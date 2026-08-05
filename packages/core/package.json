@@ -17,6 +17,8 @@
     "clean": "tsc --build --clean"
   },
   "dependencies": {
-    "@noble/hashes": "^1.6.1"
+    "@noble/curves": "^1.7.0",
+    "@noble/hashes": "^1.6.1",
+    "bs58": "^6.0.0"
   }
 }

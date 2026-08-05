@@ -22,3 +22,29 @@ export {
   type CreateLeagueInput,
   type StoredLeagueRules,
 } from "./leagues.js";
+
+export {
+  createUser,
+  findUserByEmail,
+  getUser,
+  getWallets,
+  IdentityError,
+  issueVerificationToken,
+  linkWallet,
+  verifyEmail,
+  VERIFICATION_TTL_MS,
+  type User,
+  type VerificationToken,
+  type Wallet,
+} from "./identity.js";
+
+export {
+  addBot,
+  getJoinMessage,
+  getMembershipProofs,
+  JoinError,
+  joinLeague,
+  type JoinedLeague,
+  type JoinLeagueInput,
+  type MembershipProof,
+} from "./membership.js";

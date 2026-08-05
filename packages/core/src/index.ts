@@ -59,3 +59,10 @@ export {
 
 export { encodeLeagueRules, hashLeagueRules, verifyLeagueRulesHash } from "./rules/hash.js";
 export { validateLeagueRules } from "./rules/validate.js";
+
+export {
+  buildJoinMessage,
+  isValidWalletAddress,
+  verifyJoinSignature,
+  type JoinMessageInput,
+} from "./signing.js";

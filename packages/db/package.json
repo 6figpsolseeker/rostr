@@ -20,6 +20,8 @@
     "@rostr/core": "workspace:*"
   },
   "devDependencies": {
-    "@electric-sql/pglite": "^0.2.17"
+    "@electric-sql/pglite": "^0.2.17",
+    "@noble/curves": "^1.7.0",
+    "bs58": "^6.0.0"
   }
 }
