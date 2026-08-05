@@ -61,7 +61,7 @@ know.
 Per-game keeps the scoreboard moving through the day without paying real-time prices.
 It is a deliberate trade, not an oversight.
 
-### It stays reversible
+### It stays reversible — and cost is not the constraint
 
 **The fetch interval is a config value, not an architecture.** The pipeline is identical
 either way:
@@ -70,8 +70,16 @@ either way:
 fetch stat lines → store with revision → recompute → publish
 ```
 
-Whether that fires every 30 seconds or once after a game is one number. Moving to
-real-time later means changing a schedule and paying a bigger invoice — not a rewrite.
+Whether that fires every 30 seconds or once after a game is one number.
+
+Worth being precise about the economics, because it is easy to assume real-time means
+Sportradar money. It does not. Tank01 updates **box scores immediately as they happen**,
+and 30-second polling through game windows is roughly **6,700 calls/month** — inside the
+**$10/month** Pro tier.
+
+Per-game remains the right v1 choice for simplicity and fewer failure modes. But the
+reason is build time and operational surface, **not cost**. It can be revisited any
+Sunday by changing a number.
 
 ---
 
@@ -100,8 +108,36 @@ Teams must submit inactive lists **90 minutes before kickoff**. That data change
 users *do* — whether to bench a questionable starter — where live scoring only changes
 what they *watch*.
 
-If the data budget only covers one timely feed, it should be this one. The inactives job
-fires at kickoff minus 100 minutes so users get a usable window before lineups lock.
+If the data budget only covers one timely feed, it should be this one.
+
+**Provider refresh rates are the binding constraint here, not our polling.** Tank01
+states:
+
+| Data | Refresh |
+|---|---|
+| Games, box scores | Immediately, as they happen |
+| Player news, headlines | Multiple times per hour |
+| Rosters — injuries refresh with them | **Hourly** |
+
+Hourly is fine for the Wednesday–Friday injury designations. It is *not* fine for
+gameday inactives:
+
+```
+T-90   inactives released by teams
+T-89   best case — Tank01 refreshes just after
+T-30   worst case — previous refresh landed at T-91
+T-0    kickoff, lineup locks
+```
+
+Users would get 25–90 minutes of warning, median ~55. ESPN and Sleeper get it at T-90.
+Tank01 also only *guarantees* `teamID`, `teamAbv`, and `playerID` on the roster endpoint,
+with other metadata varying, and documents no dedicated inactives endpoint.
+
+**Mitigation, at no additional cost:** SportsDataIO documents an explicit `Inactive`
+field available ~90 minutes before kickoff — and is already budgeted as the independent
+second oracle source. One line item, two jobs. Additionally, poll Tank01's **news**
+endpoint through the pre-kickoff window: it refreshes multiple times an hour, and
+breaking "ruled out" reports land there before the roster reflects them.
 
 ---
 
@@ -131,24 +167,29 @@ Per week, in season:
 | Tier | Cost | Verdict |
 |---|---|---|
 | **Tank01 Basic** (RapidAPI) | **Free** — 1,000 calls/month | Fits development. No credit card. |
-| **Tank01 Pro** | **$10/mo** — 1,000/day (~30,000/mo) | **40× headroom. Ship on this.** |
-| Tank01 Ultra | $25/mo — 15,000/day | Only if polling gets aggressive |
-| SportsDataIO self-serve | $99–149/mo — delayed, call-capped | Viable as the **second** oracle source |
-| Sportradar | ~$500–1,000+/mo | Real-time push. Not needed here. |
+| **Tank01 Pro** | **$10/mo** — 1,000/day (~30,000/mo) | **40× headroom at per-game; still fits 30s polling.** |
+| Tank01 Ultra | $25/mo — 15,000/day | Only if polling gets genuinely aggressive |
+| SportsDataIO self-serve | $99–149/mo — delayed, call-capped | **Inactives + second oracle source** |
+| Sportradar | ~$500–1,000+/mo | Push feeds. Not needed here. |
 
-**Primary feed: Tank01 Pro at $10/month.** Already updated for the 2026 season, includes
-box scores, injuries, and projections.
+**Primary feed: Tank01 Pro at $10/month.** Already updated for the 2026 season; box
+scores, injuries, news, and projections.
 
-### The second source
+### The second source earns its cost twice
 
 Settlement requires two independent providers to agree before a paying week finalises.
-That second source runs **once a week on final box scores** — not live — so it can sit on
-the cheapest tier available.
+That runs **once a week on final box scores** — not live — so it could sit on the
+cheapest tier available.
 
-Budget **$100–150/month** for SportsDataIO self-serve, or find a cheaper independent
-feed. ESPN's undocumented public endpoints are free and widely used, but they are
-unofficial, unsupported, and carry terms-of-service risk for a commercial product — not
-something to rest a payout on.
+But SportsDataIO also documents the explicit `Inactive` field at ~90 minutes before
+kickoff, which is precisely Tank01's weakest point. So the same **$99–149/month** covers
+both settlement redundancy and the one feed where timeliness genuinely affects user
+decisions. Worth paying for that reason alone.
+
+ESPN's undocumented public endpoints are free and widely used, but unofficial,
+unsupported, and carry terms-of-service risk for a commercial product. Useful for
+development fixtures and as a human tiebreak signal when providers disagree — never in
+the automated path that decides who gets paid.
 
 ### Bottom line
 
