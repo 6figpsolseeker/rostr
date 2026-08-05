@@ -1,0 +1,175 @@
+/**
+ * Default full-PPR scoring and league settings for the NFL.
+ *
+ * These mirror `docs/RULES.md` exactly. A league copies these values at creation
+ * — it does not reference them. If this file were ever edited, every league
+ * pointing at it would silently change, which is precisely what immutability
+ * exists to prevent.
+ */
+
+import type {
+  AbandonmentRules,
+  DraftRules,
+  LeagueRules,
+  LeagueSizeRules,
+  PotRules,
+  RosterRules,
+  ScheduleRules,
+  ScoringRule,
+  SettlementRules,
+  TradeRules,
+  WaiverRules,
+} from "./types.js";
+
+/** Points -> milli-points. Compile-time only; no floats survive into a rule set. */
+const pts = (n: number): number => Math.round(n * 1000);
+
+export const NFL_PPR_SCORING: readonly ScoringRule[] = [
+  // Passing — 4 per TD, 1 point per 25 yards (0.04/yd)
+  { statKey: "pass_td", kind: "LINEAR", milliPointsPerUnit: pts(4) },
+  { statKey: "pass_yd", kind: "LINEAR", milliPointsPerUnit: 40 },
+  { statKey: "pass_int", kind: "LINEAR", milliPointsPerUnit: pts(-2) },
+
+  // Rushing — 6 per TD, 1 point per 10 yards (0.1/yd)
+  { statKey: "rush_td", kind: "LINEAR", milliPointsPerUnit: pts(6) },
+  { statKey: "rush_yd", kind: "LINEAR", milliPointsPerUnit: 100 },
+
+  // Receiving — full PPR
+  { statKey: "rec_td", kind: "LINEAR", milliPointsPerUnit: pts(6) },
+  { statKey: "rec_yd", kind: "LINEAR", milliPointsPerUnit: 100 },
+  { statKey: "rec", kind: "LINEAR", milliPointsPerUnit: pts(1) },
+
+  // Misc offense
+  { statKey: "fum_lost", kind: "LINEAR", milliPointsPerUnit: pts(-2) },
+  { statKey: "two_pt", kind: "LINEAR", milliPointsPerUnit: pts(2) },
+
+  // Kicking — by distance, misses unpenalised
+  { statKey: "fg_0_39", kind: "LINEAR", milliPointsPerUnit: pts(3) },
+  { statKey: "fg_40_49", kind: "LINEAR", milliPointsPerUnit: pts(4) },
+  { statKey: "fg_50_plus", kind: "LINEAR", milliPointsPerUnit: pts(5) },
+  { statKey: "xp_made", kind: "LINEAR", milliPointsPerUnit: pts(1) },
+
+  // Defense / special teams
+  { statKey: "def_sack", kind: "LINEAR", milliPointsPerUnit: pts(1) },
+  { statKey: "def_int", kind: "LINEAR", milliPointsPerUnit: pts(2) },
+  { statKey: "def_fum_rec", kind: "LINEAR", milliPointsPerUnit: pts(2) },
+  { statKey: "def_safety", kind: "LINEAR", milliPointsPerUnit: pts(2) },
+  { statKey: "def_td", kind: "LINEAR", milliPointsPerUnit: pts(6) },
+  { statKey: "def_blk_kick", kind: "LINEAR", milliPointsPerUnit: pts(2) },
+  {
+    statKey: "def_pts_allowed",
+    kind: "TIERED",
+    tiers: [
+      { min: 0, max: 0, milliPoints: pts(10) },
+      { min: 1, max: 6, milliPoints: pts(7) },
+      { min: 7, max: 13, milliPoints: pts(4) },
+      { min: 14, max: 20, milliPoints: pts(1) },
+      { min: 21, max: 27, milliPoints: pts(0) },
+      { min: 28, max: 34, milliPoints: pts(-1) },
+      { min: 35, max: null, milliPoints: pts(-4) },
+    ],
+  },
+];
+
+export const NFL_PPR_ROSTER: RosterRules = {
+  starters: [
+    { slotType: "QB", count: 1 },
+    { slotType: "RB", count: 2 },
+    { slotType: "WR", count: 2 },
+    { slotType: "TE", count: 1 },
+    { slotType: "FLEX", count: 2 },
+    { slotType: "K", count: 1 },
+    { slotType: "DEF", count: 1 },
+  ],
+  benchSlots: 5,
+  irSlots: 2,
+  lockMode: "PER_PLAYER_KICKOFF",
+};
+
+export const NFL_DEFAULT_LEAGUE: LeagueSizeRules = {
+  maxTeams: 12,
+  minHumans: 2,
+  botsAllowed: true,
+  visibility: "PRIVATE",
+};
+
+export const NFL_DEFAULT_SCHEDULE: ScheduleRules = {
+  regularSeasonWeeks: 14,
+  playoffWeeks: [15, 16, 17],
+  playoffTeams: 6,
+  byeSeeds: 2,
+  consolationBracket: true,
+  // Ends on LOWEST_TEAM_ID: deterministic by design. A coin flip cannot decide a
+  // league with money in escrow.
+  tiebreakers: ["WIN_PCT", "POINTS_FOR", "HEAD_TO_HEAD", "POINTS_AGAINST", "LOWEST_TEAM_ID"],
+};
+
+export const NFL_DEFAULT_WAIVERS: WaiverRules = {
+  system: "ROLLING_PRIORITY",
+  waiverPeriodDays: 2,
+};
+
+export const NFL_DEFAULT_TRADES: TradeRules = {
+  enabled: true,
+  vetoWindowHours: 48,
+  // One third of uninvolved teams — Yahoo's threshold, deliberately harder to
+  // trigger than ESPN's majority.
+  vetoNumerator: 1,
+  vetoDenominator: 3,
+  deadlineWeek: 11,
+};
+
+export const NFL_DEFAULT_ABANDONMENT: AbandonmentRules = {
+  strikesToAbandon: 3,
+  autolineup: "SEASON_AVERAGE",
+  forfeitStakeToChampion: true,
+};
+
+export const NFL_DEFAULT_SETTLEMENT: SettlementRules = {
+  requiredOracleSources: 2,
+  standardFinalizationHours: 48,
+  // Seven days: the NFL issues official stat corrections for up to a week, and a
+  // reclassified fumble can flip a matchup after it looked settled.
+  payingFinalizationHours: 168,
+  payingWeeks: [14, 17],
+};
+
+/** 60 / 15 / 10 / 10 / 5 — champion always holds the largest single share. */
+export const NFL_DEFAULT_PAYOUT: PotRules["payout"] = [
+  { prize: "CHAMPION", basisPoints: 6000 },
+  { prize: "RUNNER_UP", basisPoints: 1500 },
+  { prize: "REGULAR_SEASON", basisPoints: 1000 },
+  { prize: "CONSOLATION", basisPoints: 1000 },
+  { prize: "THIRD_PLACE", basisPoints: 500 },
+];
+
+export type NflPprOverrides = {
+  readonly seasonYear: number;
+  readonly draft: DraftRules;
+  readonly league?: Partial<LeagueSizeRules>;
+  readonly pot?: PotRules | null;
+};
+
+/**
+ * Build a complete rule set from the defaults.
+ *
+ * The result is a plain value with no shared references into this module, so a
+ * later edit here cannot reach a league that has already been created.
+ */
+export function buildNflPprRules(overrides: NflPprOverrides): LeagueRules {
+  return structuredClone({
+    schemaVersion: 1,
+    sportKey: "nfl",
+    seasonYear: overrides.seasonYear,
+    scoring: NFL_PPR_SCORING,
+    roster: NFL_PPR_ROSTER,
+    league: { ...NFL_DEFAULT_LEAGUE, ...overrides.league },
+    draft: overrides.draft,
+    schedule: NFL_DEFAULT_SCHEDULE,
+    waivers: NFL_DEFAULT_WAIVERS,
+    trades: NFL_DEFAULT_TRADES,
+    pot: overrides.pot ?? null,
+    abandonment: NFL_DEFAULT_ABANDONMENT,
+    settlement: NFL_DEFAULT_SETTLEMENT,
+  }) as LeagueRules;
+}

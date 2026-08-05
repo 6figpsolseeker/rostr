@@ -1,0 +1,296 @@
+/**
+ * Rule set validation.
+ *
+ * Runs once, before a league is created and its rules are frozen. After that
+ * point nothing can be corrected, so every invariant that would otherwise be
+ * enforced by a commissioner's judgement has to be enforced here instead.
+ *
+ * Returns all problems rather than throwing on the first, so a league creator
+ * sees everything wrong at once.
+ */
+
+import type { SportDef } from "../sports/types.js";
+import { slotTypesByKey, statKeysByKey } from "../sports/types.js";
+import { BASIS_POINTS_TOTAL } from "./types.js";
+import type { LeagueRules, ScoringRule } from "./types.js";
+
+const FAST_PICK_SECONDS = [90, 120, 300, 600];
+const SLOW_PICK_SECONDS = [3600, 14_400, 28_800, 86_400];
+
+/** The NFL issues official stat corrections for up to seven days. */
+const MIN_PAYING_FINALIZATION_HOURS = 168;
+
+function validateScoring(rules: LeagueRules, sport: SportDef, out: string[]): void {
+  const known = statKeysByKey(sport);
+  const seen = new Set<string>();
+
+  for (const rule of rules.scoring) {
+    const def = known.get(rule.statKey);
+
+    if (!def) {
+      out.push(`scoring references unknown stat key "${rule.statKey}"`);
+      continue;
+    }
+    if (seen.has(rule.statKey)) {
+      out.push(`scoring defines "${rule.statKey}" more than once`);
+    }
+    seen.add(rule.statKey);
+
+    if (def.kind !== rule.kind) {
+      out.push(
+        `scoring rule for "${rule.statKey}" is ${rule.kind}, but the sport defines it as ${def.kind}`,
+      );
+      continue;
+    }
+
+    if (rule.kind === "TIERED") validateTiers(rule, out);
+  }
+}
+
+function validateTiers(rule: Extract<ScoringRule, { kind: "TIERED" }>, out: string[]): void {
+  const { statKey, tiers } = rule;
+
+  if (tiers.length === 0) {
+    out.push(`tiered rule "${statKey}" has no tiers`);
+    return;
+  }
+
+  let expectedMin: number | null = tiers[0]?.min ?? 0;
+
+  for (const [i, tier] of tiers.entries()) {
+    const last = i === tiers.length - 1;
+
+    if (expectedMin === null) {
+      out.push(`tiered rule "${statKey}" continues past an unbounded tier at index ${i}`);
+      return;
+    }
+    if (tier.min !== expectedMin) {
+      out.push(
+        `tiered rule "${statKey}" has a gap or overlap at index ${i}: ` +
+          `expected min ${expectedMin}, got ${tier.min}`,
+      );
+      return;
+    }
+    if (tier.max !== null && tier.max < tier.min) {
+      out.push(`tiered rule "${statKey}" tier ${i} has max below min`);
+      return;
+    }
+    if (tier.max === null && !last) {
+      out.push(`tiered rule "${statKey}" has an unbounded tier before the end`);
+      return;
+    }
+    if (last && tier.max !== null) {
+      out.push(
+        `tiered rule "${statKey}" must end with an unbounded tier, ` +
+          `or a value above ${tier.max} would score nothing`,
+      );
+      return;
+    }
+
+    expectedMin = tier.max === null ? null : tier.max + 1;
+  }
+}
+
+function validateRoster(rules: LeagueRules, sport: SportDef, out: string[]): void {
+  const slots = slotTypesByKey(sport);
+
+  if (rules.roster.starters.length === 0) out.push("roster defines no starting slots");
+
+  for (const slot of rules.roster.starters) {
+    if (!slots.has(slot.slotType)) {
+      out.push(`roster references unknown slot type "${slot.slotType}"`);
+    }
+    if (slot.count <= 0) {
+      out.push(`roster slot "${slot.slotType}" must have a positive count`);
+    }
+  }
+
+  if (rules.roster.benchSlots < 0) out.push("benchSlots cannot be negative");
+  if (rules.roster.irSlots < 0) out.push("irSlots cannot be negative");
+}
+
+function validateDraft(rules: LeagueRules, out: string[]): void {
+  const { mode, pickSeconds } = rules.draft;
+  const allowed = mode === "FAST" ? FAST_PICK_SECONDS : SLOW_PICK_SECONDS;
+
+  if (!allowed.includes(pickSeconds)) {
+    out.push(
+      `draft pickSeconds ${pickSeconds} is not permitted for ${mode} mode ` +
+        `(allowed: ${allowed.join(", ")})`,
+    );
+  }
+  if (pickSeconds < 90) out.push("draft pick clock may never be below 90 seconds");
+  if (rules.draft.scheduledAt <= 0) out.push("draft scheduledAt must be set at creation");
+}
+
+function validateSchedule(rules: LeagueRules, out: string[]): void {
+  const s = rules.schedule;
+
+  if (s.regularSeasonWeeks <= 0) out.push("regularSeasonWeeks must be positive");
+  if (s.playoffTeams > rules.league.maxTeams) {
+    out.push(`playoffTeams (${s.playoffTeams}) exceeds maxTeams (${rules.league.maxTeams})`);
+  }
+  if (s.playoffTeams < 2) out.push("playoffTeams must be at least 2");
+  if (s.byeSeeds >= s.playoffTeams) out.push("byeSeeds must be fewer than playoffTeams");
+  if (s.byeSeeds < 0) out.push("byeSeeds cannot be negative");
+
+  // The bracket has to actually resolve: after the first round, the survivors
+  // plus the bye teams must be a power of two.
+  const firstRoundTeams = s.playoffTeams - s.byeSeeds;
+  if (firstRoundTeams % 2 !== 0) {
+    out.push(
+      `bracket does not resolve: ${firstRoundTeams} teams in the first round cannot pair up`,
+    );
+  } else {
+    const afterFirstRound = firstRoundTeams / 2 + s.byeSeeds;
+    if (afterFirstRound > 0 && (afterFirstRound & (afterFirstRound - 1)) !== 0) {
+      out.push(
+        `bracket does not resolve: ${afterFirstRound} teams after round 1 is not a power of two`,
+      );
+    } else {
+      const rounds = Math.log2(afterFirstRound) + (firstRoundTeams > 0 ? 1 : 0);
+      if (s.playoffWeeks.length !== rounds) {
+        out.push(
+          `bracket needs ${rounds} rounds but ${s.playoffWeeks.length} playoff weeks are defined`,
+        );
+      }
+    }
+  }
+
+  for (const [i, week] of s.playoffWeeks.entries()) {
+    if (week <= s.regularSeasonWeeks) {
+      out.push(`playoff week ${week} overlaps the regular season`);
+    }
+    const prev = s.playoffWeeks[i - 1];
+    if (prev !== undefined && week <= prev) out.push("playoffWeeks must ascend");
+  }
+
+  if (s.tiebreakers.length === 0) {
+    out.push("at least one tiebreaker is required");
+  } else if (s.tiebreakers.at(-1) !== "LOWEST_TEAM_ID") {
+    out.push(
+      "the final tiebreaker must be LOWEST_TEAM_ID — seeding must resolve deterministically",
+    );
+  }
+}
+
+function validateTrades(rules: LeagueRules, out: string[]): void {
+  const t = rules.trades;
+  if (!t.enabled) return;
+
+  if (t.vetoDenominator <= 0) out.push("vetoDenominator must be positive");
+  if (t.vetoNumerator <= 0) out.push("vetoNumerator must be positive");
+  if (t.vetoNumerator > t.vetoDenominator) out.push("veto threshold exceeds 100%");
+  if (t.vetoWindowHours <= 0) out.push("vetoWindowHours must be positive");
+  if (t.deadlineWeek > rules.schedule.regularSeasonWeeks) {
+    out.push(
+      `trade deadline (week ${t.deadlineWeek}) falls after the regular season ends ` +
+        `(week ${rules.schedule.regularSeasonWeeks})`,
+    );
+  }
+}
+
+function validatePot(rules: LeagueRules, out: string[]): void {
+  const pot = rules.pot;
+  if (pot === null) return;
+
+  if (!/^[1-9][0-9]*$/.test(pot.buyInBaseUnits)) {
+    out.push("buyInBaseUnits must be a positive integer expressed as a decimal string");
+  }
+  if (pot.tokenMint.length === 0) out.push("pot requires a token mint");
+  if (pot.refundUnlockAt <= 0) out.push("pot requires a refund unlock time");
+
+  if (pot.payout.length === 0) {
+    out.push("pot defines no payout shares");
+    return;
+  }
+
+  const total = pot.payout.reduce((sum, share) => sum + share.basisPoints, 0);
+  if (total !== BASIS_POINTS_TOTAL) {
+    out.push(
+      `payout shares sum to ${total} basis points, must be exactly ${BASIS_POINTS_TOTAL}`,
+    );
+  }
+
+  const seen = new Set<string>();
+  for (const share of pot.payout) {
+    if (seen.has(share.prize)) out.push(`payout defines ${share.prize} more than once`);
+    seen.add(share.prize);
+    if (share.basisPoints <= 0) out.push(`payout share ${share.prize} must be positive`);
+  }
+
+  const champion = pot.payout.find((s) => s.prize === "CHAMPION");
+  if (!champion) {
+    out.push("payout must include a CHAMPION share");
+  } else {
+    const largest = Math.max(...pot.payout.map((s) => s.basisPoints));
+    if (champion.basisPoints < largest) {
+      out.push("CHAMPION must hold the largest single payout share");
+    }
+  }
+
+  if (rules.schedule.consolationBracket === false) {
+    if (pot.payout.some((s) => s.prize === "CONSOLATION")) {
+      out.push("payout includes a CONSOLATION share but no consolation bracket is scheduled");
+    }
+  }
+}
+
+function validateSettlement(rules: LeagueRules, out: string[]): void {
+  const s = rules.settlement;
+
+  if (s.requiredOracleSources < 1) out.push("at least one oracle source is required");
+  if (rules.pot !== null && s.requiredOracleSources < 2) {
+    out.push("a league with a pot requires at least two independent oracle sources");
+  }
+  if (s.standardFinalizationHours <= 0) out.push("standardFinalizationHours must be positive");
+  if (s.payingFinalizationHours < MIN_PAYING_FINALIZATION_HOURS) {
+    out.push(
+      `payingFinalizationHours must be at least ${MIN_PAYING_FINALIZATION_HOURS} ` +
+        `— official stat corrections arrive for up to seven days after a game`,
+    );
+  }
+  if (s.payingFinalizationHours < s.standardFinalizationHours) {
+    out.push("paying weeks cannot finalise sooner than standard weeks");
+  }
+
+  const lastPlayoffWeek = rules.schedule.playoffWeeks.at(-1);
+  if (lastPlayoffWeek !== undefined && !s.payingWeeks.includes(lastPlayoffWeek)) {
+    out.push(`the championship week (${lastPlayoffWeek}) must be a paying week`);
+  }
+}
+
+function validateLeagueSize(rules: LeagueRules, out: string[]): void {
+  const l = rules.league;
+  if (l.minHumans < 2) out.push("a league requires at least 2 humans");
+  if (l.maxTeams < l.minHumans) out.push("maxTeams cannot be below minHumans");
+  if (l.maxTeams < 2) out.push("maxTeams must be at least 2");
+}
+
+/**
+ * Validate a rule set against its sport.
+ *
+ * @returns every problem found; an empty array means the rules are coherent and
+ * safe to freeze.
+ */
+export function validateLeagueRules(rules: LeagueRules, sport: SportDef): string[] {
+  const out: string[] = [];
+
+  if (rules.sportKey !== sport.key) {
+    out.push(
+      `rules declare sport "${rules.sportKey}" but were validated against "${sport.key}"`,
+    );
+    return out;
+  }
+
+  validateScoring(rules, sport, out);
+  validateRoster(rules, sport, out);
+  validateLeagueSize(rules, out);
+  validateDraft(rules, out);
+  validateSchedule(rules, out);
+  validateTrades(rules, out);
+  validatePot(rules, out);
+  validateSettlement(rules, out);
+
+  return out;
+}
