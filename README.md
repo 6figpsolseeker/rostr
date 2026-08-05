@@ -34,19 +34,49 @@ front-run on a marketplace, and they can't be forced through by a commissioner.
 
 Pre-alpha. Specification first, then the testable core, then the chain programs.
 
-|     |                                                         |
-| --- | ------------------------------------------------------- |
-| ✅  | League rule set — [`docs/RULES.md`](docs/RULES.md)      |
-| ✅  | Data model — [`docs/DATA-MODEL.md`](docs/DATA-MODEL.md) |
-| ⬜  | Scoring engine                                          |
-| ⬜  | Snake draft + bot auto-pick                             |
-| ⬜  | Stats provider adapter                                  |
-| ⬜  | Anchor programs — pot escrow, roster NFTs, trade escrow |
-| ⬜  | Web app                                                 |
-| ⬜  | Native app (React Native + Expo, Mobile Wallet Adapter) |
+|     |                                                              |
+| --- | ------------------------------------------------------------ |
+| ✅  | League rule set — [`docs/RULES.md`](docs/RULES.md)           |
+| ✅  | Data model — [`docs/DATA-MODEL.md`](docs/DATA-MODEL.md)      |
+| ✅  | Sport registry, canonical rule encoding, hashing, validation |
+| ⬜  | Persistence + league creation                                |
+| ⬜  | Scoring engine                                               |
+| ⬜  | Snake draft + bot auto-pick                                  |
+| ⬜  | Stats provider adapter                                       |
+| ⬜  | Anchor programs — pot escrow, roster NFTs, trade escrow      |
+| ⬜  | Web app                                                      |
+| ⬜  | Native app (React Native + Expo, Mobile Wallet Adapter)      |
 
 **Target: the 2026 NFL season, kickoff September 9 2026.** Drafts happen in the last two
 weeks of August, so the draftable deadline is late August — not September.
+
+---
+
+## Getting started
+
+Requires **Node ≥ 22.13** and **pnpm**.
+
+```bash
+git clone https://github.com/6figpsolseeker/rostr.git
+cd rostr
+pnpm install
+
+pnpm test        # 49 tests
+pnpm typecheck
+pnpm lint
+```
+
+For the on-chain programs (not yet started) you will also need Rust, the Solana CLI, and
+Anchor — on Windows, via WSL. Setup commands are in [`CLAUDE.md`](CLAUDE.md).
+
+### Reading order
+
+| Start here                                 | For                                       |
+| ------------------------------------------ | ----------------------------------------- |
+| [`CLAUDE.md`](CLAUDE.md)                   | Current state, invariants, what's next    |
+| [`docs/BUILD-PLAN.md`](docs/BUILD-PLAN.md) | Milestones and commits, deadline-ordered  |
+| [`docs/RULES.md`](docs/RULES.md)           | How a league actually behaves             |
+| [`docs/DECISIONS.md`](docs/DECISIONS.md)   | Why — including what was rejected and why |
 
 ---
 
