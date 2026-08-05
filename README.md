@@ -1,9 +1,7 @@
-# Gridiron
+# rostr
 
-> Working name — see [Naming](#naming).
-
-Open-source fantasy football on Solana. Web app and native app, targeting the
-**Solana Seeker dApp Store**.
+Open-source fantasy sports on Solana, starting with football. Web app and native app,
+targeting the **Solana Seeker dApp Store**.
 
 > **⚠️ NOT AUDITED.** The escrow contract holds real funds and has not been audited.
 > Do not use with money you cannot lose until it has been.
@@ -78,14 +76,6 @@ Adding a sport should insert rows and write one provider adapter, with no migrat
 no change to scoring, drafting, trading, or settlement.
 
 See [`docs/DATA-MODEL.md`](docs/DATA-MODEL.md).
-
----
-
-## Naming
-
-`Gridiron` is a placeholder and a slightly bad one: it means football specifically, and
-the whole point of the data model is that the platform isn't football-specific. Worth
-choosing something sport-neutral before the repo goes public.
 
 ---
 
