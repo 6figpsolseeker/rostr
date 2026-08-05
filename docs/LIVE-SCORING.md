@@ -1,6 +1,7 @@
-# Live Scoring
+# Scoring Updates
 
-How the incumbents update scores during games, and what this project should do.
+How the incumbents update scores during games, what this project does instead, and what
+it costs.
 
 ---
 
@@ -15,99 +16,165 @@ provider push feed ─→ ingest ─→ queue ─→ scoring workers ─→ cach
      (streaming)      (validate)  (Kafka/SQS)  (apply rules)   (Redis)   (fan-out)
 ```
 
-Four properties make it work:
+Sportradar offers push feeds to real-time customers: one request opens a streaming
+connection and events arrive continuously. It is genuinely excellent, and it costs an
+estimated **$500–1,000+/month** for a single sport.
 
-**Push, not poll.** Sportradar offers push feeds to real-time customers: one request
-opens a streaming connection and events arrive continuously. Polling adds latency equal
-to half your interval on average and wastes most calls on nothing having happened.
-
-**A queue between ingest and scoring.** Events land in Kafka or SQS before anything
-consumes them. A slow consumer doesn't block the others; a crashed consumer resumes from
-the queue rather than losing a touchdown.
-
-**Recompute, don't increment.** Each event triggers a recalculation of the affected
-player's line from the full stat set, not a `+= 6`. Incremental scoring drifts, and
-drift in a money league is a support ticket you cannot win.
-
-**In-memory leaderboards.** Standings during a Sunday afternoon change constantly.
-They're cached and event-invalidated, never recomputed from Postgres per request.
+We are not doing that.
 
 ---
 
-## What this means here specifically
+## What this project does: per-game updates
 
-**Live scoring is entirely off-chain, and that is the whole trick.**
+Scores refresh when each game **finishes**, not continuously. Across a typical week:
 
-The contract only ever sees *finalised* weekly scores — 48 hours after non-paying weeks,
-seven days after Weeks 14 and 17. Everything a user watches on Sunday afternoon is
-provisional UI. So the real-time pipeline needs no consensus, no oracle, no signatures,
-and can be rebuilt or replaced without touching a deployed program.
+| Trigger | Roughly |
+|---|---|
+| Thursday night game final | Thu ~11:30pm ET |
+| Sunday 1pm slate final | Sun ~4:15pm ET |
+| Sunday 4pm slate final | Sun ~7:30pm ET |
+| Sunday night game final | Sun ~11:30pm ET |
+| Monday night game final | Mon ~11:30pm ET |
 
-That decoupling is worth protecting. It means a live-scoring outage is a bad afternoon,
-not a settlement failure.
+Five to six updates a weekend instead of several hundred.
 
----
+### Why this costs nothing structurally
 
-## Providers
+Live scoring is **pure UX**. It has no bearing on correctness, settlement, or money:
 
-| Provider | Real-time | Cost | Notes |
-|---|---|---|---|
-| **Sportradar** | Push feeds, full play-by-play, all games incl. preseason | Not public; industry estimates **$500–1,000+/mo** for one sport. 30-day dev trial. | The reference feed. What the majors actually use. |
-| **SportsDataIO** | Real-time on commercial tier | Self-serve **$99–149/mo** but **delayed data + daily call caps**; real-time needs a sales conversation | Self-serve tier is fine for development, not for live Sunday scoring |
-| **DataFeeds / Rolling Insights** | Live, "within seconds" | From **$400/mo** | Middle option |
-| **Tank01** (RapidAPI) | Live in-game stats, already updated for 2026 | Cheap tiers | Lowest cost path to something that actually works |
-| **MySportsFeeds** | Play-by-play | Free for non-commercial | **A paid-entry league is commercial.** Free tier does not apply here. |
+- Head-to-head matchups need only **end-of-week totals**. The weekly result is identical
+  whether the score arrived in one update or four hundred.
+- The chain sees only **finalised** scores — 48 hours later for standings weeks, seven
+  days for Weeks 14 and 17.
+- Lineup lock is driven by the **schedule**, not the stat feed. Kickoff times are known
+  months ahead.
 
-The free tiers evaporate the moment there's a pot. That's the real cost of the mainnet
-decision, and it should be budgeted rather than discovered in Week 1.
+No rule in [`RULES.md`](RULES.md) changes as a result of this decision.
 
----
+### What it costs in experience
 
-## Cost lever: NFL games are concentrated
+Honestly: watching a score tick up during the 1pm slate is why people open a fantasy app
+forty times on a Sunday. Per-game updates lose that. Users are watching on television —
+which runs *ahead* of every data feed — so the app is always behind what they already
+know.
 
-Unlike soccer or basketball, the NFL plays in tight windows — Thursday night, Sunday
-1pm/4pm ET, Sunday night, Monday night. Live infrastructure is genuinely needed for
-roughly **12 hours a week**, not continuously.
+Per-game keeps the scoreboard moving through the day without paying real-time prices.
+It is a deliberate trade, not an oversight.
 
-That permits a hybrid the majors don't bother with because they operate at a scale where
-it doesn't matter:
+### It stays reversible
 
-- **In-window** (games live): push feed or aggressive polling, full pipeline hot
-- **Out-of-window**: a single daily sync for injuries, transactions, and corrections
-
-Same user experience, a fraction of the API spend.
-
----
-
-## Recommendation for v1
-
-**Poll, don't push.** Every 20–30 seconds inside game windows. Fantasy scores are not a
-trading feed; nobody can tell the difference between a two-second and a twenty-second
-update, and users are watching the game on television anyway — the broadcast is *ahead*
-of every data feed regardless. Push is a v2 optimisation, and the pipeline shape below
-makes swapping it in a change to one module.
-
-**Ship this:**
+**The fetch interval is a config value, not an architecture.** The pipeline is identical
+either way:
 
 ```
-poller (in-window)  →  Postgres stat_lines  →  scoring engine  →  Redis  →  SSE  →  clients
+fetch stat lines → store with revision → recompute → publish
 ```
 
-- **Server-Sent Events, not WebSockets.** Scoring is one-directional — server to client.
-  SSE is a fraction of the complexity, reconnects natively, and works through proxies
-  that break WebSockets. Reserve WebSockets for the live draft room, which genuinely is
-  bidirectional.
-- **Recompute the full player line every tick.** Cheap, and immune to drift.
-- **`stat_lines.revision`** is already in the schema. Never overwrite; append. A settled
-  week must be auditable against exactly the data it settled on.
-- **Provider behind an adapter interface** from the first commit. Every provider above
-  will be re-evaluated once there's revenue, and the scoring engine must never know which
+Whether that fires every 30 seconds or once after a game is one number. Moving to
+real-time later means changing a schedule and paying a bigger invoice — not a rewrite.
+
+---
+
+## Automation
+
+Fully automated. No human in the loop at any point.
+
+The NFL schedule is published in May, so **every kickoff time is known months ahead**.
+That makes the whole thing schedule-driven rather than reactive:
+
+| Job | Fires | Does |
+|---|---|---|
+| **Season sync** | Daily, 4am | Players, teams, byes, schedule changes |
+| **Injury sync** | Every 6h, and hourly on game days | Injury designations |
+| **Inactives** | **100 minutes before each kickoff** | Official inactive list — see below |
+| **Game watcher** | 2.5h after each kickoff, then every 10 min | Polls until status is `final` |
+| **Score finalise** | On `final` | Box score → `stat_lines` → recompute → publish |
+| **Week finalise** | T+48h, or T+7d for Weeks 14 and 17 | Locks the week for settlement |
+
+The game watcher is the only job that polls, and only from 2.5 hours after kickoff until
+the game ends — roughly 20–40 minutes of polling per game.
+
+### Inactives matter more than live scoring
+
+Teams must submit inactive lists **90 minutes before kickoff**. That data changes what
+users *do* — whether to bench a questionable starter — where live scoring only changes
+what they *watch*.
+
+If the data budget only covers one timely feed, it should be this one. The inactives job
+fires at kickoff minus 100 minutes so users get a usable window before lineups lock.
+
+---
+
+## Cost
+
+### Call volume
+
+The critical property: **data cost is O(games), not O(users).**
+
+Jalen Hurts' box score is fetched once and scored against every league in the system.
+Ten leagues or ten thousand, the API bill is identical. Data spend is fully decoupled
+from growth.
+
+Per week, in season:
+
+| Job | Calls/week |
+|---|---|
+| Game watcher polling | ~70 |
+| Box score fetch (16 games) | 16 |
+| Inactives (4 kickoff windows) | ~48 |
+| Injury sync | ~30 |
+| Season/roster sync | 7 |
+| **Total** | **~170/week ≈ 700/month** |
+
+### Providers
+
+| Tier | Cost | Verdict |
+|---|---|---|
+| **Tank01 Basic** (RapidAPI) | **Free** — 1,000 calls/month | Fits development. No credit card. |
+| **Tank01 Pro** | **$10/mo** — 1,000/day (~30,000/mo) | **40× headroom. Ship on this.** |
+| Tank01 Ultra | $25/mo — 15,000/day | Only if polling gets aggressive |
+| SportsDataIO self-serve | $99–149/mo — delayed, call-capped | Viable as the **second** oracle source |
+| Sportradar | ~$500–1,000+/mo | Real-time push. Not needed here. |
+
+**Primary feed: Tank01 Pro at $10/month.** Already updated for the 2026 season, includes
+box scores, injuries, and projections.
+
+### The second source
+
+Settlement requires two independent providers to agree before a paying week finalises.
+That second source runs **once a week on final box scores** — not live — so it can sit on
+the cheapest tier available.
+
+Budget **$100–150/month** for SportsDataIO self-serve, or find a cheaper independent
+feed. ESPN's undocumented public endpoints are free and widely used, but they are
+unofficial, unsupported, and carry terms-of-service risk for a commercial product — not
+something to rest a payout on.
+
+### Bottom line
+
+| Phase | Monthly |
+|---|---|
+| Development | **$0** (Tank01 Basic) |
+| 2026 season, single source | **$10** |
+| 2026 season with settlement redundancy | **$110–160** |
+
+For context: the real-time architecture the majors run would be **$500–1,000+/month**,
+for a feature that has no effect on who wins.
+
+---
+
+## Implementation notes
+
+- **Provider behind an adapter interface** from the first commit. Every provider here
+  gets re-evaluated once there's revenue, and the scoring engine must never know which
   one is behind it.
-
-**Cheapest viable stack for the 2026 season:** Tank01 or the SportsDataIO self-serve tier
-for development, upgrading to a real-time commercial tier before Week 1. The second
-oracle source required for settlement can be a different provider entirely — settlement
-runs once a week on final box scores, not live, so the cheap tier is sufficient there.
+- **Recompute the full player line each update.** Never increment. Incremental scoring
+  drifts, and drift in a money league is an argument you cannot win.
+- **`stat_lines.revision` is append-only.** A settled week must be auditable against
+  exactly the data it settled on.
+- **SSE, not WebSockets**, for publishing score updates. One-directional, far less
+  complexity, reconnects natively, survives proxies that break WebSockets. WebSockets are
+  reserved for the live draft room, which genuinely is bidirectional.
 
 ---
 
@@ -121,5 +188,5 @@ can flip a completed matchup a week later.
 
 On ESPN this is an annoyance. Here it would be a payout to the wrong wallet.
 
-This is why finalisation is two-tier — 48 hours for weeks that only move standings, seven
-days for Weeks 14 and 17 where money moves. See [`RULES.md` §7](RULES.md).
+Hence two-tier finalisation — 48 hours for weeks that only move standings, seven days for
+Weeks 14 and 17 where money moves. See [`RULES.md` §7](RULES.md).

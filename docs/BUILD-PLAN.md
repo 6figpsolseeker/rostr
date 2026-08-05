@@ -142,9 +142,11 @@ milli-points internally; formatting to decimals happens only at the display edge
 | C1 | `feat(season): round-robin schedule generation, 14 weeks` | Balanced, deterministic, no repeats beyond necessity |
 | C2 | `feat(season): lineup set + validation` | Slot eligibility enforced from `slot_types` |
 | C3 | `feat(season): per-player lock at kickoff` | A locked slot cannot move, ever |
-| C4 | `feat(data): in-window stat poller, 20–30s` | Live stat lines land during games |
+| C4 | `feat(data): schedule-driven job runner` | Jobs fire off known kickoff times, no human trigger |
+| C4b | `feat(data): inactives job at kickoff −100min` | Official inactive list lands before lineups lock |
+| C4c | `feat(data): game watcher + per-game finalisation` | Polls from T+2.5h until `final`, then ingests |
 | C5 | `feat(data): stat_line revisions, append-only` | Corrections never overwrite history |
-| C6 | `feat(season): team-week scoring from lineups` | Live totals match hand calculation |
+| C6 | `feat(season): team-week scoring from lineups` | Totals match hand calculation |
 | C7 | `feat(api): SSE score stream` | Browser updates without refresh |
 | C8 | `feat(season): matchup resolution + standings` | W/L/T, Points For, Points Against |
 | C9 | `feat(season): tiebreaker chain` | Deterministic to the final step, no coin flips |
