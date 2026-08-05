@@ -1,12 +1,9 @@
 export type { SqlClient } from "./client.js";
 
-export {
-  loadMigrations,
-  migrate,
-  MigrationError,
-  type Migration,
-  type MigrateResult,
-} from "./migrate.js";
+// Migrations are deliberately NOT exported here. `migrate.ts` reads SQL files
+// from disk, which a bundler cannot statically analyse — importing it from an
+// app entry point breaks the build. It lives at `@rostr/db/migrate`, for CLI and
+// setup code only.
 
 export { withTransaction } from "./transaction.js";
 

@@ -36,6 +36,11 @@ jobs:
       - name: Test
         run: pnpm test
 
+      # Builds the workspace packages to dist as a side effect of typecheck
+      # above, then compiles the web app against them.
+      - name: Build web app
+        run: pnpm --filter @rostr/web build
+
   # The rules hash is what members sign when they join a league. If canonical
   # encoding drifts, previously created leagues become unverifiable — so the
   # golden fixture is checked on a second Node major as well.

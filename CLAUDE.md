@@ -56,15 +56,45 @@ See [`docs/BUILD-PLAN.md`](docs/BUILD-PLAN.md) for the full commit-by-commit pla
 - A6: Postgres migrations (`packages/db/migrations/`), forward-only runner, PGlite tests
 - A7: `seedSport()` and `createLeague()` — validate, hash, freeze, all in one transaction
 - A8: `@rostr/pinning` — pin the canonical document, verify the round trip, `setRulesUri()`
+- A9: identity — users, email verification, wallet linking
+- A10–A11: `apps/web` — Next.js 15, Tailwind 4, wallet adapter, full rules rendered
+  before the join control
+- A12: `buildJoinMessage()` / `joinLeague()` — signature over the rules hash, verified
+  server-side
 
 **Next, in order:**
 
-1. **A9–A12** — email + wallet identity, web shell, rules shown before join, join with a
-   signature over the rules hash
+1. **Finish A9's UI** — there is no session yet, so `JoinPanel` posts an empty `userId`
+   and the league creation form is a preview only. Both are marked TODO in the code.
+   Needs a Supabase project (see `docs/SETUP-REQUIRED.md`).
 2. **B1–B5** — the PPR scoring engine, integer milli-points, golden fixtures from real
    2025 box scores
 3. **D1–D10** — the escrow program. **Write this early.** The audit is 2–4 weeks of
    calendar time and it gates pot leagues opening on Aug 22.
+
+### The web app
+
+`apps/web`, Next.js 15 App Router. `pnpm --filter @rostr/web dev`. It needs
+`DATABASE_URL` to do anything beyond render the home page.
+
+Two things worth not undoing:
+
+**`RulesView` renders above the join control, always, and in full.** Nothing is collapsed
+behind a toggle and no field is omitted. A join button placed before the rules would make
+"shown before you join" a technicality rather than a fact.
+
+**The join message is fetched from the server, never composed on the client.** A client
+that builds its own message could sign one rule set and be admitted under another.
+
+**Wallets:** Phantom, Solflare, and Coinbase adapters are registered explicitly, but most
+wallets — including Seed Vault on Seeker — auto-register via the Wallet Standard and need
+nothing. Do **not** add `@solana/wallet-adapter-wallets`: that meta-package pulls in
+Ledger USB bindings, the Stellar SDK, and protobufjs, roughly 500 packages, for wallets
+nobody here uses.
+
+Migrations are not exported from `@rostr/db`'s main entry — `migrate.ts` reads SQL from
+disk, which a bundler cannot statically analyse. Import from `@rostr/db/migrate` in CLI
+and setup code only.
 
 ### Pinning
 

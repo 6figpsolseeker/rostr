@@ -3,7 +3,15 @@ import tseslint from "typescript-eslint";
 
 export default tseslint.config(
   {
-    ignores: ["**/dist/**", "**/node_modules/**", "**/coverage/**", "**/target/**"],
+    // The web app is typechecked and linted by Next's own toolchain; this config
+    // is type-aware over the packages and would need a separate project setup.
+    ignores: [
+      "**/dist/**",
+      "**/node_modules/**",
+      "**/coverage/**",
+      "**/target/**",
+      "apps/web/**",
+    ],
   },
   eslint.configs.recommended,
   ...tseslint.configs.recommended,
