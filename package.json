@@ -4,6 +4,7 @@
   "private": true,
   "license": "MIT",
   "type": "module",
+  "packageManager": "pnpm@11.20.0",
   "engines": {
     "node": ">=20"
   },
