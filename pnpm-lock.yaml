@@ -49,6 +49,15 @@ importers:
         specifier: ^0.2.17
         version: 0.2.17
 
+  packages/pinning:
+    dependencies:
+      '@noble/hashes':
+        specifier: ^1.6.1
+        version: 1.8.0
+      '@rostr/core':
+        specifier: workspace:*
+        version: link:../core
+
 packages:
 
   '@ampproject/remapping@2.3.0':

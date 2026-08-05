@@ -1,6 +1,7 @@
 export {
   canonicalize,
   canonicalHash,
+  sha256Hex,
   CanonicalEncodingError,
   type CanonicalValue,
 } from "./canonical.js";

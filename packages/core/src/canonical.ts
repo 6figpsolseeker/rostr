@@ -129,7 +129,12 @@ export function canonicalize(value: CanonicalValue): string {
   return encode(value, "");
 }
 
+/** SHA-256 of a UTF-8 string, lowercase hex. */
+export function sha256Hex(content: string): string {
+  return bytesToHex(sha256(new TextEncoder().encode(content)));
+}
+
 /** SHA-256 of the canonical encoding, lowercase hex. */
 export function canonicalHash(value: CanonicalValue): string {
-  return bytesToHex(sha256(new TextEncoder().encode(canonicalize(value))));
+  return sha256Hex(canonicalize(value));
 }
