@@ -47,26 +47,41 @@ Do not build it in August.
 
 See [`docs/BUILD-PLAN.md`](docs/BUILD-PLAN.md) for the full commit-by-commit plan.
 
-**Done — 66 tests, CI green:**
+**Done — 82 tests, CI green:**
 
 - Full specification — rules, data model, live scoring, build plan
 - A1: pnpm monorepo, TS strict, vitest, eslint, prettier, CI
 - A2: sport registry (`packages/core/src/sports/`)
 - A3–A5: canonical encoding, rule schema, hashing, validation
 - A6: Postgres migrations (`packages/db/migrations/`), forward-only runner, PGlite tests
+- A7: `seedSport()` and `createLeague()` — validate, hash, freeze, all in one transaction
 
 **Next, in order:**
 
-1. **A7** — league creation: build rules, validate, hash, write `leagues` +
-   `league_rules` + denormalised scoring/roster rows in one transaction
-2. **A8** — pin the canonical rule document to IPFS behind an adapter interface,
-   store `rules_uri`
-3. **A9–A12** — email + wallet identity, web shell, rules shown before join, join with a
+1. **A8** — pin the canonical rule document to IPFS behind an adapter interface, then
+   `setRulesUri()`. Must happen before anyone joins: a league whose `rules_uri` does not
+   resolve anchors nothing.
+2. **A9–A12** — email + wallet identity, web shell, rules shown before join, join with a
    signature over the rules hash
-4. **B1–B5** — the PPR scoring engine, integer milli-points, golden fixtures from real
+3. **B1–B5** — the PPR scoring engine, integer milli-points, golden fixtures from real
    2025 box scores
-5. **D1–D10** — the escrow program. **Write this early.** The audit is 2–4 weeks of
+4. **D1–D10** — the escrow program. **Write this early.** The audit is 2–4 weeks of
    calendar time and it gates pot leagues opening on Aug 22.
+
+### League creation
+
+`createLeague()` in `packages/db/src/leagues.ts` is the only moment a league's rules are
+writable. It validates, hashes, and writes in a single transaction — so there is no state
+in which a league exists with rules that were never checked, and a partial write leaves
+nothing behind.
+
+`league_rules.canonical` holds the exact bytes that were hashed, verbatim. That is what
+gets pinned, and what anyone can re-hash to check against the chain. `verifyStoredRules()`
+does exactly that.
+
+The denormalised `league_scoring_rules` and `league_roster_slots` are **copies**, never
+references to a shared template — a template edit must never be able to reach a league
+that already exists. They carry the same immutability triggers.
 
 ### Database
 
