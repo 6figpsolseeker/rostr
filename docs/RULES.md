@@ -258,9 +258,22 @@ vote, and no discretion.
 
 Stats reach the chain through an oracle, since no contract can observe an NFL game.
 Two independent providers must agree before a week's scores finalise; disagreement
-freezes that week for review. Scores post immediately and finalise after **48 hours**,
-which also absorbs official stat corrections — the NFL revises box scores after games,
-and a reclassified fumble can flip a matchup days later.
+freezes that week for review.
+
+Finalisation is **two-tier**, because the NFL issues official stat corrections for up to
+**seven days** after a game and a reclassified fumble can flip a matchup long after it
+looked settled:
+
+| Week | Provisional | Final | Why |
+|---|---|---|---|
+| Regular season 1–13, playoffs 15–16 | immediately | **T+48h** | No funds move. A late correction restates standings and the bracket, which is recoverable. |
+| **Week 14** (regular-season prize) | immediately | **T+7 days** | Money moves. Must outlast the correction window. |
+| **Week 17** (championship, runner-up, 3rd, consolation) | immediately | **T+7 days** | Money moves. Must outlast the correction window. |
+
+Any week that pays out waits the full seven days. Weeks that only affect standings
+finalise in 48 hours so the season keeps moving. A correction arriving after a paying
+week has finalised does not reopen it — the seven days exist precisely so that never
+needs to happen.
 
 ---
 
@@ -313,7 +326,7 @@ Immutable rules must anticipate failure, because no one can patch them mid-seaso
 |---|---|
 | An NFL game is cancelled or postponed beyond the scoring window | Affected players score 0 for that week. The matchup stands. |
 | Both oracle providers disagree | The week freezes pending review; no settlement occurs while frozen. |
-| Official stats are revised after posting | Absorbed by the 48h finalisation window. Revisions after finalisation do not reopen a week. |
+| Official stats are revised after posting | Absorbed by the finalisation window — 48h for non-paying weeks, 7 days for Weeks 14 and 17. Revisions after finalisation do not reopen a week. |
 | A championship ends in an exact tie | Higher seed wins. |
 | A league never reaches 2 humans by the draft date | Auto-dissolve, full refunds. |
 | A member disputes a result | League vote. No commissioner discretion exists. |
