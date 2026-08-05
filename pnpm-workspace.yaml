@@ -8,3 +8,8 @@ allowBuilds:
   esbuild: true
   # sharp powers Next's image optimisation.
   sharp: true
+  # Optional native speedups for `ws`, pulled in by @solana/web3.js. It falls
+  # back to pure JS without them, so decline rather than compile native code on
+  # every CI run for a websocket path this app barely uses.
+  bufferutil: false
+  utf-8-validate: false
