@@ -28,13 +28,13 @@ We are not doing that.
 
 Scores refresh when each game **finishes**, not continuously. Across a typical week:
 
-| Trigger | Roughly |
-|---|---|
+| Trigger                   | Roughly         |
+| ------------------------- | --------------- |
 | Thursday night game final | Thu ~11:30pm ET |
-| Sunday 1pm slate final | Sun ~4:15pm ET |
-| Sunday 4pm slate final | Sun ~7:30pm ET |
-| Sunday night game final | Sun ~11:30pm ET |
-| Monday night game final | Mon ~11:30pm ET |
+| Sunday 1pm slate final    | Sun ~4:15pm ET  |
+| Sunday 4pm slate final    | Sun ~7:30pm ET  |
+| Sunday night game final   | Sun ~11:30pm ET |
+| Monday night game final   | Mon ~11:30pm ET |
 
 Five to six updates a weekend instead of several hundred.
 
@@ -55,7 +55,7 @@ No rule in [`RULES.md`](RULES.md) changes as a result of this decision.
 
 Honestly: watching a score tick up during the 1pm slate is why people open a fantasy app
 forty times on a Sunday. Per-game updates lose that. Users are watching on television —
-which runs *ahead* of every data feed — so the app is always behind what they already
+which runs _ahead_ of every data feed — so the app is always behind what they already
 know.
 
 Per-game keeps the scoreboard moving through the day without paying real-time prices.
@@ -90,14 +90,14 @@ Fully automated. No human in the loop at any point.
 The NFL schedule is published in May, so **every kickoff time is known months ahead**.
 That makes the whole thing schedule-driven rather than reactive:
 
-| Job | Fires | Does |
-|---|---|---|
-| **Season sync** | Daily, 4am | Players, teams, byes, schedule changes |
-| **Injury sync** | Every 6h, and hourly on game days | Injury designations |
-| **Inactives** | **100 minutes before each kickoff** | Official inactive list — see below |
-| **Game watcher** | 2.5h after each kickoff, then every 10 min | Polls until status is `final` |
-| **Score finalise** | On `final` | Box score → `stat_lines` → recompute → publish |
-| **Week finalise** | T+48h, or T+7d for Weeks 14 and 17 | Locks the week for settlement |
+| Job                | Fires                                      | Does                                           |
+| ------------------ | ------------------------------------------ | ---------------------------------------------- |
+| **Season sync**    | Daily, 4am                                 | Players, teams, byes, schedule changes         |
+| **Injury sync**    | Every 6h, and hourly on game days          | Injury designations                            |
+| **Inactives**      | **100 minutes before each kickoff**        | Official inactive list — see below             |
+| **Game watcher**   | 2.5h after each kickoff, then every 10 min | Polls until status is `final`                  |
+| **Score finalise** | On `final`                                 | Box score → `stat_lines` → recompute → publish |
+| **Week finalise**  | T+48h, or T+7d for Weeks 14 and 17         | Locks the week for settlement                  |
 
 The game watcher is the only job that polls, and only from 2.5 hours after kickoff until
 the game ends — roughly 20–40 minutes of polling per game.
@@ -105,21 +105,21 @@ the game ends — roughly 20–40 minutes of polling per game.
 ### Inactives matter more than live scoring
 
 Teams must submit inactive lists **90 minutes before kickoff**. That data changes what
-users *do* — whether to bench a questionable starter — where live scoring only changes
-what they *watch*.
+users _do_ — whether to bench a questionable starter — where live scoring only changes
+what they _watch_.
 
 If the data budget only covers one timely feed, it should be this one.
 
 **Provider refresh rates are the binding constraint here, not our polling.** Tank01
 states:
 
-| Data | Refresh |
-|---|---|
-| Games, box scores | Immediately, as they happen |
-| Player news, headlines | Multiple times per hour |
-| Rosters — injuries refresh with them | **Hourly** |
+| Data                                 | Refresh                     |
+| ------------------------------------ | --------------------------- |
+| Games, box scores                    | Immediately, as they happen |
+| Player news, headlines               | Multiple times per hour     |
+| Rosters — injuries refresh with them | **Hourly**                  |
 
-Hourly is fine for the Wednesday–Friday injury designations. It is *not* fine for
+Hourly is fine for the Wednesday–Friday injury designations. It is _not_ fine for
 gameday inactives:
 
 ```
@@ -130,7 +130,7 @@ T-0    kickoff, lineup locks
 ```
 
 Users would get 25–90 minutes of warning, median ~55. ESPN and Sleeper get it at T-90.
-Tank01 also only *guarantees* `teamID`, `teamAbv`, and `playerID` on the roster endpoint,
+Tank01 also only _guarantees_ `teamID`, `teamAbv`, and `playerID` on the roster endpoint,
 with other metadata varying, and documents no dedicated inactives endpoint.
 
 **Mitigation, at no additional cost:** SportsDataIO documents an explicit `Inactive`
@@ -153,24 +153,24 @@ from growth.
 
 Per week, in season:
 
-| Job | Calls/week |
-|---|---|
-| Game watcher polling | ~70 |
-| Box score fetch (16 games) | 16 |
-| Inactives (4 kickoff windows) | ~48 |
-| Injury sync | ~30 |
-| Season/roster sync | 7 |
-| **Total** | **~170/week ≈ 700/month** |
+| Job                           | Calls/week                |
+| ----------------------------- | ------------------------- |
+| Game watcher polling          | ~70                       |
+| Box score fetch (16 games)    | 16                        |
+| Inactives (4 kickoff windows) | ~48                       |
+| Injury sync                   | ~30                       |
+| Season/roster sync            | 7                         |
+| **Total**                     | **~170/week ≈ 700/month** |
 
 ### Providers
 
-| Tier | Cost | Verdict |
-|---|---|---|
-| **Tank01 Basic** (RapidAPI) | **Free** — 1,000 calls/month | Fits development. No credit card. |
-| **Tank01 Pro** | **$10/mo** — 1,000/day (~30,000/mo) | **40× headroom at per-game; still fits 30s polling.** |
-| Tank01 Ultra | $25/mo — 15,000/day | Only if polling gets genuinely aggressive |
-| SportsDataIO self-serve | $99–149/mo — delayed, call-capped | **Inactives + second oracle source** |
-| Sportradar | ~$500–1,000+/mo | Push feeds. Not needed here. |
+| Tier                        | Cost                                | Verdict                                               |
+| --------------------------- | ----------------------------------- | ----------------------------------------------------- |
+| **Tank01 Basic** (RapidAPI) | **Free** — 1,000 calls/month        | Fits development. No credit card.                     |
+| **Tank01 Pro**              | **$10/mo** — 1,000/day (~30,000/mo) | **40× headroom at per-game; still fits 30s polling.** |
+| Tank01 Ultra                | $25/mo — 15,000/day                 | Only if polling gets genuinely aggressive             |
+| SportsDataIO self-serve     | $99–149/mo — delayed, call-capped   | **Inactives + second oracle source**                  |
+| Sportradar                  | ~$500–1,000+/mo                     | Push feeds. Not needed here.                          |
 
 **Primary feed: Tank01 Pro at $10/month.** Already updated for the 2026 season; box
 scores, injuries, news, and projections.
@@ -193,11 +193,11 @@ the automated path that decides who gets paid.
 
 ### Bottom line
 
-| Phase | Monthly |
-|---|---|
-| Development | **$0** (Tank01 Basic) |
-| 2026 season, single source | **$10** |
-| 2026 season with settlement redundancy | **$110–160** |
+| Phase                                  | Monthly               |
+| -------------------------------------- | --------------------- |
+| Development                            | **$0** (Tank01 Basic) |
+| 2026 season, single source             | **$10**               |
+| 2026 season with settlement redundancy | **$110–160**          |
 
 For context: the real-time architecture the majors run would be **$500–1,000+/month**,
 for a feature that has no effect on who wins.

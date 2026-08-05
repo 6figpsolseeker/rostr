@@ -1,0 +1,7 @@
+packages:
+  - "packages/*"
+  - "apps/*"
+allowBuilds:
+  # esbuild ships prebuilt binaries and needs its install script to select one.
+  # Required by vitest.
+  esbuild: true

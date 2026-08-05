@@ -8,7 +8,7 @@ Ordered by deadline and risk, not by what's easy or interesting.
 
 **1. The NFL calendar is the release schedule.** Settlement code doesn't run until
 January. Playoff brackets don't run until December. Waivers don't run until Week 2.
-Only *drafting* and *scoring* are genuinely due in the next five weeks. This turns an
+Only _drafting_ and _scoring_ are genuinely due in the next five weeks. This turns an
 impossible 35-day scope into a feasible one — as long as the ordering respects it.
 
 **2. Long-lead items go first, regardless of when they're used.** The escrow program
@@ -34,17 +34,17 @@ to change after the fact.
 
 ## The deadline ladder
 
-| Date | Week | What must exist |
-|---|---|---|
-| **Aug 22** | — | **Leagues can be created, joined, funded, and drafted** |
-| **Sep 9** | 1 | **Lineups lock, live scoring, matchups resolve** |
-| Sep 16 | 2 | Waivers |
-| Sep 20 | 2–3 | Trades + veto |
-| Nov 22 | 11 | Trade deadline enforcement |
-| Dec 13 | 14 | Regular-season prize settles — **first real payout** |
-| Dec 16 | 15 | Playoff + consolation brackets |
-| Jan 3 | 17 | Championship |
-| Jan 10 | — | Final payouts (7-day correction window) |
+| Date       | Week | What must exist                                         |
+| ---------- | ---- | ------------------------------------------------------- |
+| **Aug 22** | —    | **Leagues can be created, joined, funded, and drafted** |
+| **Sep 9**  | 1    | **Lineups lock, live scoring, matchups resolve**        |
+| Sep 16     | 2    | Waivers                                                 |
+| Sep 20     | 2–3  | Trades + veto                                           |
+| Nov 22     | 11   | Trade deadline enforcement                              |
+| Dec 13     | 14   | Regular-season prize settles — **first real payout**    |
+| Dec 16     | 15   | Playoff + consolation brackets                          |
+| Jan 3      | 17   | Championship                                            |
+| Jan 10     | —    | Final payouts (7-day correction window)                 |
 
 Two hard deadlines: **Aug 22** and **Sep 9**. Everything else has months of runway.
 
@@ -83,20 +83,20 @@ The resolution, in order of importance:
 
 Foundations plus the first vertical slice.
 
-| # | Commit | Done when |
-|---|---|---|
-| A1 | `chore: pnpm monorepo, TS strict, vitest, eslint, CI` | `pnpm test` runs green in CI |
-| A2 | `feat(core): sport registry — stat keys, positions, slot types` | NFL registered entirely as data |
-| A3 | `feat(core): league rule schema + canonical JSON encoding` | Byte-identical output for identical rules |
-| A4 | `feat(core): rules hashing` | Same rules → same hash, across machines and versions |
-| A5 | `test(core): rule hash golden fixtures` | Encoding can never silently drift |
-| A6 | `feat(db): schema migrations from DATA-MODEL` | Migrations up/down clean |
-| A7 | `feat(api): league creation, rules frozen at write` | `league_rules` rejects UPDATE at the DB level |
-| A8 | `feat(api): rule set pinned to IPFS, hash stored` | `rules_uri` resolves to the exact hashed document |
-| A9 | `feat(auth): email verification + wallet linking` | One user, verified email, ≥1 wallet |
-| A10 | `feat(web): app shell, wallet adapter, league create flow` | A league can be created in a browser |
-| A11 | `feat(web): rules displayed in full before join` | Nobody joins without seeing the frozen rules |
-| A12 | `feat(api): join league, signature over rules hash` | Consent stored as a signature, not a boolean |
+| #   | Commit                                                          | Done when                                            |
+| --- | --------------------------------------------------------------- | ---------------------------------------------------- |
+| A1  | `chore: pnpm monorepo, TS strict, vitest, eslint, CI`           | `pnpm test` runs green in CI                         |
+| A2  | `feat(core): sport registry — stat keys, positions, slot types` | NFL registered entirely as data                      |
+| A3  | `feat(core): league rule schema + canonical JSON encoding`      | Byte-identical output for identical rules            |
+| A4  | `feat(core): rules hashing`                                     | Same rules → same hash, across machines and versions |
+| A5  | `test(core): rule hash golden fixtures`                         | Encoding can never silently drift                    |
+| A6  | `feat(db): schema migrations from DATA-MODEL`                   | Migrations up/down clean                             |
+| A7  | `feat(api): league creation, rules frozen at write`             | `league_rules` rejects UPDATE at the DB level        |
+| A8  | `feat(api): rule set pinned to IPFS, hash stored`               | `rules_uri` resolves to the exact hashed document    |
+| A9  | `feat(auth): email verification + wallet linking`               | One user, verified email, ≥1 wallet                  |
+| A10 | `feat(web): app shell, wallet adapter, league create flow`      | A league can be created in a browser                 |
+| A11 | `feat(web): rules displayed in full before join`                | Nobody joins without seeing the frozen rules         |
+| A12 | `feat(api): join league, signature over rules hash`             | Consent stored as a signature, not a boolean         |
 
 **A3–A5 are the highest-stakes commits in the project.** If canonical encoding is
 unstable, hashes drift, and every immutability guarantee is decorative. Two library
@@ -108,25 +108,25 @@ versions that serialise a float differently are enough to break it.
 
 If this slips, there is no 2026 season.
 
-| # | Commit | Done when |
-|---|---|---|
-| B1 | `feat(scoring): LINEAR rule evaluation` | Multiplier rules score correctly |
-| B2 | `feat(scoring): integer milli-point arithmetic` | Zero float drift — see note |
-| B3 | `feat(scoring): TIERED rule evaluation` | DST points-allowed ladder correct at every boundary |
-| B4 | `feat(scoring): NFL full-PPR default rule set` | Matches `RULES.md` §1 exactly |
-| B5 | `test(scoring): golden fixtures from real 2025 box scores` | Hand-verified against ESPN totals |
-| B6 | `feat(data): provider adapter interface` | Engine has no knowledge of any provider |
-| B7 | `feat(data): Tank01 adapter` | Players, positions, byes, box scores |
-| B8 | `feat(data): player + season sync job` | Full 2026 player pool in Postgres |
-| B9 | `feat(draft): snake order generation` | Order reverses per round, deterministic from seed |
-| B10 | `feat(draft): state machine + pick validation` | Illegal picks impossible, not merely rejected |
-| B11 | `feat(draft): personal queue` | Persistent, reorderable, survives disconnects |
-| B12 | `feat(draft): auto-pick — queue, then best-available-at-need` | Clock expiry always yields a legal pick |
-| B13 | `feat(draft): bot managers` | Bots reuse B12 verbatim — one code path |
-| B14 | `feat(draft): slow draft timers` | 1h–24h picks, no real-time infrastructure |
-| B15 | `test(draft): 12-team simulation, humans + bots` | 1000 drafts, zero invalid rosters |
-| B16 | `feat(web): draft board, queue UI, pick flow` | A human can draft in a browser |
-| B17 | `feat(draft): live draft room over WebSocket` | **Deferrable** — see cut list |
+| #   | Commit                                                        | Done when                                           |
+| --- | ------------------------------------------------------------- | --------------------------------------------------- |
+| B1  | `feat(scoring): LINEAR rule evaluation`                       | Multiplier rules score correctly                    |
+| B2  | `feat(scoring): integer milli-point arithmetic`               | Zero float drift — see note                         |
+| B3  | `feat(scoring): TIERED rule evaluation`                       | DST points-allowed ladder correct at every boundary |
+| B4  | `feat(scoring): NFL full-PPR default rule set`                | Matches `RULES.md` §1 exactly                       |
+| B5  | `test(scoring): golden fixtures from real 2025 box scores`    | Hand-verified against ESPN totals                   |
+| B6  | `feat(data): provider adapter interface`                      | Engine has no knowledge of any provider             |
+| B7  | `feat(data): Tank01 adapter`                                  | Players, positions, byes, box scores                |
+| B8  | `feat(data): player + season sync job`                        | Full 2026 player pool in Postgres                   |
+| B9  | `feat(draft): snake order generation`                         | Order reverses per round, deterministic from seed   |
+| B10 | `feat(draft): state machine + pick validation`                | Illegal picks impossible, not merely rejected       |
+| B11 | `feat(draft): personal queue`                                 | Persistent, reorderable, survives disconnects       |
+| B12 | `feat(draft): auto-pick — queue, then best-available-at-need` | Clock expiry always yields a legal pick             |
+| B13 | `feat(draft): bot managers`                                   | Bots reuse B12 verbatim — one code path             |
+| B14 | `feat(draft): slow draft timers`                              | 1h–24h picks, no real-time infrastructure           |
+| B15 | `test(draft): 12-team simulation, humans + bots`              | 1000 drafts, zero invalid rosters                   |
+| B16 | `feat(web): draft board, queue UI, pick flow`                 | A human can draft in a browser                      |
+| B17 | `feat(draft): live draft room over WebSocket`                 | **Deferrable** — see cut list                       |
 
 **B2 matters more than it looks.** Passing yards score 0.04/yard. In IEEE floats,
 `0.04 × 25 !== 1`. Accumulate that across a 12-team season and matchups decided by
@@ -137,22 +137,22 @@ milli-points internally; formatting to decimals happens only at the display edge
 
 ## Milestone C — A season scores · target Sep 9 · **HARD**
 
-| # | Commit | Done when |
-|---|---|---|
-| C1 | `feat(season): round-robin schedule generation, 14 weeks` | Balanced, deterministic, no repeats beyond necessity |
-| C2 | `feat(season): lineup set + validation` | Slot eligibility enforced from `slot_types` |
-| C3 | `feat(season): per-player lock at kickoff` | A locked slot cannot move, ever |
-| C4 | `feat(data): schedule-driven job runner` | Jobs fire off known kickoff times, no human trigger |
-| C4b | `feat(data): inactives job at kickoff −100min` | Official inactive list lands before lineups lock |
-| C4c | `feat(data): game watcher + per-game finalisation` | Polls from T+2.5h until `final`, then ingests |
-| C5 | `feat(data): stat_line revisions, append-only` | Corrections never overwrite history |
-| C6 | `feat(season): team-week scoring from lineups` | Totals match hand calculation |
-| C7 | `feat(api): SSE score stream` | Browser updates without refresh |
-| C8 | `feat(season): matchup resolution + standings` | W/L/T, Points For, Points Against |
-| C9 | `feat(season): tiebreaker chain` | Deterministic to the final step, no coin flips |
-| C10 | `feat(season): deterministic autolineup` | Season-to-date average, ties by player ID |
-| C11 | `feat(season): abandonment strikes + on-chain warnings` | 3 strikes → autolineup, visible at 1 and 2 |
-| C12 | `feat(web): matchup view, live scoring, standings` | Sunday afternoon works |
+| #   | Commit                                                    | Done when                                            |
+| --- | --------------------------------------------------------- | ---------------------------------------------------- |
+| C1  | `feat(season): round-robin schedule generation, 14 weeks` | Balanced, deterministic, no repeats beyond necessity |
+| C2  | `feat(season): lineup set + validation`                   | Slot eligibility enforced from `slot_types`          |
+| C3  | `feat(season): per-player lock at kickoff`                | A locked slot cannot move, ever                      |
+| C4  | `feat(data): schedule-driven job runner`                  | Jobs fire off known kickoff times, no human trigger  |
+| C4b | `feat(data): inactives job at kickoff −100min`            | Official inactive list lands before lineups lock     |
+| C4c | `feat(data): game watcher + per-game finalisation`        | Polls from T+2.5h until `final`, then ingests        |
+| C5  | `feat(data): stat_line revisions, append-only`            | Corrections never overwrite history                  |
+| C6  | `feat(season): team-week scoring from lineups`            | Totals match hand calculation                        |
+| C7  | `feat(api): SSE score stream`                             | Browser updates without refresh                      |
+| C8  | `feat(season): matchup resolution + standings`            | W/L/T, Points For, Points Against                    |
+| C9  | `feat(season): tiebreaker chain`                          | Deterministic to the final step, no coin flips       |
+| C10 | `feat(season): deterministic autolineup`                  | Season-to-date average, ties by player ID            |
+| C11 | `feat(season): abandonment strikes + on-chain warnings`   | 3 strikes → autolineup, visible at 1 and 2           |
+| C12 | `feat(web): matchup view, live scoring, standings`        | Sunday afternoon works                               |
 
 ---
 
@@ -160,66 +160,66 @@ milli-points internally; formatting to decimals happens only at the display edge
 
 Calendar-driven, not sequence-driven. Written alongside A and B.
 
-| # | Commit | Done when |
-|---|---|---|
-| D1 | `chore(anchor): workspace, localnet, CI` | `anchor test` green on localnet |
-| D2 | `feat(program): league account + rules hash + frozen config` | Rules hash immutable post-init |
-| D3 | `feat(program): join with rules-hash acceptance` | Consent provable on-chain |
-| D4 | `feat(program): deposit to vault, single SPL token` | Mixed tokens rejected at the type level |
-| D5 | `feat(program): unconditional timelock refund` | **Funds can never be stuck. Ship first.** |
-| D6 | `feat(program): payout by frozen split` | 60/15/10/10/5 enforced by the program |
-| D7 | `feat(program): abandonment forfeit to champion` | Forfeited stake redirects correctly |
-| D8 | `test(program): adversarial suite` | Double-deposit, early-withdraw, wrong-signer, overflow |
-| D9 | `chore: upgrade authority → multisig, documented` | Disclosed in README |
-| D10 | `chore: submit for audit` | **Must happen in week one** |
+| #   | Commit                                                       | Done when                                              |
+| --- | ------------------------------------------------------------ | ------------------------------------------------------ |
+| D1  | `chore(anchor): workspace, localnet, CI`                     | `anchor test` green on localnet                        |
+| D2  | `feat(program): league account + rules hash + frozen config` | Rules hash immutable post-init                         |
+| D3  | `feat(program): join with rules-hash acceptance`             | Consent provable on-chain                              |
+| D4  | `feat(program): deposit to vault, single SPL token`          | Mixed tokens rejected at the type level                |
+| D5  | `feat(program): unconditional timelock refund`               | **Funds can never be stuck. Ship first.**              |
+| D6  | `feat(program): payout by frozen split`                      | 60/15/10/10/5 enforced by the program                  |
+| D7  | `feat(program): abandonment forfeit to champion`             | Forfeited stake redirects correctly                    |
+| D8  | `test(program): adversarial suite`                           | Double-deposit, early-withdraw, wrong-signer, overflow |
+| D9  | `chore: upgrade authority → multisig, documented`            | Disclosed in README                                    |
+| D10 | `chore: submit for audit`                                    | **Must happen in week one**                            |
 
 ---
 
 ## Milestone E — Rosters become NFTs · target Oct
 
-Deliberately *after* the season is running. A working season with database rosters beats
+Deliberately _after_ the season is running. A working season with database rosters beats
 a broken season with beautiful tokens, and this is the most technically involved piece.
 
-| # | Commit | Done when |
-|---|---|---|
-| E1 | `feat(program): Token-2022 mint, permanent delegate` | Program can always move a roster token |
-| E2 | `feat(program): transfer hook restricting to league program` | Marketplace transfers rejected |
-| E3 | `feat(draft): mint "Player YYYY" on pick` | Draft produces wallet-held NFTs |
-| E4 | `feat(program): trophy unlock at settlement` | Transfer restriction relaxes after the season |
-| E5 | `test(program): marketplace bypass attempts` | Every escape route provably closed |
+| #   | Commit                                                       | Done when                                     |
+| --- | ------------------------------------------------------------ | --------------------------------------------- |
+| E1  | `feat(program): Token-2022 mint, permanent delegate`         | Program can always move a roster token        |
+| E2  | `feat(program): transfer hook restricting to league program` | Marketplace transfers rejected                |
+| E3  | `feat(draft): mint "Player YYYY" on pick`                    | Draft produces wallet-held NFTs               |
+| E4  | `feat(program): trophy unlock at settlement`                 | Transfer restriction relaxes after the season |
+| E5  | `test(program): marketplace bypass attempts`                 | Every escape route provably closed            |
 
 ---
 
 ## Milestone F — Rosters change · target Sep 16 (waivers), Sep 20 (trades)
 
-| # | Commit | Done when |
-|---|---|---|
-| F1 | `feat(txn): rolling waiver priority` | Claim wins → team drops to the back |
-| F2 | `feat(txn): claim processing job` | Batch resolution, deterministic ordering |
-| F3 | `feat(txn): 2-day waiver period then free agency` | Drops age correctly into FA |
-| F4 | `feat(txn): trade proposal + acceptance` | Roster-legal trades only |
-| F5 | `feat(program): trade escrow PDA` | Both sides' NFTs held atomically |
-| F6 | `feat(txn): 48h veto window + ⅓ threshold` | Uninvolved teams only; bots abstain |
-| F7 | `feat(txn): veto resolution — execute or revert` | Atomic both ways |
-| F8 | `feat(txn): trade deadline enforcement` | Week 11 hard stop |
-| F9 | `feat(web): waiver + trade UI` | Usable without documentation |
+| #   | Commit                                            | Done when                                |
+| --- | ------------------------------------------------- | ---------------------------------------- |
+| F1  | `feat(txn): rolling waiver priority`              | Claim wins → team drops to the back      |
+| F2  | `feat(txn): claim processing job`                 | Batch resolution, deterministic ordering |
+| F3  | `feat(txn): 2-day waiver period then free agency` | Drops age correctly into FA              |
+| F4  | `feat(txn): trade proposal + acceptance`          | Roster-legal trades only                 |
+| F5  | `feat(program): trade escrow PDA`                 | Both sides' NFTs held atomically         |
+| F6  | `feat(txn): 48h veto window + ⅓ threshold`        | Uninvolved teams only; bots abstain      |
+| F7  | `feat(txn): veto resolution — execute or revert`  | Atomic both ways                         |
+| F8  | `feat(txn): trade deadline enforcement`           | Week 11 hard stop                        |
+| F9  | `feat(web): waiver + trade UI`                    | Usable without documentation             |
 
 ---
 
 ## Milestone G — The season resolves · target Dec–Jan
 
-| # | Commit | Done when |
-|---|---|---|
-| G1 | `feat(playoffs): seeding from final standings` | Top 6, byes for 1–2 |
-| G2 | `feat(playoffs): bracket generation + advancement` | 3v6, 4v5, reseed, championship |
-| G3 | `feat(playoffs): consolation bracket` | Bottom 6 seeded by finish |
-| G4 | `feat(data): second provider adapter` | Independent source for oracle agreement |
-| G5 | `feat(oracle): dual-source agreement gate` | Disagreement freezes the week |
-| G6 | `feat(oracle): 48h / 7-day finalisation windows` | Paying weeks wait out stat corrections |
-| G7 | `feat(settle): post finalised scores on-chain` | Scores signed and stored |
-| G8 | `feat(settle): derive champion from bracket` | No human declares a winner |
-| G9 | `feat(settle): execute payouts` | All five prizes distributed correctly |
-| G10 | `chore: burn upgrade authority` | Before Week 14 pays out |
+| #   | Commit                                             | Done when                               |
+| --- | -------------------------------------------------- | --------------------------------------- |
+| G1  | `feat(playoffs): seeding from final standings`     | Top 6, byes for 1–2                     |
+| G2  | `feat(playoffs): bracket generation + advancement` | 3v6, 4v5, reseed, championship          |
+| G3  | `feat(playoffs): consolation bracket`              | Bottom 6 seeded by finish               |
+| G4  | `feat(data): second provider adapter`              | Independent source for oracle agreement |
+| G5  | `feat(oracle): dual-source agreement gate`         | Disagreement freezes the week           |
+| G6  | `feat(oracle): 48h / 7-day finalisation windows`   | Paying weeks wait out stat corrections  |
+| G7  | `feat(settle): post finalised scores on-chain`     | Scores signed and stored                |
+| G8  | `feat(settle): derive champion from bracket`       | No human declares a winner              |
+| G9  | `feat(settle): execute payouts`                    | All five prizes distributed correctly   |
+| G10 | `chore: burn upgrade authority`                    | Before Week 14 pays out                 |
 
 ---
 
@@ -228,14 +228,14 @@ a broken season with beautiful tokens, and this is the most technically involved
 Off the critical path for the 2026 season. Build against a proven backend rather than
 alongside an unproven one.
 
-| # | Commit | Done when |
-|---|---|---|
-| H1 | `chore(mobile): RN + Expo bare workspace` | Mirrors the `percolator-mobile` setup |
-| H2 | `feat(mobile): Mobile Wallet Adapter + Seed Vault` | Biometric signing on Seeker |
-| H3 | `feat(mobile): league, matchup, roster screens` | Feature parity with web for in-season use |
-| H4 | `feat(mobile): draft room` | Drafting from a phone |
-| H5 | `feat(mobile): push notifications` | Veto windows and waiver results reach people |
-| H6 | `chore: dApp Store submission` | Per `percolator-mobile/DISTRIBUTION.md` |
+| #   | Commit                                             | Done when                                    |
+| --- | -------------------------------------------------- | -------------------------------------------- |
+| H1  | `chore(mobile): RN + Expo bare workspace`          | Mirrors the `percolator-mobile` setup        |
+| H2  | `feat(mobile): Mobile Wallet Adapter + Seed Vault` | Biometric signing on Seeker                  |
+| H3  | `feat(mobile): league, matchup, roster screens`    | Feature parity with web for in-season use    |
+| H4  | `feat(mobile): draft room`                         | Drafting from a phone                        |
+| H5  | `feat(mobile): push notifications`                 | Veto windows and waiver results reach people |
+| H6  | `chore: dApp Store submission`                     | Per `percolator-mobile/DISTRIBUTION.md`      |
 
 ---
 
@@ -258,8 +258,8 @@ finalisation windows. Those are the ones that lose someone's money.
 
 ## Honest assessment
 
-Milestones A and B in 17 days is achievable solo *if nothing else is attempted in
-parallel*. Milestone C by Sep 9 is achievable. Milestone D written in the same window is
+Milestones A and B in 17 days is achievable solo _if nothing else is attempted in
+parallel_. Milestone C by Sep 9 is achievable. Milestone D written in the same window is
 the strain — it's a different language, a different toolchain, and it must be good enough
 to hand an auditor.
 

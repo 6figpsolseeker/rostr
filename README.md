@@ -34,16 +34,16 @@ front-run on a marketplace, and they can't be forced through by a commissioner.
 
 Pre-alpha. Specification first, then the testable core, then the chain programs.
 
-| | |
-|---|---|
-| ✅ | League rule set — [`docs/RULES.md`](docs/RULES.md) |
-| ✅ | Data model — [`docs/DATA-MODEL.md`](docs/DATA-MODEL.md) |
-| ⬜ | Scoring engine |
-| ⬜ | Snake draft + bot auto-pick |
-| ⬜ | Stats provider adapter |
-| ⬜ | Anchor programs — pot escrow, roster NFTs, trade escrow |
-| ⬜ | Web app |
-| ⬜ | Native app (React Native + Expo, Mobile Wallet Adapter) |
+|     |                                                         |
+| --- | ------------------------------------------------------- |
+| ✅  | League rule set — [`docs/RULES.md`](docs/RULES.md)      |
+| ✅  | Data model — [`docs/DATA-MODEL.md`](docs/DATA-MODEL.md) |
+| ⬜  | Scoring engine                                          |
+| ⬜  | Snake draft + bot auto-pick                             |
+| ⬜  | Stats provider adapter                                  |
+| ⬜  | Anchor programs — pot escrow, roster NFTs, trade escrow |
+| ⬜  | Web app                                                 |
+| ⬜  | Native app (React Native + Expo, Mobile Wallet Adapter) |
 
 **Target: the 2026 NFL season, kickoff September 9 2026.** Drafts happen in the last two
 weeks of August, so the draftable deadline is late August — not September.

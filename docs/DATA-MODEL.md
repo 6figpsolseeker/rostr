@@ -26,10 +26,10 @@ and the **slots** a lineup is made of. The scoring engine never learns a sport's
 Most scoring is linear — a multiplier per unit. Some is not, and the schema has to
 admit that up front or it gets bolted on badly later.
 
-| Kind | Shape | Football examples |
-|---|---|---|
-| `LINEAR` | `points = value × multiplier` | 0.04/passing yard, 1.0/reception, −2/interception, 4/passing TD |
-| `TIERED` | `points = lookup(value in range)` | DEF points allowed (0 → 10, 1–6 → 7, … 35+ → −4) |
+| Kind     | Shape                             | Football examples                                               |
+| -------- | --------------------------------- | --------------------------------------------------------------- |
+| `LINEAR` | `points = value × multiplier`     | 0.04/passing yard, 1.0/reception, −2/interception, 4/passing TD |
+| `TIERED` | `points = lookup(value in range)` | DEF points allowed (0 → 10, 1–6 → 7, … 35+ → −4)                |
 
 Field goals by distance are deliberately **not** tiered. Modelling them as a tier would
 require the engine to see individual kick events. Instead the provider adapter buckets
@@ -138,14 +138,14 @@ addresses, and those are exactly the people who play in leagues together.
 
 The chain holds what must be trustless. Postgres holds what must be queryable.
 
-| On-chain | Off-chain |
-|---|---|
+| On-chain                      | Off-chain                            |
+| ----------------------------- | ------------------------------------ |
 | `rules_hash` and join consent | Full rule document (hash anchors it) |
-| Pot escrow, deposits, payouts | Player database, stat lines |
-| Roster NFTs (Token-2022) | Standings, matchups, schedule |
-| Trade escrow + veto tally | Draft queues, UI state |
-| Abandonment strikes | Notification state |
-| Finalised weekly scores | Provisional scores in the 48h window |
+| Pot escrow, deposits, payouts | Player database, stat lines          |
+| Roster NFTs (Token-2022)      | Standings, matchups, schedule        |
+| Trade escrow + veto tally     | Draft queues, UI state               |
+| Abandonment strikes           | Notification state                   |
+| Finalised weekly scores       | Provisional scores in the 48h window |
 
 Anything the chain settles on must be reconstructible from off-chain data, and anything
 off-chain that contradicts the chain is wrong by definition.
