@@ -47,23 +47,40 @@ Do not build it in August.
 
 See [`docs/BUILD-PLAN.md`](docs/BUILD-PLAN.md) for the full commit-by-commit plan.
 
-**Done:**
+**Done — 66 tests, CI green:**
 
 - Full specification — rules, data model, live scoring, build plan
-- Milestone A1: pnpm monorepo, TS strict, vitest, eslint, prettier, CI green
-- Milestone A2: sport registry (`packages/core/src/sports/`)
-- Milestone A3–A5: canonical encoding, rule schema, hashing, validation — **49 tests**
+- A1: pnpm monorepo, TS strict, vitest, eslint, prettier, CI
+- A2: sport registry (`packages/core/src/sports/`)
+- A3–A5: canonical encoding, rule schema, hashing, validation
+- A6: Postgres migrations (`packages/db/migrations/`), forward-only runner, PGlite tests
 
 **Next, in order:**
 
-1. **A6–A8** — Postgres migrations from `docs/DATA-MODEL.md`, league creation with rules
-   frozen at write, rule set pinned to IPFS
-2. **A9–A12** — email + wallet identity, web shell, rules shown before join, join with a
+1. **A7** — league creation: build rules, validate, hash, write `leagues` +
+   `league_rules` + denormalised scoring/roster rows in one transaction
+2. **A8** — pin the canonical rule document to IPFS behind an adapter interface,
+   store `rules_uri`
+3. **A9–A12** — email + wallet identity, web shell, rules shown before join, join with a
    signature over the rules hash
-3. **B1–B5** — the PPR scoring engine, integer milli-points, golden fixtures from real
+4. **B1–B5** — the PPR scoring engine, integer milli-points, golden fixtures from real
    2025 box scores
-4. **D1–D10** — the escrow program. **Write this early.** The audit is 2–4 weeks of
+5. **D1–D10** — the escrow program. **Write this early.** The audit is 2–4 weeks of
    calendar time and it gates pot leagues opening on Aug 22.
+
+### Database
+
+Tests run on **PGlite** — real Postgres compiled to WASM, in-process, no service, no
+Docker, no credentials. `createTestDatabase()` in `packages/db/src/testing.ts` gives a
+fresh migrated database per test.
+
+The real database is **Supabase** (hosted, so it follows you between machines; also
+matches the stack in `percolator-launch`). Not set up yet — see
+[`docs/SETUP-REQUIRED.md`](docs/SETUP-REQUIRED.md).
+
+Migrations are **forward-only** plain SQL. There are no down migrations: a league's rules
+are immutable and its history must stay auditable, so the answer to a bad migration is
+another migration. Editing an already-applied file makes the runner refuse to start.
 
 ---
 
@@ -178,14 +195,18 @@ pnpm lint
 
 ---
 
-## Open questions
+## Blocked on the owner
 
-Not yet decided, and worth raising with the owner rather than guessing:
+**[`docs/SETUP-REQUIRED.md`](docs/SETUP-REQUIRED.md) is the live list** — accounts, API
+keys, and decisions only the owner can supply, each recording what it blocks and when it
+is needed. Keep it updated: when you hit something that needs a credential or a call the
+owner has to make, add it there rather than stalling or guessing.
 
-- **Bot draft sophistication.** Queue-and-fallback is specified. Whether bots should
-  understand positional scarcity, bye weeks, and tier breaks is open.
-- **Stats provider contract.** Tank01 Pro ($10/mo) is the intended primary,
-  SportsDataIO ($99–149/mo) the second oracle source and inactives feed. Neither is
-  signed up for yet.
-- **Audit vendor and timing.** On the critical path for Aug 22. Nothing booked.
-- **Whether the NOT AUDITED banner stays at the top of the README.** Currently it does.
+Nothing on that list blocks `pnpm test`. The core is deliberately testable without a
+single credential.
+
+The two that matter most right now:
+
+- **The escrow audit** — 2–4 weeks of calendar time, gates pot leagues opening on Aug 22.
+  Should be quoted _now_, before the program is finished.
+- **Bot draft sophistication** — a scope decision needed before Milestone B.
