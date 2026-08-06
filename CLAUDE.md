@@ -296,6 +296,28 @@ pnpm lint
 
 ---
 
+## Answering a scoring question: verify all three sources
+
+**Standing rule from the owner.** Any question of the form "does X score?" or "how many
+points is Y?" gets answered from three places, never from memory:
+
+1. **Tank01** — is the stat actually obtainable, and under what field or text form? Use
+   `stats:probe`, `verify`, `discover`, `deep`. Field names guessed from documentation
+   have been wrong three times already.
+2. **ESPN** — what do they pay, and is it on by default?
+3. **Sleeper** — same, and note their category structure. They split "Special Teams
+   Player" from "Special Teams Defense", which is the distinction that stopped return
+   touchdowns being double-counted.
+
+Answering from any one of the three has produced a wrong answer at least once. The
+scoring table is frozen per league and decides who gets paid, so "probably 6 points" is
+not good enough.
+
+Record the finding in [`docs/TANK01.md`](docs/TANK01.md) with the verbatim strings, so
+the next person does not repeat the lookup.
+
+---
+
 ## Working with the owner
 
 Preferences established in practice, not stated as rules:
