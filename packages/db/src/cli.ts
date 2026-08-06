@@ -11,9 +11,11 @@
  */
 
 import { NFL } from "@rostr/core";
+import { Tank01Provider } from "@rostr/stats";
 import { loadMigrations, migrate } from "./migrate.js";
 import { createPostgresClient } from "./postgres.js";
 import { seedSport } from "./sports.js";
+import { loadDraftBoard, syncByeWeeks, syncPlayers, syncRankings } from "./sync.js";
 
 function connectionString(): string {
   const url = process.env["DATABASE_URL"];
@@ -67,6 +69,58 @@ async function main(): Promise<void> {
           `Seeded ${NFL.key}: ${ids.statKeyIds.size} stat keys, ` +
             `${ids.positionIds.size} positions, ${ids.slotTypeIds.size} slot types.`,
         );
+        break;
+      }
+
+      case "sync": {
+        const apiKey = process.env["TANK01_API_KEY"];
+        if (!apiKey) {
+          console.error("TANK01_API_KEY is not set. See docs/SETUP-REQUIRED.md.");
+          process.exit(1);
+        }
+
+        const season = Number(process.argv[3] ?? new Date().getFullYear());
+        const provider = new Tank01Provider({ apiKey });
+
+        console.log(`Syncing ${NFL.key} ${season} from ${provider.name}...\n`);
+
+        const players = await syncPlayers(client, provider, NFL.key, season);
+        console.log(
+          `players    +${players.inserted} new, ${players.updated} updated, ` +
+            `${players.skipped} skipped (positions we do not roster)`,
+        );
+
+        const byes = await syncByeWeeks(
+          client,
+          NFL.key,
+          season,
+          await provider.listByeWeeks(season),
+        );
+        console.log(`bye weeks  ${byes} player-seasons`);
+
+        const rankings = await syncRankings(client, provider, NFL.key, season);
+        console.log(
+          `rankings   +${rankings.inserted} ranked, ${rankings.skipped} unmatched ` +
+            `(board dated ${rankings.asOf})`,
+        );
+
+        // Named, not merely counted. "36 unmatched" looked unremarkable; the
+        // names turned out to be every kicker in the league.
+        if (rankings.unmatched.length > 0) {
+          console.log(`\n  ranked but not in our player pool:`);
+          for (const name of rankings.unmatched.slice(0, 15)) console.log(`    ${name}`);
+          if (rankings.unmatched.length > 15) {
+            console.log(`    ... and ${rankings.unmatched.length - 15} more`);
+          }
+        }
+
+        const board = await loadDraftBoard(client, NFL.key, season);
+        console.log(`\nDraft board: ${board.length} players`);
+        for (const entry of board.slice(0, 8)) {
+          console.log(
+            `  ${String(entry.rank).padStart(3)}  ${entry.fullName.padEnd(24)} ${entry.positions.join("/")}`,
+          );
+        }
         break;
       }
 

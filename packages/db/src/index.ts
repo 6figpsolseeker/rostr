@@ -36,6 +36,17 @@ export {
 } from "./identity.js";
 
 export {
+  loadDraftBoard,
+  syncByeWeeks,
+  syncGames,
+  syncPlayers,
+  syncRankings,
+  type AdpCapableProvider,
+  type DraftBoardEntry,
+  type SyncResult,
+} from "./sync.js";
+
+export {
   addBot,
   getJoinMessage,
   getMembershipProofs,

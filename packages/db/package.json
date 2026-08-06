@@ -26,6 +26,7 @@
   },
   "dependencies": {
     "@rostr/core": "workspace:*",
+    "@rostr/stats": "workspace:*",
     "pg": "^8.13.1"
   },
   "devDependencies": {

@@ -11,6 +11,12 @@ export {
 export { Tank01Client, type Tank01Options } from "./tank01/client.js";
 export { translateBoxScore, type TranslatedBoxScore } from "./tank01/box-score.js";
 export {
+  DST_REF_PREFIX,
+  Tank01Provider,
+  type AdpBoard,
+  type AdpEntry,
+} from "./tank01/adapter.js";
+export {
   bucketFieldGoal,
   isBlockedKick,
   isDefensiveReturnTouchdown,

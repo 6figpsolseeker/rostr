@@ -111,6 +111,9 @@ importers:
       '@rostr/core':
         specifier: workspace:*
         version: link:../core
+      '@rostr/stats':
+        specifier: workspace:*
+        version: link:../stats
       pg:
         specifier: ^8.13.1
         version: 8.22.0
