@@ -94,13 +94,13 @@ their defense and special teams.
 | RB               | 2             |
 | WR               | 2             |
 | TE               | 1             |
-| FLEX (RB/WR/TE)  | 2             |
+| FLEX (RB/WR/TE)  | 1             |
 | K                | 1             |
 | DEF              | 1             |
-| **Starters**     | **10**        |
+| **Starters**     | **9**         |
 | Bench            | 5             |
 | IR               | 2             |
-| **Total roster** | **15 + 2 IR** |
+| **Total roster** | **14 + 2 IR** |
 
 IR slots hold only players officially designated out or on injured reserve, and do not
 count against the roster limit.

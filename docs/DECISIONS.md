@@ -55,6 +55,52 @@ default. Reverse-standings priority is also deferred.
 Note for later: FAAB maps unusually well to on-chain sealed-bid commit-reveal, which
 makes it more trustworthy than any web2 implementation. Worth revisiting for 2027.
 
+### Draft parity with ESPN and Sleeper
+
+Checked deliberately, because a draft that behaves unexpectedly is the fastest way to
+lose a league full of people who came from somewhere else.
+
+**Where we match:**
+
+| Behaviour                                       | Them              | Us                               |
+| ----------------------------------------------- | ----------------- | -------------------------------- |
+| Snake order, reversing each round               | Default on both   | Same                             |
+| Draft order randomised before the draft         | Yes               | Yes, but seeded and reproducible |
+| Personal queue drives auto-pick                 | Yes               | Same                             |
+| Queue exhausted → best available by roster need | Sleeper, verbatim | Same                             |
+| Hard timer always produces a pick               | Yes               | Same                             |
+| Slow drafts (hours per pick)                    | Sleeper           | Same                             |
+
+Sleeper's own wording for auto-pick — _"Once your queue is empty, the autopick will take
+the next best player based on your roster needs"_ — is exactly what `autoPick()` does.
+
+**Where we are stricter, on purpose:**
+
+Neither platform stops you drafting a roster that cannot field a legal lineup.
+
+- **Sleeper** calls it _"lazy enforcement"_: you can draft over the roster limit and are
+  simply blocked from setting a lineup or adding free agents until you comply.
+- **ESPN** offers configurable per-position minimums and maximums instead, off by default.
+
+We reject a pick that leaves fewer picks than unfilled starting slots
+(`CANNOT_FILL_STARTERS`). That is a real divergence, and it is deliberate:
+
+> **Our abandonment rule punishes invalid lineups.** Three consecutive weeks with an
+> invalid lineup means the team is abandoned and its stake is forfeited to the champion.
+> Copying Sleeper's laziness here would let someone lose a buy-in to a drafting mistake
+> made in August. Sleeper can afford to be lazy because nobody has money in escrow.
+
+The rule only bites in the last two rounds, and only when a legal lineup is genuinely
+impossible — it never blocks a merely unwise pick.
+
+**What we deliberately do not have:**
+
+- **Per-position maximums** (both platforms offer them; off by default on ESPN, opt-in on
+  Sleeper). Ours is a stricter, simpler guarantee instead.
+- **Third Round Reversal**, a Sleeper variant where direction flips at round 3. A format
+  option, not a default. Worth adding if leagues ask.
+- **Auction and linear drafts.** Sleeper supports both. Snake only for v1.
+
 ### Consolation bracket pays out
 
 Not a nicety — **the anti-abandonment mechanism.**

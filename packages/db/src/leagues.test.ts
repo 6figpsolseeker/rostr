@@ -167,7 +167,7 @@ describe("createLeague", () => {
     );
 
     expect(rows.map((r) => r.key)).toEqual(["QB", "RB", "WR", "TE", "FLEX", "K", "DEF"]);
-    expect(rows.map((r) => Number(r.count))).toEqual([1, 2, 2, 1, 2, 1, 1]);
+    expect(rows.map((r) => Number(r.count))).toEqual([1, 2, 2, 1, 1, 1, 1]);
   });
 
   it("makes the rules immutable once written", async () => {

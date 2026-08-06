@@ -71,13 +71,14 @@ export const NFL_PPR_SCORING: readonly ScoringRule[] = [
   },
 ];
 
+/** QB, RB, RB, WR, WR, TE, FLEX, K, DEF — 9 starters, 5 bench, 14 total. */
 export const NFL_PPR_ROSTER: RosterRules = {
   starters: [
     { slotType: "QB", count: 1 },
     { slotType: "RB", count: 2 },
     { slotType: "WR", count: 2 },
     { slotType: "TE", count: 1 },
-    { slotType: "FLEX", count: 2 },
+    { slotType: "FLEX", count: 1 },
     { slotType: "K", count: 1 },
     { slotType: "DEF", count: 1 },
   ],

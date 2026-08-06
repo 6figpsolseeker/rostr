@@ -272,11 +272,19 @@ describe("hashLeagueRules", () => {
   });
 
   it("GOLDEN: the pinned fixture hash has not moved", () => {
-    // If this fails, canonical encoding changed. Every league created before the
-    // change becomes unverifiable. Do not update this value to make it pass —
-    // work out what altered the encoding.
+    // If this fails, either the canonical encoding changed or the default rule
+    // set did. Work out which before touching this value.
+    //
+    //   - Encoding changed  -> every league ever created is now unverifiable.
+    //                          Fix the encoding, never the constant.
+    //   - Defaults changed  -> only new leagues are affected; existing ones hold
+    //                          frozen copies. Updating the constant is correct,
+    //                          and the commit must say what moved and why.
+    //
+    // Last moved: 2026-08-05, roster changed to one FLEX instead of two
+    // (QB/RB/RB/WR/WR/TE/FLEX/K/DEF). No leagues existed.
     expect(hashLeagueRules(FIXTURE)).toBe(
-      "5afc934db3b3e1b1f5ec7a9e503f61e531aa925a6f966c41ec227118201da36a",
+      "df3a5e0445c67dff9fc1b3f54fcdfaed0853c2adbe844830edd48b6e4a486d43",
     );
   });
 });

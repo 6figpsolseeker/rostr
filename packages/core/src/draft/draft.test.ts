@@ -23,6 +23,9 @@ import {
 const SHAPE = buildRosterShape(NFL_PPR_ROSTER, NFL);
 const TEAMS = Array.from({ length: 12 }, (_, i) => `team-${i + 1}`);
 
+/** One round per roster slot — 9 starters plus 5 bench. */
+const ROUNDS = SHAPE.totalSlots;
+
 /** A realistic pool: enough at every position for a 12-team draft. */
 function buildPool(): Map<string, DraftablePlayer> {
   const pool = new Map<string, DraftablePlayer>();
@@ -130,12 +133,12 @@ describe("pickPosition — the snake", () => {
   });
 
   it("gives every team the same number of picks", () => {
-    const sequence = fullDraftSequence(TEAMS, 15);
-    expect(sequence).toHaveLength(totalPicks(12, 15));
+    const sequence = fullDraftSequence(TEAMS, ROUNDS);
+    expect(sequence).toHaveLength(totalPicks(12, ROUNDS));
 
     const counts = new Map<string, number>();
     for (const team of sequence) counts.set(team, (counts.get(team) ?? 0) + 1);
-    expect([...counts.values()]).toEqual(Array<number>(12).fill(15));
+    expect([...counts.values()]).toEqual(Array<number>(12).fill(ROUNDS));
   });
 });
 
@@ -162,11 +165,11 @@ describe("roster legality", () => {
   it("reports unfilled slots in roster order", () => {
     const unfilled = unfilledStarterSlots([player("qb1", ["QB"])], SHAPE);
     expect(unfilled[0]?.slotType).toBe("RB");
-    expect(unfilled).toHaveLength(9);
+    expect(unfilled).toHaveLength(SHAPE.starters.length - 1);
   });
 
   it("permits a legal pick", () => {
-    expect(canDraft([], player("rb1", ["RB"]), SHAPE, 14).legal).toBe(true);
+    expect(canDraft([], player("rb1", ["RB"]), SHAPE, ROUNDS - 1).legal).toBe(true);
   });
 
   it("refuses a player already rostered", () => {
@@ -320,12 +323,12 @@ describe("draft state machine", () => {
   const order = generateDraftOrder(TEAMS, "seed");
 
   it("puts the first team in the order on the clock", () => {
-    const state = createDraft(order, 15);
+    const state = createDraft(order, ROUNDS);
     expect(currentTeam(state)).toBe(order[0]);
   });
 
   it("records a legal manual pick", () => {
-    const state = createDraft(order, 15);
+    const state = createDraft(order, ROUNDS);
     const after = makePick(state, {
       teamId: order[0]!,
       playerId: "rb-1",
@@ -339,13 +342,13 @@ describe("draft state machine", () => {
   });
 
   it("does not mutate the previous state", () => {
-    const state = createDraft(order, 15);
+    const state = createDraft(order, ROUNDS);
     makePick(state, { teamId: order[0]!, playerId: "rb-1", pool, shape: SHAPE });
     expect(state.picks).toHaveLength(0);
   });
 
   it("refuses a pick from a team not on the clock", () => {
-    const state = createDraft(order, 15);
+    const state = createDraft(order, ROUNDS);
     expectDraftError(
       () => makePick(state, { teamId: order[5]!, playerId: "rb-1", pool, shape: SHAPE }),
       "NOT_ON_CLOCK",
@@ -353,7 +356,7 @@ describe("draft state machine", () => {
   });
 
   it("refuses a player already drafted", () => {
-    let state = createDraft(order, 15);
+    let state = createDraft(order, ROUNDS);
     state = makePick(state, { teamId: order[0]!, playerId: "rb-1", pool, shape: SHAPE });
 
     expectDraftError(
@@ -363,7 +366,7 @@ describe("draft state machine", () => {
   });
 
   it("refuses an unknown player", () => {
-    const state = createDraft(order, 15);
+    const state = createDraft(order, ROUNDS);
     expectDraftError(
       () => makePick(state, { teamId: order[0]!, playerId: "nobody", pool, shape: SHAPE }),
       "PLAYER_UNAVAILABLE",
@@ -371,13 +374,12 @@ describe("draft state machine", () => {
   });
 
   it("counts a team's remaining picks correctly through the snake", () => {
-    const state = createDraft(order, 15);
-    // The team on the clock for pick 1 has 14 picks left after this one.
-    expect(picksRemainingAfter(state, order[0]!)).toBe(14);
+    const state = createDraft(order, ROUNDS);
+    expect(picksRemainingAfter(state, order[0]!)).toBe(ROUNDS - 1);
   });
 
   it("auto-picks from a queue", () => {
-    const state = createDraft(order, 15);
+    const state = createDraft(order, ROUNDS);
     const queues = new Map([[order[0]!, ["qb-1"]]]);
     const after = makeAutoPick(state, { pool, shape: SHAPE, queues });
 
@@ -386,20 +388,20 @@ describe("draft state machine", () => {
   });
 
   it("auto-picks by need with no queue", () => {
-    const state = createDraft(order, 15);
+    const state = createDraft(order, ROUNDS);
     const after = makeAutoPick(state, { pool, shape: SHAPE });
     expect(after.picks[0]?.source).toBe("NEED");
   });
 
   it("refuses any pick once complete", () => {
-    // 15 rounds, not 1. A draft with fewer rounds than starting slots cannot
-    // produce a legal roster, and the engine correctly refuses to try.
-    let state = createDraft(["a", "b"], 15);
+    // A full-length draft, not 1 round. A draft with fewer rounds than starting
+    // slots cannot produce a legal roster, and the engine refuses to try.
+    let state = createDraft(["a", "b"], ROUNDS);
     while (!isComplete(state)) {
       state = makeAutoPick(state, { pool, shape: SHAPE });
     }
 
-    expect(state.picks).toHaveLength(30);
+    expect(state.picks).toHaveLength(2 * ROUNDS);
     expectDraftError(() => makeAutoPick(state, { pool, shape: SHAPE }), "DRAFT_COMPLETE");
     expectDraftError(
       () => makePick(state, { teamId: "a", playerId: "qb-1", pool, shape: SHAPE }),
@@ -452,7 +454,7 @@ describe("full draft simulation", () => {
     humanQueues: Map<string, string[]>,
   ): ReturnType<typeof createDraft> {
     const order = generateDraftOrder(TEAMS, seed);
-    let state = createDraft(order, 15);
+    let state = createDraft(order, ROUNDS);
 
     while (!isComplete(state)) {
       state = makeAutoPick(state, { pool, shape: SHAPE, queues: humanQueues });
@@ -463,11 +465,11 @@ describe("full draft simulation", () => {
   it("completes and produces a legal roster for every team", () => {
     const state = runDraft("sim-1", new Map());
 
-    expect(state.picks).toHaveLength(totalPicks(12, 15));
+    expect(state.picks).toHaveLength(totalPicks(12, ROUNDS));
 
     for (const teamId of TEAMS) {
       const roster = rosterFor(state, teamId, pool);
-      expect(roster).toHaveLength(15);
+      expect(roster).toHaveLength(ROUNDS);
       // The property that matters: every team can field a legal lineup.
       expect(startersFilled(roster, SHAPE)).toBe(SHAPE.starters.length);
     }
@@ -498,7 +500,7 @@ describe("full draft simulation", () => {
 
       for (const teamId of TEAMS) {
         const roster = rosterFor(state, teamId, pool);
-        expect(roster).toHaveLength(15);
+        expect(roster).toHaveLength(ROUNDS);
         expect(startersFilled(roster, SHAPE)).toBe(SHAPE.starters.length);
       }
     }
