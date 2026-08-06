@@ -13,6 +13,7 @@ export default defineConfig({
       "@rostr/core": src("core"),
       "@rostr/db": src("db"),
       "@rostr/pinning": src("pinning"),
+      "@rostr/stats": src("stats"),
     },
   },
   test: {

@@ -3,6 +3,7 @@
   "references": [
     { "path": "./packages/core" },
     { "path": "./packages/db" },
-    { "path": "./packages/pinning" }
+    { "path": "./packages/pinning" },
+    { "path": "./packages/stats" }
   ]
 }

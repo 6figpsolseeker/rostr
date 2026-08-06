@@ -137,6 +137,12 @@ importers:
         specifier: workspace:*
         version: link:../core
 
+  packages/stats:
+    dependencies:
+      '@rostr/core':
+        specifier: workspace:*
+        version: link:../core
+
 packages:
 
   '@alloc/quick-lru@5.2.0':
