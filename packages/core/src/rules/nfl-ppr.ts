@@ -112,9 +112,16 @@ export const NFL_DEFAULT_SCHEDULE: ScheduleRules = {
   tiebreakers: ["WIN_PCT", "POINTS_FOR", "HEAD_TO_HEAD", "POINTS_AGAINST", "LOWEST_TEAM_ID"],
 };
 
+/** ESPN's defaults, matched deliberately — see `docs/RULES.md` §6. */
 export const NFL_DEFAULT_WAIVERS: WaiverRules = {
   system: "ROLLING_PRIORITY",
-  waiverPeriodDays: 2,
+  waiverPeriodDays: 1,
+  timezone: "America/New_York",
+  // Unrostered players lock back onto waivers once the week's games are done,
+  // giving everyone a full day of blind claims before they resolve.
+  weeklyLock: { day: "TUESDAY", hour: 0 },
+  processing: { day: "WEDNESDAY", hour: 3 },
+  shortTenureHours: 24,
 };
 
 export const NFL_DEFAULT_TRADES: TradeRules = {

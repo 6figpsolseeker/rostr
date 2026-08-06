@@ -41,6 +41,8 @@ export {
   type TieredScoringRule,
   type TradeRules,
   type WaiverRules,
+  type Weekday,
+  type WeeklyMoment,
 } from "./rules/types.js";
 
 export {
@@ -115,6 +117,28 @@ export {
   type AutoPickResult,
   type AutoPickSource,
 } from "./draft/autopick.js";
+
+export {
+  availabilityAt,
+  dropDestination,
+  nextProcessingAt,
+  nextWeekly,
+  nextWeeklyLockAt,
+  waiverClearsAt,
+  WaiverScheduleError,
+  type DropDestination,
+  type PlayerAvailability,
+} from "./waivers/schedule.js";
+
+export {
+  initialWaiverPriority,
+  resolveWaiverClaims,
+  type ClaimFailure,
+  type ClaimOutcome,
+  type ResolveInput,
+  type WaiverClaim,
+  type WaiverResolution,
+} from "./waivers/claims.js";
 
 export {
   createDraft,

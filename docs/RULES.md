@@ -202,13 +202,62 @@ higher seed wins.
 
 ## 6. Transactions
 
-### Waivers — rolling priority
+### Waivers and free agency
 
-Priority is a fixed 1–12 order, set in reverse of the draft order. Winning a claim
-sends that team to the back of the order. Unclaimed players become free agents on a
-first-come, first-served basis.
+Matches ESPN. Every unrostered player is in exactly one of two states:
 
-Dropped players sit on waivers for **2 days** before entering free agency.
+| State          | Meaning                                                             |
+| -------------- | ------------------------------------------------------------------- |
+| **On waivers** | Frozen. Claims are **blind** and all resolve together, by priority. |
+| **Free agent** | Addable instantly, first come first served.                         |
+
+#### The weekly cycle
+
+| When (Eastern)                  | What happens                               |
+| ------------------------------- | ------------------------------------------ |
+| **Tuesday 00:00**               | Every unrostered player returns to waivers |
+| **Wednesday 03:00**             | Claims process, blind, by priority         |
+| Wednesday 03:00 → Tuesday 00:00 | Free agency, first come first served       |
+
+This is the substance of the system, not the drop rule below it. A backup who
+breaks out on Sunday is claimed by priority on Wednesday morning — not by whoever
+happens to be refreshing on Sunday night.
+
+#### Dropping a player
+
+| Held for               | Goes to                 |
+| ---------------------- | ----------------------- |
+| **24 hours or more**   | Waivers                 |
+| **Less than 24 hours** | Straight to free agency |
+
+The short-tenure exception is ESPN's, and it exists to stop a manager adding a player,
+cutting him hours later, and re-adding him to sidestep the claim queue.
+
+#### Waiver period
+
+**1 day.** A player clears at the first processing run at least a full day after landing
+on waivers — so someone dropped on Tuesday evening does not clear the next morning,
+which would leave the rest of the league no real chance to claim him.
+
+#### Priority
+
+- **Rolling.** Winning a claim sends that team to the back of the order.
+- **A failed claim costs nothing.** Priority moves only on success, so there is never a
+  reason to hoard claims.
+- A team that wins several claims in one run moves once.
+- Starting order is the **reverse of the draft order**.
+
+#### Locks
+
+A player cannot be added or dropped once **his own game has kicked off**. Otherwise a
+manager could cut an injured player mid-game, or add one after his touchdown.
+
+#### Times are a timezone, never an offset
+
+The schedule is stored as `America/New_York` plus a local hour. The season crosses the
+daylight-saving change in early November, so a frozen UTC offset would shift every
+waiver run by an hour partway through — around the trade deadline — with no symptom
+other than claims resolving at the wrong time.
 
 ### Trades
 

@@ -284,9 +284,11 @@ describe("hashLeagueRules", () => {
     // Moved 2026-08-05: roster changed to one FLEX instead of two
     // (QB/RB/RB/WR/WR/TE/FLEX/K/DEF).
     // Moved 2026-08-05: added ret_td at 6 points, matching ESPN and Sleeper.
-    // No leagues existed on either occasion.
+    // Moved 2026-08-06: waiver rules matched to ESPN — 1-day period rather than
+    //   2, plus the weekly cycle, short-tenure rule, and a timezone.
+    // No leagues existed on any of these occasions.
     expect(hashLeagueRules(FIXTURE)).toBe(
-      "1a6ba00fff13593ecf298cbabdfa678f0452b625be11e1916330527e22dc072e",
+      "50d2b40206187be3f6dfd5946a93f3bf41dbbcb46e361daf9fd18fd2c93c691f",
     );
   });
 });

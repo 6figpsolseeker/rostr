@@ -174,6 +174,37 @@ function validateSchedule(rules: LeagueRules, out: string[]): void {
   }
 }
 
+function validateWaivers(rules: LeagueRules, out: string[]): void {
+  const w = rules.waivers;
+
+  if (w.waiverPeriodDays <= 0) out.push("waiverPeriodDays must be positive");
+  if (w.shortTenureHours < 0) out.push("shortTenureHours cannot be negative");
+
+  // A timezone, never an offset — the season crosses the daylight-saving change.
+  if (!w.timezone) {
+    out.push("waivers require a timezone, e.g. America/New_York");
+  } else {
+    try {
+      new Intl.DateTimeFormat("en-US", { timeZone: w.timezone });
+    } catch {
+      out.push(`waiver timezone "${w.timezone}" is not a valid IANA timezone`);
+    }
+  }
+
+  for (const [label, moment] of [
+    ["weeklyLock", w.weeklyLock],
+    ["processing", w.processing],
+  ] as const) {
+    if (!Number.isInteger(moment.hour) || moment.hour < 0 || moment.hour > 23) {
+      out.push(`${label}.hour must be an integer 0-23, got ${moment.hour}`);
+    }
+  }
+
+  if (w.weeklyLock.day === w.processing.day && w.weeklyLock.hour === w.processing.hour) {
+    out.push("the weekly lock and processing run cannot be the same moment");
+  }
+}
+
 function validateTrades(rules: LeagueRules, out: string[]): void {
   const t = rules.trades;
   if (!t.enabled) return;
@@ -288,6 +319,7 @@ export function validateLeagueRules(rules: LeagueRules, sport: SportDef): string
   validateLeagueSize(rules, out);
   validateDraft(rules, out);
   validateSchedule(rules, out);
+  validateWaivers(rules, out);
   validateTrades(rules, out);
   validatePot(rules, out);
   validateSettlement(rules, out);

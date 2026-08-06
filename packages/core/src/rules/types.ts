@@ -116,10 +116,56 @@ export type Tiebreaker =
 // Transactions
 // ---------------------------------------------------------------------------
 
+export type Weekday =
+  "SUNDAY" | "MONDAY" | "TUESDAY" | "WEDNESDAY" | "THURSDAY" | "FRIDAY" | "SATURDAY";
+
+/** A recurring weekly moment, in the league's timezone. */
+export type WeeklyMoment = {
+  readonly day: Weekday;
+  /** Local hour, 0–23. */
+  readonly hour: number;
+};
+
+/**
+ * Waivers and free agency, matching ESPN.
+ *
+ * Every unrostered player is in one of two states at any moment: **on waivers**,
+ * frozen and claimable only by blind claim, or a **free agent**, addable
+ * instantly by anyone.
+ *
+ * The weekly cycle is the point of the system. Every unrostered player returns
+ * to waivers after the week's games, so a backup who broke out on Sunday is
+ * claimed by priority on Wednesday rather than by whoever refreshes fastest on
+ * Sunday night.
+ */
 export type WaiverRules = {
   readonly system: "ROLLING_PRIORITY";
-  /** Days a dropped player sits on waivers before entering free agency. */
+  /**
+   * Days a player sits on waivers before clearing. ESPN's default is 1: a
+   * player clears at the first processing run at least this long after landing.
+   */
   readonly waiverPeriodDays: number;
+  /**
+   * IANA timezone the weekly schedule is expressed in.
+   *
+   * **A timezone, never a UTC offset.** "Wednesday 03:00 ET" is 08:00 UTC in
+   * winter and 07:00 UTC in summer, and the NFL season crosses the change in
+   * early November — right before the trade deadline. Freezing an offset would
+   * silently shift every waiver run by an hour mid-season.
+   */
+  readonly timezone: string;
+  /** When unrostered players return to waivers for the week. */
+  readonly weeklyLock: WeeklyMoment;
+  /** When claims are resolved. */
+  readonly processing: WeeklyMoment;
+  /**
+   * A player rostered for less than this many hours goes straight to free
+   * agency when dropped, rather than to waivers.
+   *
+   * ESPN's rule, and it exists to stop a manager adding a player, cutting him
+   * hours later, and re-adding him to dodge the queue.
+   */
+  readonly shortTenureHours: number;
 };
 
 export type TradeRules = {
