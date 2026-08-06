@@ -65,14 +65,23 @@ resolve, or the on-chain hash anchors nothing.
 
 ---
 
-### ⬜ Tank01 API key (RapidAPI)
+### ✅ Tank01 API key (RapidAPI)
 
-**Blocks:** the stats provider adapter, and therefore the scoring engine's real fixtures.
-**Needed by:** Milestone B, ahead of the **Aug 22** draft deadline.
-**Cost:** Basic tier is **free** (1,000 calls/month) and is enough for development.
-Pro is **$10/month** and is what production should run on.
+**Done 2026-08-05.** Key is in `.env` as `TANK01_API_KEY`. Verify any time with
+`pnpm stats:check`, and inspect live response shapes with `pnpm stats:probe`.
 
-See [`LIVE-SCORING.md`](LIVE-SCORING.md) for why Tank01 is the primary feed.
+**Still to do: upgrade to Pro ($10/month) before Week 1.** Basic allows 1,000 calls a
+month and the estimate for a live season is ~700 — too close to the ceiling once real
+leagues are running, and exceeding it stops scoring mid-week.
+
+Two gaps found while mapping the live response, both recorded in
+`packages/stats/src/tank01/stat-map.ts`:
+
+- **Two-point conversions** appear only in play-by-play, and the probe game contained
+  none — so the `scoreType` token is still a guess. Confirm against a game that has one
+  before trusting two-point scoring.
+- **Blocked kicks** (`def_blk_kick`) appear nowhere in Tank01's response. They score zero
+  until a source is found. A known under-count, not a silent wrong answer.
 
 ---
 
