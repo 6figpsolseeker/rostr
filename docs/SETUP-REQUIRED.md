@@ -80,18 +80,34 @@ blocked kicks are both obtainable, from the play-by-play. See
 
 ---
 
-### ⬜ Security audit — escrow program
+### 🟡 Security review — escrow program
 
-**Blocks:** pot leagues opening. **This is the long pole on the critical path.**
-**Needed by:** engaged in **week one**; an audit is 2–4 weeks of calendar time no amount
-of effort compresses, and pot leagues must be fundable by **Aug 22**.
-**Cost:** significant. Budget accordingly.
+**Decided 2026-08-05:** no commercial audit firm. The owner has a professional auditor
+who will review once the tech is mostly built, and audits Solana programs himself —
+`percolator` plus bug bounty submissions on other Solana DeFi programs.
 
-If this slips, the fallback is free-to-play leagues for 2026 with the pot enabled once
-audited. That is the single largest available risk reduction and it is better taken early
-than late.
+That is a real review path rather than a skipped one, and it removes the 2–4 week
+booking lead time that previously sat on the critical path.
 
-**To do:** get quotes now, before the program is finished. Auditors book out.
+**What still limits exposure**, and matters more without a firm's sign-off:
+
+- **A buy-in cap.** The largest single lever: same code and same bug, but a $25 cap on a
+  12-person league risks $300 where a $500 cap risks $6,000. Enforced in the program, not
+  the UI. **Amount still to be decided.**
+- **The unconditional timelock refund.** Turns "funds are gone" into "funds are stuck
+  until a date". Non-negotiable.
+- **Kani proofs.** Already used on `percolator-stake` and `percolator-match`. Free, and
+  it catches the class of bug that drains escrows.
+- **The disclaimer belongs in the signed rules**, not a banner — members already sign the
+  rules hash to join, so an unaudited warning inside the rule set is cryptographically
+  acknowledged rather than dismissed.
+
+**Roster NFTs stay in scope** (Milestone E). They were floated as a cut and the owner
+declined.
+
+**Timing note, stated once:** review happens after the program is written, so for an
+Aug 22 launch it lands close to or after the first deposits. Worth knowing; the caps
+above are what make that tolerable.
 
 ---
 
