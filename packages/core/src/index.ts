@@ -95,6 +95,9 @@ export {
 export {
   buildRosterShape,
   canDraft,
+  countAtPosition,
+  defaultPositionCaps,
+  isAtPositionCap,
   startersFilled,
   unfilledStarterSlots,
   wouldStrandStarters,

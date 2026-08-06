@@ -6,6 +6,7 @@ import { fullDraftSequence, generateDraftOrder, pickPosition, totalPicks } from 
 import {
   buildRosterShape,
   canDraft,
+  defaultPositionCaps,
   startersFilled,
   unfilledStarterSlots,
   wouldStrandStarters,
@@ -33,25 +34,56 @@ const TEAMS = Array.from({ length: 12 }, (_, i) => `team-${i + 1}`);
 /** One round per roster slot — 9 starters plus 5 bench. */
 const ROUNDS = SHAPE.totalSlots;
 
-/** A realistic pool: enough at every position for a 12-team draft. */
+/**
+ * A pool shaped like a real ADP board.
+ *
+ * Ranking order matters to every best-available test, so positions are
+ * interleaved rather than blocked. Skill positions dominate the early rounds and
+ * kickers and defenses sit at the very back — on the live 2026 board, the first
+ * kicker goes around pick 187.
+ *
+ * A pool that ranked all 60 running backs first would make "best available" look
+ * indistinguishable from "take every RB", which is exactly the confusion this
+ * pool exists to avoid.
+ */
 function buildPool(): Map<string, DraftablePlayer> {
-  const pool = new Map<string, DraftablePlayer>();
-  let rank = 1;
-
-  const add = (position: string, count: number): void => {
-    for (let i = 0; i < count; i++) {
-      const id = `${position.toLowerCase()}-${i + 1}`;
-      pool.set(id, { playerId: id, positions: [position], rank: rank++ });
-    }
+  const byPosition = new Map<string, string[]>();
+  const make = (position: string, count: number): void => {
+    byPosition.set(
+      position,
+      Array.from({ length: count }, (_, i) => `${position.toLowerCase()}-${i + 1}`),
+    );
   };
 
-  // Interleaved so ranking is not simply position-ordered.
-  add("RB", 60);
-  add("WR", 70);
-  add("QB", 24);
-  add("TE", 24);
-  add("K", 16);
-  add("DEF", 16);
+  make("RB", 60);
+  make("WR", 70);
+  make("QB", 24);
+  make("TE", 24);
+  make("K", 16);
+  make("DEF", 16);
+
+  // Roughly the shape of a real board: receivers and backs throughout, a
+  // quarterback or tight end sprinkled in, kickers and defenses last.
+  const cadence = ["WR", "RB", "WR", "RB", "TE", "WR", "RB", "QB"];
+  const pool = new Map<string, DraftablePlayer>();
+  let rank = 1;
+  let exhausted = false;
+
+  while (!exhausted) {
+    exhausted = true;
+    for (const position of cadence) {
+      const id = byPosition.get(position)?.shift();
+      if (!id) continue;
+      exhausted = false;
+      pool.set(id, { playerId: id, positions: [position], rank: rank++ });
+    }
+  }
+
+  for (const position of ["K", "DEF"]) {
+    for (const id of byPosition.get(position) ?? []) {
+      pool.set(id, { playerId: id, positions: [position], rank: rank++ });
+    }
+  }
 
   return pool;
 }
@@ -258,18 +290,59 @@ describe("autoPick", () => {
     expect(result?.source).toBe("QUEUE");
   });
 
-  it("falls back to the most-needed slot when the queue is exhausted", () => {
+  it("takes the best player available when the queue is exhausted", () => {
+    // Not the first unfilled roster slot. An earlier version filled slots in
+    // order, so every bot opened with a quarterback — twelve teams taking a QB
+    // in round one, which is nothing like a real draft.
     const result = autoPick({
       available,
       roster: [],
       queue: [],
       shape: SHAPE,
-      picksRemainingAfter: 14,
+      picksRemainingAfter: 13,
     });
-    // First unfilled slot is QB, so the best QB goes — not the higher-ranked WR.
-    expect(result?.source).toBe("NEED");
-    expect(result?.slotType).toBe("QB");
-    expect(result?.player.playerId).toBe("qb1");
+    expect(result?.source).toBe("BEST_AVAILABLE");
+    expect(result?.player.playerId).toBe("wr1");
+  });
+
+  it("will not hoard a position past its cap", () => {
+    // Best-available alone would take receivers all day. Caps are what stop it.
+    const caps = defaultPositionCaps(SHAPE);
+    const wrCap = caps.get("WR")!;
+    const roster = Array.from({ length: wrCap }, (_, i) => player(`wr0${i}`, ["WR"], i));
+
+    const result = autoPick({
+      available,
+      roster,
+      queue: [],
+      shape: SHAPE,
+      picksRemainingAfter: 8,
+    });
+    expect(result?.player.positions).not.toContain("WR");
+  });
+
+  it("fills a required slot late, once best-available is exhausted", () => {
+    // The endgame: one pick left and a defense still needed. ADP would never
+    // reach a defense on merit, so the need path has to take over.
+    const roster = [
+      player("qb1", ["QB"]),
+      player("rb1", ["RB"]),
+      player("rb2", ["RB"]),
+      player("wr01", ["WR"]),
+      player("wr02", ["WR"]),
+      player("te1", ["TE"]),
+      player("fx1", ["WR"]),
+      player("k1", ["K"]),
+    ];
+
+    const result = autoPick({
+      available,
+      roster,
+      queue: [],
+      shape: SHAPE,
+      picksRemainingAfter: 0,
+    });
+    expect(result?.player.playerId).toBe("def1");
   });
 
   it("takes best available once every starting slot is covered", () => {
@@ -427,10 +500,10 @@ describe("draft state machine", () => {
     expect(after.picks[0]?.source).toBe("QUEUE");
   });
 
-  it("auto-picks by need with no queue", () => {
+  it("auto-picks best available with no queue", () => {
     const state = createDraft(order, ROUNDS);
     const after = makeAutoPick(state, { pool, shape: SHAPE });
-    expect(after.picks[0]?.source).toBe("NEED");
+    expect(after.picks[0]?.source).toBe("BEST_AVAILABLE");
   });
 
   it("refuses any pick once complete", () => {
@@ -536,14 +609,43 @@ describe("full draft simulation", () => {
   });
 
   it("honours queues where they exist and falls back where they do not", () => {
-    const queues = new Map([
-      [TEAMS[0]!, ["qb-1", "rb-1", "wr-1"]],
-      [TEAMS[1]!, ["te-1"]],
-    ]);
+    // Deliberately a kicker: nobody takes one early on merit, so it is certain
+    // to still be there — and it proves a queue overrides best-available rather
+    // than merely agreeing with it.
+    const queues = new Map([[TEAMS[0]!, ["k-1"]]]);
     const state = runDraft("sim-3", queues);
 
-    expect(state.picks.some((pick) => pick.source === "QUEUE")).toBe(true);
-    expect(state.picks.some((pick) => pick.source === "NEED")).toBe(true);
+    const queued = state.picks.filter((pick) => pick.source === "QUEUE");
+    expect(queued).toHaveLength(1);
+    expect(queued[0]?.playerId).toBe("k-1");
+    expect(queued[0]?.teamId).toBe(TEAMS[0]);
+
+    // Everyone without a queue still drafts normally.
+    expect(state.picks.some((pick) => pick.source === "BEST_AVAILABLE")).toBe(true);
+  });
+
+  it("does not open every team with the same position", () => {
+    // The symptom that prompted this design: filling roster slots in order made
+    // all twelve teams take a quarterback with the first pick.
+    const state = runDraft("sim-variety", new Map());
+    const firstRound = state.picks.filter((pick) => pick.round === 1);
+    const positions = firstRound.map((pick) => pool.get(pick.playerId)?.positions[0] ?? "?");
+
+    expect(new Set(positions).size).toBeGreaterThan(1);
+  });
+
+  it("gives every team a kicker and a defense", () => {
+    // Neither is ever the best player available — ADP puts kickers past pick
+    // 180 — so they are only ever drafted because the endgame requires them.
+    const state = runDraft("sim-required", new Map());
+
+    for (const teamId of TEAMS) {
+      const roster = rosterFor(state, teamId, pool);
+      const positions = roster.flatMap((player) => player.positions);
+
+      expect(positions, `${teamId} has no kicker`).toContain("K");
+      expect(positions, `${teamId} has no defense`).toContain("DEF");
+    }
   });
 
   it("survives many drafts across different orders", () => {

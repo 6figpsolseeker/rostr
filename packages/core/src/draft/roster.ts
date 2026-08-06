@@ -144,6 +144,67 @@ export function unfilledStarterSlots(
     .sort((a, b) => a.ordinal - b.ordinal);
 }
 
+/**
+ * How many of a position a team should carry.
+ *
+ * Derived from the roster shape, never hardcoded — a sport with different slots
+ * gets sensible caps for free.
+ *
+ * Each position gets its starting slots, plus a share of the bench proportional
+ * to how many slots accept it. Positions you start several of earn depth;
+ * positions with a single dedicated slot do not.
+ *
+ * In football that is:
+ *
+ *     QB 1    RB 4    WR 4    TE 3    K 1    DEF 1
+ *
+ * A first version gave every position `slots + 1`, which let a bot draft **two
+ * kickers and one tight end** — ADP-optimal at the moment of the pick, and
+ * something no manager would ever do. You can only start one kicker and there
+ * is no flex to hide a second in, so the second is a wasted roster spot.
+ *
+ * These are guidance for auto-pick, **not** a rule. A human may draft whatever
+ * they like; `canDraft` does not consult this.
+ */
+export function defaultPositionCaps(shape: RosterShape): ReadonlyMap<string, number> {
+  const accepting = new Map<string, number>();
+
+  for (const slot of shape.starters) {
+    for (const position of slot.eligiblePositions) {
+      accepting.set(position, (accepting.get(position) ?? 0) + 1);
+    }
+  }
+
+  const totalStarterSlots = shape.starters.length;
+  if (totalStarterSlots === 0) return accepting;
+
+  return new Map(
+    [...accepting].map(([position, slots]) => [
+      position,
+      // Floor, deliberately. Rounding up hands a bench spot to every position,
+      // which is how the second kicker got in.
+      slots + Math.floor((shape.benchSlots * slots) / totalStarterSlots),
+    ]),
+  );
+}
+
+/** How many players a roster already holds at a position. */
+export function countAtPosition(roster: readonly DraftablePlayer[], position: string): number {
+  return roster.filter((player) => player.positions.includes(position)).length;
+}
+
+/** Whether a player's positions are all at or over their cap. */
+export function isAtPositionCap(
+  roster: readonly DraftablePlayer[],
+  player: DraftablePlayer,
+  caps: ReadonlyMap<string, number>,
+): boolean {
+  return player.positions.every((position) => {
+    const cap = caps.get(position);
+    return cap !== undefined && countAtPosition(roster, position) >= cap;
+  });
+}
+
 export type IllegalPickReason = "ROSTER_FULL" | "ALREADY_ROSTERED";
 
 export interface PickLegality {
