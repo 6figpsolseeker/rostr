@@ -82,3 +82,53 @@ export {
 } from "./scoring/engine.js";
 
 export { SCORING_FIXTURES, type ScoringFixture } from "./scoring/fixtures.js";
+
+export {
+  fullDraftSequence,
+  generateDraftOrder,
+  pickPosition,
+  teamOnClock,
+  totalPicks,
+  type PickPosition,
+} from "./draft/order.js";
+
+export {
+  buildRosterShape,
+  canDraft,
+  startersFilled,
+  unfilledStarterSlots,
+  type DraftablePlayer,
+  type IllegalPickReason,
+  type PickLegality,
+  type RosterShape,
+  type StartingSlot,
+} from "./draft/roster.js";
+
+export {
+  autoPick,
+  pruneQueue,
+  type AutoPickContext,
+  type AutoPickResult,
+  type AutoPickSource,
+} from "./draft/autopick.js";
+
+export {
+  createDraft,
+  currentPickNumber,
+  currentTeam,
+  draftedPlayerIds,
+  DraftError,
+  isComplete,
+  isPickExpired,
+  makeAutoPick,
+  makePick,
+  pickDeadline,
+  picksRemainingAfter,
+  rosterFor,
+  secondsRemaining,
+  type AutoPickInput,
+  type DraftErrorCode,
+  type DraftPick,
+  type DraftState,
+  type MakePickInput,
+} from "./draft/state.js";

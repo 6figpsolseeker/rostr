@@ -1,0 +1,512 @@
+import { describe, expect, it } from "vitest";
+import { NFL } from "../sports/nfl.js";
+import { NFL_PPR_ROSTER } from "../rules/nfl-ppr.js";
+import type { DraftRules } from "../rules/types.js";
+import { fullDraftSequence, generateDraftOrder, pickPosition, totalPicks } from "./order.js";
+import { buildRosterShape, canDraft, startersFilled, unfilledStarterSlots } from "./roster.js";
+import type { DraftablePlayer } from "./roster.js";
+import { autoPick, pruneQueue } from "./autopick.js";
+import {
+  createDraft,
+  currentTeam,
+  DraftError,
+  isComplete,
+  isPickExpired,
+  makeAutoPick,
+  makePick,
+  pickDeadline,
+  picksRemainingAfter,
+  rosterFor,
+  secondsRemaining,
+} from "./state.js";
+
+const SHAPE = buildRosterShape(NFL_PPR_ROSTER, NFL);
+const TEAMS = Array.from({ length: 12 }, (_, i) => `team-${i + 1}`);
+
+/** A realistic pool: enough at every position for a 12-team draft. */
+function buildPool(): Map<string, DraftablePlayer> {
+  const pool = new Map<string, DraftablePlayer>();
+  let rank = 1;
+
+  const add = (position: string, count: number): void => {
+    for (let i = 0; i < count; i++) {
+      const id = `${position.toLowerCase()}-${i + 1}`;
+      pool.set(id, { playerId: id, positions: [position], rank: rank++ });
+    }
+  };
+
+  // Interleaved so ranking is not simply position-ordered.
+  add("RB", 60);
+  add("WR", 70);
+  add("QB", 24);
+  add("TE", 24);
+  add("K", 16);
+  add("DEF", 16);
+
+  return pool;
+}
+
+const player = (id: string, positions: string[], rank = 1): DraftablePlayer => ({
+  playerId: id,
+  positions,
+  rank,
+});
+
+/**
+ * Assert a synchronous call throws a DraftError with a given code.
+ *
+ * `expect(fn).toSatisfy(...)` inspects the function itself, not what it throws —
+ * so it passes for any predicate that happens to be falsy on a function value.
+ */
+function expectDraftError(fn: () => unknown, code: string): void {
+  let thrown: unknown;
+  try {
+    fn();
+  } catch (error) {
+    thrown = error;
+  }
+
+  expect(thrown, "expected the call to throw").toBeInstanceOf(DraftError);
+  expect((thrown as DraftError).code).toBe(code);
+}
+
+describe("generateDraftOrder", () => {
+  it("is deterministic for a given seed", () => {
+    const a = generateDraftOrder(TEAMS, "seed-abc");
+    const b = generateDraftOrder(TEAMS, "seed-abc");
+    expect(a).toEqual(b);
+  });
+
+  it("produces different orders for different seeds", () => {
+    const a = generateDraftOrder(TEAMS, "seed-abc");
+    const b = generateDraftOrder(TEAMS, "seed-xyz");
+    expect(a).not.toEqual(b);
+  });
+
+  it("is a permutation — every team appears exactly once", () => {
+    const order = generateDraftOrder(TEAMS, "seed");
+    expect([...order].sort()).toEqual([...TEAMS].sort());
+  });
+
+  it("actually shuffles", () => {
+    // A seed that returned the input unchanged would pass every test above.
+    const orders = ["a", "b", "c", "d", "e"].map((s) => generateDraftOrder(TEAMS, s));
+    expect(orders.some((order) => order.join() !== TEAMS.join())).toBe(true);
+  });
+
+  it("handles a two-team league", () => {
+    expect([...generateDraftOrder(["a", "b"], "seed")].sort()).toEqual(["a", "b"]);
+  });
+});
+
+describe("pickPosition — the snake", () => {
+  it("runs round 1 forward", () => {
+    expect(pickPosition(1, 12).orderIndex).toBe(0);
+    expect(pickPosition(12, 12).orderIndex).toBe(11);
+  });
+
+  it("runs round 2 backward", () => {
+    expect(pickPosition(13, 12).orderIndex).toBe(11);
+    expect(pickPosition(24, 12).orderIndex).toBe(0);
+  });
+
+  it("runs round 3 forward again", () => {
+    expect(pickPosition(25, 12).orderIndex).toBe(0);
+  });
+
+  it("gives the first and last picker consecutive picks at the turn", () => {
+    // The defining property of a snake: pick 12 and 13 are the same team.
+    expect(pickPosition(12, 12).orderIndex).toBe(pickPosition(13, 12).orderIndex);
+  });
+
+  it("reports rounds and positions", () => {
+    expect(pickPosition(1, 12)).toEqual({ round: 1, pickInRound: 1, orderIndex: 0 });
+    expect(pickPosition(14, 12)).toEqual({ round: 2, pickInRound: 2, orderIndex: 10 });
+  });
+
+  it("rejects nonsense input", () => {
+    expect(() => pickPosition(0, 12)).toThrow(RangeError);
+    expect(() => pickPosition(1, 0)).toThrow(RangeError);
+  });
+
+  it("gives every team the same number of picks", () => {
+    const sequence = fullDraftSequence(TEAMS, 15);
+    expect(sequence).toHaveLength(totalPicks(12, 15));
+
+    const counts = new Map<string, number>();
+    for (const team of sequence) counts.set(team, (counts.get(team) ?? 0) + 1);
+    expect([...counts.values()]).toEqual(Array<number>(12).fill(15));
+  });
+});
+
+describe("roster legality", () => {
+  it("counts a FLEX-eligible surplus as filling FLEX", () => {
+    // Naive per-position counting says the third WR is surplus. It is not.
+    const roster = [
+      player("rb1", ["RB"]),
+      player("wr1", ["WR"]),
+      player("wr2", ["WR"]),
+      player("wr3", ["WR"]),
+    ];
+    // RB, RB, WR, WR, FLEX, FLEX are all reachable: 1 RB + 3 WR fills
+    // RB, WR, WR, FLEX = 4 slots.
+    expect(startersFilled(roster, SHAPE)).toBe(4);
+  });
+
+  it("does not let a surplus fill a slot it is ineligible for", () => {
+    const roster = [player("qb1", ["QB"]), player("qb2", ["QB"]), player("qb3", ["QB"])];
+    // Only one QB slot, and QB is not FLEX-eligible.
+    expect(startersFilled(roster, SHAPE)).toBe(1);
+  });
+
+  it("reports unfilled slots in roster order", () => {
+    const unfilled = unfilledStarterSlots([player("qb1", ["QB"])], SHAPE);
+    expect(unfilled[0]?.slotType).toBe("RB");
+    expect(unfilled).toHaveLength(9);
+  });
+
+  it("permits a legal pick", () => {
+    expect(canDraft([], player("rb1", ["RB"]), SHAPE, 14).legal).toBe(true);
+  });
+
+  it("refuses a player already rostered", () => {
+    const rb = player("rb1", ["RB"]);
+    expect(canDraft([rb], rb, SHAPE, 14).reason).toBe("ALREADY_ROSTERED");
+  });
+
+  it("refuses when the roster is full", () => {
+    const full = Array.from({ length: SHAPE.totalSlots }, (_, i) => player(`p${i}`, ["WR"], i));
+    expect(canDraft(full, player("new", ["WR"]), SHAPE, 5).reason).toBe("ROSTER_FULL");
+  });
+
+  it("refuses a pick that would leave starters unfillable", () => {
+    // The rule that stops six quarterbacks and no kicker. One pick left, and
+    // both a K and a DEF still needed — taking a WR makes Week 1 impossible.
+    const roster = [
+      player("qb1", ["QB"]),
+      player("rb1", ["RB"]),
+      player("rb2", ["RB"]),
+      player("wr1", ["WR"]),
+      player("wr2", ["WR"]),
+      player("te1", ["TE"]),
+      player("fx1", ["WR"]),
+      player("fx2", ["RB"]),
+      player("k1", ["K"]),
+    ];
+    expect(canDraft(roster, player("wr9", ["WR"]), SHAPE, 0).reason).toBe(
+      "CANNOT_FILL_STARTERS",
+    );
+    // The DEF that actually fills the gap is fine.
+    expect(canDraft(roster, player("def1", ["DEF"]), SHAPE, 0).legal).toBe(true);
+  });
+
+  it("allows luxury picks while there is still time", () => {
+    const roster = [player("qb1", ["QB"])];
+    expect(canDraft(roster, player("qb2", ["QB"]), SHAPE, 13).legal).toBe(true);
+  });
+});
+
+describe("autoPick", () => {
+  const available = [
+    player("wr1", ["WR"], 1),
+    player("rb1", ["RB"], 2),
+    player("qb1", ["QB"], 3),
+    player("k1", ["K"], 90),
+    player("def1", ["DEF"], 95),
+  ];
+
+  it("takes the top queued player", () => {
+    const result = autoPick({
+      available,
+      roster: [],
+      queue: ["qb1"],
+      shape: SHAPE,
+      picksRemainingAfter: 14,
+    });
+    expect(result?.player.playerId).toBe("qb1");
+    expect(result?.source).toBe("QUEUE");
+  });
+
+  it("skips queued players already taken", () => {
+    const result = autoPick({
+      available: available.filter((p) => p.playerId !== "qb1"),
+      roster: [],
+      queue: ["qb1", "rb1"],
+      shape: SHAPE,
+      picksRemainingAfter: 14,
+    });
+    expect(result?.player.playerId).toBe("rb1");
+    expect(result?.source).toBe("QUEUE");
+  });
+
+  it("falls back to the most-needed slot when the queue is exhausted", () => {
+    const result = autoPick({
+      available,
+      roster: [],
+      queue: [],
+      shape: SHAPE,
+      picksRemainingAfter: 14,
+    });
+    // First unfilled slot is QB, so the best QB goes — not the higher-ranked WR.
+    expect(result?.source).toBe("NEED");
+    expect(result?.slotType).toBe("QB");
+    expect(result?.player.playerId).toBe("qb1");
+  });
+
+  it("takes best available once every starting slot is covered", () => {
+    const roster = [
+      player("qb0", ["QB"]),
+      player("rb01", ["RB"]),
+      player("rb02", ["RB"]),
+      player("wr01", ["WR"]),
+      player("wr02", ["WR"]),
+      player("te0", ["TE"]),
+      player("fx1", ["RB"]),
+      player("fx2", ["WR"]),
+      player("k0", ["K"]),
+      player("def0", ["DEF"]),
+    ];
+    const result = autoPick({
+      available,
+      roster,
+      queue: [],
+      shape: SHAPE,
+      picksRemainingAfter: 4,
+    });
+    expect(result?.source).toBe("BEST_AVAILABLE");
+    expect(result?.player.playerId).toBe("wr1");
+  });
+
+  it("never returns an illegal pick", () => {
+    const full = Array.from({ length: SHAPE.totalSlots }, (_, i) => player(`p${i}`, ["WR"], i));
+    expect(
+      autoPick({ available, roster: full, queue: [], shape: SHAPE, picksRemainingAfter: 0 }),
+    ).toBeNull();
+  });
+
+  it("ignores a queued player who would be an illegal pick", () => {
+    const roster = [
+      player("qb1", ["QB"]),
+      player("rb1", ["RB"]),
+      player("rb2", ["RB"]),
+      player("wr1", ["WR"]),
+      player("wr2", ["WR"]),
+      player("te1", ["TE"]),
+      player("fx1", ["WR"]),
+      player("fx2", ["RB"]),
+      player("k1", ["K"]),
+    ];
+    // Queue wants another WR, but only DEF keeps the lineup fillable.
+    const result = autoPick({
+      available,
+      roster,
+      queue: ["wr1x"],
+      shape: SHAPE,
+      picksRemainingAfter: 0,
+    });
+    expect(result?.player.playerId).toBe("def1");
+  });
+});
+
+describe("pruneQueue", () => {
+  it("drops players who are gone", () => {
+    const available = [player("a", ["WR"]), player("c", ["WR"])];
+    expect(pruneQueue(["a", "b", "c"], available)).toEqual(["a", "c"]);
+  });
+});
+
+describe("draft state machine", () => {
+  const pool = buildPool();
+  const order = generateDraftOrder(TEAMS, "seed");
+
+  it("puts the first team in the order on the clock", () => {
+    const state = createDraft(order, 15);
+    expect(currentTeam(state)).toBe(order[0]);
+  });
+
+  it("records a legal manual pick", () => {
+    const state = createDraft(order, 15);
+    const after = makePick(state, {
+      teamId: order[0]!,
+      playerId: "rb-1",
+      pool,
+      shape: SHAPE,
+    });
+
+    expect(after.picks).toHaveLength(1);
+    expect(after.picks[0]?.source).toBe("MANUAL");
+    expect(currentTeam(after)).toBe(order[1]);
+  });
+
+  it("does not mutate the previous state", () => {
+    const state = createDraft(order, 15);
+    makePick(state, { teamId: order[0]!, playerId: "rb-1", pool, shape: SHAPE });
+    expect(state.picks).toHaveLength(0);
+  });
+
+  it("refuses a pick from a team not on the clock", () => {
+    const state = createDraft(order, 15);
+    expectDraftError(
+      () => makePick(state, { teamId: order[5]!, playerId: "rb-1", pool, shape: SHAPE }),
+      "NOT_ON_CLOCK",
+    );
+  });
+
+  it("refuses a player already drafted", () => {
+    let state = createDraft(order, 15);
+    state = makePick(state, { teamId: order[0]!, playerId: "rb-1", pool, shape: SHAPE });
+
+    expectDraftError(
+      () => makePick(state, { teamId: order[1]!, playerId: "rb-1", pool, shape: SHAPE }),
+      "PLAYER_UNAVAILABLE",
+    );
+  });
+
+  it("refuses an unknown player", () => {
+    const state = createDraft(order, 15);
+    expectDraftError(
+      () => makePick(state, { teamId: order[0]!, playerId: "nobody", pool, shape: SHAPE }),
+      "PLAYER_UNAVAILABLE",
+    );
+  });
+
+  it("counts a team's remaining picks correctly through the snake", () => {
+    const state = createDraft(order, 15);
+    // The team on the clock for pick 1 has 14 picks left after this one.
+    expect(picksRemainingAfter(state, order[0]!)).toBe(14);
+  });
+
+  it("auto-picks from a queue", () => {
+    const state = createDraft(order, 15);
+    const queues = new Map([[order[0]!, ["qb-1"]]]);
+    const after = makeAutoPick(state, { pool, shape: SHAPE, queues });
+
+    expect(after.picks[0]?.playerId).toBe("qb-1");
+    expect(after.picks[0]?.source).toBe("QUEUE");
+  });
+
+  it("auto-picks by need with no queue", () => {
+    const state = createDraft(order, 15);
+    const after = makeAutoPick(state, { pool, shape: SHAPE });
+    expect(after.picks[0]?.source).toBe("NEED");
+  });
+
+  it("refuses any pick once complete", () => {
+    // 15 rounds, not 1. A draft with fewer rounds than starting slots cannot
+    // produce a legal roster, and the engine correctly refuses to try.
+    let state = createDraft(["a", "b"], 15);
+    while (!isComplete(state)) {
+      state = makeAutoPick(state, { pool, shape: SHAPE });
+    }
+
+    expect(state.picks).toHaveLength(30);
+    expectDraftError(() => makeAutoPick(state, { pool, shape: SHAPE }), "DRAFT_COMPLETE");
+    expectDraftError(
+      () => makePick(state, { teamId: "a", playerId: "qb-1", pool, shape: SHAPE }),
+      "DRAFT_COMPLETE",
+    );
+  });
+
+  it("refuses a draft with fewer rounds than starting slots", () => {
+    // Worth pinning: 10 starters cannot be filled in 1 round, and failing
+    // loudly beats producing a roster that cannot field a lineup in Week 1.
+    const state = createDraft(["a", "b"], 1);
+    expectDraftError(() => makeAutoPick(state, { pool, shape: SHAPE }), "NO_LEGAL_PICK");
+  });
+});
+
+describe("pick clock", () => {
+  const fast: DraftRules = {
+    type: "SNAKE",
+    mode: "FAST",
+    pickSeconds: 90,
+    scheduledAt: 1_756_400_000,
+  };
+  const slow: DraftRules = { ...fast, mode: "SLOW", pickSeconds: 86_400 };
+
+  it("computes a fast deadline", () => {
+    expect(pickDeadline(1000, fast)).toBe(1090);
+  });
+
+  it("computes a slow deadline with the same function", () => {
+    // Slow drafts need no separate machinery — only a bigger number.
+    expect(pickDeadline(1000, slow)).toBe(87_400);
+  });
+
+  it("expires exactly at the deadline", () => {
+    expect(isPickExpired(1090, 1089)).toBe(false);
+    expect(isPickExpired(1090, 1090)).toBe(true);
+  });
+
+  it("floors remaining time at zero", () => {
+    expect(secondsRemaining(1090, 1000)).toBe(90);
+    expect(secondsRemaining(1090, 5000)).toBe(0);
+  });
+});
+
+describe("full draft simulation", () => {
+  const pool = buildPool();
+
+  function runDraft(
+    seed: string,
+    humanQueues: Map<string, string[]>,
+  ): ReturnType<typeof createDraft> {
+    const order = generateDraftOrder(TEAMS, seed);
+    let state = createDraft(order, 15);
+
+    while (!isComplete(state)) {
+      state = makeAutoPick(state, { pool, shape: SHAPE, queues: humanQueues });
+    }
+    return state;
+  }
+
+  it("completes and produces a legal roster for every team", () => {
+    const state = runDraft("sim-1", new Map());
+
+    expect(state.picks).toHaveLength(totalPicks(12, 15));
+
+    for (const teamId of TEAMS) {
+      const roster = rosterFor(state, teamId, pool);
+      expect(roster).toHaveLength(15);
+      // The property that matters: every team can field a legal lineup.
+      expect(startersFilled(roster, SHAPE)).toBe(SHAPE.starters.length);
+    }
+  });
+
+  it("never drafts a player twice", () => {
+    const state = runDraft("sim-2", new Map());
+    const ids = state.picks.map((pick) => pick.playerId);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("honours queues where they exist and falls back where they do not", () => {
+    const queues = new Map([
+      [TEAMS[0]!, ["qb-1", "rb-1", "wr-1"]],
+      [TEAMS[1]!, ["te-1"]],
+    ]);
+    const state = runDraft("sim-3", queues);
+
+    expect(state.picks.some((pick) => pick.source === "QUEUE")).toBe(true);
+    expect(state.picks.some((pick) => pick.source === "NEED")).toBe(true);
+  });
+
+  it("survives many drafts across different orders", () => {
+    // Different seeds exercise different orders, and therefore different
+    // sequences of scarcity near the end where legality gets tight.
+    for (let i = 0; i < 60; i++) {
+      const state = runDraft(`sim-bulk-${i}`, new Map());
+
+      for (const teamId of TEAMS) {
+        const roster = rosterFor(state, teamId, pool);
+        expect(roster).toHaveLength(15);
+        expect(startersFilled(roster, SHAPE)).toBe(SHAPE.starters.length);
+      }
+    }
+  });
+
+  it("is reproducible from its seed", () => {
+    const a = runDraft("repeat", new Map());
+    const b = runDraft("repeat", new Map());
+    expect(a.picks).toEqual(b.picks);
+  });
+});
