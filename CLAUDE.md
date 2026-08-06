@@ -88,18 +88,24 @@ See [`docs/BUILD-PLAN.md`](docs/BUILD-PLAN.md) for the full commit-by-commit pla
 
 - The draft room (`apps/web/src/components/DraftRoom.tsx`, `api/leagues/[id]/draft/`)
 
+- League creation, with a live rules preview; the draft is scheduled with the league
+
+- `/api/cron/draft-tick` — clocks advance without anyone watching
+
+**The Aug 22 path is complete in the app: create → join → draft.** What it still needs is
+deployment and the credentials in `SETUP-REQUIRED.md`, not more code.
+
 **Next, in order:**
 
-1. **League creation form** — still a preview; it does not post, so there is no way to
-   make a league through the UI. Marked TODO in the code. This is what stands between the
-   current build and an end-to-end run: create, join, draft.
-2. **A scheduled job for expired picks.** Clocks only advance when someone reads the
-   draft. See "The draft room" below.
-3. **C2, C3, C6** — lineups, per-player kickoff locks, and team-week scoring. Needed by
-   Sep 9, not Aug 22. C6 is what finally connects the scoring engine to `MatchupResult`.
-4. **D1–D10** — the escrow program. **Write this early.** The audit is 2–4 weeks of
+1. **C2, C3, C6** — lineups, per-player kickoff locks, and team-week scoring. Needed by
+   Sep 9. C6 is what finally connects the scoring engine to `MatchupResult`.
+2. **C10** — deterministic autolineup, which abandonment depends on.
+3. **D1–D10** — the escrow program. **Write this early.** The audit is 2–4 weeks of
    calendar time and it gates pot leagues opening on Aug 22. Blocked on the secondary PC
    (no Rust/Anchor).
+4. **Pot leagues cannot actually take money yet.** The rules describe a pot and the UI
+   collects a buy-in, but nothing escrows anything until D1–D10 exists. Do not let a real
+   league form around a pot before then.
 
 **Still open on the draft:** nothing, on the fairness side — the grindable seed is fixed
 (see "The order draw" below). What remains is operational: `SOLANA_RPC_URL` has to be
@@ -223,10 +229,18 @@ happened to open the page: an hour of nobody watching would cost exactly one pic
 silently extend every clock after it. Advancing deadline by deadline keeps the draft on
 real time. Tested.
 
-**Still true and still a gap: a draft nobody looks at does not advance.** Harmless for a
-24-hour slow draft, and a live room is being polled — but it wants a scheduled job over
-`draftsWithExpiredPicks()` before the season. "You had to keep the tab open" is not a rule
-anyone agreed to.
+**`/api/cron/draft-tick` is what makes clocks real.** Before it existed, expiry happened
+only when somebody _read_ a draft, so a draft nobody had open did not advance and a
+manager who went to bed could return to find their clock had never run. It must fire **at
+least as often as the shortest pick clock** — a minute, given the 90-second minimum.
+`apps/web/vercel.json` schedules it; anywhere else, point cron at the URL.
+
+Set `CRON_SECRET` to stop it being hammered. It is not a security boundary in the usual
+sense: the endpoint only does what the clock already permits, so an unauthorised call
+cannot produce a wrong pick. The guard is about database load.
+
+It also purges expired sessions and idle rate-limit buckets, because those need a
+scheduler and nothing else did.
 
 Clocks are **computed from `clock_started_at`, never scheduled.** That is what lets a
 24-hour slow draft run with no timer infrastructure: `draftsWithExpiredPicks()` returns
