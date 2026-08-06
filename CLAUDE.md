@@ -252,16 +252,29 @@ These were discussed at length and decided. Re-proposing them wastes the owner's
 **This repo was started on a secondary Windows PC.** Tooling installed there: Node
 v24.19.0, pnpm 11.20.0, gh 2.97.0, git. No Rust, no Solana CLI, no Anchor.
 
-**On the main PC you will need**, beyond Node and pnpm:
+**For Anchor work (Milestones D and E)** you need Rust, the Solana CLI, and Anchor.
 
-```bash
-# Rust + Solana + Anchor. On Windows, use WSL — Anchor is painful natively.
-sh -c "$(curl -sSfL https://release.anza.xyz/stable/install)"
-cargo install --git https://github.com/coral-xyz/anchor avm --locked
-avm install latest && avm use latest
+On Windows this means **WSL, not native**. Anchor's build shells out to
+`cargo-build-sbf`, which does not work reliably on native Windows; Anchor's own docs
+point at WSL. Rust and the Solana CLI install fine either way — Anchor is the one that
+does not.
+
+```powershell
+# PowerShell, AS ADMINISTRATOR. Installs WSL2 + Ubuntu. Requires a reboot.
+wsl --install
 ```
 
-Anchor work (Milestones D and E) is blocked until that exists.
+Then, inside the Ubuntu shell:
+
+```bash
+bash scripts/setup-anchor.sh
+```
+
+That script installs build dependencies, Rust, the Solana CLI, and Anchor via AVM,
+persists PATH, and generates a localnet-only keypair. It is idempotent — safe to re-run,
+and safe to run on the main PC where some of it already exists.
+
+Expect ~30–60 minutes; compiling AVM from source is the slow part.
 
 ### Getting started
 
