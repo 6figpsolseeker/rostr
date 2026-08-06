@@ -34,18 +34,24 @@ front-run on a marketplace, and they can't be forced through by a commissioner.
 
 Pre-alpha. Specification first, then the testable core, then the chain programs.
 
-|     |                                                              |
-| --- | ------------------------------------------------------------ |
-| ✅  | League rule set — [`docs/RULES.md`](docs/RULES.md)           |
-| ✅  | Data model — [`docs/DATA-MODEL.md`](docs/DATA-MODEL.md)      |
-| ✅  | Sport registry, canonical rule encoding, hashing, validation |
-| ⬜  | Persistence + league creation                                |
-| ⬜  | Scoring engine                                               |
-| ⬜  | Snake draft + bot auto-pick                                  |
-| ⬜  | Stats provider adapter                                       |
-| ⬜  | Anchor programs — pot escrow, roster NFTs, trade escrow      |
-| ⬜  | Web app                                                      |
-| ⬜  | Native app (React Native + Expo, Mobile Wallet Adapter)      |
+A league can be created, joined, and drafted end to end in a browser today. Nothing
+touches money yet — the escrow program is not written, so **pot leagues cannot take a
+deposit.**
+
+|     |                                                                                 |
+| --- | ------------------------------------------------------------------------------- |
+| ✅  | League rule set — [`docs/RULES.md`](docs/RULES.md)                              |
+| ✅  | Data model — [`docs/DATA-MODEL.md`](docs/DATA-MODEL.md)                         |
+| ✅  | Sport registry, canonical rule encoding, hashing, validation                    |
+| ✅  | Persistence, league creation, rules pinned to IPFS                              |
+| ✅  | Identity — email sign-in, wallet linking by signature, sessions                 |
+| ✅  | Scoring engine — integer milli-points, linear and tiered rules                  |
+| ✅  | Snake draft, personal queues, auto-pick, bots — order drawn from a Solana block |
+| ✅  | Stats provider adapter — Tank01: players, ADP, projections, box scores          |
+| ✅  | Web app — create, join, and draft a league                                      |
+| 🟡  | Season — schedule, standings, tiebreakers, lineups, autolineup; matchups next   |
+| ⬜  | Anchor programs — pot escrow, roster NFTs, trade escrow                         |
+| ⬜  | Native app (React Native + Expo, Mobile Wallet Adapter)                         |
 
 **Target: the 2026 NFL season, kickoff September 9 2026.** Drafts happen in the last two
 weeks of August, so the draftable deadline is late August — not September.
@@ -61,10 +67,14 @@ git clone https://github.com/6figpsolseeker/rostr.git
 cd rostr
 pnpm install
 
-pnpm test        # 49 tests
+pnpm test        # 614 tests
 pnpm typecheck
 pnpm lint
 ```
+
+Tests need no credentials — the database ones run on PGlite, Postgres compiled to WASM,
+in-process. Everything in [`docs/SETUP-REQUIRED.md`](docs/SETUP-REQUIRED.md) is for
+running the app, not for testing it.
 
 For the on-chain programs (not yet started) you will also need Rust, the Solana CLI, and
 Anchor — on Windows, via WSL. Setup commands are in [`CLAUDE.md`](CLAUDE.md).
