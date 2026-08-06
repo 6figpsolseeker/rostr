@@ -9,6 +9,7 @@ export {
 } from "./provider.js";
 
 export { Tank01Client, type Tank01Options } from "./tank01/client.js";
+export { translateBoxScore, type TranslatedBoxScore } from "./tank01/box-score.js";
 export {
   bucketFieldGoal,
   isBlockedKick,

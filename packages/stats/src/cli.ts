@@ -355,6 +355,32 @@ async function deep(): Promise<void> {
   }
 }
 
+/**
+ * Save a real response to disk as a test fixture.
+ *
+ * Tests that run against captured real data catch mapping mistakes that tests
+ * against hand-written data cannot, because hand-written data encodes the same
+ * assumptions as the code.
+ */
+async function capture(): Promise<void> {
+  const { writeFileSync, mkdirSync } = await import("node:fs");
+  const { dirname, resolve } = await import("node:path");
+
+  const client = new Tank01Client({ apiKey: apiKey() });
+  const gameID = process.argv[3] ?? "20250904_DAL@PHI";
+  const out = resolve(
+    process.argv[4] ?? "packages/stats/src/tank01/__fixtures__/box-score.json",
+  );
+
+  const box = await client.get<unknown>("getNFLBoxScore", { gameID });
+
+  mkdirSync(dirname(out), { recursive: true });
+  writeFileSync(out, `${JSON.stringify(box, null, 2)}\n`, "utf8");
+
+  const bytes = JSON.stringify(box).length;
+  console.log(`Captured ${gameID} -> ${out} (${Math.round(bytes / 1024)} KB)`);
+}
+
 const command = process.argv[2] ?? "check";
 
 const run =
@@ -366,7 +392,9 @@ const run =
         ? discover
         : command === "deep"
           ? deep
-          : check;
+          : command === "capture"
+            ? capture
+            : check;
 
 run().catch((error: unknown) => {
   console.error(error instanceof Error ? error.message : String(error));
