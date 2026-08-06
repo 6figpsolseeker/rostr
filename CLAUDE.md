@@ -273,6 +273,27 @@ pnpm lint
 
 ---
 
+## Working with the owner
+
+Preferences established in practice, not stated as rules:
+
+- **Website before mobile.** The Seeker app matters, but the web app is the priority for
+  2026; mobile is Milestone H and off the critical path.
+- **Flag risks once, clearly, then build what was asked.** Concerns about the mainnet pot,
+  the audit timeline, and winner-take-all were each raised and each answered. They are
+  decided — see the settled table below. Re-raising them is noise.
+- **Keep notes in the repo, not in a chat window.** This file, `DECISIONS.md`, and
+  `SETUP-REQUIRED.md` exist because the owner works across two machines and expects to
+  pick up where they left off. Update them as you go rather than at the end.
+- **Say what is not done.** The scoring fixtures are constructed rather than real box
+  scores, and that is labelled everywhere it appears rather than glossed.
+
+**There are more product ideas the owner has not yet shared.** They said so explicitly
+during the initial scoping and the conversation moved on to building. Worth asking before
+assuming the current spec is the whole product.
+
+---
+
 ## Blocked on the owner
 
 **[`docs/SETUP-REQUIRED.md`](docs/SETUP-REQUIRED.md) is the live list** — accounts, API
