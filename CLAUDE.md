@@ -62,15 +62,39 @@ See [`docs/BUILD-PLAN.md`](docs/BUILD-PLAN.md) for the full commit-by-commit pla
 - A12: `buildJoinMessage()` / `joinLeague()` — signature over the rules hash, verified
   server-side
 
+- B1–B5: the scoring engine (`packages/core/src/scoring/`) — integer milli-points, tiered
+  ladders tested at every boundary
+
 **Next, in order:**
 
-1. **Finish A9's UI** — there is no session yet, so `JoinPanel` posts an empty `userId`
-   and the league creation form is a preview only. Both are marked TODO in the code.
-   Needs a Supabase project (see `docs/SETUP-REQUIRED.md`).
-2. **B1–B5** — the PPR scoring engine, integer milli-points, golden fixtures from real
-   2025 box scores
+1. **B6–B8** — the stats provider adapter (Tank01), player and season sync. Needs a
+   Tank01 key, free tier.
+2. **B9–B15** — snake draft, queue, auto-pick, bots. **The Aug 22 deadline.**
 3. **D1–D10** — the escrow program. **Write this early.** The audit is 2–4 weeks of
    calendar time and it gates pot leagues opening on Aug 22.
+4. **Finish A9's UI** — there is no session yet, so `JoinPanel` posts an empty `userId`
+   and the league creation form is a preview only. Both marked TODO in the code. Needs
+   the Supabase project, which the owner is setting up on their main PC.
+
+### Scoring
+
+`scorePlayer()` and `scoreTeamWeek()` in `packages/core/src/scoring/engine.ts`. Pure, no
+I/O, no sport knowledge — a test scores an invented cricket-shaped rule set to prove it.
+
+Three behaviours that are deliberate and should not be "fixed":
+
+- **Absent is not zero.** A stat key missing from the input contributes nothing. Correct
+  for a player who did not appear — but it means a defense that allowed 0 points needs an
+  explicit `def_pts_allowed: 0` to earn the shutout bonus. **That is the provider
+  adapter's job.**
+- **An uncovered tier value throws.** A negative points-allowed means the feed is broken;
+  scoring zero would bury it.
+- **Bench and IR are scored but not counted.** Managers want to see what they left out.
+  The filter comes from the league's own roster rules, not a hardcoded slot list.
+
+Fixtures in `scoring/fixtures.ts` are **constructed, not real box scores**, and labelled
+as such. Validating against real 2025 data is the outstanding half of B5 and needs the
+Tank01 key.
 
 ### The web app
 
