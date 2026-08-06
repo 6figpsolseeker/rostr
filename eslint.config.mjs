@@ -23,4 +23,9 @@ export default tseslint.config(
       "no-console": "warn",
     },
   },
+  {
+    // A CLI's output is its interface.
+    files: ["**/cli.ts"],
+    rules: { "no-console": "off" },
+  },
 );

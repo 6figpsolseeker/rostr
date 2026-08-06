@@ -15,6 +15,9 @@
     "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --build --force",
     "lint": "eslint .",
+    "db:migrate": "node --env-file-if-exists=.env packages/db/dist/cli.js migrate",
+    "db:status": "node --env-file-if-exists=.env packages/db/dist/cli.js status",
+    "db:seed": "node --env-file-if-exists=.env packages/db/dist/cli.js seed",
     "format": "prettier --write \"**/*.{ts,tsx,json,md}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,json,md}\""
   },

@@ -14,18 +14,39 @@ Status key: ⬜ not started · 🟡 in progress · ✅ done
 
 ### ⬜ Supabase project
 
-**Blocks:** running anything against a real database. Migrations and their tests run on
-PGlite (in-process Postgres, no service) and do not need this.
-**Needed by:** after migrations exist — i.e. before the league-creation API is wired up.
-**Cost:** free tier is sufficient.
+**Blocks:** the web app past its home page, and the session that league creation and
+joining both need. Migrations and their tests run on PGlite (in-process Postgres, no
+service) and do not need this.
+**Needed by:** now. This is the current blocker.
+
+**Cost:** Free ($0) is fine for development — 500 MB database, 5 GB egress, 50k monthly
+active users, 2 active projects. Our data is tiny.
+
+**But free projects pause after one week with no API requests.** Data is retained and
+resuming is manual. Harmless during development; unacceptable in December with money in
+escrow and someone trying to set a playoff lineup.
+
+> **Move to Pro ($25/mo) before Week 1.** Nothing in the schema or code changes — it is a
+> billing switch.
 
 Why hosted rather than local Postgres: the database then follows you between machines.
 A local install strands your data on whichever PC you are sitting at, which is the exact
 problem this repo's `CLAUDE.md` exists to avoid. It also matches the stack already used in
 `percolator-launch` and `percolator-mobile`.
 
-**To do:** create a project, then put the connection string and anon key in `.env`
-(see `.env.example`). Do not commit them.
+**Which machine to set it up on:** either. The project lives on Supabase's servers, so
+creating it is a browser signup and the result is identical. The credentials go in `.env`,
+which is gitignored, so they must be copied to each machine by hand — move them through a
+password manager, not chat or email. Sign up with the same email as GitHub so the account
+does not get orphaned.
+
+**To do:**
+
+1. Create a project at supabase.com.
+2. Put its connection string in `.env` as `DATABASE_URL` (see `.env.example`).
+3. `pnpm db:migrate` — applies the schema.
+4. `pnpm db:seed` — inserts the NFL registry.
+5. `pnpm db:status` — confirms what is applied.
 
 ---
 
@@ -99,6 +120,24 @@ gets burned entirely once settlement is audited, before Week 14 pays out.
 **Needed by:** **Aug 22**, at deployment.
 
 A decision, not a task: what is the maximum a league may put into a contract this new?
+
+---
+
+## Running cost, once live
+
+| Item                                            | Monthly       |
+| ----------------------------------------------- | ------------- |
+| Supabase Pro                                    | $25           |
+| Tank01 Pro — stats, box scores, news            | $10           |
+| SportsDataIO — inactives + second oracle source | $99–149       |
+| **Total**                                       | **~$135–185** |
+
+Plus the escrow audit, which is a one-off and materially larger. Data cost does not scale
+with users — one box score is scored against every league — so this figure holds whether
+there are ten leagues or ten thousand.
+
+Dropping the pot removes both the audit and the SportsDataIO oracle requirement, taking
+the running cost to roughly **$35/month**.
 
 ---
 
