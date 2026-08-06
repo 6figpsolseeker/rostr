@@ -74,14 +74,9 @@ resolve, or the on-chain hash anchors nothing.
 month and the estimate for a live season is ~700 — too close to the ceiling once real
 leagues are running, and exceeding it stops scoring mid-week.
 
-Two gaps found while mapping the live response, both recorded in
-`packages/stats/src/tank01/stat-map.ts`:
-
-- **Two-point conversions** appear only in play-by-play, and the probe game contained
-  none — so the `scoreType` token is still a guess. Confirm against a game that has one
-  before trusting two-point scoring.
-- **Blocked kicks** (`def_blk_kick`) appear nowhere in Tank01's response. They score zero
-  until a source is found. A known under-count, not a silent wrong answer.
+Both gaps flagged on first mapping are now **resolved** — two-point conversions and
+blocked kicks are both obtainable, from the play-by-play. See
+[`TANK01.md`](TANK01.md) for the full digest, verified across 96 real games.
 
 ---
 
@@ -173,6 +168,27 @@ Until then, treat the order as fair only for free leagues.
 ---
 
 ## Decisions outstanding
+
+### ⬜ Do return touchdowns score?
+
+Found while verifying Tank01 against real games: `"Ray Davis 97 Yd Kickoff Return"`.
+
+`RULES.md` §1 has no line for a **player** returning a kick or punt for a touchdown.
+ESPN and Sleeper both award the returner 6 points by default, so this is a gap in our
+scoring table, not in the data — `Kicking.kickReturnTD` exists.
+
+**Needed by:** before the first league is created. Changing the scoring table afterwards
+is impossible for leagues already frozen.
+
+Three options:
+
+1. **Add `ret_td` at 6 points.** Matches ESPN and Sleeper. Punt-return TDs need a source
+   confirmed; kick returns are already available.
+2. **Leave it out.** Simpler, and return touchdowns are rare — but a manager whose
+   receiver takes one back 97 yards will notice the zero.
+3. Fold it into `def_td`, which is wrong — that is the team defense unit, not the player.
+
+Recommend (1).
 
 ### ⬜ Bot draft sophistication
 

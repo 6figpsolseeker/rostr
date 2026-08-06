@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   bucketFieldGoal,
-  isTwoPointConversion,
+  isBlockedKick,
+  isExtraPointMade,
+  isSuccessfulTwoPointConversion,
   parseFieldGoalYards,
   parseStatValue,
   TANK01_DST_MAP,
@@ -92,15 +94,89 @@ describe("parseStatValue", () => {
   });
 });
 
-describe("isTwoPointConversion", () => {
-  it("recognises the candidate score types", () => {
-    expect(isTwoPointConversion("2PT")).toBe(true);
-    expect(isTwoPointConversion("2ptc")).toBe(true);
+/**
+ * Verbatim scoring-play text collected from 48 real games (2025 weeks 1-3).
+ * Every string below was produced by Tank01, not written by hand.
+ */
+const REAL_PAT_FORMS = {
+  kickMade: "Javonte Williams 1 Yd Rush (Brandon Aubrey Kick)",
+  kickMadeApostrophe: "Nico Collins 29 Yd pass from C.J. Stroud (Ka'imi Fairbairn Kick)",
+  patFailed: "Patrick Mahomes 11 Yd Rush (Harrison Butker PAT Failed)",
+  patBlocked: "Blake Corum 1 Yd Rush (Joshua Karty PAT blocked)",
+  patBlocked2: "Cam Skattebo 13 Yd Rush (Jamie Gillan PAT blocked)",
+  twoPointRun: "Drake Maye 6 Yd Rush (Rhamondre Stevenson Run for Two-Point Conversion)",
+  twoPointPass:
+    "De'Von Achane 11 Yd pass from Tua Tagovailoa (Tua Tagovailoa Pass to Julian Hill for Two-Point Conversion)",
+  twoPointFailed:
+    "Travis Kelce 37 Yd pass from Patrick Mahomes (Two-Point Pass Conversion Failed)",
+  blockedReturnTd:
+    "Blocked Kick Recovered by Jordan Davis (PHI) Jordan Davis 61 Yd Touchown Return",
+  safety: "Defensive Holding in Endzone for Safety",
+} as const;
+
+describe("isSuccessfulTwoPointConversion", () => {
+  it("recognises a successful rushing conversion", () => {
+    expect(isSuccessfulTwoPointConversion(REAL_PAT_FORMS.twoPointRun)).toBe(true);
   });
 
-  it("does not match ordinary scores", () => {
-    expect(isTwoPointConversion("TD")).toBe(false);
-    expect(isTwoPointConversion("FG")).toBe(false);
+  it("recognises a successful passing conversion", () => {
+    expect(isSuccessfulTwoPointConversion(REAL_PAT_FORMS.twoPointPass)).toBe(true);
+  });
+
+  it("does NOT award points for a failed conversion", () => {
+    // The bug this exists to prevent. A match on "Two-Point" alone would score
+    // two points for a conversion that did not happen.
+    expect(isSuccessfulTwoPointConversion(REAL_PAT_FORMS.twoPointFailed)).toBe(false);
+  });
+
+  it("ignores ordinary kicks", () => {
+    expect(isSuccessfulTwoPointConversion(REAL_PAT_FORMS.kickMade)).toBe(false);
+    expect(isSuccessfulTwoPointConversion(REAL_PAT_FORMS.patFailed)).toBe(false);
+  });
+});
+
+describe("isBlockedKick", () => {
+  it("recognises a blocked extra point", () => {
+    expect(isBlockedKick(REAL_PAT_FORMS.patBlocked)).toBe(true);
+    expect(isBlockedKick(REAL_PAT_FORMS.patBlocked2)).toBe(true);
+  });
+
+  it("recognises a blocked kick returned for a touchdown", () => {
+    // Note Tank01's own typo, "Touchown". Matching stable tokens rather than
+    // whole phrases is why this still works.
+    expect(isBlockedKick(REAL_PAT_FORMS.blockedReturnTd)).toBe(true);
+  });
+
+  it("does not fire on ordinary plays", () => {
+    expect(isBlockedKick(REAL_PAT_FORMS.kickMade)).toBe(false);
+    expect(isBlockedKick(REAL_PAT_FORMS.twoPointRun)).toBe(false);
+  });
+});
+
+describe("isExtraPointMade", () => {
+  it("recognises a made kick", () => {
+    expect(isExtraPointMade(REAL_PAT_FORMS.kickMade)).toBe(true);
+    expect(isExtraPointMade(REAL_PAT_FORMS.kickMadeApostrophe)).toBe(true);
+  });
+
+  it("rejects a failed or blocked attempt", () => {
+    expect(isExtraPointMade(REAL_PAT_FORMS.patFailed)).toBe(false);
+    expect(isExtraPointMade(REAL_PAT_FORMS.patBlocked)).toBe(false);
+  });
+
+  it("rejects a two-point conversion", () => {
+    expect(isExtraPointMade(REAL_PAT_FORMS.twoPointRun)).toBe(false);
+  });
+});
+
+describe("field goals against real plays", () => {
+  it("finds distances only in genuine field goals", () => {
+    // Every string here is real. The rushing touchdowns contain both a yard
+    // count and a kicker's name, which is what breaks a loose pattern.
+    expect(parseFieldGoalYards(REAL_PAT_FORMS.kickMade)).toBeNull();
+    expect(parseFieldGoalYards(REAL_PAT_FORMS.twoPointRun)).toBeNull();
+    expect(parseFieldGoalYards(REAL_PAT_FORMS.blockedReturnTd)).toBeNull();
+    expect(parseFieldGoalYards("Brandon Aubrey 41 Yd Field Goal")).toBe(41);
   });
 });
 

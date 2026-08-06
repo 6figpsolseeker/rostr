@@ -64,13 +64,12 @@ export const TANK01_DST_MAP: Readonly<Record<string, string>> = {
 };
 
 /**
- * Not available from Tank01.
+ * Everything our scoring table needs is obtainable.
  *
- * `def_blk_kick` appears in neither the DST block nor any player category. Until
- * a source is found, blocked kicks score nothing — a small, known
- * under-count rather than a silent wrong answer.
+ * An earlier version of this file claimed blocked kicks were unavailable. They
+ * are not — see {@link isBlockedKick}. Confirmed across 48 games of 2025.
  */
-export const TANK01_UNAVAILABLE_STATS: readonly string[] = ["def_blk_kick"];
+export const TANK01_UNAVAILABLE_STATS: readonly string[] = [];
 
 // ---------------------------------------------------------------------------
 // Field goals and two-point conversions
@@ -105,19 +104,62 @@ export function parseFieldGoalYards(scoreText: string): number | null {
 }
 
 /**
- * Two-point conversions are also only in the play-by-play.
+ * Two-point conversions and blocked kicks: the parenthetical.
  *
- * No `Passing`/`Rushing`/`Receiving` field carries them — another guess the
- * earlier version of this file got wrong. They appear as a distinct
- * `scoreType`, and the exact token has **not** yet been observed: the probe
- * game contained none. Confirm against a game that has one before trusting
- * two-point scoring.
+ * Confirmed across 48 games of the 2025 season (weeks 1-3). There are exactly
+ * **three** `scoreType` values — `TD`, `FG`, `SF` — and nothing else. Extra
+ * points, two-point conversions, and blocked kicks are not score types at all:
+ * they live in the trailing parenthetical of a touchdown's `score` text, the
+ * same slot as the kick.
+ *
+ * Every observed form:
+ *
+ *     (Brandon Aubrey Kick)                                    XP made
+ *     (Harrison Butker PAT Failed)                             XP missed
+ *     (Joshua Karty PAT blocked)                               XP blocked
+ *     (Rhamondre Stevenson Run for Two-Point Conversion)       2PT good
+ *     (Tua Tagovailoa Pass to Julian Hill for Two-Point ...)   2PT good
+ *     (Two-Point Pass Conversion Failed)                       2PT failed
+ *
+ * An earlier version of this file checked `scoreType` for a "2PT" token. It
+ * would never have matched, and a looser text match would have **awarded two
+ * points for a failed conversion** — the exact silent scoring bug this parsing
+ * has to avoid. Hence the explicit `Failed` exclusion, and a test for it.
  */
-export const TWO_POINT_SCORE_TYPES: readonly string[] = ["2PT", "2PTC", "TWO POINT"];
 
-export function isTwoPointConversion(scoreType: string): boolean {
-  const normalised = scoreType.trim().toUpperCase();
-  return TWO_POINT_SCORE_TYPES.some((token) => normalised.includes(token));
+const TWO_POINT_PATTERN = /Two-Point\s+\w*\s*Conversion/i;
+const FAILED_PATTERN = /\bfailed\b/i;
+
+/**
+ * Whether the play includes a **successful** two-point conversion.
+ *
+ * Note the asymmetry in Tank01's wording: a success names the players
+ * ("Rhamondre Stevenson Run for Two-Point Conversion") while a failure often
+ * does not ("Two-Point Pass Conversion Failed"). Only the `Failed` token is a
+ * reliable discriminator.
+ */
+export function isSuccessfulTwoPointConversion(scoreText: string): boolean {
+  return TWO_POINT_PATTERN.test(scoreText) && !FAILED_PATTERN.test(scoreText);
+}
+
+/**
+ * Whether the play involved a blocked kick.
+ *
+ * Two observed forms:
+ *
+ *     Blake Corum 1 Yd Rush (Joshua Karty PAT blocked)
+ *     Blocked Kick Recovered by Jordan Davis (PHI) Jordan Davis 61 Yd Touchown Return
+ *
+ * Note "Touchown" — Tank01's own text contains typos, which is a standing
+ * argument for matching on stable tokens rather than whole phrases.
+ */
+export function isBlockedKick(scoreText: string): boolean {
+  return /\bblocked\b/i.test(scoreText) || /\bblocked\s+kick\b/i.test(scoreText);
+}
+
+/** Whether the play's PAT attempt was a successful kick. */
+export function isExtraPointMade(scoreText: string): boolean {
+  return /\(\s*[^)]*\bKick\s*\)/i.test(scoreText) && !FAILED_PATTERN.test(scoreText);
 }
 
 /** Bucket a made field goal into the three keys the scoring table uses. */
