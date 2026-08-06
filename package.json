@@ -18,6 +18,7 @@
     "db:migrate": "node --env-file-if-exists=.env packages/db/dist/cli.js migrate",
     "db:status": "node --env-file-if-exists=.env packages/db/dist/cli.js status",
     "db:seed": "node --env-file-if-exists=.env packages/db/dist/cli.js seed",
+    "db:audit": "node --env-file-if-exists=.env packages/db/dist/cli.js audit",
     "stats:check": "node --env-file-if-exists=.env packages/stats/dist/cli.js check",
     "stats:probe": "node --env-file-if-exists=.env packages/stats/dist/cli.js probe",
     "format": "prettier --write \"**/*.{ts,tsx,json,md}\"",
