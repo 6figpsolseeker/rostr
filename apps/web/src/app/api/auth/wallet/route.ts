@@ -5,8 +5,11 @@ import {
   issueWalletChallenge,
   linkWalletWithSignature,
   SessionError,
+  WALLET_CHALLENGE_PER_IP,
+  WALLET_CHALLENGE_PER_USER,
 } from "@rostr/db";
 import { db } from "@/lib/db";
+import { byIp, enforceRateLimit } from "@/lib/rate-limit";
 import { currentUser } from "@/lib/session";
 
 const STATUS: Record<string, number> = {
@@ -48,6 +51,16 @@ export async function POST(request: Request): Promise<NextResponse> {
   try {
     // No signature yet means "give me something to sign".
     if (!body.signature) {
+      // Limited on the challenge, not the link. Issuing one writes a row and
+      // does nothing useful for an attacker, but it is unauthenticated work
+      // available on demand. Verifying a signature is bounded by the challenges
+      // that exist, so it needs no separate limit.
+      const limited = await enforceRateLimit([
+        { rule: WALLET_CHALLENGE_PER_USER, subject: user.id },
+        byIp(WALLET_CHALLENGE_PER_IP, request),
+      ]);
+      if (limited) return limited;
+
       const challenge = await issueWalletChallenge(db(), user.id, body.walletAddress);
       return NextResponse.json({
         message: challenge.message,

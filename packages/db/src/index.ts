@@ -21,6 +21,19 @@ export {
 } from "./leagues.js";
 
 export {
+  consumeAll,
+  consumeRateLimit,
+  hashedIp,
+  purgeIdleRateLimits,
+  SIGN_IN_PER_EMAIL,
+  SIGN_IN_PER_IP,
+  WALLET_CHALLENGE_PER_IP,
+  WALLET_CHALLENGE_PER_USER,
+  type RateLimitResult,
+  type RateLimitRule,
+} from "./rate-limit.js";
+
+export {
   CHALLENGE_TTL_MS,
   createSession,
   issueWalletChallenge,

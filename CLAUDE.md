@@ -47,7 +47,7 @@ Do not build it in August.
 
 See [`docs/BUILD-PLAN.md`](docs/BUILD-PLAN.md) for the full commit-by-commit plan.
 
-**Done — 506 tests, CI green:**
+**Done — 528 tests, CI green:**
 
 - Full specification — rules, data model, live scoring, build plan
 - A1: pnpm monorepo, TS strict, vitest, eslint, prettier, CI
@@ -88,19 +88,13 @@ See [`docs/BUILD-PLAN.md`](docs/BUILD-PLAN.md) for the full commit-by-commit pla
 
 **Next, in order:**
 
-1. **Rate limiting on the auth endpoints.** The owner asked for this first, 2026-08-06.
-   `/api/auth/request` will send a sign-in email to any address as fast as it is called,
-   and `/api/auth/wallet` issues challenges the same way. Not a break-in — nobody signs in
-   as anyone — but it lets someone flood a stranger's inbox using our sender, which is how
-   a sending domain's reputation dies, and it empties a 3,000/month email quota in
-   minutes. Per-address **and** per-IP, on both endpoints.
-2. **Draft UI** — the draft is fully persisted and fully tested but there is no room to
+1. **Draft UI** — the draft is fully persisted and fully tested but there is no room to
    run it in. This is the Aug 22 deadline and nothing else on the list competes with it.
-3. **League creation form** — still a preview; it does not post. Marked TODO in the code.
+2. **League creation form** — still a preview; it does not post. Marked TODO in the code.
    Unblocked now that there is a session to attribute a league to.
-4. **C2, C3, C6** — lineups, per-player kickoff locks, and team-week scoring. Needed by
+3. **C2, C3, C6** — lineups, per-player kickoff locks, and team-week scoring. Needed by
    Sep 9, not Aug 22. C6 is what finally connects the scoring engine to `MatchupResult`.
-5. **D1–D10** — the escrow program. **Write this early.** The audit is 2–4 weeks of
+4. **D1–D10** — the escrow program. **Write this early.** The audit is 2–4 weeks of
    calendar time and it gates pot leagues opening on Aug 22. Blocked on the secondary PC
    (no Rust/Anchor).
 
@@ -269,9 +263,28 @@ the emailed sign-in link arrives as a top-level navigation that `strict` would r
 `safeRedirect()` exists because `?next=` on the verify route is otherwise an open
 redirect, which from a link in someone's inbox is the shape of a convincing phish.
 
+**Rate limiting** is a **token bucket in Postgres** (`packages/db/src/rate-limit.ts`,
+migration `0012`), not a counter in memory. The web app runs as serverless functions, so
+an in-process counter is per-instance and an attacker gets a fresh allowance every time
+the platform starts another one. Token bucket rather than a fixed window because a window
+lets someone spend the whole allowance at 10:59 and the next at 11:01 — double the rate,
+right where a script lands.
+
+Two rules per endpoint, per-subject and per-address. **Both are charged even when one
+refuses** — stopping at the first refusal would let someone who has already exhausted the
+address bucket keep hammering a victim's account bucket for free.
+
+`clientIp()` reads `x-forwarded-for`, which is **client-supplied and spoofable unless a
+proxy we control rewrites it**. Vercel does. If this app ever moves behind something that
+does not, per-address limiting silently stops working while still appearing to. The
+per-account limits do not depend on it.
+
+`hashedIp()` is **not anonymisation** and the comment says so — IPv4 is brute-forceable.
+It means a leaked dump is not a readable list of member IPs. Unrelated to the rejected
+IP-based sybil blocking: limiting a burst is not deciding who someone is.
+
 **Known gaps, deliberately named rather than glossed:**
 
-- **No rate limiting.** Top of the list — see "Next, in order" above.
 - **Login CSRF.** Someone can send you _their_ sign-in link; click it and you are in their
   account and may enter data there. Inherent to magic links, low impact, not addressed.
 - **Tokens ride in URLs** and land in browser history. Mitigated by single use and a
@@ -423,7 +436,7 @@ Expect ~30–60 minutes; compiling AVM from source is the slow part.
 
 ```bash
 pnpm install
-pnpm test        # 506 tests, all green
+pnpm test        # 528 tests, all green
 pnpm typecheck
 pnpm lint
 ```
