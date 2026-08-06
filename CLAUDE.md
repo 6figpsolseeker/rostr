@@ -65,16 +65,39 @@ See [`docs/BUILD-PLAN.md`](docs/BUILD-PLAN.md) for the full commit-by-commit pla
 - B1–B5: the scoring engine (`packages/core/src/scoring/`) — integer milli-points, tiered
   ladders tested at every boundary
 
+- B9–B15: snake draft, queue, auto-pick, bots (`packages/core/src/draft/`)
+
 **Next, in order:**
 
 1. **B6–B8** — the stats provider adapter (Tank01), player and season sync. Needs a
-   Tank01 key, free tier.
-2. **B9–B15** — snake draft, queue, auto-pick, bots. **The Aug 22 deadline.**
+   Tank01 key, free tier. This is what supplies `DraftablePlayer.rank` — the draft
+   currently takes ranking as an input and has no source for it.
+2. **B16** — persist the draft: it is a pure state machine with no storage behind it yet.
 3. **D1–D10** — the escrow program. **Write this early.** The audit is 2–4 weeks of
-   calendar time and it gates pot leagues opening on Aug 22.
+   calendar time and it gates pot leagues opening on Aug 22. Blocked on the secondary PC
+   (no Rust/Anchor).
 4. **Finish A9's UI** — there is no session yet, so `JoinPanel` posts an empty `userId`
    and the league creation form is a preview only. Both marked TODO in the code. Needs
    the Supabase project, which the owner is setting up on their main PC.
+
+### The draft
+
+`packages/core/src/draft/`. Pure state machine — transitions return new state, nothing
+runs a clock or touches a database. That is why slow drafts need no real-time
+infrastructure and why a full 12-team draft plays out instantly in a test.
+
+- **Order is seeded, never `Math.random`.** Anyone holding the seed can recompute it and
+  confirm nobody reshuffled. Use the league's rules hash: already on-chain, already
+  unforgeable.
+- **Roster legality is bipartite matching** (`roster.ts`), not per-position counting.
+  Counting is _wrong_ because of FLEX — see the comment at the top of that file before
+  changing it. This underpins the rule that stops six quarterbacks and no kicker.
+- **One auto-pick routine serves clock expiry and every bot.** Do not fork them. Two
+  implementations would diverge, and the divergence would read as "the bot outdrafted me
+  while I was asleep".
+
+Bot sophistication is still the open question: the current bots draft by need from a
+supplied ranking. Positional scarcity, bye weeks, and tier breaks are not modelled.
 
 ### Scoring
 
