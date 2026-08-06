@@ -74,24 +74,40 @@ lose a league full of people who came from somewhere else.
 Sleeper's own wording for auto-pick — _"Once your queue is empty, the autopick will take
 the next best player based on your roster needs"_ — is exactly what `autoPick()` does.
 
-**Where we are stricter, on purpose:**
+**Manual picks are permissive; auto-picks are protective.**
 
-Neither platform stops you drafting a roster that cannot field a legal lineup.
+Neither platform stops you drafting a roster that cannot field a legal lineup — Sleeper
+calls its version _"lazy enforcement"_, and ESPN offers optional per-position maximums
+instead. An earlier version of this engine blocked such picks outright. That was wrong,
+and the owner corrected it:
 
-- **Sleeper** calls it _"lazy enforcement"_: you can draft over the roster limit and are
-  simply blocked from setting a lineup or adding free agents until you comply.
-- **ESPN** offers configurable per-position minimums and maximums instead, off by default.
+- **A manual pick is never blocked for being bad.** Nothing but wide receivers is a
+  decision, not an error, and it belongs to the manager. `canDraft()` rejects only the
+  genuinely impossible: roster full, or player already rostered.
+- **Auto-pick will not strand a lineup on a manager's behalf.** When the clock expires,
+  the manager was not there to choose — so `autoPick()` skips any player, queued or not,
+  that would make the starting lineup unfillable.
 
-We reject a pick that leaves fewer picks than unfilled starting slots
-(`CANNOT_FILL_STARTERS`). That is a real divergence, and it is deliberate:
+The asymmetry is the whole point. Stakes are higher here than on ESPN: three consecutive
+invalid lineups mean the team is abandoned and its stake forfeited. A manager may accept
+that risk knowingly; the app must not impose it on someone who was asleep.
 
-> **Our abandonment rule punishes invalid lineups.** Three consecutive weeks with an
-> invalid lineup means the team is abandoned and its stake is forfeited to the champion.
-> Copying Sleeper's laziness here would let someone lose a buy-in to a drafting mistake
-> made in August. Sleeper can afford to be lazy because nobody has money in escrow.
+`pickWouldStrandStarters()` exists so the UI can warn before a manual pick confirms.
+Warn, never block.
 
-The rule only bites in the last two rounds, and only when a legal lineup is genuinely
-impossible — it never blocks a merely unwise pick.
+**The draft order seed is an unsolved security problem.**
+
+The order is a seeded Fisher-Yates shuffle, so it is reproducible and auditable rather
+than "trust us, it was random". But the output depends on the seed _and the set of team
+IDs_, and anything a commissioner can vary before the draft, they can grind: add a bot,
+compute the order, remove it, try another.
+
+A seed fixed at league creation — the rules hash — does not close this. The seed must be
+unpredictable until after the field is locked. **A Solana slot hash at or after the frozen
+`draft.scheduledAt`** satisfies both halves: unknowable in advance, verifiable afterwards.
+
+Until that is wired up, the order should be considered fair only for leagues without a
+pot. Flagged in `order.ts` and in `SETUP-REQUIRED.md`.
 
 **What we deliberately do not have:**
 

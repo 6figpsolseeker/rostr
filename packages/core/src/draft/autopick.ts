@@ -8,16 +8,19 @@
  *
  * The order is:
  *
- *   1. The manager's queue, skipping anyone taken or illegal
+ *   1. The manager's queue, skipping anyone taken or unsafe
  *   2. Best available at the most-needed starting slot
- *   3. Best available that is legal at all
+ *   3. Best available that still leaves a fillable lineup
+ *   4. Best available at all — only reachable if the manager already stranded
+ *      their own lineup by hand
  *
- * Step 3 exists because late in a draft, needs are met and the only requirement
- * is a legal roster.
+ * "Unsafe" means it would leave the starting lineup unfillable. A manager may do
+ * that to themselves deliberately; auto-pick never does it on their behalf,
+ * because they were not there to choose and the penalty is a forfeited stake.
  */
 
 import type { DraftablePlayer, RosterShape } from "./roster.js";
-import { canDraft, unfilledStarterSlots } from "./roster.js";
+import { canDraft, unfilledStarterSlots, wouldStrandStarters } from "./roster.js";
 
 export interface AutoPickContext {
   /** Available players, best first. Ranking comes from the provider. */
@@ -48,14 +51,26 @@ export function autoPick(context: AutoPickContext): AutoPickResult | null {
   const { available, roster, queue, shape, picksRemainingAfter } = context;
 
   const byId = new Map(available.map((player) => [player.playerId, player]));
-  const isLegal = (player: DraftablePlayer): boolean =>
-    canDraft(roster, player, shape, picksRemainingAfter).legal;
 
-  // 1. The queue. Persistent across the whole draft, so entries taken by other
-  //    managers are skipped rather than treated as an empty queue.
+  const isLegal = (player: DraftablePlayer): boolean => canDraft(roster, player, shape).legal;
+
+  /**
+   * Legal *and* leaves a fillable lineup.
+   *
+   * A manager who picks manually may strand their own starters — that is their
+   * call. Auto-pick must not do it on their behalf, because the manager was not
+   * there to make the choice and the penalty is a forfeited stake.
+   */
+  const isSafe = (player: DraftablePlayer): boolean =>
+    isLegal(player) && !wouldStrandStarters(roster, player, shape, picksRemainingAfter);
+
+  // 1. The queue. Persistent across the draft, so entries taken by other
+  //    managers are skipped rather than treated as an empty queue. A queued
+  //    player who would strand the lineup is skipped too — the queue was written
+  //    before the board looked like this.
   for (const playerId of queue) {
     const queued = byId.get(playerId);
-    if (queued && isLegal(queued)) {
+    if (queued && isSafe(queued)) {
       return { player: queued, source: "QUEUE" };
     }
   }
@@ -68,12 +83,18 @@ export function autoPick(context: AutoPickContext): AutoPickResult | null {
     const best = ranked.find(
       (player) =>
         player.positions.some((position) => slot.eligiblePositions.includes(position)) &&
-        isLegal(player),
+        isSafe(player),
     );
     if (best) return { player: best, source: "NEED", slotType: slot.slotType };
   }
 
-  // 3. Starters are covered; take the best legal player left.
+  // 3. Starters are covered; take the best player who keeps them covered.
+  const safest = ranked.find(isSafe);
+  if (safest) return { player: safest, source: "BEST_AVAILABLE" };
+
+  // 4. Nothing keeps the lineup fillable — which happens only when a manager
+  //    already stranded it by hand. Auto-pick cannot undo that, so it takes the
+  //    best legal player rather than refusing to pick and stalling the draft.
   const best = ranked.find(isLegal);
   return best ? { player: best, source: "BEST_AVAILABLE" } : null;
 }

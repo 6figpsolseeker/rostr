@@ -29,11 +29,25 @@ function seededIndex(seed: string, counter: number, max: number): number {
  * Shuffle team IDs into a draft order.
  *
  * Fisher-Yates, with every swap driven by the seed. Same seed and same input
- * always produce the same order, on any machine.
+ * always produce the same order, on any machine — so the order is *auditable*
+ * rather than merely asserted to be random.
  *
- * The seed should be something both fixed at creation and unforgeable after the
- * fact — the league's rules hash is a good choice, since it is already on-chain
- * and cannot be altered once members have signed it.
+ * ## Choosing a seed — this is a security decision
+ *
+ * The output depends on the seed **and on the set of team IDs**. Anything the
+ * commissioner can vary before the draft, they can grind.
+ *
+ * A seed known at league creation (the rules hash, say) is not sufficient on its
+ * own: a commissioner could add a bot, compute the resulting order, remove it,
+ * add a differently-identified one, and repeat until the order favours them.
+ * Nothing about that is detectable after the fact.
+ *
+ * The seed must therefore be **unpredictable until after the field is locked**.
+ * A Solana slot hash at or after the frozen `draft.scheduledAt` satisfies both
+ * halves: nobody can know it in advance, and anyone can verify it afterwards.
+ *
+ * Until that is wired up (it needs the chain integration), callers should treat
+ * the order as fair only for leagues without a pot.
  */
 export function generateDraftOrder(
   teamIds: readonly string[],

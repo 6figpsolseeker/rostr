@@ -144,6 +144,25 @@ the running cost to roughly **$35/month**.
 
 ---
 
+## Known gaps
+
+### ⬜ Draft order seed is grindable
+
+**Blocks:** a fair draft in any league with a pot.
+**Needed by:** **Aug 22**, with the draft.
+
+The order is a seeded shuffle, so it is auditable. But it depends on the seed _and_ the
+set of team IDs, and a commissioner can vary the latter: add a bot, compute the resulting
+order, remove it, try again until it favours them. Undetectable afterwards.
+
+The fix is a seed nobody can know until the field is locked — **a Solana slot hash at or
+after the frozen `draft.scheduledAt`**. Unpredictable in advance, verifiable after.
+Needs the chain integration, so it is currently blocked alongside Milestone D.
+
+Until then, treat the order as fair only for free leagues.
+
+---
+
 ## Decisions outstanding
 
 ### ⬜ Bot draft sophistication

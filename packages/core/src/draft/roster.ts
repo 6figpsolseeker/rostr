@@ -144,7 +144,7 @@ export function unfilledStarterSlots(
     .sort((a, b) => a.ordinal - b.ordinal);
 }
 
-export type IllegalPickReason = "ROSTER_FULL" | "ALREADY_ROSTERED" | "CANNOT_FILL_STARTERS";
+export type IllegalPickReason = "ROSTER_FULL" | "ALREADY_ROSTERED";
 
 export interface PickLegality {
   readonly legal: boolean;
@@ -152,24 +152,23 @@ export interface PickLegality {
 }
 
 /**
- * Whether a team may draft this player.
+ * Whether a team may draft this player at all.
  *
- * Three conditions, in the order a manager would think of them:
+ * Only the two conditions that are genuinely impossible: there is no room, or
+ * they already have him.
  *
- * 1. There is room on the roster.
- * 2. They do not already have him.
- * 3. **Taking him still leaves enough picks to field a legal lineup.** This is
- *    the rule that stops someone drafting six quarterbacks and arriving at Week 1
- *    unable to start a kicker. Every real platform enforces it; it is easy to
- *    miss because it only bites near the end of the draft.
+ * **Drafting badly is deliberately permitted.** If a manager wants nothing but
+ * wide receivers, that is their draft to lose. Blocking it would be the app
+ * overruling a decision that is theirs to make, and both ESPN and Sleeper allow
+ * it — Sleeper calls its version "lazy enforcement".
  *
- * @param picksRemainingAfter picks this team has left *after* this one
+ * The consequence is real and must be surfaced rather than hidden: see
+ * {@link wouldStrandStarters}.
  */
 export function canDraft(
   roster: readonly DraftablePlayer[],
   player: DraftablePlayer,
   shape: RosterShape,
-  picksRemainingAfter: number,
 ): PickLegality {
   if (roster.length >= shape.totalSlots) {
     return { legal: false, reason: "ROSTER_FULL" };
@@ -177,13 +176,28 @@ export function canDraft(
   if (roster.some((p) => p.playerId === player.playerId)) {
     return { legal: false, reason: "ALREADY_ROSTERED" };
   }
+  return { legal: true };
+}
 
+/**
+ * Whether this pick would leave the team unable to field a legal lineup.
+ *
+ * Advisory, not a block. A manual pick may proceed anyway; auto-pick avoids it.
+ *
+ * The stakes are worth stating plainly wherever this surfaces in a UI: a roster
+ * that cannot fill its starting slots produces an invalid lineup every week,
+ * and three consecutive invalid lineups mean the team is abandoned and its stake
+ * is forfeited. On ESPN that is an embarrassment; here it is someone's buy-in.
+ *
+ * @param picksRemainingAfter picks this team has left *after* this one
+ */
+export function wouldStrandStarters(
+  roster: readonly DraftablePlayer[],
+  player: DraftablePlayer,
+  shape: RosterShape,
+  picksRemainingAfter: number,
+): boolean {
   const after = [...roster, player];
   const shortfall = shape.starters.length - startersFilled(after, shape);
-
-  if (shortfall > picksRemainingAfter) {
-    return { legal: false, reason: "CANNOT_FILL_STARTERS" };
-  }
-
-  return { legal: true };
+  return shortfall > picksRemainingAfter;
 }

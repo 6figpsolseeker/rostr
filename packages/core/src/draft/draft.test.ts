@@ -3,7 +3,13 @@ import { NFL } from "../sports/nfl.js";
 import { NFL_PPR_ROSTER } from "../rules/nfl-ppr.js";
 import type { DraftRules } from "../rules/types.js";
 import { fullDraftSequence, generateDraftOrder, pickPosition, totalPicks } from "./order.js";
-import { buildRosterShape, canDraft, startersFilled, unfilledStarterSlots } from "./roster.js";
+import {
+  buildRosterShape,
+  canDraft,
+  startersFilled,
+  unfilledStarterSlots,
+  wouldStrandStarters,
+} from "./roster.js";
 import type { DraftablePlayer } from "./roster.js";
 import { autoPick, pruneQueue } from "./autopick.js";
 import {
@@ -16,6 +22,7 @@ import {
   makePick,
   pickDeadline,
   picksRemainingAfter,
+  pickWouldStrandStarters,
   rosterFor,
   secondsRemaining,
 } from "./state.js";
@@ -169,43 +176,52 @@ describe("roster legality", () => {
   });
 
   it("permits a legal pick", () => {
-    expect(canDraft([], player("rb1", ["RB"]), SHAPE, ROUNDS - 1).legal).toBe(true);
+    expect(canDraft([], player("rb1", ["RB"]), SHAPE).legal).toBe(true);
   });
 
   it("refuses a player already rostered", () => {
     const rb = player("rb1", ["RB"]);
-    expect(canDraft([rb], rb, SHAPE, 14).reason).toBe("ALREADY_ROSTERED");
+    expect(canDraft([rb], rb, SHAPE).reason).toBe("ALREADY_ROSTERED");
   });
 
   it("refuses when the roster is full", () => {
     const full = Array.from({ length: SHAPE.totalSlots }, (_, i) => player(`p${i}`, ["WR"], i));
-    expect(canDraft(full, player("new", ["WR"]), SHAPE, 5).reason).toBe("ROSTER_FULL");
+    expect(canDraft(full, player("new", ["WR"]), SHAPE).reason).toBe("ROSTER_FULL");
   });
 
-  it("refuses a pick that would leave starters unfillable", () => {
-    // The rule that stops six quarterbacks and no kicker. One pick left, and
-    // both a K and a DEF still needed — taking a WR makes Week 1 impossible.
-    const roster = [
-      player("qb1", ["QB"]),
-      player("rb1", ["RB"]),
-      player("rb2", ["RB"]),
-      player("wr1", ["WR"]),
-      player("wr2", ["WR"]),
-      player("te1", ["TE"]),
-      player("fx1", ["WR"]),
-      player("fx2", ["RB"]),
-      player("k1", ["K"]),
-    ];
-    expect(canDraft(roster, player("wr9", ["WR"]), SHAPE, 0).reason).toBe(
-      "CANNOT_FILL_STARTERS",
+  it("permits a deliberately terrible draft", () => {
+    // Nothing but wide receivers is a decision, not an error. The manager owns
+    // it, the same as on ESPN and Sleeper.
+    const allWr = Array.from({ length: 10 }, (_, i) => player(`wr${i}`, ["WR"], i));
+    expect(canDraft(allWr, player("wr-more", ["WR"]), SHAPE).legal).toBe(true);
+  });
+});
+
+describe("wouldStrandStarters", () => {
+  // One pick left, and both a K and a DEF still needed.
+  const nearlyDone = [
+    player("qb1", ["QB"]),
+    player("rb1", ["RB"]),
+    player("rb2", ["RB"]),
+    player("wr1", ["WR"]),
+    player("wr2", ["WR"]),
+    player("te1", ["TE"]),
+    player("fx1", ["WR"]),
+    player("k1", ["K"]),
+  ];
+
+  it("flags a pick that makes a legal lineup impossible", () => {
+    expect(wouldStrandStarters(nearlyDone, player("wr9", ["WR"]), SHAPE, 0)).toBe(true);
+  });
+
+  it("does not flag the pick that fills the gap", () => {
+    expect(wouldStrandStarters(nearlyDone, player("def1", ["DEF"]), SHAPE, 0)).toBe(false);
+  });
+
+  it("does not flag luxury picks while there is still time", () => {
+    expect(wouldStrandStarters([player("qb1", ["QB"])], player("qb2", ["QB"]), SHAPE, 12)).toBe(
+      false,
     );
-    // The DEF that actually fills the gap is fine.
-    expect(canDraft(roster, player("def1", ["DEF"]), SHAPE, 0).legal).toBe(true);
-  });
-
-  it("allows luxury picks while there is still time", () => {
-    const roster = [player("qb1", ["QB"])];
-    expect(canDraft(roster, player("qb2", ["QB"]), SHAPE, 13).legal).toBe(true);
   });
 });
 
@@ -287,7 +303,10 @@ describe("autoPick", () => {
     ).toBeNull();
   });
 
-  it("ignores a queued player who would be an illegal pick", () => {
+  it("skips a queued player who would strand the lineup", () => {
+    // The queue was written before the board looked like this. Auto-pick must
+    // not strand a lineup on the manager's behalf — they were not there to
+    // choose it, and the penalty is a forfeited stake.
     const roster = [
       player("qb1", ["QB"]),
       player("rb1", ["RB"]),
@@ -296,18 +315,39 @@ describe("autoPick", () => {
       player("wr2", ["WR"]),
       player("te1", ["TE"]),
       player("fx1", ["WR"]),
-      player("fx2", ["RB"]),
       player("k1", ["K"]),
     ];
-    // Queue wants another WR, but only DEF keeps the lineup fillable.
     const result = autoPick({
       available,
       roster,
-      queue: ["wr1x"],
+      queue: ["wr1"],
       shape: SHAPE,
       picksRemainingAfter: 0,
     });
     expect(result?.player.playerId).toBe("def1");
+  });
+
+  it("still picks when a manager already stranded their own lineup", () => {
+    // Manual picks may strand starters. Auto-pick cannot undo that, and must
+    // not stall the draft over it — it takes the best legal player.
+    const stranded = [
+      player("wr01", ["WR"]),
+      player("wr02", ["WR"]),
+      player("wr03", ["WR"]),
+      player("wr04", ["WR"]),
+      player("wr05", ["WR"]),
+      player("wr06", ["WR"]),
+      player("wr07", ["WR"]),
+      player("wr08", ["WR"]),
+    ];
+    const result = autoPick({
+      available,
+      roster: stranded,
+      queue: [],
+      shape: SHAPE,
+      picksRemainingAfter: 0,
+    });
+    expect(result).not.toBeNull();
   });
 });
 
@@ -409,11 +449,25 @@ describe("draft state machine", () => {
     );
   });
 
-  it("refuses a draft with fewer rounds than starting slots", () => {
-    // Worth pinning: 10 starters cannot be filled in 1 round, and failing
-    // loudly beats producing a roster that cannot field a lineup in Week 1.
+  it("still picks in a draft too short to fill a lineup", () => {
+    // 9 starters cannot be filled in 1 round. Auto-pick takes the best legal
+    // player anyway rather than stalling — the shortfall is the league's
+    // configuration problem, not something a pick can fix.
     const state = createDraft(["a", "b"], 1);
-    expectDraftError(() => makeAutoPick(state, { pool, shape: SHAPE }), "NO_LEGAL_PICK");
+    const after = makeAutoPick(state, { pool, shape: SHAPE });
+    expect(after.picks).toHaveLength(1);
+  });
+
+  it("warns before a manual pick that would strand the lineup", () => {
+    let state = createDraft(["a"], 2);
+    // One pick left after this one, and 9 starting slots to fill.
+    const input = { teamId: "a", playerId: "wr-1", pool, shape: SHAPE };
+
+    expect(pickWouldStrandStarters(state, input)).toBe(true);
+
+    // Warned, not blocked — the manager may proceed.
+    state = makePick(state, input);
+    expect(state.picks).toHaveLength(1);
   });
 });
 

@@ -10,7 +10,7 @@
 import type { DraftRules } from "../rules/types.js";
 import { autoPick } from "./autopick.js";
 import type { AutoPickSource } from "./autopick.js";
-import { canDraft } from "./roster.js";
+import { canDraft, wouldStrandStarters } from "./roster.js";
 import type { DraftablePlayer, IllegalPickReason, RosterShape } from "./roster.js";
 import { pickPosition, teamOnClock, totalPicks } from "./order.js";
 
@@ -104,11 +104,34 @@ export interface MakePickInput {
 }
 
 /**
+ * Whether a manual pick would strand the team's starting lineup.
+ *
+ * Call this *before* `makePick` and show the answer. The pick is permitted
+ * either way — a manager who wants nothing but wide receivers may have them —
+ * but the consequence has to be visible before they confirm, not discovered in
+ * Week 1 when the lineup will not validate.
+ */
+export function pickWouldStrandStarters(state: DraftState, input: MakePickInput): boolean {
+  const player = input.pool.get(input.playerId);
+  if (!player) return false;
+
+  return wouldStrandStarters(
+    rosterFor(state, input.teamId, input.pool),
+    player,
+    input.shape,
+    picksRemainingAfter(state, input.teamId),
+  );
+}
+
+/**
  * Record a manual pick.
  *
- * Every rejection throws with a code. Illegal picks are impossible to record,
- * not merely discouraged — a draft that accepted one would produce a roster that
- * cannot field a lineup, discovered in Week 1.
+ * Rejects only what is genuinely impossible: out of turn, player gone, roster
+ * full, already rostered.
+ *
+ * **A bad draft is allowed.** Taking six quarterbacks and no kicker is a
+ * decision, not an error, and it is the manager's to make — the same as ESPN and
+ * Sleeper. Warn with {@link pickWouldStrandStarters} beforehand; do not block.
  */
 export function makePick(state: DraftState, input: MakePickInput): DraftState {
   if (isComplete(state)) {
@@ -128,12 +151,7 @@ export function makePick(state: DraftState, input: MakePickInput): DraftState {
     throw new DraftError(`Player ${input.playerId} is not available`, "PLAYER_UNAVAILABLE");
   }
 
-  const legality = canDraft(
-    rosterFor(state, input.teamId, input.pool),
-    player,
-    input.shape,
-    picksRemainingAfter(state, input.teamId),
-  );
+  const legality = canDraft(rosterFor(state, input.teamId, input.pool), player, input.shape);
   if (!legality.legal) {
     throw new DraftError(
       `Cannot draft ${input.playerId}: ${legality.reason}`,
