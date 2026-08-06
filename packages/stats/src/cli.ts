@@ -150,6 +150,7 @@ async function verify(): Promise<void> {
   /** Every "(...)" trailer seen on a scoring play, with an example. */
   const parentheticals = new Map<string, string>();
   const blocked: string[] = [];
+  const returns: string[] = [];
   let games = 0;
 
   for (const week of weeks) {
@@ -182,6 +183,7 @@ async function verify(): Promise<void> {
         }
 
         if (/block/i.test(text)) blocked.push(`${type} | ${text}`);
+        if (/return/i.test(text) && type === "TD") returns.push(text);
       }
     }
   }
@@ -203,6 +205,13 @@ async function verify(): Promise<void> {
   console.log(
     blocked.length > 0
       ? blocked.map((b) => `  ${b}`).join("\n")
+      : "  NONE across the scanned games",
+  );
+
+  console.log("\nReturn touchdowns:");
+  console.log(
+    returns.length > 0
+      ? [...new Set(returns)].map((r) => `  ${r}`).join("\n")
       : "  NONE across the scanned games",
   );
 }

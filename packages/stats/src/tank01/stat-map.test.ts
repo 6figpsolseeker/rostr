@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   bucketFieldGoal,
   isBlockedKick,
+  isDefensiveReturnTouchdown,
   isExtraPointMade,
+  isSpecialTeamsReturnTouchdown,
   isSuccessfulTwoPointConversion,
   parseFieldGoalYards,
   parseStatValue,
@@ -166,6 +168,65 @@ describe("isExtraPointMade", () => {
 
   it("rejects a two-point conversion", () => {
     expect(isExtraPointMade(REAL_PAT_FORMS.twoPointRun)).toBe(false);
+  });
+});
+
+/** Verbatim return touchdowns from 2025 weeks 4, 8, 14 and 17. */
+const REAL_RETURNS = {
+  kickoff: "Rashid Shaheed 100 Yd Kickoff Return (Jason Myers Kick)",
+  kickoff2: "Deonte Banks 95 Yd Kickoff Return (Ben Sauls Kick)",
+  punt: "Marcus Jones 87 Yd Punt Return (Andy Borregales Kick)",
+  puntWithTwoPoint: "Parker Washington 87 Yd Punt Return (Two-Point Pass Conversion Failed)",
+  blockedPunt: "Sydney Brown 35 yd. return of blocked punt (J.Elliott kick)",
+  blockedFieldGoal: "Jared Verse 76 Yd Return of Blocked Field Goal (Harrison Mevis Kick)",
+  interception: "Christian Benford 63 Yd Interception Return (Matt Prater Kick)",
+  interception2: "T.J. Edwards 34 Yd Interception Return (Cairo Santos Kick)",
+} as const;
+
+describe("isSpecialTeamsReturnTouchdown", () => {
+  it("recognises kickoff returns", () => {
+    expect(isSpecialTeamsReturnTouchdown(REAL_RETURNS.kickoff)).toBe(true);
+    expect(isSpecialTeamsReturnTouchdown(REAL_RETURNS.kickoff2)).toBe(true);
+  });
+
+  it("recognises punt returns", () => {
+    expect(isSpecialTeamsReturnTouchdown(REAL_RETURNS.punt)).toBe(true);
+    expect(isSpecialTeamsReturnTouchdown(REAL_RETURNS.puntWithTwoPoint)).toBe(true);
+  });
+
+  it("recognises blocked-kick returns, including the lowercase variant", () => {
+    // "35 yd. return of blocked punt (J.Elliott kick)" — different casing,
+    // abbreviated name, full stop after "yd". Tank01's text is not uniform.
+    expect(isSpecialTeamsReturnTouchdown(REAL_RETURNS.blockedPunt)).toBe(true);
+    expect(isSpecialTeamsReturnTouchdown(REAL_RETURNS.blockedFieldGoal)).toBe(true);
+  });
+
+  it("does NOT count interception returns", () => {
+    // The double-pay trap. These are defensive touchdowns, already scored as
+    // def_td. Counting them here would pay one play under two rules.
+    expect(isSpecialTeamsReturnTouchdown(REAL_RETURNS.interception)).toBe(false);
+    expect(isSpecialTeamsReturnTouchdown(REAL_RETURNS.interception2)).toBe(false);
+  });
+
+  it("does not fire on ordinary touchdowns", () => {
+    expect(isSpecialTeamsReturnTouchdown(REAL_PAT_FORMS.kickMade)).toBe(false);
+    expect(isSpecialTeamsReturnTouchdown(REAL_PAT_FORMS.twoPointRun)).toBe(false);
+  });
+});
+
+describe("isDefensiveReturnTouchdown", () => {
+  it("recognises interception returns", () => {
+    expect(isDefensiveReturnTouchdown(REAL_RETURNS.interception)).toBe(true);
+  });
+
+  it("is mutually exclusive with special teams returns", () => {
+    // Every real return play must land in exactly one bucket.
+    for (const text of Object.values(REAL_RETURNS)) {
+      const special = isSpecialTeamsReturnTouchdown(text);
+      const defensive = isDefensiveReturnTouchdown(text);
+      expect(special && defensive, `both matched: ${text}`).toBe(false);
+      expect(special || defensive, `neither matched: ${text}`).toBe(true);
+    }
   });
 });
 

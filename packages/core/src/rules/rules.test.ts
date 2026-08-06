@@ -281,10 +281,12 @@ describe("hashLeagueRules", () => {
     //                          frozen copies. Updating the constant is correct,
     //                          and the commit must say what moved and why.
     //
-    // Last moved: 2026-08-05, roster changed to one FLEX instead of two
-    // (QB/RB/RB/WR/WR/TE/FLEX/K/DEF). No leagues existed.
+    // Moved 2026-08-05: roster changed to one FLEX instead of two
+    // (QB/RB/RB/WR/WR/TE/FLEX/K/DEF).
+    // Moved 2026-08-05: added ret_td at 6 points, matching ESPN and Sleeper.
+    // No leagues existed on either occasion.
     expect(hashLeagueRules(FIXTURE)).toBe(
-      "df3a5e0445c67dff9fc1b3f54fcdfaed0853c2adbe844830edd48b6e4a486d43",
+      "1a6ba00fff13593ecf298cbabdfa678f0452b625be11e1916330527e22dc072e",
     );
   });
 });

@@ -38,6 +38,11 @@ export const NFL_STAT_KEYS = [
   { key: "fum_lost", displayName: "Fumbles Lost", kind: "LINEAR" },
   { key: "two_pt", displayName: "Two-Point Conversions", kind: "LINEAR" },
 
+  // Special teams returns by a *player* — a kickoff, punt, or blocked-kick
+  // return taken to the house. Distinct from `def_td`, which is the defensive
+  // unit's touchdown: an interception or fumble return is not this.
+  { key: "ret_td", displayName: "Return Touchdowns", kind: "LINEAR" },
+
   // Kicking
   { key: "fg_0_39", displayName: "Field Goals 0-39 Yards", kind: "LINEAR" },
   { key: "fg_40_49", displayName: "Field Goals 40-49 Yards", kind: "LINEAR" },

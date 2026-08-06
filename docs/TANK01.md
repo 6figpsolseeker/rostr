@@ -200,19 +200,32 @@ One thing the recheck did surface:
 Ray Davis 97 Yd Kickoff Return (Matt Prater Kick)
 ```
 
-**Return touchdowns are not in our scoring table.** `RULES.md` §1 pays for
-passing, rushing, receiving, and defensive/special-teams touchdowns, but there is
-no line for a _player_ returning a kick for six. ESPN and Sleeper both award 6
-points to the returner by default, so this is a gap in our rules rather than in
-the data.
+Return touchdowns were missing from our scoring table. **Now added as `ret_td` at
+6 points**, matching ESPN and Sleeper, which both treat a player's return
+touchdown as a category separate from the defensive unit's.
 
-The data is there: `Kicking.kickReturnTD` is a real field, and team defense
-projections carry `returnTD`. Punt-return touchdowns are less clear — the
-`Punting` category covers punters, not returners, so a source for those is still
-unconfirmed.
+Scanning weeks 4, 8, 14 and 17 for every return touchdown produced the full
+vocabulary — and a trap:
 
-This is an owner decision, since it changes the frozen scoring table. Tracked in
-[`SETUP-REQUIRED.md`](SETUP-REQUIRED.md).
+| Text                                             | Scores as                  |
+| ------------------------------------------------ | -------------------------- |
+| `Rashid Shaheed 100 Yd Kickoff Return`           | `ret_td`                   |
+| `Marcus Jones 87 Yd Punt Return`                 | `ret_td`                   |
+| `Sydney Brown 35 yd. return of blocked punt`     | `ret_td`                   |
+| `Jared Verse 76 Yd Return of Blocked Field Goal` | `ret_td`                   |
+| `Christian Benford 63 Yd Interception Return`    | **`def_td`, not `ret_td`** |
+| `T.J. Edwards 34 Yd Interception Return`         | **`def_td`, not `ret_td`** |
+
+Interception and fumble returns are defensive touchdowns we already score.
+Counting them as return touchdowns as well would pay one play under two rules —
+precisely the misconfiguration Sleeper's own documentation warns about.
+`isSpecialTeamsReturnTouchdown()` excludes them, and a test asserts every real
+return play lands in exactly one bucket.
+
+Note `"35 yd. return of blocked punt (J.Elliott kick)"`: lowercase, abbreviated
+name, full stop after "yd". Tank01's play text comes from more than one source
+and its formatting is not uniform — another reason to match tokens rather than
+whole phrases.
 
 ---
 

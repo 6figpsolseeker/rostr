@@ -12,7 +12,9 @@ export { Tank01Client, type Tank01Options } from "./tank01/client.js";
 export {
   bucketFieldGoal,
   isBlockedKick,
+  isDefensiveReturnTouchdown,
   isExtraPointMade,
+  isSpecialTeamsReturnTouchdown,
   isSuccessfulTwoPointConversion,
   parseFieldGoalYards,
   parseStatValue,

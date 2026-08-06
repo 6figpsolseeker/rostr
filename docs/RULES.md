@@ -37,10 +37,20 @@ Set by the project owner. Standard modern full-PPR.
 | Interception thrown                           | **−2**                       |
 | Fumble lost                                   | **−2**                       |
 | 2-point conversion (pass, rush, or reception) | **2**                        |
+| Return touchdown                              | **6**                        |
 
 No yardage milestone bonuses. Fumbles recovered by the fumbling team score nothing —
 only **lost** fumbles are penalised, and the penalty is charged to the player who
 fumbled.
+
+**Return touchdowns** are kickoff, punt, and blocked-kick returns taken to the end zone,
+scored by the returning player. Matches ESPN and Sleeper, which both treat this as a
+category separate from the defensive unit's touchdown.
+
+Interception and fumble returns are **not** this — they are defensive touchdowns, scored
+by the Defense/Special Teams unit below. A single return touchdown therefore pays both
+the returner and the opposing-of-that-play D/ST, which is correct: they are different
+roster spots, usually owned by different managers.
 
 ### Kicking
 

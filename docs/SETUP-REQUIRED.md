@@ -169,27 +169,6 @@ Until then, treat the order as fair only for free leagues.
 
 ## Decisions outstanding
 
-### ⬜ Do return touchdowns score?
-
-Found while verifying Tank01 against real games: `"Ray Davis 97 Yd Kickoff Return"`.
-
-`RULES.md` §1 has no line for a **player** returning a kick or punt for a touchdown.
-ESPN and Sleeper both award the returner 6 points by default, so this is a gap in our
-scoring table, not in the data — `Kicking.kickReturnTD` exists.
-
-**Needed by:** before the first league is created. Changing the scoring table afterwards
-is impossible for leagues already frozen.
-
-Three options:
-
-1. **Add `ret_td` at 6 points.** Matches ESPN and Sleeper. Punt-return TDs need a source
-   confirmed; kick returns are already available.
-2. **Leave it out.** Simpler, and return touchdowns are rare — but a manager whose
-   receiver takes one back 97 yards will notice the zero.
-3. Fold it into `def_td`, which is wrong — that is the team defense unit, not the player.
-
-Recommend (1).
-
 ### ⬜ Bot draft sophistication
 
 Queue-and-fallback is specified and cheap. Bots that draft _believably_ — positional

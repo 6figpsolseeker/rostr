@@ -162,6 +162,42 @@ export function isExtraPointMade(scoreText: string): boolean {
   return /\(\s*[^)]*\bKick\s*\)/i.test(scoreText) && !FAILED_PATTERN.test(scoreText);
 }
 
+/**
+ * Whether a touchdown was a **special teams return** by a player.
+ *
+ * The distinction that matters, and the trap this exists to avoid:
+ *
+ *     Rashid Shaheed 100 Yd Kickoff Return          -> ret_td   (special teams)
+ *     Marcus Jones 87 Yd Punt Return                -> ret_td
+ *     Sydney Brown 35 yd. return of blocked punt    -> ret_td
+ *     Jared Verse 76 Yd Return of Blocked Field Goal -> ret_td
+ *
+ *     Christian Benford 63 Yd Interception Return   -> def_td   (defensive)
+ *     ... Fumble Return                             -> def_td
+ *
+ * Interception and fumble returns are already scored as defensive touchdowns.
+ * Counting them here as well would pay a single play twice under two different
+ * rules — which is exactly the misconfiguration Sleeper's own documentation
+ * warns about.
+ *
+ * Note `"35 yd. return of blocked punt (J.Elliott kick)"` — lowercase, an
+ * abbreviated name, and a full stop after "yd". Tank01's play text comes from
+ * more than one source and its formatting is not consistent, so this matches
+ * tokens rather than shapes.
+ */
+const DEFENSIVE_RETURN = /\b(interception|fumble)\s+return\b/i;
+const SPECIAL_TEAMS_RETURN = /\b(kickoff|kick|punt)\s+return\b|\breturn\s+of\s+blocked\b/i;
+
+export function isSpecialTeamsReturnTouchdown(scoreText: string): boolean {
+  if (DEFENSIVE_RETURN.test(scoreText)) return false;
+  return SPECIAL_TEAMS_RETURN.test(scoreText);
+}
+
+/** Whether a touchdown was a defensive return — an interception or fumble. */
+export function isDefensiveReturnTouchdown(scoreText: string): boolean {
+  return DEFENSIVE_RETURN.test(scoreText);
+}
+
 /** Bucket a made field goal into the three keys the scoring table uses. */
 export function bucketFieldGoal(yards: number): "fg_0_39" | "fg_40_49" | "fg_50_plus" {
   if (yards >= 50) return "fg_50_plus";

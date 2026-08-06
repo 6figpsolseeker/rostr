@@ -43,6 +43,13 @@ export const NFL_PPR_SCORING: readonly ScoringRule[] = [
   { statKey: "fum_lost", kind: "LINEAR", milliPointsPerUnit: pts(-2) },
   { statKey: "two_pt", kind: "LINEAR", milliPointsPerUnit: pts(2) },
 
+  // Kickoff, punt, and blocked-kick returns for a touchdown, scored by the
+  // returning player. 6 points, matching ESPN and Sleeper — both treat this as
+  // a separate category from the defensive unit's touchdown, and both pay the
+  // returner and the D/ST for the same play. That is not double-counting: they
+  // are different roster spots, usually owned by different managers.
+  { statKey: "ret_td", kind: "LINEAR", milliPointsPerUnit: pts(6) },
+
   // Kicking — by distance, misses unpenalised
   { statKey: "fg_0_39", kind: "LINEAR", milliPointsPerUnit: pts(3) },
   { statKey: "fg_40_49", kind: "LINEAR", milliPointsPerUnit: pts(4) },
