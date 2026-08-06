@@ -194,6 +194,18 @@ export {
 } from "./season/standings.js";
 
 export {
+  BENCH_SLOT,
+  ResultsError,
+  resolveMatchups,
+  resolveWeek,
+  scoreTeamLineup,
+  scoreWeek,
+  winnerOf,
+  type StatsByPlayer,
+  type TeamLineup,
+} from "./season/results.js";
+
+export {
   createDraft,
   currentPickNumber,
   currentTeam,
