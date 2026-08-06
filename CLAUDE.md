@@ -47,7 +47,7 @@ Do not build it in August.
 
 See [`docs/BUILD-PLAN.md`](docs/BUILD-PLAN.md) for the full commit-by-commit plan.
 
-**Done — 557 tests, CI green:**
+**Done — 614 tests, CI green:**
 
 - Full specification — rules, data model, live scoring, build plan
 - A1: pnpm monorepo, TS strict, vitest, eslint, prettier, CI
@@ -92,14 +92,20 @@ See [`docs/BUILD-PLAN.md`](docs/BUILD-PLAN.md) for the full commit-by-commit pla
 
 - `/api/cron/draft-tick` — clocks advance without anyone watching
 
+- C2, C3 and C10: lineup validation, per-player kickoff locks, and the deterministic
+  autolineup (`packages/core/src/season/lineup.ts`, `autolineup.ts`). **Pure only — not
+  yet persisted or exposed**; that is the next commit.
+
 **The Aug 22 path is complete in the app: create → join → draft.** What it still needs is
 deployment and the credentials in `SETUP-REQUIRED.md`, not more code.
 
 **Next, in order:**
 
-1. **C2, C3, C6** — lineups, per-player kickoff locks, and team-week scoring. Needed by
+1. **C6, C8** — team-week scoring from lineups, feeding matchup resolution. Needed by
    Sep 9. C6 is what finally connects the scoring engine to `MatchupResult`.
-2. **C10** — deterministic autolineup, which abandonment depends on.
+2. **Persist lineups and expose them** — the `lineups` table exists and the rules are
+   written, but nothing writes a lineup yet. Needs a `setLineup` in `@rostr/db`, a route,
+   and a screen.
 3. **D1–D10** — the escrow program. **Write this early.** The audit is 2–4 weeks of
    calendar time and it gates pot leagues opening on Aug 22. Blocked on the secondary PC
    (no Rust/Anchor).
@@ -275,6 +281,36 @@ times — comparing records across different schedules is not a tiebreaker.
 `computeStandings` **throws** if the chain runs out with teams still tied. Falling back to
 input order would make a playoff seed depend on database row order, and playoff seeds
 decide who can win the pot.
+
+### Lineups and the autolineup
+
+`packages/core/src/season/lineup.ts` and `autolineup.ts`. Pure, so the same rules govern a
+manager's edit, a bot's week, and an abandoned team.
+
+**A slot locks at the kickoff of _that player's_ game**, not at the week's first kickoff.
+So a Thursday player being locked does not stop a manager reacting to a Sunday-morning
+injury. Two behaviours look like oversights and are not:
+
+- **An empty slot never locks.** Nothing has happened in it for anyone to react to.
+  Locking empty slots at the first kickoff would punish forgetting rather than prevent
+  cheating.
+- **A player on a bye never locks.** There is no game to have started, so that slot stays
+  fillable — with a Monday-night player, for instance.
+
+A locked slot may **keep** its player; it may not change. Rejecting the slot outright
+would make submitting a whole lineup on Sunday fail because of a Thursday slot the
+manager can do nothing about.
+
+**The autolineup is deterministic, and that is the whole point.** An abandoned team plays
+out the season and its results move other people's playoff seeds — which in a pot league
+decides who gets paid. Season-to-date average, ties broken on player ID. Tested for
+reproducibility and for independence from roster order.
+
+**Scarcest slot first.** With one tight end on the roster, filling FLEX first takes him
+and leaves TE empty. There is a test.
+
+An unavailable player still gets started when there is nobody else: an empty slot and an
+inactive player both score nothing, but only one keeps the lineup legal.
 
 ### Scoring
 
@@ -513,7 +549,7 @@ Expect ~30–60 minutes; compiling AVM from source is the slow part.
 
 ```bash
 pnpm install
-pnpm test        # 557 tests, all green
+pnpm test        # 614 tests, all green
 pnpm typecheck
 pnpm lint
 ```

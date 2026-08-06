@@ -162,6 +162,26 @@ export {
 } from "./season/schedule.js";
 
 export {
+  autolineup,
+  seasonAverage,
+  type AutolineupCandidate,
+  type AutolineupInput,
+} from "./season/autolineup.js";
+
+export {
+  lineupIsFullyLocked,
+  lockedAssignments,
+  slotLocksAt,
+  startingSlots,
+  validateLineup,
+  type LineupAssignment,
+  type LineupPlayer,
+  type LineupProblem,
+  type LineupProblemCode,
+  type ValidateLineupInput,
+} from "./season/lineup.js";
+
+export {
   computeRecords,
   computeStandings,
   consolationField,
