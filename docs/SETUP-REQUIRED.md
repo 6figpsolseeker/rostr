@@ -12,6 +12,29 @@ Status key: ⬜ not started · 🟡 in progress · ✅ done
 
 ## Blocking soon
 
+### ⬜ Solana RPC endpoint (`SOLANA_RPC_URL`)
+
+**Blocks:** drawing draft orders. Every league needs one draw, at its scheduled draft
+time.
+**Needed by:** Aug 22 2026, with the first draft.
+
+The draft order is seeded by the first Solana block produced at or after the league's
+scheduled draft time — see `docs/RULES.md` §4. Finding it takes about twenty JSON-RPC
+calls, once per league, so almost any endpoint will do.
+
+**Free is fine to start.** The public mainnet endpoint
+(`https://api.mainnet-beta.solana.com`) is rate-limited but the load here is trivial. A
+free Helius or QuickNode key is more reliable and costs nothing at this volume.
+
+> **One caveat worth knowing now.** Public nodes **prune old blocks**. Drawing an order
+> works fine, because that happens seconds after the block is produced. But someone
+> verifying a draw _months later_ — say, disputing a championship — will get "block not
+> available" from a pruned node, which looks identical to a missing block.
+>
+> If leagues are playing for money, budget for an **archival** RPC plan before the
+> playoffs, or record the blockhash somewhere independently checkable. Not urgent in
+> August; do not discover it in January.
+
 ### ⬜ Supabase project
 
 **Blocks:** the web app past its home page, and the session that league creation and

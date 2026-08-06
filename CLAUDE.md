@@ -93,10 +93,9 @@ See [`docs/BUILD-PLAN.md`](docs/BUILD-PLAN.md) for the full commit-by-commit pla
    calendar time and it gates pot leagues opening on Aug 22. Blocked on the secondary PC
    (no Rust/Anchor).
 
-**Still open on the draft:** the order seed is grindable. `createDraftRecord` takes a
-seed and records it, but nothing yet supplies a Solana slot hash from at or after
-`scheduledAt`. Until it does, the order is fair only for leagues without a pot — see the
-comment on `generateDraftOrder`.
+**Still open on the draft:** nothing, on the fairness side — the grindable seed is fixed
+(see "The order draw" below). What remains is operational: `SOLANA_RPC_URL` has to be
+set, and verifying an old draw needs an archival node.
 
 ### The draft
 
@@ -105,8 +104,9 @@ runs a clock or touches a database. That is why slow drafts need no real-time
 infrastructure and why a full 12-team draft plays out instantly in a test.
 
 - **Order is seeded, never `Math.random`.** Anyone holding the seed can recompute it and
-  confirm nobody reshuffled. Use the league's rules hash: already on-chain, already
-  unforgeable.
+  confirm nobody reshuffled.
+- **The seed comes from the chain, and only after the field locks.** See below — this was
+  the one genuinely exploitable hole in the design and it is now closed.
 - **Roster legality is bipartite matching** (`roster.ts`), not per-position counting.
   Counting is _wrong_ because of FLEX — see the comment at the top of that file before
   changing it. This underpins the rule that stops six quarterbacks and no kicker.
@@ -116,6 +116,34 @@ infrastructure and why a full 12-team draft plays out instantly in a test.
 
 Bot sophistication is still the open question: the current bots draft by need from a
 supplied ranking. Positional scarcity, bye weeks, and tier breaks are not modelled.
+
+#### The order draw — do not simplify this
+
+`packages/db/src/randomness.ts` and `packages/core/src/draft/seed.ts`.
+
+The seed is the first Solana block produced at or after the league's frozen
+`scheduledAt`. **A seed known before the field is locked is worthless**, because the
+shuffle depends on the seed _and_ the set of team IDs: a commissioner adds a bot,
+computes the order offline, removes it, tries another, and repeats until it suits them.
+Every order they computed is correct. Nothing about the published one looks wrong. No
+server-side check can catch it — the grinding happens on their laptop.
+
+Four things close it, and removing any one reopens it:
+
+1. `drawDraftOrder` refuses before `scheduledAt`.
+2. The rule names **exactly one** block — the _first_ at or after that instant — so there
+   is no "try again a few slots later". `SolanaBeacon.verify` is what proves a recorded
+   slot really is that one, in two RPC calls.
+3. A trigger rejects any second write to the draw or to any team's `draft_position`.
+4. A trigger locks the field: no team may join once the order is drawn.
+
+`SolanaBeacon.firstBlockAtOrAfter` is a binary search over block times, tolerating
+skipped slots. Roughly twenty RPC calls; a linear walk would be millions. **Verification
+of an old draw needs an archival RPC node** — public nodes prune, and a pruned range
+looks the same as a stalled chain.
+
+`FixedBeacon` is test-only. It makes the seed predictable, which is the entire thing the
+real one exists to prevent.
 
 **Persistence lives in `packages/db/src/draft.ts` and adds exactly one thing the engine
 cannot do: arbitration.** The engine is pure and single-threaded, so when two managers

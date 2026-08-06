@@ -51,6 +51,7 @@ export {
   draftProgress,
   DraftPersistenceError,
   draftsWithExpiredPicks,
+  drawDraftOrder,
   getQueue,
   isCurrentPickExpired,
   loadDraft,
@@ -59,12 +60,24 @@ export {
   recordPick,
   setQueue,
   startDraft,
+  verifyDraftOrder,
   type CreateDraftInput,
   type DraftProgress,
   type DraftRecord,
+  type DrawOrderInput,
+  type OrderDraw,
   type RecordedPick,
   type RecordPickInput,
 } from "./draft.js";
+
+export {
+  BeaconError,
+  FixedBeacon,
+  SolanaBeacon,
+  type DrawnBlock,
+  type RandomnessBeacon,
+  type SolanaBeaconOptions,
+} from "./randomness.js";
 
 export {
   addBot,

@@ -111,6 +111,13 @@ export {
 } from "./draft/roster.js";
 
 export {
+  deriveOrderSeed,
+  explainOrderDraw,
+  type OrderRandomness,
+  type OrderSeedInput,
+} from "./draft/seed.js";
+
+export {
   autoPick,
   pruneQueue,
   type AutoPickContext,

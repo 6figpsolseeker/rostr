@@ -137,8 +137,45 @@ trades, place waiver claims, or vote on vetoes.
 ## 4. Draft
 
 **Snake order** — the order reverses each round. A team picking 1st in round 1 picks
-12th in round 2, 1st in round 3, and so on. The order is randomised at league creation
-and revealed with the draft.
+12th in round 2, 1st in round 3, and so on.
+
+### The order is drawn once, from the chain
+
+The order is **not** drawn at league creation, and **not** drawn by us.
+
+It comes from the first Solana block produced at or after the league's scheduled draft
+time. That block does not exist while teams are still joining, so nobody — including the
+commissioner and including us — can know the order in advance.
+
+This matters more than it sounds. The shuffle depends on the seed _and_ on the set of
+teams. If the seed were fixed in advance, a commissioner could add a bot, compute the
+resulting order on their own machine, remove it, add a differently-named one, and repeat
+until the order suited them. Every order they computed would be genuinely correct, and
+the published one would look completely normal. They would simply have re-rolled in
+private and announced the roll they liked.
+
+So:
+
+| Rule                          |                                                    |
+| ----------------------------- | -------------------------------------------------- |
+| **When**                      | At or after the scheduled draft time, never before |
+| **From what**                 | The first Solana block at or after that instant    |
+| **How many times**            | Once. The database rejects a second draw.          |
+| **What happens to the field** | It locks at the draw. No team may join afterwards. |
+| **Can positions be edited?**  | No. Rejected at the database level.                |
+
+**Anyone can check it.** The slot and its blockhash are recorded and shown with the
+order. Look up that slot on any Solana explorer, confirm its block time is at or after
+the scheduled draft time and that the block before it is earlier — that makes it the only
+block the league could have used — then recompute:
+
+```
+seed  = sha256("rostr:draft-order:v1:<leagueId>:<rulesHash>:<slot>:<blockhash>")
+order = published snake shuffle over the team IDs in join order
+```
+
+The league ID and rules hash are mixed in so two leagues drawing from the same block get
+unrelated orders.
 
 Two modes, chosen at creation:
 

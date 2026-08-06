@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   buildNflPprRules,
   buildRosterShape,
+  deriveOrderSeed,
+  generateDraftOrder,
   NFL,
   NFL_PPR_ROSTER,
   totalPicks,
@@ -13,11 +15,13 @@ import { addBot } from "./membership.js";
 import { seedSport } from "./sports.js";
 import { createTestDatabase } from "./testing.js";
 import type { PGliteClient } from "./testing.js";
+import { FixedBeacon } from "./randomness.js";
 import {
   createDraftRecord,
   draftProgress,
   DraftPersistenceError,
   draftsWithExpiredPicks,
+  drawDraftOrder,
   getQueue,
   isCurrentPickExpired,
   loadDraft,
@@ -26,6 +30,7 @@ import {
   recordPick,
   setQueue,
   startDraft,
+  verifyDraftOrder,
 } from "./draft.js";
 
 let db: PGliteClient | undefined;
@@ -43,8 +48,32 @@ const DRAFT: DraftRules = {
 };
 
 const SHAPE = buildRosterShape(NFL_PPR_ROSTER, NFL);
-const SEED = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 const SCHEDULED = new Date("2026-08-22T18:00:00Z");
+const SCHEDULED_SECONDS = Math.floor(SCHEDULED.getTime() / 1000);
+
+/**
+ * A stand-in chain: one block just before the scheduled time and one just after.
+ * The one after is the only block the rule can select.
+ */
+const CHOSEN_SLOT = 412_550_991;
+const CHOSEN_BLOCKHASH = "5xot9PVkphiX2adznghwrAuxGs2zeWisNSxMW6hU6Hkj";
+
+const BEACON = new FixedBeacon([
+  {
+    slot: CHOSEN_SLOT - 3,
+    blockhash: "TooEarly1111111111111111111111111111111111",
+    blockTime: SCHEDULED_SECONDS - 2,
+  },
+  { slot: CHOSEN_SLOT, blockhash: CHOSEN_BLOCKHASH, blockTime: SCHEDULED_SECONDS + 1 },
+  {
+    slot: CHOSEN_SLOT + 4,
+    blockhash: "TooLate11111111111111111111111111111111111",
+    blockTime: SCHEDULED_SECONDS + 3,
+  },
+]);
+
+/** After the draft time, so the draw is allowed. */
+const DRAW_TIME = new Date(SCHEDULED.getTime() + 5_000);
 
 /**
  * A pool deep enough that every team can fill a legal lineup, in a realistic
@@ -116,6 +145,24 @@ async function setup(teamCount = 4, poolSize = 200): Promise<Fixture> {
   return { client: db, leagueId: league.id, teamIds, pool };
 }
 
+const scheduleArgs = (leagueId: string) => ({
+  leagueId,
+  rounds: 14,
+  pickSeconds: 90,
+  scheduledAt: SCHEDULED,
+});
+
+/** Schedule a draft and draw its order. */
+async function scheduled(fx: Fixture): Promise<readonly string[]> {
+  await createDraftRecord(fx.client, scheduleArgs(fx.leagueId));
+  const drawn = await drawDraftOrder(fx.client, {
+    leagueId: fx.leagueId,
+    beacon: BEACON,
+    now: DRAW_TIME,
+  });
+  return drawn.order;
+}
+
 /** The best available player the engine would consider legal for anyone. */
 function anyAvailable(fx: Fixture, taken: ReadonlySet<string>, position?: string): string {
   for (const [id, player] of fx.pool) {
@@ -127,167 +174,297 @@ function anyAvailable(fx: Fixture, taken: ReadonlySet<string>, position?: string
 }
 
 describe("createDraftRecord", () => {
+  it("schedules without drawing an order", async () => {
+    // Teams may still be joining. A seed that exists while the field can change
+    // is a seed the commissioner can grind against.
+    const fx = await setup();
+    const draft = await createDraftRecord(fx.client, scheduleArgs(fx.leagueId));
+
+    expect(draft.draw).toBeNull();
+    expect(draft.order).toEqual([]);
+    expect(draft.status).toBe("SCHEDULED");
+  });
+
+  it("refuses a second draft for the same league", async () => {
+    // A redraft would invalidate every roster NFT already minted.
+    const fx = await setup();
+    await createDraftRecord(fx.client, scheduleArgs(fx.leagueId));
+
+    await expect(createDraftRecord(fx.client, scheduleArgs(fx.leagueId))).rejects.toMatchObject(
+      { code: "DRAFT_EXISTS" },
+    );
+  });
+});
+
+describe("drawDraftOrder", () => {
   it("draws an order covering every team exactly once", async () => {
     const fx = await setup();
-    const draft = await createDraftRecord(fx.client, {
-      leagueId: fx.leagueId,
-      rounds: 14,
-      pickSeconds: 90,
-      orderSeed: SEED,
-      scheduledAt: SCHEDULED,
-    });
+    const order = await scheduled(fx);
 
-    expect([...draft.order].sort()).toEqual([...fx.teamIds].sort());
+    expect([...order].sort()).toEqual([...fx.teamIds].sort());
+  });
+
+  it("records the block it drew from", async () => {
+    // Without the slot and blockhash, the seed is an unverifiable claim.
+    const fx = await setup();
+    await scheduled(fx);
+    const draft = await loadDraft(fx.client, fx.leagueId);
+
+    expect(draft!.draw).toMatchObject({
+      slot: CHOSEN_SLOT,
+      blockhash: CHOSEN_BLOCKHASH,
+    });
+    expect(draft!.draw!.drawnAt.toISOString()).toBe(DRAW_TIME.toISOString());
+  });
+
+  it("takes the first block at or after the scheduled time, not the latest", async () => {
+    // The rule has to name exactly one block. "A recent block" would let whoever
+    // draws keep asking until they liked the answer.
+    const fx = await setup();
+    await scheduled(fx);
+    const draft = await loadDraft(fx.client, fx.leagueId);
+
+    expect(draft!.draw!.slot).toBe(CHOSEN_SLOT);
+    expect(draft!.draw!.slot).not.toBe(CHOSEN_SLOT + 4);
+  });
+
+  it("derives the seed from the block, the league, and the rules hash", async () => {
+    const fx = await setup();
+    await scheduled(fx);
+
+    const draft = await loadDraft(fx.client, fx.leagueId);
+    const [league] = await fx.client.query<{ rules_hash: string }>(
+      "SELECT rules_hash FROM leagues WHERE id = $1",
+      [fx.leagueId],
+    );
+
+    expect(draft!.draw!.seed).toBe(
+      deriveOrderSeed({
+        leagueId: fx.leagueId,
+        rulesHash: league!.rules_hash,
+        slot: CHOSEN_SLOT,
+        blockhash: CHOSEN_BLOCKHASH,
+      }),
+    );
+  });
+
+  it("produces the order that seed produces, and nothing else", async () => {
+    const fx = await setup();
+    const order = await scheduled(fx);
+    const draft = await loadDraft(fx.client, fx.leagueId);
+
+    const joinOrder = await fx.client.query<{ id: string }>(
+      "SELECT id FROM teams WHERE league_id = $1 ORDER BY slot",
+      [fx.leagueId],
+    );
+
+    expect(order).toEqual(
+      generateDraftOrder(
+        joinOrder.map((t) => t.id),
+        draft!.draw!.seed,
+      ),
+    );
   });
 
   it("writes the order to teams.draft_position", async () => {
     // One source of truth. Storing the order in two places would eventually let
     // them disagree about who is on the clock.
     const fx = await setup();
-    const draft = await createDraftRecord(fx.client, {
-      leagueId: fx.leagueId,
-      rounds: 14,
-      pickSeconds: 90,
-      orderSeed: SEED,
-      scheduledAt: SCHEDULED,
-    });
+    const order = await scheduled(fx);
 
-    const rows = await fx.client.query<{ id: string; draft_position: number }>(
-      "SELECT id, draft_position FROM teams WHERE league_id = $1 ORDER BY draft_position",
+    const rows = await fx.client.query<{ id: string }>(
+      "SELECT id FROM teams WHERE league_id = $1 ORDER BY draft_position",
       [fx.leagueId],
     );
 
-    expect(rows.map((r) => r.id)).toEqual([...draft.order]);
+    expect(rows.map((r) => r.id)).toEqual([...order]);
   });
 
-  it("is reproducible from the seed", async () => {
-    const a = await setup();
-    const first = await createDraftRecord(a.client, {
-      leagueId: a.leagueId,
-      rounds: 14,
-      pickSeconds: 90,
-      orderSeed: SEED,
-      scheduledAt: SCHEDULED,
-    });
-    const firstSlots = await a.client.query<{ slot: number }>(
-      "SELECT slot FROM teams WHERE league_id = $1 ORDER BY draft_position",
-      [a.leagueId],
-    );
-    await a.client.close();
-
-    const b = await setup();
-    await createDraftRecord(b.client, {
-      leagueId: b.leagueId,
-      rounds: 14,
-      pickSeconds: 90,
-      orderSeed: SEED,
-      scheduledAt: SCHEDULED,
-    });
-    const secondSlots = await b.client.query<{ slot: number }>(
-      "SELECT slot FROM teams WHERE league_id = $1 ORDER BY draft_position",
-      [b.leagueId],
-    );
-
-    // Team UUIDs differ between databases, so compare join slots: the same seed
-    // must put the same *position in the league* at the same draft position.
-    expect(secondSlots.map((r) => r.slot)).toEqual(firstSlots.map((r) => r.slot));
-    expect(first.orderSeed).toBe(SEED);
-  });
-
-  it("refuses a second draft for the same league", async () => {
-    // A redraft would invalidate every roster NFT already minted.
+  it("refuses before the scheduled time", async () => {
+    // Drawing early is drawing from a block someone could still arrange the
+    // field against.
     const fx = await setup();
-    const args = {
-      leagueId: fx.leagueId,
-      rounds: 14,
-      pickSeconds: 90,
-      orderSeed: SEED,
-      scheduledAt: SCHEDULED,
-    };
-    await createDraftRecord(fx.client, args);
+    await createDraftRecord(fx.client, scheduleArgs(fx.leagueId));
 
-    await expect(createDraftRecord(fx.client, args)).rejects.toMatchObject({
-      code: "DRAFT_EXISTS",
-    });
+    await expect(
+      drawDraftOrder(fx.client, {
+        leagueId: fx.leagueId,
+        beacon: BEACON,
+        now: new Date(SCHEDULED.getTime() - 1000),
+      }),
+    ).rejects.toMatchObject({ code: "TOO_EARLY_TO_DRAW" });
+  });
+
+  it("refuses a second draw", async () => {
+    // The whole attack is re-rolling until you like the answer. One draw, ever.
+    const fx = await setup();
+    await scheduled(fx);
+
+    await expect(
+      drawDraftOrder(fx.client, {
+        leagueId: fx.leagueId,
+        beacon: BEACON,
+        now: DRAW_TIME,
+      }),
+    ).rejects.toMatchObject({ code: "ORDER_ALREADY_DRAWN" });
   });
 
   it("refuses a league with no teams", async () => {
     const fx = await setup(0);
+    await createDraftRecord(fx.client, scheduleArgs(fx.leagueId));
 
     await expect(
-      createDraftRecord(fx.client, {
-        leagueId: fx.leagueId,
-        rounds: 14,
-        pickSeconds: 90,
-        orderSeed: SEED,
-        scheduledAt: SCHEDULED,
-      }),
+      drawDraftOrder(fx.client, { leagueId: fx.leagueId, beacon: BEACON, now: DRAW_TIME }),
     ).rejects.toMatchObject({ code: "NO_TEAMS" });
+  });
+
+  it("refuses to draw for a league with no draft", async () => {
+    const fx = await setup();
+
+    await expect(
+      drawDraftOrder(fx.client, { leagueId: fx.leagueId, beacon: BEACON, now: DRAW_TIME }),
+    ).rejects.toMatchObject({ code: "DRAFT_NOT_FOUND" });
+  });
+
+  it("depends on the block, so a different block gives a different order", async () => {
+    const fx = await setup(8);
+    await scheduled(fx);
+    const drawn = await loadDraft(fx.client, fx.leagueId);
+
+    const joinOrder = await fx.client.query<{ id: string }>(
+      "SELECT id FROM teams WHERE league_id = $1 ORDER BY slot",
+      [fx.leagueId],
+    );
+    const [league] = await fx.client.query<{ rules_hash: string }>(
+      "SELECT rules_hash FROM leagues WHERE id = $1",
+      [fx.leagueId],
+    );
+
+    const otherSeed = deriveOrderSeed({
+      leagueId: fx.leagueId,
+      rulesHash: league!.rules_hash,
+      slot: CHOSEN_SLOT + 1,
+      blockhash: CHOSEN_BLOCKHASH,
+    });
+
+    expect(
+      generateDraftOrder(
+        joinOrder.map((t) => t.id),
+        otherSeed,
+      ),
+    ).not.toEqual(drawn!.order);
   });
 });
 
-describe("loadDraft", () => {
-  it("returns null before a draft exists", async () => {
+describe("the field locks at the draw", () => {
+  it("refuses a team joining after the order is drawn", async () => {
+    // The shuffle depends on the seed *and* the set of teams. Adding a team
+    // after the block is known would restore the whole attack: watch the block
+    // land, compute what adding a bot does, then add it.
     const fx = await setup();
-    expect(await loadDraft(fx.client, fx.leagueId)).toBeNull();
+    await scheduled(fx);
+
+    await expect(addBot(fx.client, fx.leagueId, "Late Bot")).rejects.toThrow(
+      /field is locked/i,
+    );
   });
 
-  it("round-trips the record", async () => {
+  it("refuses to edit a drawn position", async () => {
+    // An editable position would make the recorded slot decorative.
     const fx = await setup();
-    const created = await createDraftRecord(fx.client, {
-      leagueId: fx.leagueId,
-      rounds: 14,
-      pickSeconds: 90,
-      orderSeed: SEED,
-      scheduledAt: SCHEDULED,
-    });
+    const order = await scheduled(fx);
 
-    const loaded = await loadDraft(fx.client, fx.leagueId);
-
-    expect(loaded).toMatchObject({
-      draftId: created.draftId,
-      status: "SCHEDULED",
-      rounds: 14,
-      pickSeconds: 90,
-      orderSeed: SEED,
-    });
-    expect(loaded!.order).toEqual(created.order);
-    expect(loaded!.scheduledAt.toISOString()).toBe(SCHEDULED.toISOString());
+    await expect(
+      fx.client.query("UPDATE teams SET draft_position = 1 WHERE id = $1", [order[2]]),
+    ).rejects.toThrow(/cannot be edited/i);
   });
 
-  it("refuses to load an incomplete order", async () => {
-    // A team without a draft position would silently drop out of the rotation
-    // and every later pick would be attributed to the wrong manager.
+  it("refuses to clear a drawn position", async () => {
     const fx = await setup();
-    await createDraftRecord(fx.client, {
-      leagueId: fx.leagueId,
-      rounds: 14,
-      pickSeconds: 90,
-      orderSeed: SEED,
-      scheduledAt: SCHEDULED,
+    const order = await scheduled(fx);
+
+    await expect(
+      fx.client.query("UPDATE teams SET draft_position = NULL WHERE id = $1", [order[0]]),
+    ).rejects.toThrow(/cannot be edited/i);
+  });
+
+  it("refuses to overwrite the recorded draw", async () => {
+    const fx = await setup();
+    await scheduled(fx);
+
+    await expect(
+      fx.client.query("UPDATE drafts SET order_slot = 1 WHERE league_id = $1", [fx.leagueId]),
+    ).rejects.toThrow(/drawn once/i);
+  });
+
+  it("refuses a seed recorded without the block it came from", async () => {
+    const fx = await setup();
+    await createDraftRecord(fx.client, scheduleArgs(fx.leagueId));
+
+    await expect(
+      fx.client.query("UPDATE drafts SET order_seed = $2 WHERE league_id = $1", [
+        fx.leagueId,
+        "a".repeat(64),
+      ]),
+    ).rejects.toThrow();
+  });
+});
+
+describe("verifyDraftOrder", () => {
+  it("passes for an honest draw", async () => {
+    const fx = await setup();
+    await scheduled(fx);
+
+    expect(await verifyDraftOrder(fx.client, fx.leagueId, BEACON)).toEqual({
+      ok: true,
+      problems: [],
     });
-    await fx.client.query("UPDATE teams SET draft_position = NULL WHERE id = $1", [
-      fx.teamIds[0],
+  });
+
+  it("fails before the order is drawn", async () => {
+    const fx = await setup();
+    await createDraftRecord(fx.client, scheduleArgs(fx.leagueId));
+
+    const result = await verifyDraftOrder(fx.client, fx.leagueId, BEACON);
+
+    expect(result.ok).toBe(false);
+    expect(result.problems[0]).toMatch(/not been drawn/i);
+  });
+
+  it("catches a slot that is not the first block at or after the draft time", async () => {
+    // The check a sceptic actually runs: two RPC calls, no search.
+    const fx = await setup();
+    await scheduled(fx);
+
+    const wrongBeacon = new FixedBeacon([
+      {
+        slot: CHOSEN_SLOT + 4,
+        blockhash: "TooLate11111111111111111111111111111111111",
+        blockTime: SCHEDULED_SECONDS + 3,
+      },
     ]);
 
-    await expect(loadDraft(fx.client, fx.leagueId)).rejects.toMatchObject({
-      code: "ORDER_INCOMPLETE",
-    });
+    const result = await verifyDraftOrder(fx.client, fx.leagueId, wrongBeacon);
+
+    expect(result.ok).toBe(false);
+    expect(result.problems.join(" ")).toMatch(/not the first block/i);
+  });
+
+  it("works without a beacon, checking only the maths", async () => {
+    // Useful in the UI, where an RPC round trip per page load is not worth it.
+    const fx = await setup();
+    await scheduled(fx);
+
+    expect((await verifyDraftOrder(fx.client, fx.leagueId)).ok).toBe(true);
   });
 });
 
 describe("recordPick", () => {
   async function started(teamCount = 4): Promise<Fixture & { order: readonly string[] }> {
     const fx = await setup(teamCount);
-    const draft = await createDraftRecord(fx.client, {
-      leagueId: fx.leagueId,
-      rounds: 14,
-      pickSeconds: 90,
-      orderSeed: SEED,
-      scheduledAt: SCHEDULED,
-    });
+    const order = await scheduled(fx);
     await startDraft(fx.client, fx.leagueId, SCHEDULED);
-    return { ...fx, order: draft.order };
+    return { ...fx, order };
   }
 
   it("records a manual pick and moves the clock on", async () => {
@@ -380,13 +557,7 @@ describe("recordPick", () => {
 
   it("refuses to pick into a draft that has not started", async () => {
     const fx = await setup();
-    await createDraftRecord(fx.client, {
-      leagueId: fx.leagueId,
-      rounds: 14,
-      pickSeconds: 90,
-      orderSeed: SEED,
-      scheduledAt: SCHEDULED,
-    });
+    await scheduled(fx);
 
     await expect(
       recordPick(fx.client, {
@@ -484,12 +655,10 @@ describe("recordPick", () => {
     expect(draft!.state.picks).toHaveLength(total);
 
     // Every player exactly once, and every team a full roster.
-    const playerIds = draft!.state.picks.map((p) => p.playerId);
-    expect(new Set(playerIds).size).toBe(total);
+    expect(new Set(draft!.state.picks.map((p) => p.playerId)).size).toBe(total);
 
     for (const teamId of fx.teamIds) {
-      const roster = draft!.state.picks.filter((p) => p.teamId === teamId);
-      expect(roster).toHaveLength(14);
+      expect(draft!.state.picks.filter((p) => p.teamId === teamId)).toHaveLength(14);
     }
 
     // And rosters landed in the database, not just in the reconstructed state.
@@ -533,39 +702,38 @@ describe("recordPick", () => {
 });
 
 describe("clocks", () => {
-  async function scheduled(): Promise<Fixture> {
+  it("refuses to start before the order is drawn", async () => {
+    // Without an order there is no rotation, so there is no answer to "whose
+    // pick is it".
     const fx = await setup();
-    await createDraftRecord(fx.client, {
-      leagueId: fx.leagueId,
-      rounds: 14,
-      pickSeconds: 90,
-      orderSeed: SEED,
-      scheduledAt: SCHEDULED,
+    await createDraftRecord(fx.client, scheduleArgs(fx.leagueId));
+
+    await expect(startDraft(fx.client, fx.leagueId, SCHEDULED)).rejects.toMatchObject({
+      code: "ORDER_NOT_DRAWN",
     });
-    return fx;
-  }
+  });
 
   it("does not expire a draft that has not started", async () => {
-    const fx = await scheduled();
+    const fx = await setup();
+    await scheduled(fx);
     const draft = await loadDraft(fx.client, fx.leagueId);
 
     expect(isCurrentPickExpired(draft!, new Date("2030-01-01T00:00:00Z"))).toBe(false);
   });
 
   it("expires once the pick clock elapses", async () => {
-    const fx = await scheduled();
+    const fx = await setup();
+    await scheduled(fx);
     await startDraft(fx.client, fx.leagueId, SCHEDULED);
     const draft = await loadDraft(fx.client, fx.leagueId);
 
-    const justBefore = new Date(SCHEDULED.getTime() + 89_000);
-    const justAfter = new Date(SCHEDULED.getTime() + 90_000);
-
-    expect(isCurrentPickExpired(draft!, justBefore)).toBe(false);
-    expect(isCurrentPickExpired(draft!, justAfter)).toBe(true);
+    expect(isCurrentPickExpired(draft!, new Date(SCHEDULED.getTime() + 89_000))).toBe(false);
+    expect(isCurrentPickExpired(draft!, new Date(SCHEDULED.getTime() + 90_000))).toBe(true);
   });
 
   it("lists drafts a timer job needs to act on", async () => {
-    const fx = await scheduled();
+    const fx = await setup();
+    await scheduled(fx);
     await startDraft(fx.client, fx.leagueId, SCHEDULED);
 
     const before = await draftsWithExpiredPicks(
@@ -584,7 +752,8 @@ describe("clocks", () => {
   it("gives a full fresh timer after a pause", async () => {
     // A manager should not lose sixty of their ninety seconds to an outage they
     // had nothing to do with.
-    const fx = await scheduled();
+    const fx = await setup();
+    await scheduled(fx);
     await startDraft(fx.client, fx.leagueId, SCHEDULED);
     await pauseDraft(fx.client, fx.leagueId);
 
@@ -603,13 +772,7 @@ describe("clocks", () => {
 
   it("refuses to start a completed draft", async () => {
     const fx = await setup(2);
-    await createDraftRecord(fx.client, {
-      leagueId: fx.leagueId,
-      rounds: 14,
-      pickSeconds: 90,
-      orderSeed: SEED,
-      scheduledAt: SCHEDULED,
-    });
+    await scheduled(fx);
     await startDraft(fx.client, fx.leagueId, SCHEDULED);
 
     for (let i = 0; i < totalPicks(2, 14); i++) {
@@ -634,26 +797,21 @@ describe("concurrency guards", () => {
   // are what make a lost race impossible rather than merely unlikely.
   async function drafted(): Promise<{ fx: Fixture; draftId: string; playerId: string }> {
     const fx = await setup();
-    const draft = await createDraftRecord(fx.client, {
-      leagueId: fx.leagueId,
-      rounds: 14,
-      pickSeconds: 90,
-      orderSeed: SEED,
-      scheduledAt: SCHEDULED,
-    });
+    const order = await scheduled(fx);
     await startDraft(fx.client, fx.leagueId, SCHEDULED);
 
     const playerId = anyAvailable(fx, new Set());
     await recordPick(fx.client, {
       leagueId: fx.leagueId,
-      teamId: draft.order[0]!,
+      teamId: order[0]!,
       playerId,
       pool: fx.pool,
       shape: SHAPE,
       now: SCHEDULED,
     });
 
-    return { fx, draftId: draft.draftId, playerId };
+    const draft = await loadDraft(fx.client, fx.leagueId);
+    return { fx, draftId: draft!.draftId, playerId };
   }
 
   it("refuses a second write to the same pick number", async () => {
@@ -687,9 +845,9 @@ describe("concurrency guards", () => {
 
     await expect(
       fx.client.query(
-        `INSERT INTO drafts (league_id, rounds, pick_seconds, order_seed, scheduled_at)
-         VALUES ($1, 14, 90, $2, $3)`,
-        [fx.leagueId, SEED, SCHEDULED],
+        `INSERT INTO drafts (league_id, rounds, pick_seconds, scheduled_at)
+         VALUES ($1, 14, 90, $2)`,
+        [fx.leagueId, SCHEDULED],
       ),
     ).rejects.toThrow();
   });
@@ -734,13 +892,7 @@ describe("concurrency guards", () => {
 describe("queues", () => {
   async function withDraft(): Promise<Fixture> {
     const fx = await setup();
-    await createDraftRecord(fx.client, {
-      leagueId: fx.leagueId,
-      rounds: 14,
-      pickSeconds: 90,
-      orderSeed: SEED,
-      scheduledAt: SCHEDULED,
-    });
+    await createDraftRecord(fx.client, scheduleArgs(fx.leagueId));
     return fx;
   }
 

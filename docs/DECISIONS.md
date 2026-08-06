@@ -95,19 +95,56 @@ that risk knowingly; the app must not impose it on someone who was asleep.
 `pickWouldStrandStarters()` exists so the UI can warn before a manual pick confirms.
 Warn, never block.
 
-**The draft order seed is an unsolved security problem.**
+### The draft order is drawn from the chain, once
 
-The order is a seeded Fisher-Yates shuffle, so it is reproducible and auditable rather
-than "trust us, it was random". But the output depends on the seed _and the set of team
-IDs_, and anything a commissioner can vary before the draft, they can grind: add a bot,
-compute the order, remove it, try another.
+**Solved.** It was the one genuinely exploitable hole in the design, and it deserves
+recording in full because the fix looks like overkill until you see the attack.
 
-A seed fixed at league creation — the rules hash — does not close this. The seed must be
-unpredictable until after the field is locked. **A Solana slot hash at or after the frozen
-`draft.scheduledAt`** satisfies both halves: unknowable in advance, verifiable afterwards.
+The order is a seeded Fisher-Yates shuffle: reproducible and auditable, rather than
+"trust us, it was random". But the output depends on the seed **and the set of team
+IDs**, and anything a commissioner can vary before the draft, they can grind:
 
-Until that is wired up, the order should be considered fair only for leagues without a
-pot. Flagged in `order.ts` and in `SETUP-REQUIRED.md`.
+1. Add a bot. Compute the order on your own laptop. Seventh — no good.
+2. Remove it, add a differently-named one. Compute again. Fourth.
+3. Repeat until first. Open the draft.
+
+Every order computed along the way is genuinely correct. The published one looks
+completely normal, because nothing was tampered with — they re-rolled in private and
+announced the roll they kept. **No server-side check can detect this**, because the
+grinding never touches our servers.
+
+A seed fixed at league creation — the rules hash, say — does not help. Neither does a
+better shuffle. The seed itself has to not exist while the field can still change.
+
+**The rule: the first Solana block produced at or after the frozen `scheduledAt`.**
+Unknowable while teams are joining; verifiable by anyone afterwards; not ours to choose.
+
+Four mechanisms, each closing a different way back in:
+
+| Mechanism                                           | What reopens without it                                      |
+| --------------------------------------------------- | ------------------------------------------------------------ |
+| Refuse to draw before `scheduledAt`                 | Drawing from a block the field can still be arranged against |
+| Rule names the **first** such block, not any        | "Try again a few slots later" until the order suits you      |
+| Trigger rejects a second draw or an edited position | Redrawing, or just editing the result                        |
+| Trigger locks the field at the draw                 | Watch the block land, then add a bot that shifts the order   |
+
+**This did not need Anchor.** Reading a block hash is a plain JSON-RPC call; only
+verifying one _inside a program_ needs Rust. That was worth noticing — the fix had been
+parked behind the escrow work for no reason.
+
+Rejected along the way:
+
+- **A commit-reveal between members.** Stronger in theory, but it needs every manager to
+  show up twice before a draft they have not started yet. Nobody would.
+- **Our own server-side RNG with a published seed.** Just relocates the trust to us, which
+  is the thing this project exists not to require.
+- **A slot number committed at league creation.** Slot times drift; a slot chosen weeks
+  ahead could land hours off the scheduled draft. Time-based is exact and just as
+  checkable.
+
+**Known limit:** public RPC nodes prune old blocks, so verifying a draw months later needs
+an archival node. Recorded in `SETUP-REQUIRED.md` rather than left to be discovered during
+a playoff dispute.
 
 **What we deliberately do not have:**
 

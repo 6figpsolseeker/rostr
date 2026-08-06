@@ -33,8 +33,10 @@ import {
   pickDeadline,
   totalPicks,
 } from "@rostr/core";
+import { deriveOrderSeed } from "@rostr/core";
 import type { DraftablePlayer, DraftPick, DraftState, RosterShape } from "@rostr/core";
 import type { SqlClient } from "./client.js";
+import type { RandomnessBeacon } from "./randomness.js";
 import { withTransaction } from "./transaction.js";
 
 /** Postgres `unique_violation`. */
@@ -55,6 +57,10 @@ export class DraftPersistenceError extends Error {
       | "DRAFT_EXISTS"
       | "NO_TEAMS"
       | "ORDER_INCOMPLETE"
+      | "ORDER_NOT_DRAWN"
+      | "ORDER_ALREADY_DRAWN"
+      | "TOO_EARLY_TO_DRAW"
+      | "RULES_MISSING"
       | "NOT_IN_PROGRESS"
       | "ALREADY_STARTED"
       | "PICK_RACE_LOST",
@@ -70,13 +76,26 @@ export interface DraftRecord {
   readonly status: "SCHEDULED" | "IN_PROGRESS" | "PAUSED" | "COMPLETE";
   readonly rounds: number;
   readonly pickSeconds: number;
-  readonly orderSeed: string;
   readonly scheduledAt: Date;
   readonly clockStartedAt: Date | null;
-  /** Team IDs in round-1 order. */
+  /**
+   * The order draw, or `null` until it happens.
+   *
+   * Everything needed to check the order independently: the slot it came from,
+   * that block's hash, and the seed they produce.
+   */
+  readonly draw: OrderDraw | null;
+  /** Team IDs in round-1 order. Empty until the order is drawn. */
   readonly order: readonly string[];
   /** Reconstructed engine state, ready to pass to `makePick` / `makeAutoPick`. */
   readonly state: DraftState;
+}
+
+export interface OrderDraw {
+  readonly seed: string;
+  readonly slot: number;
+  readonly blockhash: string;
+  readonly drawnAt: Date;
 }
 
 interface DraftRow {
@@ -85,10 +104,17 @@ interface DraftRow {
   status: DraftRecord["status"];
   rounds: number;
   pick_seconds: number;
-  order_seed: string;
+  order_seed: string | null;
+  order_slot: string | number | null;
+  order_blockhash: string | null;
+  order_drawn_at: string | null;
   scheduled_at: string;
   clock_started_at: string | null;
 }
+
+const DRAFT_COLUMNS = `id, league_id, status, rounds, pick_seconds, order_seed,
+            order_slot, order_blockhash, order_drawn_at,
+            scheduled_at, clock_started_at`;
 
 // ---------------------------------------------------------------------------
 // Creating
@@ -98,23 +124,16 @@ export interface CreateDraftInput {
   readonly leagueId: string;
   readonly rounds: number;
   readonly pickSeconds: number;
-  /**
-   * Seed for the order.
-   *
-   * **This is a security decision, not a formality.** A seed known before the
-   * field is locked can be ground: add a bot, compute the order, remove it, try
-   * another. It must be unpredictable until after the last team joins — a Solana
-   * slot hash at or after the frozen `scheduledAt`. See `generateDraftOrder`.
-   */
-  readonly orderSeed: string;
+  /** Frozen at league creation. The order draw keys off this instant. */
   readonly scheduledAt: Date;
 }
 
 /**
- * Create the draft and draw the order.
+ * Schedule a draft.
  *
- * The order is written to `teams.draft_position` in the same transaction, so
- * there is no moment at which a draft exists without one.
+ * **No order is drawn here.** Teams may still be joining, and a seed that exists
+ * while the field can still change is a seed a commissioner can grind against —
+ * see `deriveOrderSeed`. The order comes later, from `drawDraftOrder`.
  */
 export async function createDraftRecord(
   db: SqlClient,
@@ -132,9 +151,97 @@ export async function createDraftRecord(
       );
     }
 
-    // Ordered by slot so the input to the shuffle is deterministic. Without it
-    // the order would depend on how Postgres happened to return the rows, and a
-    // seed anyone can check would produce an order nobody can reproduce.
+    const [draft] = await tx.query<DraftRow>(
+      `INSERT INTO drafts (league_id, rounds, pick_seconds, scheduled_at)
+       VALUES ($1, $2, $3, $4)
+       RETURNING ${DRAFT_COLUMNS}`,
+      [input.leagueId, input.rounds, input.pickSeconds, input.scheduledAt],
+    );
+
+    return toRecord(draft!, [], []);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Drawing the order
+// ---------------------------------------------------------------------------
+
+export interface DrawOrderInput {
+  readonly leagueId: string;
+  readonly beacon: RandomnessBeacon;
+  readonly now: Date;
+}
+
+/**
+ * Draw the draft order, once, from a block nobody could have predicted.
+ *
+ * The seed comes from the first Solana block produced at or after the league's
+ * frozen `scheduledAt`. While teams were joining, that block did not exist, so
+ * there was nothing to grind against; afterwards anyone can look up the slot and
+ * recompute the order.
+ *
+ * Three things make the draw unrepeatable, and all three are needed:
+ *
+ *   * It refuses before `scheduledAt`. Drawing early is drawing from a block
+ *     someone could still have influenced the field against.
+ *   * The rule names exactly one block — the *first* at or after that instant —
+ *     so there is no "try again a few slots later".
+ *   * A database trigger rejects any later write to the draw or to any team's
+ *     position, and locks the field the moment it lands.
+ *
+ * Being able to *check* the draw matters as much as making it. Everything a
+ * sceptic needs is recorded; `explainOrderDraw` in `@rostr/core` prints the
+ * instructions.
+ */
+export async function drawDraftOrder(
+  db: SqlClient,
+  input: DrawOrderInput,
+): Promise<DraftRecord> {
+  const [preflight] = await db.query<DraftRow>(
+    `SELECT ${DRAFT_COLUMNS} FROM drafts WHERE league_id = $1`,
+    [input.leagueId],
+  );
+  if (!preflight) throw new DraftPersistenceError("League has no draft", "DRAFT_NOT_FOUND");
+
+  if (preflight.order_drawn_at) {
+    throw new DraftPersistenceError(
+      `The order was already drawn from slot ${preflight.order_slot}`,
+      "ORDER_ALREADY_DRAWN",
+    );
+  }
+
+  const scheduledAt = new Date(preflight.scheduled_at);
+  if (input.now < scheduledAt) {
+    throw new DraftPersistenceError(
+      `The order cannot be drawn until ${scheduledAt.toISOString()}, ` +
+        `when the field locks and the deciding block is produced`,
+      "TOO_EARLY_TO_DRAW",
+    );
+  }
+
+  // Fetched outside the transaction: an RPC round trip should not hold a lock,
+  // and the block is immutable once produced, so nothing changes underneath.
+  const block = await input.beacon.firstBlockAtOrAfter(scheduledAt);
+
+  return withTransaction(db, async (tx) => {
+    const [draft] = await tx.query<DraftRow>(
+      `SELECT ${DRAFT_COLUMNS} FROM drafts WHERE league_id = $1 FOR UPDATE`,
+      [input.leagueId],
+    );
+    if (!draft) throw new DraftPersistenceError("League has no draft", "DRAFT_NOT_FOUND");
+    if (draft.order_drawn_at) {
+      throw new DraftPersistenceError("The order was already drawn", "ORDER_ALREADY_DRAWN");
+    }
+
+    const [league] = await tx.query<{ rules_hash: string }>(
+      "SELECT rules_hash FROM leagues WHERE id = $1",
+      [input.leagueId],
+    );
+    if (!league) throw new DraftPersistenceError("League has no rules", "RULES_MISSING");
+
+    // Ordered by join slot so the input to the shuffle is deterministic. Without
+    // it the order would depend on how Postgres happened to return the rows, and
+    // a seed anyone can check would produce an order nobody can reproduce.
     const teams = await tx.query<{ id: string }>(
       "SELECT id FROM teams WHERE league_id = $1 ORDER BY slot",
       [input.leagueId],
@@ -143,25 +250,89 @@ export async function createDraftRecord(
       throw new DraftPersistenceError("League has no teams to draft", "NO_TEAMS");
     }
 
+    const seed = deriveOrderSeed({
+      leagueId: input.leagueId,
+      rulesHash: league.rules_hash,
+      slot: block.slot,
+      blockhash: block.blockhash,
+    });
+
     const order = generateDraftOrder(
       teams.map((team) => team.id),
-      input.orderSeed,
-    );
-
-    const [draft] = await tx.query<DraftRow>(
-      `INSERT INTO drafts (league_id, rounds, pick_seconds, order_seed, scheduled_at)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING id, league_id, status, rounds, pick_seconds, order_seed,
-                 scheduled_at, clock_started_at`,
-      [input.leagueId, input.rounds, input.pickSeconds, input.orderSeed, input.scheduledAt],
+      seed,
     );
 
     for (const [index, teamId] of order.entries()) {
       await tx.query("UPDATE teams SET draft_position = $1 WHERE id = $2", [index + 1, teamId]);
     }
 
-    return toRecord(draft!, order, []);
+    // Last, so the field-lock trigger does not fire against our own writes.
+    const [updated] = await tx.query<DraftRow>(
+      `UPDATE drafts
+          SET order_seed = $2, order_slot = $3, order_blockhash = $4, order_drawn_at = $5
+        WHERE league_id = $1
+        RETURNING ${DRAFT_COLUMNS}`,
+      [input.leagueId, seed, block.slot, block.blockhash, input.now],
+    );
+
+    return toRecord(updated!, order, []);
   });
+}
+
+/**
+ * Recompute a league's draft order from the recorded block and compare.
+ *
+ * What a suspicious member runs. It re-derives the seed, re-runs the shuffle,
+ * checks the result against the stored positions, and — if the beacon is a real
+ * one — confirms the recorded slot really is the first block at or after the
+ * scheduled time.
+ */
+export async function verifyDraftOrder(
+  db: SqlClient,
+  leagueId: string,
+  beacon?: RandomnessBeacon,
+): Promise<{ ok: boolean; problems: readonly string[] }> {
+  const problems: string[] = [];
+
+  const draft = await loadDraft(db, leagueId);
+  if (!draft) return { ok: false, problems: ["League has no draft"] };
+  if (!draft.draw) return { ok: false, problems: ["The order has not been drawn"] };
+
+  const [league] = await db.query<{ rules_hash: string }>(
+    "SELECT rules_hash FROM leagues WHERE id = $1",
+    [leagueId],
+  );
+  if (!league) return { ok: false, problems: ["League has no rules"] };
+
+  const seed = deriveOrderSeed({
+    leagueId,
+    rulesHash: league.rules_hash,
+    slot: draft.draw.slot,
+    blockhash: draft.draw.blockhash,
+  });
+  if (seed !== draft.draw.seed) {
+    problems.push(`Recorded seed does not match the recorded block (expected ${seed})`);
+  }
+
+  const teams = await db.query<{ id: string }>(
+    "SELECT id FROM teams WHERE league_id = $1 ORDER BY slot",
+    [leagueId],
+  );
+  const expected = generateDraftOrder(
+    teams.map((team) => team.id),
+    seed,
+  );
+  if (expected.join(",") !== draft.order.join(",")) {
+    problems.push("Stored draft positions do not match the order this seed produces");
+  }
+
+  if (beacon && !(await beacon.verify(draft.draw.slot, draft.scheduledAt))) {
+    problems.push(
+      `Slot ${draft.draw.slot} is not the first block at or after ${draft.scheduledAt.toISOString()}`,
+    );
+  }
+
+  return { ok: problems.length === 0, problems };
 }
 
 // ---------------------------------------------------------------------------
@@ -171,9 +342,7 @@ export async function createDraftRecord(
 /** Load a league's draft, or `null` if it has none yet. */
 export async function loadDraft(db: SqlClient, leagueId: string): Promise<DraftRecord | null> {
   const [draft] = await db.query<DraftRow>(
-    `SELECT id, league_id, status, rounds, pick_seconds, order_seed,
-            scheduled_at, clock_started_at
-       FROM drafts WHERE league_id = $1`,
+    `SELECT ${DRAFT_COLUMNS} FROM drafts WHERE league_id = $1`,
     [leagueId],
   );
   if (!draft) return null;
@@ -195,6 +364,10 @@ interface PickRow {
 }
 
 async function hydrate(db: SqlClient, draft: DraftRow): Promise<DraftRecord> {
+  // No draw yet means no order yet. That is the normal state of a league that is
+  // still filling, not an error.
+  if (!draft.order_drawn_at) return toRecord(draft, [], []);
+
   const teams = await db.query<{ id: string }>(
     `SELECT id FROM teams
       WHERE league_id = $1 AND draft_position IS NOT NULL
@@ -208,7 +381,9 @@ async function hydrate(db: SqlClient, draft: DraftRow): Promise<DraftRecord> {
   );
   if (teams.length !== Number(total?.count ?? 0)) {
     // A team without a draft position would silently drop out of the order, and
-    // every pick after it would be attributed to the wrong manager.
+    // every pick after it would be attributed to the wrong manager. Triggers make
+    // this unreachable; it stays as a guard because the cost of being wrong is a
+    // whole season drafted against the wrong rotation.
     throw new DraftPersistenceError(
       `League ${draft.league_id} has ${total?.count} teams but only ${teams.length} draft positions`,
       "ORDER_INCOMPLETE",
@@ -239,7 +414,15 @@ function toRecord(
     status: draft.status,
     rounds: Number(draft.rounds),
     pickSeconds: Number(draft.pick_seconds),
-    orderSeed: draft.order_seed,
+    draw:
+      draft.order_drawn_at && draft.order_seed && draft.order_blockhash
+        ? {
+            seed: draft.order_seed,
+            slot: Number(draft.order_slot),
+            blockhash: draft.order_blockhash,
+            drawnAt: new Date(draft.order_drawn_at),
+          }
+        : null,
     scheduledAt: new Date(draft.scheduled_at),
     clockStartedAt: draft.clock_started_at ? new Date(draft.clock_started_at) : null,
     order,
@@ -260,12 +443,18 @@ function toRecord(
 // Running
 // ---------------------------------------------------------------------------
 
-/** Start the clock. */
+/**
+ * Start the clock.
+ *
+ * Refuses until the order has been drawn. Without one there is no rotation, so
+ * there is nobody on the clock and no answer to "whose pick is it".
+ */
 export async function startDraft(db: SqlClient, leagueId: string, now: Date): Promise<void> {
   const rows = await db.query<{ id: string }>(
     `UPDATE drafts
         SET status = 'IN_PROGRESS', clock_started_at = $2, started_at = COALESCE(started_at, $2)
       WHERE league_id = $1 AND status IN ('SCHEDULED', 'PAUSED')
+        AND order_drawn_at IS NOT NULL
       RETURNING id`,
     [leagueId, now],
   );
@@ -273,6 +462,12 @@ export async function startDraft(db: SqlClient, leagueId: string, now: Date): Pr
   if (rows.length === 0) {
     const draft = await loadDraft(db, leagueId);
     if (!draft) throw new DraftPersistenceError("League has no draft", "DRAFT_NOT_FOUND");
+    if (!draft.draw) {
+      throw new DraftPersistenceError(
+        "The draft order has not been drawn yet",
+        "ORDER_NOT_DRAWN",
+      );
+    }
     throw new DraftPersistenceError(`Draft is already ${draft.status}`, "ALREADY_STARTED");
   }
 }
@@ -327,9 +522,7 @@ export async function recordPick(db: SqlClient, input: RecordPickInput): Promise
   return withTransaction(db, async (tx) => {
     // Serialises every pick in this draft. Held until the transaction ends.
     const [locked] = await tx.query<DraftRow>(
-      `SELECT id, league_id, status, rounds, pick_seconds, order_seed,
-              scheduled_at, clock_started_at
-         FROM drafts WHERE league_id = $1 FOR UPDATE`,
+      `SELECT ${DRAFT_COLUMNS} FROM drafts WHERE league_id = $1 FOR UPDATE`,
       [input.leagueId],
     );
     if (!locked) throw new DraftPersistenceError("League has no draft", "DRAFT_NOT_FOUND");
