@@ -82,12 +82,14 @@ blocked kicks are both obtainable, from the play-by-play. See
 
 ### 🟡 Security review — escrow program
 
-**Decided 2026-08-05:** no commercial audit firm. The owner has a professional auditor
-who will review once the tech is mostly built, and audits Solana programs himself —
-`percolator` plus bug bounty submissions on other Solana DeFi programs.
+**Decided 2026-08-05:** no commercial audit firm **for the 2026 season**. The owner has a
+professional auditor who will review once the tech is mostly built, and audits Solana
+programs himself — `percolator` plus bug bounty submissions on other Solana DeFi
+programs.
 
-That is a real review path rather than a skipped one, and it removes the 2–4 week
-booking lead time that previously sat on the critical path.
+A commercial audit remains planned, with possible funding through the owner's
+connections. It is deferred past the 2026 season, not dropped. That removes the 2–4 week
+booking lead time from the critical path without removing review.
 
 **What still limits exposure**, and matters more without a firm's sign-off:
 
