@@ -209,23 +209,6 @@ the running cost to roughly **$35/month**.
 
 ---
 
-## Known gaps
-
-### ⬜ Draft order seed is grindable
-
-**Blocks:** a fair draft in any league with a pot.
-**Needed by:** **Aug 22**, with the draft.
-
-The order is a seeded shuffle, so it is auditable. But it depends on the seed _and_ the
-set of team IDs, and a commissioner can vary the latter: add a bot, compute the resulting
-order, remove it, try again until it favours them. Undetectable afterwards.
-
-The fix is a seed nobody can know until the field is locked — **a Solana slot hash at or
-after the frozen `draft.scheduledAt`**. Unpredictable in advance, verifiable after.
-Needs the chain integration, so it is currently blocked alongside Milestone D.
-
-Until then, treat the order as fair only for free leagues.
-
 ---
 
 ## Decisions outstanding
@@ -253,4 +236,23 @@ editor and rename, or just re-clone.
 
 ## Done
 
-_(nothing yet)_
+### ✅ Draft order seed is grindable
+
+**Closed.** The order is now seeded by the first Solana block produced at or after the
+league's frozen `scheduledAt` — unknowable while teams are still joining, verifiable by
+anyone afterwards.
+
+It needed no Anchor work: reading a block hash is a plain JSON-RPC call, and only
+verifying one _inside a program_ would need Rust. It had been parked behind Milestone D
+for no reason.
+
+`packages/core/src/draft/seed.ts`, `packages/db/src/randomness.ts`, migration `0010`.
+Four mechanisms hold it up and removing any one reopens the attack — see
+[`DECISIONS.md`](DECISIONS.md) § "The draft order is drawn from the chain, once".
+
+The one operational leftover is above: verifying an **old** draw needs an archival RPC
+node, because public nodes prune.
+
+### ✅ Tank01 API key
+
+Done 2026-08-05. See the entry above for what remains (the Pro upgrade before Week 1).
