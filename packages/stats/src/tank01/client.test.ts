@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { ProviderError } from "../provider.js";
 import { Tank01Client } from "./client.js";
-import { bucketFieldGoal, TANK01_STAT_MAP } from "./stat-map.js";
 
 function mockFetch(response: Partial<Response> & { json?: () => Promise<unknown> }) {
   return vi.fn().mockResolvedValue({
@@ -114,36 +113,5 @@ describe("healthCheck", () => {
   });
 });
 
-describe("stat mapping", () => {
-  it("buckets field goals at the right boundaries", () => {
-    expect(bucketFieldGoal(0)).toBe("fg_0_39");
-    expect(bucketFieldGoal(39)).toBe("fg_0_39");
-    expect(bucketFieldGoal(40)).toBe("fg_40_49");
-    expect(bucketFieldGoal(49)).toBe("fg_40_49");
-    expect(bucketFieldGoal(50)).toBe("fg_50_plus");
-    expect(bucketFieldGoal(66)).toBe("fg_50_plus");
-  });
-
-  it("maps only to registry stat keys", () => {
-    // Guards the abstraction: a provider field name leaking through as a stat
-    // key would put Tank01's vocabulary into the scoring engine.
-    const known = new Set([
-      "pass_yd",
-      "pass_td",
-      "pass_int",
-      "rush_yd",
-      "rush_td",
-      "rec",
-      "rec_yd",
-      "rec_td",
-      "def_td",
-      "def_sack",
-      "def_int",
-      "def_fum_rec",
-    ]);
-
-    for (const statKey of Object.values(TANK01_STAT_MAP)) {
-      expect(known, `unexpected stat key: ${statKey}`).toContain(statKey);
-    }
-  });
-});
+// Stat mapping is covered in stat-map.test.ts, against field names verified
+// from a live box score.
