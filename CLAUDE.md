@@ -1,4 +1,4 @@
-# CLAUDE.md
+﻿# CLAUDE.md
 
 Context for Claude Code sessions on this repo. Read this first — it is the handoff
 between machines and between sessions.
@@ -47,7 +47,7 @@ Do not build it in August.
 
 See [`docs/BUILD-PLAN.md`](docs/BUILD-PLAN.md) for the full commit-by-commit plan.
 
-**Done — 400 tests, CI green:**
+**Done — 433 tests, CI green:**
 
 - Full specification — rules, data model, live scoring, build plan
 - A1: pnpm monorepo, TS strict, vitest, eslint, prettier, CI
@@ -76,18 +76,27 @@ See [`docs/BUILD-PLAN.md`](docs/BUILD-PLAN.md) for the full commit-by-commit pla
   itself still needs C6** — the scoring engine exists but nothing yet feeds team-week
   totals into `MatchupResult`.
 
+- B6–B8: Tank01 adapter, box scores, live sync (`packages/stats/`, `packages/db/sync.ts`)
+
+- B16: the draft persisted (`packages/db/src/draft.ts`, migration `0009`)
+
 **Next, in order:**
 
-1. **B6–B8** — the stats provider adapter (Tank01), player and season sync. Needs a
-   Tank01 key, free tier. This is what supplies `DraftablePlayer.rank` — the draft
-   currently takes ranking as an input and has no source for it.
-2. **B16** — persist the draft: it is a pure state machine with no storage behind it yet.
-3. **D1–D10** — the escrow program. **Write this early.** The audit is 2–4 weeks of
+1. **Draft UI** — the draft is fully persisted and fully tested but there is no room to
+   run it in. This is the Aug 22 deadline and nothing else on the list competes with it.
+2. **Finish A9's UI** — there is no session yet, so `JoinPanel` posts an empty `userId`
+   and the league creation form is a preview only. Both marked TODO in the code. The
+   database is live now, so this is unblocked.
+3. **C2, C3, C6** — lineups, per-player kickoff locks, and team-week scoring. Needed by
+   Sep 9, not Aug 22. C6 is what finally connects the scoring engine to `MatchupResult`.
+4. **D1–D10** — the escrow program. **Write this early.** The audit is 2–4 weeks of
    calendar time and it gates pot leagues opening on Aug 22. Blocked on the secondary PC
    (no Rust/Anchor).
-4. **Finish A9's UI** — there is no session yet, so `JoinPanel` posts an empty `userId`
-   and the league creation form is a preview only. Both marked TODO in the code. Needs
-   the Supabase project, which the owner is setting up on their main PC.
+
+**Still open on the draft:** the order seed is grindable. `createDraftRecord` takes a
+seed and records it, but nothing yet supplies a Solana slot hash from at or after
+`scheduledAt`. Until it does, the order is fair only for leagues without a pot — see the
+comment on `generateDraftOrder`.
 
 ### The draft
 
@@ -107,6 +116,27 @@ infrastructure and why a full 12-team draft plays out instantly in a test.
 
 Bot sophistication is still the open question: the current bots draft by need from a
 supplied ranking. Positional scarcity, bye weeks, and tier breaks are not modelled.
+
+**Persistence lives in `packages/db/src/draft.ts` and adds exactly one thing the engine
+cannot do: arbitration.** The engine is pure and single-threaded, so when two managers
+click at the same instant both read "pick 15 is open", both validate, and both are right.
+The database decides instead — `SELECT ... FOR UPDATE` on the draft row is the fast path,
+and `PRIMARY KEY (draft_id, pick_number)` plus `UNIQUE (draft_id, player_id)` are the
+backstop if anything ever writes outside that lock. Both are tested.
+
+A pick writes the `draft_picks` row, the `roster_entries` row, and the queue cleanup in
+**one transaction**. A pick recorded without a roster entry leaves a team owning a player
+nothing else in the system can see.
+
+`PickRow["source"]` is imported from the engine, not restated. Writing that union out by
+hand is how the `draft_pick_source` enum and the engine drifted apart the first time —
+the migration had `NEEDED_SLOT` and `ANY_LEGAL`, which the engine has never emitted.
+
+Clocks are **computed from `clock_started_at`, never scheduled.** That is what lets a
+24-hour slow draft run with no timer infrastructure: `draftsWithExpiredPicks()` returns
+the work list and a job auto-picks through it. A pause clears the clock, so a manager
+resumes with a full fresh timer rather than losing sixty of their ninety seconds to an
+outage they had nothing to do with.
 
 ### The season
 
@@ -317,7 +347,7 @@ Expect ~30–60 minutes; compiling AVM from source is the slow part.
 
 ```bash
 pnpm install
-pnpm test        # 400 tests, all green
+pnpm test        # 433 tests, all green
 pnpm typecheck
 pnpm lint
 ```
