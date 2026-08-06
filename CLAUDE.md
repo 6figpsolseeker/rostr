@@ -47,7 +47,7 @@ Do not build it in August.
 
 See [`docs/BUILD-PLAN.md`](docs/BUILD-PLAN.md) for the full commit-by-commit plan.
 
-**Done — 232 tests, CI green:**
+**Done — 400 tests, CI green:**
 
 - Full specification — rules, data model, live scoring, build plan
 - A1: pnpm monorepo, TS strict, vitest, eslint, prettier, CI
@@ -66,6 +66,15 @@ See [`docs/BUILD-PLAN.md`](docs/BUILD-PLAN.md) for the full commit-by-commit pla
   ladders tested at every boundary
 
 - B9–B15: snake draft, queue, auto-pick, bots (`packages/core/src/draft/`)
+
+- Waivers and free agency (`packages/core/src/waivers/`) — ESPN's cycle exactly:
+  Tuesday 00:00 ET back to waivers, Wednesday 03:00 ET processing, free agency between,
+  1-day waiver period, 24-hour short-tenure rule
+
+- C1, and the standings half of C8 plus all of C9: schedule generation, records,
+  tiebreaker chain, playoff seeding (`packages/core/src/season/`). **Matchup resolution
+  itself still needs C6** — the scoring engine exists but nothing yet feeds team-week
+  totals into `MatchupResult`.
 
 **Next, in order:**
 
@@ -98,6 +107,34 @@ infrastructure and why a full 12-team draft plays out instantly in a test.
 
 Bot sophistication is still the open question: the current bots draft by need from a
 supplied ranking. Positional scarcity, bye weeks, and tier breaks are not modelled.
+
+### The season
+
+`packages/core/src/season/`. Both files are pure — no clock, no database.
+
+**The schedule is a seeded round robin**, from the rules hash, by the circle method. Two
+things it must keep doing, each of which was a real bug caught by a test:
+
+- **Sort the team IDs before shuffling.** A shuffle permutes positions, not identities,
+  so shuffling the caller's array made the schedule depend on the order teams were passed
+  in — and therefore on database row order.
+- **Assign home and away in a second pass**, to whoever is furthest behind. Deriving it
+  from the rotation geometry gave one team eleven home games out of fourteen, because
+  only the held team keeps a fixed pair index.
+
+Odd leagues get byes, spread evenly. A bye is not a game: no win, no loss, no points, and
+it does not count toward games played, so win percentage stays comparable.
+
+**Standings resolve ties by group, not pairwise.** A comparator that consults each
+tiebreaker in turn is _wrong_ for head-to-head: A beating B says nothing about C, so
+`a > b > c > a` is reachable and the result depends on what the sort algorithm visited.
+Instead, rank by one tiebreaker, then re-apply the next _within_ each still-tied group.
+Head-to-head is skipped entirely when the tied teams did not all meet the same number of
+times — comparing records across different schedules is not a tiebreaker.
+
+`computeStandings` **throws** if the chain runs out with teams still tied. Falling back to
+input order would make a playoff seed depend on database row order, and playoff seeds
+decide who can win the pot.
 
 ### Scoring
 
@@ -280,7 +317,7 @@ Expect ~30–60 minutes; compiling AVM from source is the slow part.
 
 ```bash
 pnpm install
-pnpm test        # 49 tests, all green
+pnpm test        # 400 tests, all green
 pnpm typecheck
 pnpm lint
 ```

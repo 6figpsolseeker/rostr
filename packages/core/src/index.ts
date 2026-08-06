@@ -141,6 +141,29 @@ export {
 } from "./waivers/claims.js";
 
 export {
+  byeCountsAreBalanced,
+  everyTeamPlaysOncePerWeek,
+  generateSchedule,
+  matchupsForWeek,
+  meetingCounts,
+  opponentOf,
+  ScheduleError,
+  type ScheduledMatchup,
+} from "./season/schedule.js";
+
+export {
+  computeRecords,
+  computeStandings,
+  consolationField,
+  playoffField,
+  StandingsError,
+  winPercentageBasisPoints,
+  type MatchupResult,
+  type StandingsRow,
+  type TeamRecord,
+} from "./season/standings.js";
+
+export {
   createDraft,
   currentPickNumber,
   currentTeam,

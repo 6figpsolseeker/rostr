@@ -174,6 +174,20 @@ championship cannot turn on a Sunday-morning inactive list.
 takes the win. Equal totals are a tie for both. Schedule luck is deliberate and
 retained; there is no median scoring.
 
+**The schedule is a seeded round robin.** It is generated from the league's rules hash
+by the circle method, so anyone holding that hash can recompute the schedule and confirm
+nobody arranged themselves an easy run. It depends only on the *set* of teams and the
+seed — never on join order, and never on the order rows come back from the database.
+
+With 12 teams, the first 11 weeks are a complete round robin: everyone plays everyone
+once. Weeks 12–14 begin a second rotation, so no pair meets more than twice. Home and
+away are balanced to within one game per team.
+
+**Odd leagues have byes.** A league can start with as few as two humans and bots are
+optional, so an odd number of teams is legal. One team then sits out each week. A bye is
+not a game: it contributes no win, no loss, and no points either way, so win percentage
+stays comparable. Byes are distributed evenly — no team sits more than one extra time.
+
 **Playoffs.** The top **6** of 12 qualify. Seeds 1–2 receive a Week 15 bye.
 Week 15 is 3v6 and 4v5; Week 16 pairs the top seed against the lower surviving seed;
 Week 17 is the championship. Single elimination throughout.
