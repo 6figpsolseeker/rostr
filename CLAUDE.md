@@ -133,6 +133,13 @@ behind a toggle and no field is omitted. A join button placed before the rules w
 **The join message is fetched from the server, never composed on the client.** A client
 that builds its own message could sign one rule set and be admitted under another.
 
+**`/scoring` explains the point system, and is generated from `NFL_PPR_SCORING`.** Not
+hand-written — a scoring explainer typed out by hand drifts the first time a value
+changes and then quietly lies to users about how they are being scored. The worked
+examples call `scorePlayer()` rather than stating totals, so the arithmetic on the page
+cannot diverge from the arithmetic that decides matchups. **The mobile app needs the same
+screen, built the same way** (commit H3b).
+
 **Wallets:** Phantom, Solflare, and Coinbase adapters are registered explicitly, but most
 wallets — including Seed Vault on Seeker — auto-register via the Wallet Standard and need
 nothing. Do **not** add `@solana/wallet-adapter-wallets`: that meta-package pulls in

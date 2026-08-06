@@ -19,12 +19,17 @@ export default function RootLayout({ children }: { children: ReactNode }) {
               <a href="/" className="text-lg font-semibold tracking-tight">
                 rostr
               </a>
-              <a
-                href="/leagues/new"
-                className="rounded bg-[--color-turf] px-3 py-1.5 text-sm font-medium text-black"
-              >
-                Create league
-              </a>
+              <div className="flex items-center gap-5">
+                <a href="/scoring" className="text-sm text-white/70 hover:text-white">
+                  How scoring works
+                </a>
+                <a
+                  href="/leagues/new"
+                  className="rounded bg-[--color-turf] px-3 py-1.5 text-sm font-medium text-black"
+                >
+                  Create league
+                </a>
+              </div>
             </nav>
           </header>
           <main className="mx-auto max-w-4xl px-6 py-10">{children}</main>
