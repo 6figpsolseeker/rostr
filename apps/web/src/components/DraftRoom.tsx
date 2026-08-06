@@ -20,6 +20,46 @@ interface Player {
   name: string;
   positions: string[];
   rank: number;
+  /** Milli-points, scored with this league's rules. Null when unprojected. */
+  projectedMilliPoints: number | null;
+}
+
+/** Display order for the position groups. Matches the roster, top to bottom. */
+const POSITION_ORDER = ["QB", "RB", "WR", "TE", "K", "DEF"] as const;
+
+const points = (milli: number | null): string =>
+  milli === null ? "—" : (milli / 1000).toFixed(1);
+
+/**
+ * A player's group.
+ *
+ * Multi-position players are filed under the first position the roster cares
+ * about, so a receiver who also returns kicks does not appear twice.
+ */
+function groupOf(player: Player): string {
+  for (const position of POSITION_ORDER) {
+    if (player.positions.includes(position)) return position;
+  }
+  return player.positions[0] ?? "—";
+}
+
+/**
+ * Best projection first, then ADP.
+ *
+ * ADP is the fallback rather than the primary sort. It measures where a player
+ * is *being taken*, which is a crowd's opinion filtered through other people's
+ * league settings; a projection scored against this league's own rules is a
+ * statement about what he is worth here. Unprojected players sort last but stay
+ * draftable — a late flier on someone unranked is a legitimate pick.
+ */
+function byProjection(a: Player, b: Player): number {
+  const left = a.projectedMilliPoints;
+  const right = b.projectedMilliPoints;
+
+  if (left === null && right === null) return a.rank - b.rank;
+  if (left === null) return 1;
+  if (right === null) return -1;
+  return right - left || a.rank - b.rank;
 }
 
 interface Pick {
@@ -50,7 +90,28 @@ interface DraftState {
   totalPicks: number;
   currentPickNumber: number | null;
   currentTeamId: string | null;
+  onDeckTeamId: string | null;
   complete: boolean;
+}
+
+/**
+ * How often to ask for updates.
+ *
+ * Three seconds is invisible when you are watching someone else pick. It is not
+ * invisible when the turn passes to you: a poll that lands three seconds late
+ * costs three of your ninety.
+ *
+ * So the interval tightens while you are on the clock **or next**. Being next is
+ * the important half — by the time it flips to your turn, the fast poll is
+ * already running, so you learn within a second rather than finding out three
+ * seconds in.
+ */
+function pollInterval(data: DraftResponse | undefined): number {
+  const draft = data?.draft;
+  const me = data?.me.teamId;
+  if (!draft || !me || draft.status !== "IN_PROGRESS") return 5000;
+
+  return draft.currentTeamId === me || draft.onDeckTeamId === me ? 1000 : 3000;
 }
 
 interface DraftResponse {
@@ -74,7 +135,7 @@ export function DraftRoom({ leagueId, leagueName }: { leagueId: string; leagueNa
   const { data, error, mutate } = useSWR<DraftResponse>(
     `/api/leagues/${leagueId}/draft`,
     fetcher as (url: string) => Promise<DraftResponse>,
-    { refreshInterval: 3000, revalidateOnFocus: true },
+    { refreshInterval: pollInterval, revalidateOnFocus: true },
   );
 
   const { data: boardData } = useSWR<{ players: Player[] }>(
@@ -101,13 +162,31 @@ export function DraftRoom({ leagueId, leagueName }: { leagueId: string; leagueNa
   const players = boardData?.players ?? [];
   const byId = useMemo(() => new Map(players.map((p) => [p.id, p])), [players]);
 
-  const available = useMemo(() => {
+  /**
+   * Available players, grouped by position and ranked within each group.
+   *
+   * Grouping is the point: comparing a quarterback's 340 projected points
+   * against a kicker's 130 says nothing useful, because you need one of each.
+   * What matters is who is the best one left *at a position*.
+   */
+  const groups = useMemo(() => {
     const term = search.trim().toLowerCase();
-    return players
+    const matching = players
       .filter((player) => !drafted.has(player.id))
-      .filter((player) => position === "ALL" || player.positions.includes(position))
-      .filter((player) => term === "" || player.name.toLowerCase().includes(term))
-      .slice(0, 200);
+      .filter((player) => term === "" || player.name.toLowerCase().includes(term));
+
+    const wanted = position === "ALL" ? POSITION_ORDER : [position];
+
+    return wanted
+      .map((slot) => ({
+        position: slot,
+        players: matching
+          .filter((player) => groupOf(player) === slot)
+          .sort(byProjection)
+          // Deep enough that nobody runs out mid-draft, short enough to render.
+          .slice(0, position === "ALL" ? 25 : 150),
+      }))
+      .filter((group) => group.players.length > 0);
   }, [players, drafted, position, search]);
 
   const onTheClock = draft?.currentTeamId ?? null;
@@ -194,25 +273,45 @@ export function DraftRoom({ leagueId, leagueName }: { leagueId: string; leagueNa
             />
           </div>
 
-          <PlayerList
-            players={available}
-            queue={queue}
-            canPick={isMyTurn && draft.status === "IN_PROGRESS"}
-            busy={busy}
-            onPick={(playerId) => void post("/pick", { playerId })}
-            onQueue={(playerId) =>
-              void post(
-                "/queue",
-                {
-                  playerIds: queue.includes(playerId)
-                    ? queue.filter((q) => q !== playerId)
-                    : [...queue, playerId],
-                },
-                "PUT",
-              )
-            }
-            inLeague={myTeamId !== null}
-          />
+          {groups.length === 0 ? (
+            <p className="text-sm text-white/40">Nobody left matching that.</p>
+          ) : (
+            groups.map((group) => (
+              <section key={group.position} className="space-y-1.5">
+                <h2 className="flex items-baseline gap-2 text-xs font-medium tracking-wide text-white/50 uppercase">
+                  {group.position}
+                  <span className="text-[10px] normal-case">
+                    {group.players.length} available · projected season points
+                  </span>
+                </h2>
+                <PlayerList
+                  players={group.players}
+                  queue={queue}
+                  canPick={isMyTurn && draft.status === "IN_PROGRESS"}
+                  busy={busy}
+                  onPick={(playerId) => void post("/pick", { playerId })}
+                  onQueue={(playerId) =>
+                    void post(
+                      "/queue",
+                      {
+                        playerIds: queue.includes(playerId)
+                          ? queue.filter((q) => q !== playerId)
+                          : [...queue, playerId],
+                      },
+                      "PUT",
+                    )
+                  }
+                  inLeague={myTeamId !== null}
+                />
+              </section>
+            ))
+          )}
+
+          {position === "ALL" && (
+            <p className="text-xs text-white/30">
+              Showing the top 25 at each position. Pick a position above for the full list.
+            </p>
+          )}
         </section>
 
         <aside className="space-y-6">
@@ -355,17 +454,27 @@ function PlayerList({
   onQueue: (playerId: string) => void;
   inLeague: boolean;
 }) {
-  if (players.length === 0) {
-    return <p className="text-sm text-white/40">Nobody left matching that.</p>;
-  }
-
   return (
     <ul className="divide-y divide-white/5 rounded border border-white/10">
       {players.map((player) => (
         <li key={player.id} className="flex items-center gap-3 px-4 py-2.5">
-          <span className="w-10 text-xs text-white/30 tabular-nums">{player.rank}</span>
+          <span
+            className="w-14 text-right text-sm font-medium tabular-nums"
+            title={
+              player.projectedMilliPoints === null
+                ? "No projection published for this player"
+                : "Projected season points, scored with this league's rules"
+            }
+          >
+            {points(player.projectedMilliPoints)}
+          </span>
           <span className="flex-1 truncate text-sm">{player.name}</span>
-          <span className="w-12 text-xs text-white/40">{player.positions.join("/")}</span>
+          <span
+            className="w-10 text-xs text-white/30 tabular-nums"
+            title="Average draft position"
+          >
+            {player.rank}
+          </span>
 
           {inLeague && (
             <button

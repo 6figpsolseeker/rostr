@@ -47,7 +47,7 @@ Do not build it in August.
 
 See [`docs/BUILD-PLAN.md`](docs/BUILD-PLAN.md) for the full commit-by-commit plan.
 
-**Done — 538 tests, CI green:**
+**Done — 557 tests, CI green:**
 
 - Full specification — rules, data model, live scoring, build plan
 - A1: pnpm monorepo, TS strict, vitest, eslint, prettier, CI
@@ -168,6 +168,31 @@ nothing else in the system can see.
 hand is how the `draft_pick_source` enum and the engine drifted apart the first time —
 the migration had `NEEDED_SLOT` and `ANY_LEGAL`, which the engine has never emitted.
 
+#### Projections and how the board is ordered
+
+The board groups by **position** and sorts by **projected season points**, with ADP as
+the tiebreak. Comparing a quarterback's 334 against a kicker's 133 tells you nothing —
+you need one of each. What matters is who is the best one left at a position.
+
+**Projections are stored as raw stats and scored with each league's own rules.**
+`player_projections` (migration `0013`) holds stat lines, never points. Tank01 ships a
+`fantasyPointsDefault` and it is discarded on purpose: ours pays 4 for a passing
+touchdown, so a provider's number on the draft board would disagree with the number that
+decides matchups. The same `scorePlayer()` produces both.
+
+One provider call covers the whole season — `getNFLProjections` with **no `week`**.
+See [`docs/TANK01.md`](docs/TANK01.md), which records the verbatim response shape.
+
+**Kicker projections are a floor.** The provider gives a total `fgMade` with no distance
+split and our scoring pays 3/4/5 by distance, so everything lands in the 3-point tier.
+Harmless because the board groups by position; do not "fix" it by inventing a
+distribution.
+
+`syncProjections` batches deliberately. Row-at-a-time against a hosted database was 5,600
+round trips, took minutes, and the connection died partway through. One query for the
+player map, then chunked multi-row upserts — 500 rows a chunk, because Postgres caps a
+statement at 65535 bind parameters.
+
 #### The draft room
 
 `apps/web/src/components/DraftRoom.tsx` and `apps/web/src/app/api/leagues/[id]/draft/`.
@@ -175,6 +200,14 @@ the migration had `NEEDED_SLOT` and `ANY_LEGAL`, which the engine has never emit
 **Polls, does not hold a socket.** A 90-second clock does not need sub-second updates,
 polling survives sleep and tab-switching with no reconnect protocol, and the server keeps
 no per-connection state — which matters when it runs as serverless functions.
+
+**The interval is adaptive, and that is the part that matters.** Three seconds is
+invisible while you watch someone else pick; it is not invisible when the turn reaches
+you, because a poll landing three seconds late costs three of your ninety. So it drops to
+one second while you are on the clock **or on deck** — being on deck is the important
+half, since the fast poll is then already running when it flips to your turn. `onDeckTeamId`
+is computed server-side rather than in the browser, so there is one implementation of the
+snake and the room cannot disagree with itself about whose pick it is.
 
 The board is fetched **once** and availability computed client-side by subtracting drafted
 players. A thousand players is ~80 KB and only changes when the stats sync runs; shipping
@@ -466,7 +499,7 @@ Expect ~30–60 minutes; compiling AVM from source is the slow part.
 
 ```bash
 pnpm install
-pnpm test        # 538 tests, all green
+pnpm test        # 557 tests, all green
 pnpm typecheck
 pnpm lint
 ```

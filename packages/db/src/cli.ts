@@ -15,7 +15,13 @@ import { Tank01Provider } from "@rostr/stats";
 import { loadMigrations, migrate } from "./migrate.js";
 import { createPostgresClient } from "./postgres.js";
 import { seedSport } from "./sports.js";
-import { loadDraftBoard, syncByeWeeks, syncPlayers, syncRankings } from "./sync.js";
+import {
+  loadDraftBoard,
+  syncByeWeeks,
+  syncPlayers,
+  syncProjections,
+  syncRankings,
+} from "./sync.js";
 
 function connectionString(): string {
   const url = process.env["DATABASE_URL"];
@@ -111,6 +117,20 @@ async function main(): Promise<void> {
           for (const name of rankings.unmatched.slice(0, 15)) console.log(`    ${name}`);
           if (rankings.unmatched.length > 15) {
             console.log(`    ... and ${rankings.unmatched.length - 15} more`);
+          }
+        }
+
+        const projections = await syncProjections(client, provider, NFL.key, season);
+        console.log(
+          `projections +${projections.inserted} stat lines, ` +
+            `${projections.skipped} players unmatched`,
+        );
+
+        if (projections.unmatched.length > 0) {
+          console.log(`\n  projected but not in our player pool:`);
+          for (const name of projections.unmatched.slice(0, 15)) console.log(`    ${name}`);
+          if (projections.unmatched.length > 15) {
+            console.log(`    ... and ${projections.unmatched.length - 15} more`);
           }
         }
 

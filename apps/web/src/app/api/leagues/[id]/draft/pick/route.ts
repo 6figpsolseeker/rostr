@@ -42,7 +42,7 @@ export async function POST(
       return NextResponse.json({ error: "playerId is required" }, { status: 400 });
     }
 
-    const board = await draftBoard(context.season);
+    const board = await draftBoard(context.season, context.rules);
 
     const pick = await recordPick(db(), {
       leagueId: id,

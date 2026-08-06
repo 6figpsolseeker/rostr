@@ -145,6 +145,95 @@ smarter bot would use for positional scarcity.
 ## Projections
 
 ```
+getNFLProjections?week=N&archiveSeason=YYYY   one week
+getNFLProjections?archiveSeason=YYYY          THE WHOLE SEASON
+```
+
+### Season totals come from omitting `week`
+
+**Verified live 2026-08-06.** With no `week` parameter the response comes back
+with `"week": "season"` and season-scale magnitudes:
+
+```
+Ja'Marr Chase   recYds 1457   receptions 121   recTD 11.2
+Jahmyr Gibbs    rushYds 1231  receptions 63.9
+Aaron Rodgers   passYds 3245  passTD 24.9
+```
+
+Compare week 1 alone, where Rodgers reads `passYds 201`. One call covers **622
+players and all 32 team defenses** — the whole draft board's projections.
+
+`isSeasonAggregate()` checks that `"season"` string before trusting a response,
+because a silently weekly payload would produce a draft board where every player
+looked like a backup.
+
+### Fields, unioned across the whole season response
+
+```
+top:  Kicking, Passing, Receiving, Rushing, fantasyPointsDefault,
+      fumblesLost, longName, playerID, pos, team, teamID, twoPointConversion
+sub:  Kicking.fgMade, Kicking.fgMissed, Kicking.xpMade, Kicking.xpMissed,
+      Passing.int, Passing.passAttempts, Passing.passCompletions,
+      Passing.passTD, Passing.passYds, Receiving.recTD, Receiving.recYds,
+      Receiving.receptions, Receiving.targets, Rushing.carries,
+      Rushing.rushTD, Rushing.rushYds
+```
+
+Positions present: `QB 92, RB 142, WR 212, TE 123, PK 47, FB 6`. **`PK` and `FB`
+again** — the same spelling that silently dropped every kicker from the draft
+board once already.
+
+### Kickers are projected, but only as a total
+
+`Kicking.fgMade` is a single number — `27.1` — with **no distance breakdown**,
+and our scoring pays 3, 4, or 5 by distance. Every projected field goal is
+therefore counted in the 3-point tier, making kicker projections a **floor**
+(Brandon Aubrey scores 133.0 where a real projection is nearer 150).
+
+Acceptable because the board groups by position, so kickers are only ever
+compared with each other, and the ordering is unaffected. Inventing a distance
+distribution to look precise would be worse than being visibly conservative.
+
+### Team defense
+
+```json
+{
+  "returnTD": "0.3",
+  "defTD": "1.2",
+  "safeties": "0.1",
+  "fumbleRecoveries": "6.3",
+  "ptsAgainst": "230",
+  "teamAbv": "ARI",
+  "interceptions": "10.6",
+  "sacks": "33.2",
+  "blockKick": "1.1",
+  "fantasyPointsDefault": "73.3"
+}
+```
+
+`defTD` and `returnTD` are **summed before rounding** into our `def_td`:
+`RULES.md` §1 pays 6 for a "defensive **or special teams** touchdown". Rounding
+each separately turns 1.2 + 0.3 into one touchdown instead of two.
+
+Not to be confused with `ret_td`, which is the individual returner's six points
+and belongs to a different roster spot.
+
+### `fantasyPointsDefault` is ignored, deliberately
+
+It is Tank01's arithmetic. Every league scores raw stats against its own frozen
+rules — ours pays 4 for a passing touchdown — so a provider's number on the draft
+board would disagree with the number that decides matchups.
+
+Scored with our own PPR rules, the top of each position reads:
+
+```
+QB   Josh Allen 334.4    RB   Jahmyr Gibbs 342.8    WR  Ja'Marr Chase 340.6
+TE   Brock Bowers 231.5  K    Brandon Aubrey 133.0  DEF Denver 105.0
+```
+
+### The old weekly notes
+
+```
 getNFLProjections?week=N&archiveSeason=YYYY
 { playerProjections, teamDefenseProjections, week, season }
 ```

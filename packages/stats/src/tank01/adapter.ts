@@ -18,6 +18,8 @@ import { Tank01Client } from "./client.js";
 import type { Tank01Options } from "./client.js";
 import { translateBoxScore } from "./box-score.js";
 import { parseStatValue } from "./stat-map.js";
+import { isSeasonAggregate, parseSeasonProjections } from "./projections.js";
+import type { ProviderProjection, RawProjectionsBody } from "./projections.js";
 
 /**
  * Tank01 position codes to registry positions.
@@ -272,6 +274,33 @@ export class Tank01Provider implements StatsProvider {
       rankingType: raw.adpType ?? rankingType,
       entries,
     };
+  }
+
+  /**
+   * Projected season totals, in one call.
+   *
+   * **No `week` parameter.** That is what makes it a season aggregate rather
+   * than a single week — confirmed live on 2026-08-06, where the response came
+   * back with `week: "season"` and magnitudes to match (1457 receiving yards for
+   * Ja'Marr Chase, not 91). Passing a week returns that week alone.
+   *
+   * Raw components, never Tank01's `fantasyPointsDefault`: every league scores
+   * against its own frozen rules, so a provider's idea of a point is not ours.
+   */
+  async listSeasonProjections(season: number): Promise<readonly ProviderProjection[]> {
+    const raw = await this.client.get<RawProjectionsBody>("getNFLProjections", {
+      archiveSeason: String(season),
+    });
+
+    if (!isSeasonAggregate(raw)) {
+      throw new ProviderError(
+        `Expected season projections but got week ${String(raw.week)}. ` +
+          `getNFLProjections must be called with no week parameter.`,
+        this.name,
+      );
+    }
+
+    return parseSeasonProjections(raw, DST_REF_PREFIX);
   }
 
   /** Bye weeks by team abbreviation, for a season. Free with the roster sync. */

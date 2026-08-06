@@ -66,12 +66,15 @@ export {
 
 export {
   loadDraftBoard,
+  loadProjections,
   syncByeWeeks,
   syncGames,
   syncPlayers,
+  syncProjections,
   syncRankings,
   type AdpCapableProvider,
   type DraftBoardEntry,
+  type ProjectionCapableProvider,
   type SyncResult,
 } from "./sync.js";
 

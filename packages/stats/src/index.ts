@@ -17,6 +17,12 @@ export {
   type AdpEntry,
 } from "./tank01/adapter.js";
 export {
+  isSeasonAggregate,
+  parseSeasonProjections,
+  type ProviderProjection,
+  type RawProjectionsBody,
+} from "./tank01/projections.js";
+export {
   bucketFieldGoal,
   isBlockedKick,
   isDefensiveReturnTouchdown,

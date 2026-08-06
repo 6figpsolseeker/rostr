@@ -16,7 +16,7 @@ export async function GET(
 
   try {
     const context = await draftContext(id);
-    const board = await draftBoard(context.season);
+    const board = await draftBoard(context.season, context.rules);
 
     return NextResponse.json({
       players: board.entries.map((entry) => ({
@@ -24,6 +24,10 @@ export async function GET(
         name: entry.fullName,
         positions: entry.positions,
         rank: entry.rank,
+        // Milli-points, scored with *this league's* rules. Null where the
+        // provider has no projection — a deep-bench flier is still draftable,
+        // and showing a confident zero would be worse than showing nothing.
+        projectedMilliPoints: board.projected.get(entry.playerId) ?? null,
       })),
     });
   } catch (error) {

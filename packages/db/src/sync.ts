@@ -250,6 +250,168 @@ export async function syncRankings(
   return { inserted, updated: 0, skipped, asOf: board.asOf, unmatched };
 }
 
+// ---------------------------------------------------------------------------
+// Projections
+// ---------------------------------------------------------------------------
+
+export interface ProjectionCapableProvider {
+  readonly name: string;
+  listSeasonProjections(season: number): Promise<
+    readonly {
+      readonly externalRef: string;
+      readonly fullName: string;
+      readonly position: string;
+      readonly stats: readonly { readonly statKey: string; readonly value: number }[];
+    }[]
+  >;
+}
+
+/**
+ * Pull projected season totals.
+ *
+ * Stored as **raw stats, never points** — see the migration. One provider call
+ * covers every player and every team defense.
+ */
+export async function syncProjections(
+  db: SqlClient,
+  provider: ProjectionCapableProvider,
+  sportKey: string,
+  season: number,
+): Promise<SyncResult & { unmatched: readonly string[] }> {
+  const ids = await loadSportIds(db, sportKey);
+  const projections = await provider.listSeasonProjections(season);
+
+  const statKeyIds = new Map(
+    (
+      await db.query<{ id: string; key: string }>(
+        "SELECT id, key FROM stat_keys WHERE sport_id = $1",
+        [ids.sportId],
+      )
+    ).map((row) => [row.key, row.id]),
+  );
+
+  // Every player in one query, not one query per player.
+  //
+  // A projection sync touches ~620 players and ~5,000 stat lines. Done a row at
+  // a time against a hosted database that is 5,600 round trips at roughly 75ms
+  // each — seven minutes, and it did not finish: the connection was dropped
+  // partway through. Batched, it is a handful of statements.
+  const playerIds = new Map(
+    (
+      await db.query<{ id: string; external_ref: string }>(
+        "SELECT id, external_ref FROM players WHERE sport_id = $1",
+        [ids.sportId],
+      )
+    ).map((row) => [row.external_ref, row.id]),
+  );
+
+  let skipped = 0;
+  // Named rather than counted, for the same reason as the ranking sync: a bare
+  // count of unmatched players once hid "every kicker in the league".
+  const unmatched: string[] = [];
+
+  const rows: { playerId: string; statKeyId: string; value: number }[] = [];
+
+  for (const projection of projections) {
+    const playerId = playerIds.get(projection.externalRef);
+    if (!playerId) {
+      unmatched.push(projection.fullName || projection.externalRef);
+      skipped++;
+      continue;
+    }
+
+    for (const stat of projection.stats) {
+      const statKeyId = statKeyIds.get(stat.statKey);
+      if (!statKeyId) {
+        throw new Error(
+          `Projection references unknown stat key "${stat.statKey}". ` +
+            `The registry and the provider map have diverged.`,
+        );
+      }
+      rows.push({ playerId, statKeyId, value: stat.value });
+    }
+  }
+
+  let inserted = 0;
+  let updated = 0;
+
+  // Chunked rather than one enormous statement: Postgres caps a query at 65535
+  // bind parameters, and five per row puts the ceiling around 13,000.
+  const CHUNK = 500;
+
+  for (let start = 0; start < rows.length; start += CHUNK) {
+    const chunk = rows.slice(start, start + CHUNK);
+
+    const values = chunk
+      .map((_, index) => {
+        const base = index * 5;
+        return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5})`;
+      })
+      .join(", ");
+
+    const params = chunk.flatMap((row) => [
+      row.playerId,
+      season,
+      provider.name,
+      row.statKeyId,
+      row.value,
+    ]);
+
+    const result = await db.query<{ fresh: boolean }>(
+      `INSERT INTO player_projections (player_id, season, source, stat_key_id, value)
+       VALUES ${values}
+       ON CONFLICT (player_id, season, source, stat_key_id)
+       DO UPDATE SET value = EXCLUDED.value, updated_at = now()
+       RETURNING (xmax = 0) AS fresh`,
+      params,
+    );
+
+    // `xmax = 0` distinguishes an insert from an update in an upsert, so a
+    // re-run reports "refreshed" rather than claiming to have added rows that
+    // were already there.
+    for (const row of result) {
+      if (row.fresh) inserted++;
+      else updated++;
+    }
+  }
+
+  return { inserted, updated, skipped, unmatched };
+}
+
+/**
+ * Projected stat lines by player, ready for `scorePlayer`.
+ *
+ * Returns raw stats so the caller scores them with **its own league's rules**.
+ * There is one definition of a point in this system and it is the league's.
+ */
+export async function loadProjections(
+  db: SqlClient,
+  sportKey: string,
+  season: number,
+  source?: string,
+): Promise<ReadonlyMap<string, readonly { statKey: string; value: number }[]>> {
+  const ids = await loadSportIds(db, sportKey);
+
+  const rows = await db.query<{ player_id: string; key: string; value: number }>(
+    `SELECT p.player_id, k.key, p.value
+       FROM player_projections p
+       JOIN stat_keys k ON k.id = p.stat_key_id
+      WHERE p.season = $1
+        AND k.sport_id = $2
+        AND p.source = COALESCE($3, p.source)`,
+    [season, ids.sportId, source ?? null],
+  );
+
+  const byPlayer = new Map<string, { statKey: string; value: number }[]>();
+  for (const row of rows) {
+    const lines = byPlayer.get(row.player_id) ?? [];
+    lines.push({ statKey: row.key, value: Number(row.value) });
+    byPlayer.set(row.player_id, lines);
+  }
+
+  return byPlayer;
+}
+
 export interface DraftBoardEntry {
   readonly playerId: string;
   readonly externalRef: string;

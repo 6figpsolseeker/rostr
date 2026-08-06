@@ -6,8 +6,20 @@ import {
   loadDraft,
   getQueue,
 } from "@rostr/db";
+import { teamOnClock, totalPicks } from "@rostr/core";
 import { db } from "@/lib/db";
 import { draftBoard, draftContext, DraftContextError } from "@/lib/draft-context";
+
+/** The team picking after `pickNumber`, or `null` if that is the last pick. */
+function nextTeamOnClock(
+  order: readonly string[],
+  pickNumber: number,
+  rounds: number,
+): string | null {
+  const next = pickNumber + 1;
+  if (order.length === 0 || next > totalPicks(order.length, rounds)) return null;
+  return teamOnClock(next, order);
+}
 
 /**
  * The live draft state.
@@ -38,7 +50,7 @@ export async function GET(
 
     // Catch the clock up before reporting anything.
     if (draft.status === "IN_PROGRESS") {
-      const board = await draftBoard(context.season);
+      const board = await draftBoard(context.season, context.rules);
       const made = await catchUpExpiredPicks(client, {
         leagueId: id,
         pool: board.pool,
@@ -61,6 +73,15 @@ export async function GET(
 
     const progress = draftProgress(draft);
 
+    // Who picks after this one. Sent so the client can poll faster when your
+    // turn is imminent — computing the snake in the browser would duplicate
+    // logic that already exists here, and a divergence would show up as the
+    // room disagreeing with itself about whose pick it is.
+    const onDeckTeamId =
+      progress.currentPickNumber !== null && !progress.complete
+        ? nextTeamOnClock(draft.order, progress.currentPickNumber, draft.rounds)
+        : null;
+
     return NextResponse.json({
       draft: {
         status: draft.status,
@@ -78,6 +99,7 @@ export async function GET(
           : null,
         order: draft.order,
         picks: draft.state.picks,
+        onDeckTeamId,
         ...progress,
       },
       teams: teams.map((team) => ({
