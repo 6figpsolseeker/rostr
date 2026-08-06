@@ -642,6 +642,65 @@ export function isCurrentPickExpired(draft: DraftRecord, now: Date): boolean {
   return Math.floor(now.getTime() / 1000) >= deadline;
 }
 
+export interface CatchUpInput {
+  readonly leagueId: string;
+  readonly pool: ReadonlyMap<string, DraftablePlayer>;
+  readonly shape: RosterShape;
+  readonly now: Date;
+  /**
+   * Safety stop.
+   *
+   * A whole 12-team draft is 168 picks, so a request that would make more than
+   * that has hit a bug rather than a backlog, and grinding on would turn one bad
+   * state into a timeout.
+   */
+  readonly maxPicks?: number;
+}
+
+/**
+ * Auto-pick everything the clock has already passed.
+ *
+ * Expiry has to happen somewhere. There is no scheduled worker yet, so this runs
+ * whenever anyone reads the draft — the auto-pick is deterministic and
+ * idempotent, so it does not matter who triggers it or how often.
+ *
+ * **The limitation is real: a draft nobody is looking at does not advance.** For
+ * a 24-hour slow draft that is harmless, and a live room is being polled. It
+ * should still become a scheduled job over `draftsWithExpiredPicks()` before the
+ * season — a draft that stalls because everyone closed the tab is a bad night,
+ * and "you had to keep the page open" is not a rule anyone agreed to.
+ */
+export async function catchUpExpiredPicks(db: SqlClient, input: CatchUpInput): Promise<number> {
+  const limit = input.maxPicks ?? 200;
+  let made = 0;
+
+  for (let guard = 0; guard < limit; guard++) {
+    const draft = await loadDraft(db, input.leagueId);
+    if (!draft || draft.status !== "IN_PROGRESS" || !draft.clockStartedAt) break;
+    if (!isCurrentPickExpired(draft, input.now)) break;
+
+    // Stamped at the deadline it missed, **not** at `now`.
+    //
+    // Stamping `now` would restart the next manager's clock from the moment
+    // somebody happened to open the page: an hour of nobody watching would cost
+    // exactly one pick, and every clock after it would have been silently
+    // extended by however long the room sat empty. Advancing deadline by
+    // deadline keeps the draft on real time, so the picks that expired are the
+    // picks that expire.
+    const deadline = new Date(draft.clockStartedAt.getTime() + draft.pickSeconds * 1000);
+
+    await recordPick(db, {
+      leagueId: input.leagueId,
+      pool: input.pool,
+      shape: input.shape,
+      now: deadline,
+    });
+    made++;
+  }
+
+  return made;
+}
+
 /** Every draft with an expired clock — the queue a timer job works through. */
 export async function draftsWithExpiredPicks(
   db: SqlClient,

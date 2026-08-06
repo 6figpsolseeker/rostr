@@ -17,6 +17,7 @@ import { createTestDatabase } from "./testing.js";
 import type { PGliteClient } from "./testing.js";
 import { FixedBeacon } from "./randomness.js";
 import {
+  catchUpExpiredPicks,
   createDraftRecord,
   draftProgress,
   DraftPersistenceError,
@@ -787,6 +788,134 @@ describe("clocks", () => {
     await expect(startDraft(fx.client, fx.leagueId, SCHEDULED)).rejects.toBeInstanceOf(
       DraftPersistenceError,
     );
+  });
+});
+
+describe("catchUpExpiredPicks", () => {
+  async function running(teamCount = 4): Promise<Fixture & { order: readonly string[] }> {
+    const fx = await setup(teamCount);
+    const order = await scheduled(fx);
+    await startDraft(fx.client, fx.leagueId, SCHEDULED);
+    return { ...fx, order };
+  }
+
+  const args = (fx: Fixture, now: Date) => ({
+    leagueId: fx.leagueId,
+    pool: fx.pool,
+    shape: SHAPE,
+    now,
+  });
+
+  it("does nothing while the clock is running", async () => {
+    const fx = await running();
+
+    expect(
+      await catchUpExpiredPicks(fx.client, args(fx, new Date(SCHEDULED.getTime() + 60_000))),
+    ).toBe(0);
+  });
+
+  it("makes the pick once the clock has passed", async () => {
+    const fx = await running();
+
+    expect(
+      await catchUpExpiredPicks(fx.client, args(fx, new Date(SCHEDULED.getTime() + 90_000))),
+    ).toBe(1);
+  });
+
+  it("works through a backlog one deadline at a time", async () => {
+    // Nobody looked at the draft for an hour. At 90 seconds a pick, exactly
+    // forty clocks expired in that window — not one, and not the whole draft.
+    const fx = await running();
+
+    const made = await catchUpExpiredPicks(
+      fx.client,
+      args(fx, new Date(SCHEDULED.getTime() + 3_600_000)),
+    );
+
+    expect(made).toBe(40);
+  });
+
+  it("leaves the next manager a full clock", async () => {
+    // The point of stamping each pick at the deadline it missed. Stamping `now`
+    // would silently extend every clock by however long the room sat empty.
+    const fx = await running();
+    const hourLater = new Date(SCHEDULED.getTime() + 3_600_000);
+
+    await catchUpExpiredPicks(fx.client, args(fx, hourLater));
+    const draft = await loadDraft(fx.client, fx.leagueId);
+
+    // Forty picks in, the clock is running from the fortieth deadline.
+    expect(draft!.clockStartedAt?.toISOString()).toBe(
+      new Date(SCHEDULED.getTime() + 40 * 90_000).toISOString(),
+    );
+    expect(isCurrentPickExpired(draft!, hourLater)).toBe(false);
+  });
+
+  it("runs a draft out when the gap is long enough", async () => {
+    const fx = await running(2);
+    const total = totalPicks(2, 14);
+
+    const made = await catchUpExpiredPicks(
+      fx.client,
+      args(fx, new Date(SCHEDULED.getTime() + (total + 5) * 90_000)),
+    );
+
+    expect(made).toBe(total);
+    expect((await loadDraft(fx.client, fx.leagueId))?.status).toBe("COMPLETE");
+  });
+
+  it("stops at a completed draft rather than spinning", async () => {
+    const fx = await running(2);
+    const far = new Date(SCHEDULED.getTime() + 30 * 24 * 3_600_000);
+    await catchUpExpiredPicks(fx.client, args(fx, far));
+
+    expect(await catchUpExpiredPicks(fx.client, args(fx, far))).toBe(0);
+  });
+
+  it("does nothing to a paused draft", async () => {
+    // A stale clock must not let the catch-up pick straight through a
+    // commissioner's halt.
+    const fx = await running();
+    await pauseDraft(fx.client, fx.leagueId);
+
+    expect(
+      await catchUpExpiredPicks(fx.client, args(fx, new Date(SCHEDULED.getTime() + 3_600_000))),
+    ).toBe(0);
+  });
+
+  it("does nothing to a draft that never started", async () => {
+    const fx = await setup();
+    await scheduled(fx);
+
+    expect(
+      await catchUpExpiredPicks(fx.client, args(fx, new Date(SCHEDULED.getTime() + 3_600_000))),
+    ).toBe(0);
+  });
+
+  it("respects the safety stop", async () => {
+    // A request that would make more picks than a whole draft has hit a bug, not
+    // a backlog, and grinding on turns one bad state into a timeout.
+    const fx = await running();
+
+    const made = await catchUpExpiredPicks(fx.client, {
+      ...args(fx, new Date(SCHEDULED.getTime() + 3_600_000)),
+      maxPicks: 3,
+    });
+
+    expect(made).toBe(3);
+  });
+
+  it("is idempotent — every reader triggers it", async () => {
+    const fx = await running();
+    const now = new Date(SCHEDULED.getTime() + 90_000);
+
+    expect(await catchUpExpiredPicks(fx.client, args(fx, now))).toBe(1);
+    expect(await catchUpExpiredPicks(fx.client, args(fx, now))).toBe(0);
+    expect(await catchUpExpiredPicks(fx.client, args(fx, now))).toBe(0);
+
+    const picks = (await loadDraft(fx.client, fx.leagueId))!.state.picks;
+    expect(picks).toHaveLength(1);
+    expect(new Set(picks.map((p) => p.playerId)).size).toBe(picks.length);
   });
 });
 

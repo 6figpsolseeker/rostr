@@ -42,6 +42,12 @@ export default async function LeaguePage({ params }: { params: Promise<{ id: str
           {league.season} season · {taken}/{stored.rules.league.maxTeams} teams ·{" "}
           {league.state.toLowerCase()}
         </p>
+        <a
+          href={`/leagues/${league.id}/draft`}
+          className="inline-block text-sm text-[--color-turf] hover:underline"
+        >
+          Draft room →
+        </a>
       </header>
 
       {/*

@@ -47,7 +47,7 @@ Do not build it in August.
 
 See [`docs/BUILD-PLAN.md`](docs/BUILD-PLAN.md) for the full commit-by-commit plan.
 
-**Done — 528 tests, CI green:**
+**Done — 538 tests, CI green:**
 
 - Full specification — rules, data model, live scoring, build plan
 - A1: pnpm monorepo, TS strict, vitest, eslint, prettier, CI
@@ -86,12 +86,15 @@ See [`docs/BUILD-PLAN.md`](docs/BUILD-PLAN.md) for the full commit-by-commit pla
 - Sessions, emailed sign-in links, and wallet linking by signature (migration `0011`,
   `packages/db/src/sessions.ts`, `apps/web/src/lib/session.ts`)
 
+- The draft room (`apps/web/src/components/DraftRoom.tsx`, `api/leagues/[id]/draft/`)
+
 **Next, in order:**
 
-1. **Draft UI** — the draft is fully persisted and fully tested but there is no room to
-   run it in. This is the Aug 22 deadline and nothing else on the list competes with it.
-2. **League creation form** — still a preview; it does not post. Marked TODO in the code.
-   Unblocked now that there is a session to attribute a league to.
+1. **League creation form** — still a preview; it does not post, so there is no way to
+   make a league through the UI. Marked TODO in the code. This is what stands between the
+   current build and an end-to-end run: create, join, draft.
+2. **A scheduled job for expired picks.** Clocks only advance when someone reads the
+   draft. See "The draft room" below.
 3. **C2, C3, C6** — lineups, per-player kickoff locks, and team-week scoring. Needed by
    Sep 9, not Aug 22. C6 is what finally connects the scoring engine to `MatchupResult`.
 4. **D1–D10** — the escrow program. **Write this early.** The audit is 2–4 weeks of
@@ -164,6 +167,33 @@ nothing else in the system can see.
 `PickRow["source"]` is imported from the engine, not restated. Writing that union out by
 hand is how the `draft_pick_source` enum and the engine drifted apart the first time —
 the migration had `NEEDED_SLOT` and `ANY_LEGAL`, which the engine has never emitted.
+
+#### The draft room
+
+`apps/web/src/components/DraftRoom.tsx` and `apps/web/src/app/api/leagues/[id]/draft/`.
+
+**Polls, does not hold a socket.** A 90-second clock does not need sub-second updates,
+polling survives sleep and tab-switching with no reconnect protocol, and the server keeps
+no per-connection state — which matters when it runs as serverless functions.
+
+The board is fetched **once** and availability computed client-side by subtracting drafted
+players. A thousand players is ~80 KB and only changes when the stats sync runs; shipping
+it on every 3-second poll would be silly.
+
+**`catchUpExpiredPicks()` runs on every read of the draft.** That is how clocks expire —
+there is no scheduled worker yet. It is deterministic and idempotent, so it does not
+matter who triggers it.
+
+Each auto-pick is stamped **at the deadline it missed, not at `now`**, and that is
+load-bearing. Stamping `now` restarts the next manager's clock from whenever somebody
+happened to open the page: an hour of nobody watching would cost exactly one pick and
+silently extend every clock after it. Advancing deadline by deadline keeps the draft on
+real time. Tested.
+
+**Still true and still a gap: a draft nobody looks at does not advance.** Harmless for a
+24-hour slow draft, and a live room is being polled — but it wants a scheduled job over
+`draftsWithExpiredPicks()` before the season. "You had to keep the tab open" is not a rule
+anyone agreed to.
 
 Clocks are **computed from `clock_started_at`, never scheduled.** That is what lets a
 24-hour slow draft run with no timer infrastructure: `draftsWithExpiredPicks()` returns
@@ -436,7 +466,7 @@ Expect ~30–60 minutes; compiling AVM from source is the slow part.
 
 ```bash
 pnpm install
-pnpm test        # 528 tests, all green
+pnpm test        # 538 tests, all green
 pnpm typecheck
 pnpm lint
 ```

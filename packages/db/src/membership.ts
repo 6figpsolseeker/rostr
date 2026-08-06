@@ -209,6 +209,26 @@ export async function addBot(
   });
 }
 
+/**
+ * Which team a user manages in a league, or `null` if they are not a member.
+ *
+ * The only way a request gets to act as a team. Nothing may take a team ID from
+ * a client — that would let anyone draft for anyone.
+ */
+export async function teamForUser(
+  db: SqlClient,
+  leagueId: string,
+  userId: string,
+): Promise<{ teamId: string; name: string } | null> {
+  const [row] = await db.query<{ id: string; name: string }>(
+    `SELECT t.id, t.name FROM teams t
+      WHERE t.league_id = $1 AND t.owner_id = $2`,
+    [leagueId, userId],
+  );
+
+  return row ? { teamId: row.id, name: row.name } : null;
+}
+
 export interface MembershipProof {
   readonly userId: string;
   readonly walletAddress: string;

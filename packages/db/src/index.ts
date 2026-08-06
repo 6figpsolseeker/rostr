@@ -76,6 +76,7 @@ export {
 } from "./sync.js";
 
 export {
+  catchUpExpiredPicks,
   createDraftRecord,
   draftProgress,
   DraftPersistenceError,
@@ -114,6 +115,7 @@ export {
   getMembershipProofs,
   JoinError,
   joinLeague,
+  teamForUser,
   type JoinedLeague,
   type JoinLeagueInput,
   type MembershipProof,
