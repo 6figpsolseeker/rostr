@@ -176,7 +176,7 @@ retained; there is no median scoring.
 
 **The schedule is a seeded round robin.** It is generated from the league's rules hash
 by the circle method, so anyone holding that hash can recompute the schedule and confirm
-nobody arranged themselves an easy run. It depends only on the *set* of teams and the
+nobody arranged themselves an easy run. It depends only on the _set_ of teams and the
 seed — never on join order, and never on the order rows come back from the database.
 
 With 12 teams, the first 11 weeks are a complete round robin: everyone plays everyone

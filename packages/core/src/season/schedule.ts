@@ -127,9 +127,10 @@ export function generateSchedule(
   return pairings.map(({ week, a, b }) => {
     if (b === null) return { week, homeTeamId: a, awayTeamId: null };
 
-    const aIsHome = differential.get(a)! !== differential.get(b)!
-      ? differential.get(a)! < differential.get(b)!
-      : a < b;
+    const aIsHome =
+      differential.get(a)! !== differential.get(b)!
+        ? differential.get(a)! < differential.get(b)!
+        : a < b;
     const home = aIsHome ? a : b;
     const away = aIsHome ? b : a;
 

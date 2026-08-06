@@ -86,7 +86,9 @@ describe("generateSchedule", () => {
     const forwards = generateSchedule(ids, 13, SEED);
     const backwards = generateSchedule([...ids].reverse(), 13, SEED);
 
-    const key = (s: readonly { week: number; homeTeamId: string; awayTeamId: string | null }[]) =>
+    const key = (
+      s: readonly { week: number; homeTeamId: string; awayTeamId: string | null }[],
+    ) =>
       s
         .map((m) => `${m.week}:${[m.homeTeamId, m.awayTeamId ?? "bye"].sort().join("|")}`)
         .sort();
@@ -112,7 +114,8 @@ describe("generateSchedule", () => {
         const home = new Map(ids.map((id) => [id, 0]));
 
         for (const matchup of schedule) {
-          if (matchup.awayTeamId) home.set(matchup.homeTeamId, home.get(matchup.homeTeamId)! + 1);
+          if (matchup.awayTeamId)
+            home.set(matchup.homeTeamId, home.get(matchup.homeTeamId)! + 1);
         }
 
         const counts = [...home.values()];
@@ -307,10 +310,7 @@ describe("computeStandings", () => {
 
   it("breaks an equal record on points for", () => {
     // Both 1-1. `a` scored more across the season.
-    const results = [
-      game(1, "a", "b", 150_000, 100_000),
-      game(2, "b", "a", 130_000, 90_000),
-    ];
+    const results = [game(1, "a", "b", 150_000, 100_000), game(2, "b", "a", 130_000, 90_000)];
     const standings = computeStandings(["a", "b"], results, [
       "WIN_PCT",
       "POINTS_FOR",
@@ -325,10 +325,7 @@ describe("computeStandings", () => {
   it("uses head-to-head when the tied teams met", () => {
     // Same record, same points for. `b` beat `a` when they played.
     const results = [game(1, "a", "b", 100_000, 110_000)];
-    const standings = computeStandings(["a", "b"], results, [
-      "HEAD_TO_HEAD",
-      "LOWEST_TEAM_ID",
-    ]);
+    const standings = computeStandings(["a", "b"], results, ["HEAD_TO_HEAD", "LOWEST_TEAM_ID"]);
 
     expect(standings[0]?.teamId).toBe("b");
     expect(standings[1]?.decidedBy).toBe("HEAD_TO_HEAD");
@@ -337,10 +334,7 @@ describe("computeStandings", () => {
   it("skips head-to-head when the tied teams never met", () => {
     // Head-to-head across an uneven group compares different schedules, so it
     // is skipped rather than applied unfairly. Points for decides instead.
-    const results = [
-      game(1, "a", "c", 120_000, 100_000),
-      game(1, "b", "d", 110_000, 100_000),
-    ];
+    const results = [game(1, "a", "c", 120_000, 100_000), game(1, "b", "d", 110_000, 100_000)];
     const standings = computeStandings(["a", "b", "c", "d"], results, [
       "WIN_PCT",
       "HEAD_TO_HEAD",
@@ -378,10 +372,7 @@ describe("computeStandings", () => {
   });
 
   it("prefers the team that allowed fewer points", () => {
-    const results = [
-      game(1, "a", "c", 100_000, 90_000),
-      game(1, "b", "d", 100_000, 95_000),
-    ];
+    const results = [game(1, "a", "c", 100_000, 90_000), game(1, "b", "d", 100_000, 95_000)];
     const standings = computeStandings(["a", "b", "c", "d"], results, [
       "WIN_PCT",
       "POINTS_AGAINST",

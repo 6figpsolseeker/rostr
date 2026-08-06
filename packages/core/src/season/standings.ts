@@ -73,18 +73,29 @@ export function computeRecords(
   teamIds: readonly string[],
   results: readonly MatchupResult[],
 ): ReadonlyMap<string, TeamRecord> {
-  const records = new Map<string, {
-    teamId: string;
-    wins: number;
-    losses: number;
-    ties: number;
-    milliPointsFor: number;
-    milliPointsAgainst: number;
-    games: number;
-  }>(
+  const records = new Map<
+    string,
+    {
+      teamId: string;
+      wins: number;
+      losses: number;
+      ties: number;
+      milliPointsFor: number;
+      milliPointsAgainst: number;
+      games: number;
+    }
+  >(
     teamIds.map((teamId) => [
       teamId,
-      { teamId, wins: 0, losses: 0, ties: 0, milliPointsFor: 0, milliPointsAgainst: 0, games: 0 },
+      {
+        teamId,
+        wins: 0,
+        losses: 0,
+        ties: 0,
+        milliPointsFor: 0,
+        milliPointsAgainst: 0,
+        games: 0,
+      },
     ]),
   );
 
@@ -148,9 +159,7 @@ function headToHeadScores(
       members.has(result.awayTeamId),
   );
 
-  const tally = new Map(
-    group.map((record) => [record.teamId, { wins: 0, ties: 0, games: 0 }]),
-  );
+  const tally = new Map(group.map((record) => [record.teamId, { wins: 0, ties: 0, games: 0 }]));
   const meetings = new Map<string, number>();
 
   for (const result of internal) {
