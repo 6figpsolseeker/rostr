@@ -34,11 +34,14 @@ A local install strands your data on whichever PC you are sitting at, which is t
 problem this repo's `CLAUDE.md` exists to avoid. It also matches the stack already used in
 `percolator-launch` and `percolator-mobile`.
 
-**Which machine to set it up on:** either. The project lives on Supabase's servers, so
-creating it is a browser signup and the result is identical. The credentials go in `.env`,
-which is gitignored, so they must be copied to each machine by hand — move them through a
-password manager, not chat or email. Sign up with the same email as GitHub so the account
-does not get orphaned.
+> **Decided: the owner is setting this up on their main PC.** Nothing is blocked on the
+> secondary machine in the meantime — the whole core, including the scoring engine, is
+> testable against PGlite with no credentials.
+
+The project lives on Supabase's servers, so which machine creates it makes no difference
+to the result. The credentials go in `.env`, which is gitignored, so they must be copied
+to each machine by hand — move them through a password manager, not chat or email. Sign up
+with the same email as GitHub so the account does not get orphaned.
 
 **To do:**
 

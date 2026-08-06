@@ -66,3 +66,19 @@ export {
   verifyJoinSignature,
   type JoinMessageInput,
 } from "./signing.js";
+
+export {
+  compareScores,
+  formatPoints,
+  indexScoringRules,
+  scorePlayer,
+  scoreTeamWeek,
+  scoreTeamWeekWithRules,
+  ScoringError,
+  type LineupEntry,
+  type PlayerScore,
+  type StatLine,
+  type TeamWeekScore,
+} from "./scoring/engine.js";
+
+export { SCORING_FIXTURES, type ScoringFixture } from "./scoring/fixtures.js";
