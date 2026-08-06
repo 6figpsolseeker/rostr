@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { buildNflPprRules, NFL, NFL_DEFAULT_PAYOUT } from "@rostr/core";
 import type { PotRules } from "@rostr/core";
-import { createLeague, LeagueValidationError, seedSport } from "@rostr/db";
+import { createDraftRecord, createLeague, LeagueValidationError, seedSport } from "@rostr/db";
 import { db } from "@/lib/db";
+import { currentUser } from "@/lib/session";
 
 export async function GET(): Promise<NextResponse> {
   const rows = await db().query<{
@@ -33,7 +34,6 @@ export async function GET(): Promise<NextResponse> {
 
 interface CreateBody {
   name?: string;
-  commissionerId?: string;
   visibility?: "PRIVATE" | "PUBLIC";
   seasonYear?: number;
   draftMode?: "FAST" | "SLOW";
@@ -47,11 +47,25 @@ interface CreateBody {
 }
 
 export async function POST(request: Request): Promise<NextResponse> {
+  // From the session. This route used to accept a `commissionerId` the client
+  // supplied, which meant anyone could create a league attributed to anyone —
+  // and the commissioner is the only account that can start a draft.
+  const user = await currentUser();
+  if (!user) {
+    return NextResponse.json({ error: "Sign in to create a league" }, { status: 401 });
+  }
+
   const body = (await request.json()) as CreateBody;
 
-  if (!body.name || !body.commissionerId || !body.draftAt) {
+  if (!body.name || !body.draftAt) {
+    return NextResponse.json({ error: "name and draftAt are required" }, { status: 400 });
+  }
+
+  // A draft in the past can never draw an order: the deciding block would
+  // already exist, which is the whole thing the timing prevents.
+  if (body.draftAt * 1000 <= Date.now()) {
     return NextResponse.json(
-      { error: "name, commissionerId, and draftAt are required" },
+      { error: "The draft must be scheduled in the future" },
       { status: 400 },
     );
   }
@@ -87,8 +101,24 @@ export async function POST(request: Request): Promise<NextResponse> {
 
     const league = await createLeague(client, NFL, {
       name: body.name,
-      commissionerId: body.commissionerId,
+      commissionerId: user.id,
       rules,
+    });
+
+    // Scheduled here rather than as a separate step. A league whose draft has
+    // to be created later is a league that silently has no draft until somebody
+    // remembers — and `scheduledAt` is already frozen in the rules, so there is
+    // nothing left to decide.
+    //
+    // No order is drawn: teams are still joining, and a seed that exists while
+    // the field can change is a seed a commissioner can grind against.
+    await createDraftRecord(client, {
+      leagueId: league.id,
+      rounds:
+        rules.roster.starters.reduce((total, slot) => total + slot.count, 0) +
+        rules.roster.benchSlots,
+      pickSeconds: rules.draft.pickSeconds,
+      scheduledAt: new Date(rules.draft.scheduledAt * 1000),
     });
 
     // TODO (A8 wiring): pin the canonical document and call setRulesUri once a
