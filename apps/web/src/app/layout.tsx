@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
+import { SessionBar } from "@/components/SessionBar";
 import { WalletProviders } from "@/components/WalletProviders";
+import { currentUser } from "@/lib/session";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -9,7 +11,12 @@ export const metadata: Metadata = {
     "Immutable league rules, escrowed prize pools, and automatic settlement. No commissioner to trust.",
 };
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default async function RootLayout({ children }: { children: ReactNode }) {
+  // Resolved here rather than fetched by the header, so the first paint is
+  // already right. A header that flashes "Sign in" before settling reads as if
+  // you had been signed out.
+  const user = await currentUser().catch(() => null);
+
   return (
     <html lang="en">
       <body className="min-h-screen antialiased">
@@ -29,6 +36,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
                 >
                   Create league
                 </a>
+                <SessionBar email={user?.email ?? null} />
               </div>
             </nav>
           </header>

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getJoinMessage, JoinError, joinLeague } from "@rostr/db";
 import { db } from "@/lib/db";
+import { currentUser } from "@/lib/session";
 
 /**
  * The message to sign.
@@ -46,16 +47,25 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ): Promise<NextResponse> {
   const { id } = await params;
+
+  // From the session cookie, never from the body. This route used to accept a
+  // `userId` the client supplied, which meant anyone could join any league as
+  // anyone — the wallet signature proved they held a key, but nothing tied that
+  // key to the account being credited.
+  const user = await currentUser();
+  if (!user) {
+    return NextResponse.json({ error: "Sign in to join a league" }, { status: 401 });
+  }
+
   const body = (await request.json()) as {
-    userId?: string;
     walletAddress?: string;
     signature?: string;
     teamName?: string;
   };
 
-  if (!body.userId || !body.walletAddress || !body.signature || !body.teamName) {
+  if (!body.walletAddress || !body.signature || !body.teamName) {
     return NextResponse.json(
-      { error: "userId, walletAddress, signature, and teamName are required" },
+      { error: "walletAddress, signature, and teamName are required" },
       { status: 400 },
     );
   }
@@ -66,7 +76,7 @@ export async function POST(
   try {
     const result = await joinLeague(client, {
       leagueId: id,
-      userId: body.userId,
+      userId: user.id,
       walletAddress: body.walletAddress,
       signature: body.signature,
       teamName: body.teamName,

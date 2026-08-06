@@ -8,25 +8,42 @@ import bs58 from "bs58";
 /**
  * The join flow.
  *
- * Fetch the message from the server, show it verbatim, sign it, post the
- * signature. The client never composes the message — signing something the
- * server did not author would let a client sign one rule set and be admitted
- * under another.
+ * Four gates, in order, because each one genuinely depends on the last:
+ *
+ *   1. **Signed in.** The account being credited comes from the session cookie,
+ *      never from anything this component sends.
+ *   2. **Wallet connected.**
+ *   3. **Wallet proven.** Signing a server-issued nonce. Without this, "linking
+ *      a wallet" would be typing an address, and anyone could claim one —
+ *      including one already holding a league stake.
+ *   4. **Rules signed.** The message is fetched from the server and shown
+ *      verbatim. A client that composed its own could sign one rule set and be
+ *      admitted under another.
  */
 export function JoinPanel({
   leagueId,
   leagueName,
   open,
+  signedIn,
+  linkedWallets,
 }: {
   leagueId: string;
   leagueName: string;
   open: boolean;
+  signedIn: boolean;
+  linkedWallets: readonly string[];
 }) {
   const { publicKey, signMessage, connected } = useWallet();
+  const [linked, setLinked] = useState<readonly string[]>(linkedWallets);
   const [teamName, setTeamName] = useState("");
   const [message, setMessage] = useState<string | null>(null);
-  const [status, setStatus] = useState<"idle" | "loading" | "signing" | "done">("idle");
+  const [status, setStatus] = useState<"idle" | "loading" | "linking" | "signing" | "done">(
+    "idle",
+  );
   const [error, setError] = useState<string | null>(null);
+
+  const address = publicKey?.toBase58() ?? null;
+  const isLinked = address !== null && linked.includes(address);
 
   if (!open) {
     return (
@@ -36,16 +53,72 @@ export function JoinPanel({
     );
   }
 
+  if (!signedIn) {
+    return (
+      <section className="space-y-3 rounded border border-white/10 p-6">
+        <h2 className="text-lg font-medium">Join {leagueName}</h2>
+        <p className="text-sm text-white/60">
+          Sign in first. Joining records who agreed to these rules, so it needs an account as
+          well as a wallet.
+        </p>
+        <a
+          href={`/signin?next=${encodeURIComponent(`/leagues/${leagueId}`)}`}
+          className="inline-block rounded bg-[--color-turf] px-4 py-2 text-sm font-medium text-black"
+        >
+          Sign in
+        </a>
+      </section>
+    );
+  }
+
+  /** Prove the connected wallet is ours, by signing a server-issued nonce. */
+  async function linkWallet(): Promise<void> {
+    if (!address || !signMessage) return;
+    setError(null);
+    setStatus("linking");
+
+    try {
+      const challengeResponse = await fetch("/api/auth/wallet", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ walletAddress: address }),
+      });
+      const challenge = (await challengeResponse.json()) as {
+        message?: string;
+        error?: string;
+      };
+      if (!challengeResponse.ok || !challenge.message) {
+        throw new Error(challenge.error ?? "Could not start wallet verification");
+      }
+
+      const signature = await signMessage(new TextEncoder().encode(challenge.message));
+
+      const linkResponse = await fetch("/api/auth/wallet", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ walletAddress: address, signature: bs58.encode(signature) }),
+      });
+      const body = (await linkResponse.json()) as { error?: string };
+      if (!linkResponse.ok) throw new Error(body.error ?? "Could not verify this wallet");
+
+      setLinked([...linked, address]);
+      setStatus("idle");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setStatus("idle");
+    }
+  }
+
   async function loadMessage(): Promise<void> {
-    if (!publicKey) return;
+    if (!address) return;
     setError(null);
     setStatus("loading");
+
     try {
-      const response = await fetch(
-        `/api/leagues/${leagueId}/join?wallet=${publicKey.toBase58()}`,
-      );
+      const response = await fetch(`/api/leagues/${leagueId}/join?wallet=${address}`);
       const body = (await response.json()) as { message?: string; error?: string };
       if (!response.ok) throw new Error(body.error ?? "Could not load the join message");
+
       setMessage(body.message ?? null);
       setStatus("idle");
     } catch (e) {
@@ -55,9 +128,10 @@ export function JoinPanel({
   }
 
   async function join(): Promise<void> {
-    if (!publicKey || !signMessage || !message) return;
+    if (!address || !signMessage || !message) return;
     setError(null);
     setStatus("signing");
+
     try {
       const signature = await signMessage(new TextEncoder().encode(message));
 
@@ -65,9 +139,7 @@ export function JoinPanel({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          // TODO: userId comes from the session once auth is wired up (A9 UI).
-          userId: "",
-          walletAddress: publicKey.toBase58(),
+          walletAddress: address,
           signature: bs58.encode(signature),
           teamName,
         }),
@@ -94,6 +166,22 @@ export function JoinPanel({
           </p>
           <WalletMultiButton />
         </>
+      ) : !isLinked ? (
+        <div className="space-y-3">
+          <p className="text-sm text-white/60">
+            Verify this wallet is yours by signing a one-time message. It moves no funds and
+            approves no transaction.
+          </p>
+          <p className="font-mono text-xs break-all text-white/40">{address}</p>
+          <button
+            onClick={() => void linkWallet()}
+            disabled={status === "linking"}
+            className="rounded bg-[--color-turf] px-4 py-2 text-sm font-medium text-black disabled:opacity-40"
+          >
+            {status === "linking" ? "Waiting for your wallet…" : "Verify this wallet"}
+          </button>
+          {error && <p className="text-sm text-red-400">{error}</p>}
+        </div>
       ) : (
         <div className="space-y-4">
           <label className="block text-sm">

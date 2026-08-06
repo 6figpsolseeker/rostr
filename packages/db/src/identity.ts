@@ -153,11 +153,43 @@ export async function verifyEmail(
   }
 
   const [updated] = await db.query<UserRow>(
-    `UPDATE users SET email_verified_at = $2 WHERE id = $1
+    // COALESCE, not assignment: these tokens double as sign-in links, so this
+    // runs on every login. Overwriting would keep resetting "verified since" to
+    // the most recent sign-in.
+    `UPDATE users SET email_verified_at = COALESCE(email_verified_at, $2) WHERE id = $1
      RETURNING id, email, display_name, email_verified_at`,
     [row.user_id, now.toISOString()],
   );
   return toUser(updated!);
+}
+
+/**
+ * Start an email sign-in, registering the account if it is new.
+ *
+ * One entry point for both cases on purpose. Separate "register" and "sign in"
+ * routes would differ in their responses, and the difference tells anyone who
+ * asks whether a given email has an account here.
+ */
+export async function beginEmailSignIn(
+  db: SqlClient,
+  email: string,
+  displayName?: string,
+  now: Date = new Date(),
+): Promise<{ user: User; token: VerificationToken; isNew: boolean }> {
+  const trimmed = email.trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+    throw new IdentityError("Not a valid email address", "TOKEN_INVALID");
+  }
+
+  const existing = await findUserByEmail(db, trimmed);
+  const user =
+    existing ?? (await createUser(db, trimmed, displayName?.trim() || trimmed.split("@")[0]!));
+
+  return {
+    user,
+    token: await issueVerificationToken(db, user.id, now),
+    isNew: existing === null,
+  };
 }
 
 // ---------------------------------------------------------------------------

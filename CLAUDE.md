@@ -47,7 +47,7 @@ Do not build it in August.
 
 See [`docs/BUILD-PLAN.md`](docs/BUILD-PLAN.md) for the full commit-by-commit plan.
 
-**Done — 433 tests, CI green:**
+**Done — 506 tests, CI green:**
 
 - Full specification — rules, data model, live scoring, build plan
 - A1: pnpm monorepo, TS strict, vitest, eslint, prettier, CI
@@ -80,13 +80,18 @@ See [`docs/BUILD-PLAN.md`](docs/BUILD-PLAN.md) for the full commit-by-commit pla
 
 - B16: the draft persisted (`packages/db/src/draft.ts`, migration `0009`)
 
+- The draft order drawn once from a Solana block, field locked at the draw (migration
+  `0010`)
+
+- Sessions, emailed sign-in links, and wallet linking by signature (migration `0011`,
+  `packages/db/src/sessions.ts`, `apps/web/src/lib/session.ts`)
+
 **Next, in order:**
 
 1. **Draft UI** — the draft is fully persisted and fully tested but there is no room to
    run it in. This is the Aug 22 deadline and nothing else on the list competes with it.
-2. **Finish A9's UI** — there is no session yet, so `JoinPanel` posts an empty `userId`
-   and the league creation form is a preview only. Both marked TODO in the code. The
-   database is live now, so this is unblocked.
+2. **League creation form** — still a preview; it does not post. Marked TODO in the code.
+   Unblocked now that there is a session to attribute a league to.
 3. **C2, C3, C6** — lineups, per-player kickoff locks, and team-week scoring. Needed by
    Sep 9, not Aug 22. C6 is what finally connects the scoring engine to `MatchupResult`.
 4. **D1–D10** — the escrow program. **Write this early.** The audit is 2–4 weeks of
@@ -235,6 +240,29 @@ examples call `scorePlayer()` rather than stating totals, so the arithmetic on t
 cannot diverge from the arithmetic that decides matchups. **The mobile app needs the same
 screen, built the same way** (commit H3b).
 
+**Identity is email plus wallet, and the server never takes a user ID from a request.**
+`currentUser()` in `apps/web/src/lib/session.ts` is the only source. The join route used
+to accept a `userId` the client supplied, which meant anyone could join any league as
+anyone — the wallet signature proved they held a key, but nothing tied that key to the
+account being credited. If you find yourself reading an identifier out of a body, stop.
+
+Sign-in is an emailed link. `beginEmailSignIn` handles registration and sign-in through
+one path on purpose: separate routes respond differently, and the difference tells anyone
+who asks whether an email has an account here. `/api/auth/request` answers identically
+either way for the same reason.
+
+**A wallet is linked by signature, never by typing an address** — `issueWalletChallenge`
+then `linkWalletWithSignature`. Without the nonce, anyone could claim any address,
+including one already holding a league stake. The challenge is consumed even when the
+signature fails, so one nonce cannot absorb unlimited attempts.
+
+Session tokens are stored **hashed**; the token itself lives only in the cookie. Cookies
+are `httpOnly` (script cannot exfiltrate them) and `sameSite: lax` — not `strict`, because
+the emailed sign-in link arrives as a top-level navigation that `strict` would reject.
+
+`safeRedirect()` exists because `?next=` on the verify route is otherwise an open
+redirect, which from a link in someone's inbox is the shape of a convincing phish.
+
 **Wallets:** Phantom, Solflare, and Coinbase adapters are registered explicitly, but most
 wallets — including Seed Vault on Seeker — auto-register via the Wallet Standard and need
 nothing. Do **not** add `@solana/wallet-adapter-wallets`: that meta-package pulls in
@@ -375,7 +403,7 @@ Expect ~30–60 minutes; compiling AVM from source is the slow part.
 
 ```bash
 pnpm install
-pnpm test        # 433 tests, all green
+pnpm test        # 506 tests, all green
 pnpm typecheck
 pnpm lint
 ```

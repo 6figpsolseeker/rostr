@@ -64,9 +64,12 @@ export { validateLeagueRules } from "./rules/validate.js";
 
 export {
   buildJoinMessage,
+  buildWalletLinkMessage,
   isValidWalletAddress,
   verifyJoinSignature,
+  verifyWalletLinkSignature,
   type JoinMessageInput,
+  type WalletLinkMessageInput,
 } from "./signing.js";
 
 export {

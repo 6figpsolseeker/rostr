@@ -35,6 +35,26 @@ free Helius or QuickNode key is more reliable and costs nothing at this volume.
 > playoffs, or record the blockhash somewhere independently checkable. Not urgent in
 > August; do not discover it in January.
 
+### ⬜ Email provider (`RESEND_API_KEY`, `EMAIL_FROM`)
+
+**Blocks:** anyone signing in who is not sitting at the dev server.
+**Needed by:** before anyone but you uses the app — so, before the first real league.
+**Cost:** Resend's free tier is 3,000 emails a month, which is far more than this needs.
+
+Sign-in is a link sent by email. No passwords, so nothing to forget, reuse, or leak.
+
+**Without these set**, the flow still works locally: the link is logged to the server
+console and shown in the UI. In **production it fails loudly** rather than pretending to
+have sent something — a sign-in that silently goes nowhere is indistinguishable from a
+broken account, and the user has no way to tell which it is.
+
+The dev link is only ever returned when `NODE_ENV !== "production"`. Handing a sign-in
+link back over the same HTTP response in production would let anyone who can reach the
+endpoint sign in as any address they name.
+
+**To do:** sign up at resend.com, verify a sending domain, put the key and a from-address
+in `.env`.
+
 ### ⬜ Supabase project
 
 **Blocks:** the web app past its home page, and the session that league creation and

@@ -82,3 +82,58 @@ export function isValidWalletAddress(address: string): boolean {
     return false;
   }
 }
+
+// ---------------------------------------------------------------------------
+// Wallet ownership
+// ---------------------------------------------------------------------------
+
+const LINK_PREFIX = "rostr: link wallet";
+
+export interface WalletLinkMessageInput {
+  readonly walletAddress: string;
+  readonly email: string;
+  /** Single-use, server-issued, short-lived. */
+  readonly nonce: string;
+}
+
+/**
+ * The text a wallet signs to prove its holder controls it.
+ *
+ * Unlike the join message this **carries a nonce**, and the difference is the
+ * whole point. A join signature is a permanent record of consent, so it must be
+ * reconstructible from stored data years later. This one is an authentication
+ * challenge: a signature captured once must not work twice.
+ *
+ * Without it, linking a wallet would be typing an address — and anyone could
+ * claim any address, including one already holding a league stake.
+ */
+export function buildWalletLinkMessage(input: WalletLinkMessageInput): string {
+  return [
+    LINK_PREFIX,
+    "",
+    `Account: ${input.email}`,
+    `Wallet: ${input.walletAddress}`,
+    `Nonce: ${input.nonce}`,
+    "",
+    "Signing proves you hold this wallet. It moves no funds and",
+    "approves no transaction.",
+  ].join("\n");
+}
+
+/** Verify a signature over the wallet link message. */
+export function verifyWalletLinkSignature(
+  input: WalletLinkMessageInput,
+  signatureBase58: string,
+): boolean {
+  try {
+    const message = new TextEncoder().encode(buildWalletLinkMessage(input));
+    const signature = bs58.decode(signatureBase58);
+    const publicKey = bs58.decode(input.walletAddress);
+
+    if (signature.length !== 64 || publicKey.length !== 32) return false;
+
+    return ed25519.verify(signature, message, publicKey);
+  } catch {
+    return false;
+  }
+}

@@ -1,8 +1,9 @@
 import { notFound } from "next/navigation";
-import { getLeagueRules } from "@rostr/db";
+import { getLeagueRules, getWallets } from "@rostr/db";
 import { RulesView } from "@/components/RulesView";
 import { JoinPanel } from "@/components/JoinPanel";
 import { db } from "@/lib/db";
+import { currentUser } from "@/lib/session";
 
 export default async function LeaguePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -28,6 +29,11 @@ export default async function LeaguePage({ params }: { params: Promise<{ id: str
   );
   const taken = Number(teams?.count ?? 0);
 
+  // Resolved server-side so the panel opens on the right step rather than
+  // flashing "sign in" at someone who already is.
+  const user = await currentUser();
+  const wallets = user ? await getWallets(client, user.id) : [];
+
   return (
     <div className="space-y-10">
       <header className="space-y-2">
@@ -49,6 +55,8 @@ export default async function LeaguePage({ params }: { params: Promise<{ id: str
         leagueId={league.id}
         leagueName={league.name}
         open={league.state === "FORMING" && taken < stored.rules.league.maxTeams}
+        signedIn={user !== null}
+        linkedWallets={wallets.map((wallet) => wallet.address)}
       />
 
       {league.rules_uri && (

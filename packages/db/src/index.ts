@@ -21,6 +21,22 @@ export {
 } from "./leagues.js";
 
 export {
+  CHALLENGE_TTL_MS,
+  createSession,
+  issueWalletChallenge,
+  linkWalletWithSignature,
+  purgeExpiredSessions,
+  resolveSession,
+  revokeAllSessions,
+  revokeSession,
+  SESSION_TTL_MS,
+  SessionError,
+  type Session,
+  type WalletChallenge,
+} from "./sessions.js";
+
+export {
+  beginEmailSignIn,
   createUser,
   findUserByEmail,
   getUser,
