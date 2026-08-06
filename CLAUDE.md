@@ -47,7 +47,7 @@ Do not build it in August.
 
 See [`docs/BUILD-PLAN.md`](docs/BUILD-PLAN.md) for the full commit-by-commit plan.
 
-**Done — 614 tests, CI green:**
+**Done — 630 tests, CI green:**
 
 - Full specification — rules, data model, live scoring, build plan
 - A1: pnpm monorepo, TS strict, vitest, eslint, prettier, CI
@@ -71,10 +71,12 @@ See [`docs/BUILD-PLAN.md`](docs/BUILD-PLAN.md) for the full commit-by-commit pla
   Tuesday 00:00 ET back to waivers, Wednesday 03:00 ET processing, free agency between,
   1-day waiver period, 24-hour short-tenure rule
 
-- C1, and the standings half of C8 plus all of C9: schedule generation, records,
-  tiebreaker chain, playoff seeding (`packages/core/src/season/`). **Matchup resolution
-  itself still needs C6** — the scoring engine exists but nothing yet feeds team-week
-  totals into `MatchupResult`.
+- C1, C9, and all of C8: schedule generation, records, tiebreaker chain, playoff seeding
+  (`packages/core/src/season/`)
+
+- **C6 and the rest of C8** — `season/results.ts`. Team-week scoring from stored lineups,
+  and the `MatchupResult`s the standings consume. This was the missing join: the scoring
+  engine and the standings table were both finished and had no way to reach each other.
 
 - B6–B8: Tank01 adapter, box scores, live sync (`packages/stats/`, `packages/db/sync.ts`)
 
@@ -101,14 +103,15 @@ deployment and the credentials in `SETUP-REQUIRED.md`, not more code.
 
 **Next, in order:**
 
-1. **C6, C8** — team-week scoring from lineups, feeding matchup resolution. Needed by
-   Sep 9. C6 is what finally connects the scoring engine to `MatchupResult`.
-2. **Persist lineups and expose them** — the `lineups` table exists and the rules are
-   written, but nothing writes a lineup yet. Needs a `setLineup` in `@rostr/db`, a route,
-   and a screen.
-3. **D1–D10** — the escrow program. **Write this early.** The audit is 2–4 weeks of
-   calendar time and it gates pot leagues opening on Aug 22. Blocked on the secondary PC
-   (no Rust/Anchor).
+1. **Persist lineups and expose them** — the `lineups` table exists, the rules are
+   written, and `results.ts` can now score one. Nothing writes a lineup yet. Needs a
+   `setLineup` in `@rostr/db`, a route, and a screen. Until this lands, C6 has real
+   inputs only in tests.
+2. **Wire the week** — a job that pulls the week's stat lines, calls `resolveWeek`, and
+   persists `matchups`. Everything it needs now exists; nothing calls it.
+3. **D1–D10** — the escrow program. **No longer blocked**: the main PC has Rust, the
+   Solana CLI and Anchor 0.31.1, verified by building and testing an Anchor program on a
+   local validator. See Environment below.
 4. **Pot leagues cannot actually take money yet.** The rules describe a pot and the UI
    collects a buy-in, but nothing escrows anything until D1–D10 exists. Do not let a real
    league form around a pot before then.
@@ -311,6 +314,36 @@ and leaves TE empty. There is a test.
 
 An unavailable player still gets started when there is nobody else: an empty slot and an
 inactive player both score nothing, but only one keeps the lineup legal.
+
+### Resolving a week
+
+`packages/core/src/season/results.ts`. C6 and C8 — the join between the scoring engine and
+the standings table, which were both finished and had no way to reach each other.
+
+Most of it is converting between the two representations of a lineup that both have to
+exist: stored as `(slotType, slotIndex, playerId | null)`, which is what a manager edits
+and what the database keys on, and consumed as `(slotType, playerId, stats)`, which is
+what scoring needs. Neither side should learn about the other, so the conversion lives
+here — and so do the three cases that only appear at the join.
+
+**Empty slot, absent stat line, and missing team are three different things.**
+
+- An **empty slot** scores nothing. A manager who left one empty scores zero for it; that
+  is the rule, not a fault, and it must not take the week's scoring down with it.
+- A player with **no stat line** scores zero. Inactive, on a bye, or his game is not
+  ingested yet — all three look identical here and none is an error.
+- A **team with no lineup** throws. Every team plays every week and the autolineup exists
+  so an abandoned team still has one, so a missing team means the caller lost it. Scoring
+  zero would hand its opponent a free win off our bug, which moves a playoff seed.
+
+Starters go through `scoreTeamWeek` rather than being re-totalled, so the rule about which
+slots count stays in one place. Bench players are scored with `scorePlayer` and appended
+as `counted: false` — they never pass through the starter filter, so `BENCH_SLOT` is a
+display label and cannot affect a total.
+
+**A player in two slots throws.** `validateLineup` already rejects it on submission, but a
+duplicate silently doubles his points and this is the last place it can be caught before
+money moves.
 
 ### Scoring
 
@@ -520,6 +553,23 @@ These were discussed at length and decided. Re-proposing them wastes the owner's
 
 **This repo was started on a secondary Windows PC.** Tooling installed there: Node
 v24.19.0, pnpm 11.20.0, gh 2.97.0, git. No Rust, no Solana CLI, no Anchor.
+
+**The main PC now has the Anchor toolchain**, so Milestones D and E are no longer blocked
+by machine. Installed under WSL2/Ubuntu 26.04: Rust 1.97 (stable) alongside a pinned
+1.90 default, Solana CLI 4.0.0, Anchor 0.31.1 via AVM, Node 22 via nvm. Verified by
+building and testing an unrelated Anchor program against a local validator.
+
+Two things that cost an hour there and will cost it again:
+
+- **`anchor build` rewrites the active Solana release**, dropping it to 2.1.0 with
+  platform-tools v1.43 and rustc 1.79 — too old for dependencies that need edition 2024.
+  Either pin `solana_version` in `Anchor.toml`, or run `cargo-build-sbf` directly with
+  4.0.0 on PATH and generate the IDL separately with `anchor idl build`.
+- **Node on this machine is pnpm 9 by default** while the repo pins 11.20.0. Use
+  `corepack pnpm`, and set `CI=true` or pnpm refuses to purge `node_modules` with no TTY.
+
+`scripts/setup-anchor.sh` is still the right entry point on a fresh machine and is
+idempotent.
 
 **For Anchor work (Milestones D and E)** you need Rust, the Solana CLI, and Anchor.
 
