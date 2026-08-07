@@ -2,7 +2,12 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { buildNflPprRules, hashLeagueRules, NFL_DEFAULT_PAYOUT } from "@rostr/core";
+import {
+  buildNflPprRules,
+  hashLeagueRules,
+  NFL_DEFAULT_FEE_BPS,
+  NFL_DEFAULT_PAYOUT,
+} from "@rostr/core";
 import type { LeagueRules, PotRules } from "@rostr/core";
 import { RulesView } from "@/components/RulesView";
 
@@ -36,6 +41,13 @@ const SLOW_CLOCKS = [
 
 /** USDC on mainnet. The only token offered for now — one pot, one token. */
 const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+
+/**
+ * Must match `FEE_RECIPIENT` on the server — see the comment where it is used.
+ * Empty means no fee, which is the right default locally: better a preview that
+ * honestly shows nothing than one that invents a recipient.
+ */
+const FEE_RECIPIENT = process.env.NEXT_PUBLIC_FEE_RECIPIENT ?? "";
 
 /** Two weeks after the championship, so a stuck league can always be unwound. */
 const DEFAULT_REFUND_UNLOCK = "2027-03-01T00:00";
@@ -82,6 +94,17 @@ export function CreateLeagueForm() {
       buyInBaseUnits: String(Math.round(amount * 1_000_000)),
       payout: NFL_DEFAULT_PAYOUT,
       refundUnlockAt: localToUnix(refundUnlock),
+      // The fee has to appear in the preview because the preview is the whole
+      // promise: what is rendered here is what gets hashed and frozen. A pot
+      // shown without its fee would be a rule set the creator never actually
+      // agreed to.
+      //
+      // NEXT_PUBLIC_FEE_RECIPIENT must equal the server's FEE_RECIPIENT. If they
+      // drift, this preview and the created league disagree — the server's value
+      // is the one that binds, so the mismatch is visible rather than dangerous,
+      // but it makes a liar of this screen. They are set together.
+      feeBps: FEE_RECIPIENT ? NFL_DEFAULT_FEE_BPS : 0,
+      feeRecipient: FEE_RECIPIENT,
     };
   }, [withPot, buyIn, refundUnlock]);
 

@@ -20,6 +20,16 @@ export const MILLI_POINTS_PER_POINT = 1000;
 /** 100%, expressed in basis points. */
 export const BASIS_POINTS_TOTAL = 10_000;
 
+/**
+ * Ceiling on the protocol fee, in basis points. 5%.
+ *
+ * Not the fee itself — that is per league and frozen at creation. This is the
+ * highest a league may ever be created with, so the ceiling is visible in the
+ * open-source rule schema rather than being whatever we decide to charge on a
+ * given day. The default is 1%; see `NFL_DEFAULT_FEE_BPS`.
+ */
+export const MAX_FEE_BPS = 500;
+
 // ---------------------------------------------------------------------------
 // Scoring
 // ---------------------------------------------------------------------------
@@ -204,6 +214,23 @@ export type PotRules = {
    * permanently stuck.
    */
   readonly refundUnlockAt: number;
+  /**
+   * Protocol fee in basis points, taken **once, at settlement**, from the pot
+   * before the payout shares are applied.
+   *
+   * It lives in the hashed rule set rather than in our configuration for the
+   * same reason everything else here does: a fee we could change later would
+   * make "no administrator can rewrite the rules" untrue of the one party with
+   * the most to gain. Members see it before they join and sign it with the rest.
+   *
+   * **The timelock refund is never charged.** Withdrawing your own stake under
+   * `refundUnlockAt` returns it in full — an escape hatch that costs money is a
+   * weaker guarantee, and that guarantee is the reason the escrow is shippable
+   * before it is audited.
+   */
+  readonly feeBps: number;
+  /** Where the fee is paid. Frozen at creation like everything else. */
+  readonly feeRecipient: string;
 };
 
 // ---------------------------------------------------------------------------
@@ -240,7 +267,17 @@ export type SettlementRules = {
 // ---------------------------------------------------------------------------
 
 export type LeagueRules = {
-  readonly schemaVersion: 1;
+  /**
+   * 1 → 2 added `pot.feeBps` and `pot.feeRecipient`.
+   *
+   * Bumping this is the honest way to change the rule schema: it changes the
+   * canonical encoding and therefore every hash, so the golden fixture in
+   * `rules.test.ts` moves *deliberately* rather than being edited to make a
+   * failing test pass. Safe to do here only because no league exists yet. Once
+   * one does, a schema change means supporting both versions — the rules of a
+   * created league can never be re-encoded.
+   */
+  readonly schemaVersion: 2;
   readonly sportKey: string;
   readonly seasonYear: number;
   readonly scoring: readonly ScoringRule[];

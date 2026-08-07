@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { buildNflPprRules, NFL, NFL_DEFAULT_PAYOUT } from "@rostr/core";
+import { buildNflPprRules, NFL, NFL_DEFAULT_FEE_BPS, NFL_DEFAULT_PAYOUT } from "@rostr/core";
 import type { PotRules } from "@rostr/core";
 import { createDraftRecord, createLeague, LeagueValidationError, seedSport } from "@rostr/db";
 import { db } from "@/lib/db";
@@ -70,12 +70,31 @@ export async function POST(request: Request): Promise<NextResponse> {
     );
   }
 
+  // The fee and its recipient come from server configuration, never from the
+  // request. A client-supplied fee would let anyone create a league that pays
+  // nothing, and a client-supplied recipient would let them redirect ours.
+  //
+  // Without FEE_RECIPIENT set there is nowhere to pay, so leagues are created
+  // fee-free. That is fine locally and wrong in production, where it would mean
+  // silently giving away the fee on every league ever created — the rules are
+  // frozen, so it could never be corrected afterwards. Same reasoning as the
+  // sign-in link: fail loudly rather than pretend.
+  const feeRecipient = process.env.FEE_RECIPIENT ?? "";
+  if (body.pot && !feeRecipient && process.env.NODE_ENV === "production") {
+    return NextResponse.json(
+      { error: "Pot leagues are unavailable: FEE_RECIPIENT is not configured" },
+      { status: 503 },
+    );
+  }
+
   const pot: PotRules | null = body.pot
     ? {
         tokenMint: body.pot.tokenMint,
         buyInBaseUnits: body.pot.buyInBaseUnits,
         payout: NFL_DEFAULT_PAYOUT,
         refundUnlockAt: body.pot.refundUnlockAt,
+        feeBps: feeRecipient ? NFL_DEFAULT_FEE_BPS : 0,
+        feeRecipient,
       }
     : null;
 

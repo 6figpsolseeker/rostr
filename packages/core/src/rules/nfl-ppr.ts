@@ -158,6 +158,19 @@ export const NFL_DEFAULT_PAYOUT: PotRules["payout"] = [
   { prize: "THIRD_PLACE", basisPoints: 500 },
 ];
 
+/**
+ * 1%, taken once from the pot at settlement.
+ *
+ * For scale: DraftKings and Underdog rake around 10%, and LeagueSafe — the
+ * closest thing to a neutral escrow for home leagues — charges 3–5%. At 1% a
+ * full 12-team league at the $50 cap pays $6, which is roughly what it costs to
+ * run the data feeds for a month across fifteen such leagues.
+ *
+ * It is a default, not a law: it is frozen per league at creation and members
+ * see it before they join.
+ */
+export const NFL_DEFAULT_FEE_BPS = 100;
+
 export type NflPprOverrides = {
   readonly seasonYear: number;
   readonly draft: DraftRules;
@@ -173,7 +186,7 @@ export type NflPprOverrides = {
  */
 export function buildNflPprRules(overrides: NflPprOverrides): LeagueRules {
   return structuredClone({
-    schemaVersion: 1,
+    schemaVersion: 2,
     sportKey: "nfl",
     seasonYear: overrides.seasonYear,
     scoring: NFL_PPR_SCORING,

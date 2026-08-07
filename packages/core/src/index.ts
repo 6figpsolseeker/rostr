@@ -22,6 +22,7 @@ export { NFL, NFL_POSITIONS, NFL_SLOT_TYPES, NFL_STAT_KEYS } from "./sports/nfl.
 
 export {
   BASIS_POINTS_TOTAL,
+  MAX_FEE_BPS,
   MILLI_POINTS_PER_POINT,
   type AbandonmentRules,
   type DraftRules,
@@ -48,6 +49,7 @@ export {
 export {
   buildNflPprRules,
   NFL_DEFAULT_ABANDONMENT,
+  NFL_DEFAULT_FEE_BPS,
   NFL_DEFAULT_LEAGUE,
   NFL_DEFAULT_PAYOUT,
   NFL_DEFAULT_SCHEDULE,

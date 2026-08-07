@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { buildNflPprRules, hashLeagueRules, NFL, NFL_DEFAULT_PAYOUT } from "@rostr/core";
+import {
+  buildNflPprRules,
+  hashLeagueRules,
+  NFL,
+  NFL_DEFAULT_FEE_BPS,
+  NFL_DEFAULT_PAYOUT,
+} from "@rostr/core";
 import type { DraftRules, LeagueRules, PotRules } from "@rostr/core";
 import {
   createLeague,
@@ -31,6 +37,8 @@ const POT: PotRules = {
   buyInBaseUnits: "50000000",
   payout: NFL_DEFAULT_PAYOUT,
   refundUnlockAt: 1_773_000_000,
+  feeBps: NFL_DEFAULT_FEE_BPS,
+  feeRecipient: "6dNUCTMTgoHhbfgDzKtiPvBpJ2LzMwGqBpKmUDgQtNMK",
 };
 
 function rules(overrides: Partial<LeagueRules> = {}): LeagueRules {

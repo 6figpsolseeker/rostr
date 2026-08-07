@@ -203,6 +203,54 @@ ties, leagues that never fill.
 The precedent is real. The Bills–Bengals game of January 2023 was abandoned mid-game and
 never made up, during fantasy playoff weeks, and every league in the country improvised.
 
+### The fee is 1%, and it lives inside the rules it is charged under
+
+Decided 2026-08-07. One percent of the pot, taken once, at settlement.
+
+**The rate matters less than where it lives.** It is a field in the hashed rule set —
+`pot.feeBps` and `pot.feeRecipient` — frozen at league creation and signed by every member
+who joins. A fee held in our configuration instead would be a number we could change after
+people had committed money, which would make "no administrator can rewrite the rules" false
+of the one participant with the most to gain from breaking it. The program also enforces a
+5% ceiling on any league that can ever be created, so the limit is in open-source code
+rather than a promise.
+
+**Charged at settlement, not on deposit.** A deposit-time cut is a toll on entry, and it
+makes the refund question ambiguous — if a member withdraws under the timelock, was the fee
+already taken? At settlement the pot is a known quantity and the arithmetic is clean.
+
+**Never charged on a refund.** Withdrawing your own stake under the timelock returns it in
+full. That escape hatch is the reason the escrow is shippable before it has been reviewed,
+and taking a percentage of it would weaken the guarantee for the sake of pennies.
+
+**Why 1% and not 0.5%.** Both are far below the market — DraftKings and Underdog rake
+around 10%, and LeagueSafe, which provides escrow and none of the rest of this, charges
+3–5%. At the $50 buy-in cap a full 12-team league pays $6. Running costs are $135–185/month,
+so 1% breaks even at roughly fifteen full leagues a month and 0.5% at thirty. The lower
+number buys very little additional goodwill against a figure already an order of magnitude
+under the incumbents, and 1% is still a sentence you can say out loud without flinching.
+
+**Rejected: a flat per-league fee.** Simpler to explain, but it falls hardest on the
+smallest leagues — a $5 flat fee is 10% of a two-person $50 pot and 0.8% of a twelve-person
+one. A percentage is neutral to league size, which matters when the product is aimed at
+existing friend groups rather than whales.
+
+### Free leagues are anchored on-chain too
+
+A league with no pot has nothing to escrow, so it was tempting to let it skip the chain
+entirely and keep its rules in Postgres.
+
+That would have made the central claim conditional. "The rules are immutable and you can
+verify them" would hold only for leagues with money in them; everyone else would be trusting
+a database row we control, which is exactly the arrangement this project exists to replace.
+The cheaper guarantee is also the one most people would meet first, since free leagues are
+how anyone sane tries a new platform.
+
+So `initialize_free_league` writes the same `League` account with the same rules hash, no
+vault and no buy-in. It is a separate instruction rather than a flag because the account set
+genuinely differs — making the mint and vault optional would let a caller create a pot
+league that can never accept a deposit.
+
 ### The final tiebreaker is deterministic
 
 Every major platform ends its tiebreaker chain with a coin flip. Fine for bragging

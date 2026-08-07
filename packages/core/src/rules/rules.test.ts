@@ -2,7 +2,12 @@ import { describe, expect, it } from "vitest";
 import { NFL } from "../sports/nfl.js";
 import { validateSport } from "../sports/types.js";
 import { encodeLeagueRules, hashLeagueRules, verifyLeagueRulesHash } from "./hash.js";
-import { buildNflPprRules, NFL_DEFAULT_PAYOUT, NFL_PPR_SCORING } from "./nfl-ppr.js";
+import {
+  buildNflPprRules,
+  NFL_DEFAULT_FEE_BPS,
+  NFL_DEFAULT_PAYOUT,
+  NFL_PPR_SCORING,
+} from "./nfl-ppr.js";
 import type { LeagueRules, PotRules } from "./types.js";
 import { validateLeagueRules } from "./validate.js";
 
@@ -16,6 +21,8 @@ const FIXTURE_POT: PotRules = {
   buyInBaseUnits: "50000000",
   payout: NFL_DEFAULT_PAYOUT,
   refundUnlockAt: 1_773_000_000,
+  feeBps: NFL_DEFAULT_FEE_BPS,
+  feeRecipient: "6dNUCTMTgoHhbfgDzKtiPvBpJ2LzMwGqBpKmUDgQtNMK",
 };
 
 const FIXTURE: LeagueRules = buildNflPprRules({
@@ -286,9 +293,15 @@ describe("hashLeagueRules", () => {
     // Moved 2026-08-05: added ret_td at 6 points, matching ESPN and Sleeper.
     // Moved 2026-08-06: waiver rules matched to ESPN — 1-day period rather than
     //   2, plus the weekly cycle, short-tenure rule, and a timezone.
+    // Moved 2026-08-07: schemaVersion 1 -> 2, adding pot.feeBps and
+    //   pot.feeRecipient. This one is a *schema* change rather than a defaults
+    //   change: it alters the shape every rule set encodes to, so it would make
+    //   an existing league unverifiable. Safe only because none exists. Once one
+    //   does, a schema bump means supporting both versions rather than moving
+    //   this constant.
     // No leagues existed on any of these occasions.
     expect(hashLeagueRules(FIXTURE)).toBe(
-      "50d2b40206187be3f6dfd5946a93f3bf41dbbcb46e361daf9fd18fd2c93c691f",
+      "2e9ec043556179b82993a9febb768c9cea715bf5529b7df205d2c9503b9bc1b8",
     );
   });
 });

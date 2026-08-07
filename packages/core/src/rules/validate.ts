@@ -11,7 +11,7 @@
 
 import type { SportDef } from "../sports/types.js";
 import { slotTypesByKey, statKeysByKey } from "../sports/types.js";
-import { BASIS_POINTS_TOTAL } from "./types.js";
+import { BASIS_POINTS_TOTAL, MAX_FEE_BPS } from "./types.js";
 import type { LeagueRules, ScoringRule } from "./types.js";
 
 const FAST_PICK_SECONDS = [90, 120, 300, 600];
@@ -230,6 +230,17 @@ function validatePot(rules: LeagueRules, out: string[]): void {
   }
   if (pot.tokenMint.length === 0) out.push("pot requires a token mint");
   if (pot.refundUnlockAt <= 0) out.push("pot requires a refund unlock time");
+
+  // A fee is permitted to be zero — a league that pays us nothing is a valid
+  // league — but never negative, never fractional, and never unbounded.
+  if (!Number.isInteger(pot.feeBps) || pot.feeBps < 0) {
+    out.push("pot fee must be a non-negative whole number of basis points");
+  } else if (pot.feeBps > MAX_FEE_BPS) {
+    out.push(`pot fee is ${pot.feeBps} basis points, above the ${MAX_FEE_BPS} ceiling`);
+  }
+  if (pot.feeBps > 0 && pot.feeRecipient.length === 0) {
+    out.push("a pot fee requires a recipient");
+  }
 
   if (pot.payout.length === 0) {
     out.push("pot defines no payout shares");

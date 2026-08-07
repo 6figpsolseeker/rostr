@@ -335,12 +335,39 @@ an eliminated team can hand its roster to a contender it has a side arrangement 
 
 Optional per league. When enabled:
 
-- **One token per league**, chosen at creation — USDC, SOL, SKR, or any SPL token.
-  Every member deposits the identical amount in that token. Mixed-token pots are not
-  supported: they are not a pot, they are an index fund with price risk, and there is
-  no coherent definition of an equal buy-in.
+- **One token per league**, chosen at creation. Every member deposits the identical
+  amount in that token. Mixed-token pots are not supported: they are not a pot, they are
+  an index fund with price risk, and there is no coherent definition of an equal buy-in.
+- **For the 2026 season the token must have six decimals** — the stablecoin convention,
+  and USDC is what this is built for. Base units are mint-specific, so without that
+  restriction a single buy-in cap would mean a different amount of money for every token.
+  A wider choice needs either a per-token cap or a price oracle; neither is worth building
+  before the escrow has been reviewed.
 - Funds lock in escrow until the championship resolves.
-- A buy-in cap applies while the escrow contract is young.
+- **The buy-in is capped at $50 per member** while the escrow contract is young. It is
+  enforced by the program, not the interface, so it binds every caller. At twelve members
+  that is a $600 pot — the most any single league can lose to a bug in new code.
+
+A league that plays for nothing is still a league: its rules are hashed on-chain and
+members accept that hash to join, exactly as below. Only the escrow is skipped.
+
+### The fee
+
+**1% of the pot, taken once, at settlement.** Nothing is charged on deposit, and nothing
+is charged on a refund.
+
+Like every other rule here it is **frozen at creation and shown before anyone joins** — it
+is part of the hashed document members sign. A fee the operator could change afterwards
+would make "no administrator can rewrite the rules" untrue of the one party with the most
+to gain from breaking it. The program enforces a hard ceiling of 5% on any league, so the
+limit is in open-source code rather than in a promise.
+
+**A refund under the timelock returns the full stake.** Withdrawing your own money must
+never cost you a percentage; that escape hatch is what makes the escrow safe to ship
+before it is audited, and a fee on it would weaken the guarantee for the sake of pennies.
+
+For scale: DraftKings and Underdog rake around 10%, and LeagueSafe — an escrow service
+that does none of the rest of this — charges 3–5%.
 
 ### Payout
 
