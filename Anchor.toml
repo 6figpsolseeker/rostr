@@ -1,0 +1,35 @@
+# Anchor workspace — the escrow that holds league pots.
+#
+# `solana_version` is pinned deliberately, and removing it costs an hour.
+#
+# Every `anchor` invocation rewrites the active Solana release — not just
+# `anchor build`, but `anchor --version` too. Anchor 0.31.1 defaults to 2.1.0,
+# whose platform-tools ship rustc 1.79, which cannot compile dependencies that
+# need edition 2024. Naming the version here makes Anchor set it *to this*
+# instead of to its own default, so every machine agrees and no build silently
+# runs on a five-year-old compiler.
+[toolchain]
+solana_version = "4.0.0"
+# The repo is a pnpm workspace. Anchor's default is yarn, which is not installed
+# and would produce a lockfile nothing else reads.
+package_manager = "pnpm"
+
+[features]
+resolution = true
+skip-lint = false
+
+[programs.localnet]
+rostr_escrow = "FtXXoS8G6N3dmhijp2kZGpmX6GmNtDk6cGj9h7eoK5NC"
+
+[registry]
+url = "https://api.apr.dev"
+
+[provider]
+cluster = "Localnet"
+wallet = "~/.config/solana/id.json"
+
+[scripts]
+# Program tests are a separate vitest project from `pnpm test`: they need a
+# running validator and a deployed program, where the 630 tests in packages/
+# deliberately need neither.
+test = "pnpm vitest run --config vitest.program.config.ts"

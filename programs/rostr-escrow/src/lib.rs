@@ -1,0 +1,656 @@
+//! Escrow for rostr league pots.
+//!
+//! The program's job is narrow on purpose: hold everyone's buy-in, and release
+//! it only in ways the league's frozen rules already describe. It decides
+//! nothing. The rule set lives off-chain, canonically encoded and SHA-256
+//! hashed (`packages/core/src/canonical.ts`), and only that hash is stored here
+//! — so a member who signs a join has cryptographically accepted the exact
+//! document, and no later edit to a database row can change what they agreed
+//! to.
+//!
+//! **Immutability is by omission.** There is no instruction that mutates a
+//! `League`'s configuration after `initialize_league`. That is the enforcement
+//! — not a flag, not an authority check that could be mis-signed. If you find
+//! yourself adding a setter here, re-read docs/DECISIONS.md § "Rules are
+//! immutable, and shown before joining"; the answer to a wrong rule set is a
+//! new league, not an edited one.
+//!
+//! **Legacy SPL Token only, deliberately.** `anchor_spl::token`, not
+//! `token_interface`. A Token-2022 mint carrying the transfer-fee extension
+//! would deliver less to the vault than the member sent, quietly breaking the
+//! rule that everyone stakes the identical amount — and a transfer hook is
+//! arbitrary code in the middle of a deposit. Supporting Token-2022 for the pot
+//! is a real audit surface for a benefit nobody has asked for; USDC, the
+//! expected pot token, is a legacy SPL mint. Roster NFTs in Milestone E are
+//! Token-2022 and unrelated to this file.
+//!
+//! **Scope:** this program serves leagues that play for money. A league with
+//! `pot: null` has nothing to escrow and never calls it. Anchoring a free
+//! league's rules hash on-chain is a separate question — flagged, not answered.
+
+use anchor_lang::prelude::*;
+use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
+
+declare_id!("FtXXoS8G6N3dmhijp2kZGpmX6GmNtDk6cGj9h7eoK5NC");
+
+/// Number of prizes in a payout split. Fixed at five by the rule schema:
+/// champion, runner-up, regular season, consolation, third place.
+pub const PRIZE_COUNT: usize = 5;
+
+/// 100%, in basis points. Mirrors `BASIS_POINTS_TOTAL` in `packages/core`.
+pub const BASIS_POINTS_TOTAL: u16 = 10_000;
+
+/// Positional indices into [`League::payout_bps`].
+///
+/// The array is positional rather than keyed because storing five string keys
+/// on-chain would cost bytes to express something both sides already agree on.
+/// **This order is `NFL_DEFAULT_PAYOUT` in `packages/core/src/rules/nfl-ppr.ts`,
+/// not the declaration order of the `PrizeKey` union** — those two differ, and
+/// the client must serialise from this order or the split silently reshuffles.
+pub mod prize {
+    pub const CHAMPION: usize = 0;
+    pub const RUNNER_UP: usize = 1;
+    pub const REGULAR_SEASON: usize = 2;
+    pub const CONSOLATION: usize = 3;
+    pub const THIRD_PLACE: usize = 4;
+}
+
+/// Maximum buy-in: $50, in a six-decimal stablecoin's base units.
+///
+/// The single largest lever on exposure while the program is unaudited —
+/// identical code and an identical bug risks $600 across a 12-person league at
+/// this cap, where $500 a head would risk $6,000. Enforced here rather than in
+/// the UI so that it binds every caller, not only the ones who came through our
+/// front end.
+pub const MAX_BUY_IN_BASE_UNITS: u64 = 50_000_000;
+
+/// Pot tokens must have exactly six decimals.
+///
+/// This is what makes [`MAX_BUY_IN_BASE_UNITS`] mean "fifty dollars" rather than
+/// fifty million of something. Base units are mint-specific: the same constant
+/// is 50 USDC at six decimals but 0.05 SOL at nine, so without this the cap
+/// silently means a different amount for every token.
+///
+/// **It narrows docs/RULES.md § 7 for season one**, which permits any SPL token.
+/// Six decimals is the stablecoin convention (USDC, USDT), so this is "pots are
+/// denominated in dollars" expressed as tightly as a program can express it
+/// without a price oracle.
+///
+/// **It is not a proof of value, and the gap matters.** Nothing stops a
+/// six-decimal token that is worth far more, or far less, than a dollar. Pinning
+/// the actual USDC mint address closes that, and must happen before mainnet —
+/// see docs/SETUP-REQUIRED.md.
+pub const POT_MINT_DECIMALS: u8 = 6;
+
+/// Ceiling on the protocol fee, in basis points. 5%.
+///
+/// Mirrors `MAX_FEE_BPS` in `packages/core/src/rules/types.ts`. The per-league
+/// fee is frozen at creation and defaults to 1%; this is the most a league may
+/// ever be created with, enforced on-chain so the ceiling is not merely our
+/// promise.
+pub const MAX_FEE_BPS: u16 = 500;
+
+/// Smallest league that can meaningfully play.
+pub const MIN_TEAMS: u8 = 2;
+
+#[program]
+pub mod rostr_escrow {
+    use super::*;
+
+    /// Create the on-chain record of a league, freeze its terms, and open its
+    /// vault.
+    ///
+    /// Everything validated here is validated again off-chain by
+    /// `validateRules()` before a league is written to Postgres. The duplication
+    /// is deliberate: the off-chain check produces good error messages for a
+    /// league creator, and this one is what actually binds, because it is the
+    /// only one an attacker cannot skip by calling the program directly.
+    pub fn initialize_league(
+        ctx: Context<InitializeLeague>,
+        args: InitializeLeagueArgs,
+    ) -> Result<()> {
+        // A zero hash would mean "no rules", which must never be a league that
+        // can take money. It is also what an uninitialised buffer looks like.
+        require!(args.rules_hash != [0u8; 32], EscrowError::RulesHashMissing);
+
+        require!(args.buy_in > 0, EscrowError::BuyInZero);
+        require!(
+            args.buy_in <= MAX_BUY_IN_BASE_UNITS,
+            EscrowError::BuyInAboveCap
+        );
+
+        require!(args.max_teams >= MIN_TEAMS, EscrowError::LeagueTooSmall);
+
+        // Without this the cap above means a different amount of money for every
+        // token. See POT_MINT_DECIMALS.
+        require!(
+            ctx.accounts.mint.decimals == POT_MINT_DECIMALS,
+            EscrowError::UnsupportedMintDecimals
+        );
+
+        // A fee of zero is legitimate. Anything above the ceiling is not, and the
+        // ceiling is on-chain so it is not merely our promise.
+        require!(args.fee_bps <= MAX_FEE_BPS, EscrowError::FeeAboveCeiling);
+        require!(
+            args.fee_bps == 0 || args.fee_recipient != Pubkey::default(),
+            EscrowError::FeeRecipientMissing
+        );
+
+        // The shares must account for the entire pot. Anything less would leave
+        // a remainder with no owner and no instruction able to move it.
+        let total: u32 = args.payout_bps.iter().map(|bps| u32::from(*bps)).sum();
+        require!(
+            total == u32::from(BASIS_POINTS_TOTAL),
+            EscrowError::PayoutNotWhole
+        );
+
+        // "The champion must always hold the largest single share" —
+        // docs/RULES.md § 7. Strictly greatest, so a tie cannot make second
+        // place equal to winning.
+        let champion = args.payout_bps[prize::CHAMPION];
+        require!(
+            args.payout_bps
+                .iter()
+                .enumerate()
+                .all(|(i, bps)| i == prize::CHAMPION || *bps < champion),
+            EscrowError::ChampionNotLargest
+        );
+
+        // The refund unlock is the promise that funds can never be permanently
+        // stuck. One already in the past would let the first depositor withdraw
+        // immediately; one at zero would mean the caller never set it.
+        let now = Clock::get()?.unix_timestamp;
+        require!(
+            args.refund_unlock_at > now,
+            EscrowError::RefundUnlockNotInFuture
+        );
+
+        let league = &mut ctx.accounts.league;
+        league.league_id = args.league_id;
+        league.rules_hash = args.rules_hash;
+        // Taken from the mint account rather than an argument, so the stored
+        // mint and the vault's mint cannot disagree.
+        league.token_mint = ctx.accounts.mint.key();
+        league.buy_in = args.buy_in;
+        league.refund_unlock_at = args.refund_unlock_at;
+        league.payout_bps = args.payout_bps;
+        league.fee_bps = args.fee_bps;
+        league.fee_recipient = args.fee_recipient;
+        league.has_pot = true;
+        league.max_teams = args.max_teams;
+        league.member_count = 0;
+        league.total_deposited = 0;
+        league.bump = ctx.bumps.league;
+
+        Ok(())
+    }
+
+    /// Anchor the rules of a league that plays for nothing.
+    ///
+    /// A free league has no vault, no buy-in, and no payout — but its rule set
+    /// is hashed on-chain exactly like a pot league's, and members accept it the
+    /// same way through `join_league`. That is the point: "the rules are
+    /// immutable and you can verify them" has to be true of every league, not
+    /// only the ones with money in them. Otherwise a free league's guarantee is
+    /// our database, which is the thing this project exists not to ask anyone to
+    /// trust.
+    ///
+    /// Separate from `initialize_league` rather than a flag on it because the
+    /// account set genuinely differs: there is no mint and no vault to create,
+    /// and making them optional would mean a caller could pass `None` to a pot
+    /// league and get a league that can never take a deposit.
+    pub fn initialize_free_league(
+        ctx: Context<InitializeFreeLeague>,
+        args: InitializeFreeLeagueArgs,
+    ) -> Result<()> {
+        require!(args.rules_hash != [0u8; 32], EscrowError::RulesHashMissing);
+        require!(args.max_teams >= MIN_TEAMS, EscrowError::LeagueTooSmall);
+
+        let league = &mut ctx.accounts.league;
+        league.league_id = args.league_id;
+        league.rules_hash = args.rules_hash;
+        // No token, no stake, no split, no fee, and no refund date — there is
+        // nothing to denominate, divide, charge, or return.
+        league.token_mint = Pubkey::default();
+        league.buy_in = 0;
+        league.refund_unlock_at = 0;
+        league.payout_bps = [0; PRIZE_COUNT];
+        league.fee_bps = 0;
+        league.fee_recipient = Pubkey::default();
+        league.has_pot = false;
+        league.max_teams = args.max_teams;
+        league.member_count = 0;
+        league.total_deposited = 0;
+        league.bump = ctx.bumps.league;
+
+        Ok(())
+    }
+
+    /// Join a league by accepting its rules hash.
+    ///
+    /// The caller passes the hash **they** believe they are agreeing to, and
+    /// the program requires it to equal the league's. That is what makes
+    /// consent provable rather than asserted: a client that displayed one rule
+    /// set cannot enrol someone under another, because the signature is over a
+    /// transaction naming the hash. A boolean "I agree" would prove only that
+    /// somebody clicked something.
+    pub fn join_league(ctx: Context<JoinLeague>, rules_hash: [u8; 32]) -> Result<()> {
+        require!(
+            rules_hash == ctx.accounts.league.rules_hash,
+            EscrowError::RulesHashMismatch
+        );
+
+        let league = &mut ctx.accounts.league;
+        require!(
+            league.member_count < league.max_teams,
+            EscrowError::LeagueFull
+        );
+        // Saturating is wrong here and checked is right: at the cap this is
+        // unreachable, and if it ever were reachable, silently staying at the
+        // maximum would admit an extra member.
+        league.member_count = league
+            .member_count
+            .checked_add(1)
+            .ok_or(EscrowError::MathOverflow)?;
+
+        let membership = &mut ctx.accounts.membership;
+        membership.league = league.key();
+        membership.member = ctx.accounts.member.key();
+        membership.deposited = 0;
+        membership.refunded = false;
+        membership.bump = ctx.bumps.membership;
+
+        Ok(())
+    }
+
+    /// Stake the buy-in.
+    ///
+    /// Takes no amount. The figure is `league.buy_in` and nothing else, so
+    /// "everyone deposits the identical amount" (docs/RULES.md § 7) is
+    /// structural rather than a check that could be reordered away. A member
+    /// who wants to stake more has no instruction that lets them.
+    pub fn deposit(ctx: Context<Deposit>) -> Result<()> {
+        // A free league has no vault to deposit into. Checked explicitly rather
+        // than relying on `buy_in == 0` transferring nothing, because a
+        // zero-amount transfer would "succeed" and record a deposit that never
+        // happened.
+        require!(ctx.accounts.league.has_pot, EscrowError::LeagueHasNoPot);
+
+        require!(
+            ctx.accounts.membership.deposited == 0,
+            EscrowError::AlreadyDeposited
+        );
+        // Refunding and then re-depositing would let someone re-enter a league
+        // after the timelock has already released them.
+        require!(
+            !ctx.accounts.membership.refunded,
+            EscrowError::AlreadyRefunded
+        );
+
+        let amount = ctx.accounts.league.buy_in;
+
+        token::transfer(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.member_token_account.to_account_info(),
+                    to: ctx.accounts.vault.to_account_info(),
+                    authority: ctx.accounts.member.to_account_info(),
+                },
+            ),
+            amount,
+        )?;
+
+        ctx.accounts.membership.deposited = amount;
+        ctx.accounts.league.total_deposited = ctx
+            .accounts
+            .league
+            .total_deposited
+            .checked_add(amount)
+            .ok_or(EscrowError::MathOverflow)?;
+
+        Ok(())
+    }
+
+    /// Withdraw your own stake, unconditionally, once the timelock has passed.
+    ///
+    /// **This is the instruction that makes the rest safe to ship**, and the
+    /// reason docs/BUILD-PLAN.md § D5 says to write it first. It turns "the
+    /// funds are gone" into "the funds are locked until a date", whatever else
+    /// in this program is broken, unfinished, or never written.
+    ///
+    /// So its conditions are deliberately minimal: the clock has passed, you
+    /// deposited, you have not already been refunded. It does not consult
+    /// league state, member count, settlement, or abandonment. **Every
+    /// additional condition here is a new way for money to become permanently
+    /// stuck** — which is precisely the failure this exists to make impossible.
+    /// Do not add one.
+    pub fn refund_stake(ctx: Context<RefundStake>) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        require!(
+            now >= ctx.accounts.league.refund_unlock_at,
+            EscrowError::RefundLocked
+        );
+
+        let amount = ctx.accounts.membership.deposited;
+        require!(amount > 0, EscrowError::NothingDeposited);
+        require!(
+            !ctx.accounts.membership.refunded,
+            EscrowError::AlreadyRefunded
+        );
+
+        // The vault's authority is the league PDA, so the program signs for it.
+        let league_id = ctx.accounts.league.league_id;
+        let league_bump = ctx.accounts.league.bump;
+        let seeds: &[&[u8]] = &[b"league", league_id.as_ref(), &[league_bump]];
+        let signer: &[&[&[u8]]] = &[seeds];
+
+        token::transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.vault.to_account_info(),
+                    to: ctx.accounts.member_token_account.to_account_info(),
+                    authority: ctx.accounts.league.to_account_info(),
+                },
+                signer,
+            ),
+            amount,
+        )?;
+
+        // Marked before anything else could re-enter. `deposited` is left as the
+        // historical record; `refunded` is what gates a second withdrawal.
+        ctx.accounts.membership.refunded = true;
+        ctx.accounts.league.total_deposited = ctx
+            .accounts
+            .league
+            .total_deposited
+            .checked_sub(amount)
+            .ok_or(EscrowError::MathOverflow)?;
+
+        Ok(())
+    }
+}
+
+/// The terms of a league, frozen at creation.
+///
+/// Deliberately absent: a commissioner authority. Nothing in this account may
+/// change, so there is nobody who needs the right to change it. Adding an
+/// authority field would create the exact attack docs/DECISIONS.md §
+/// "Commissioner powers are bounded by the contract" exists to remove.
+#[account]
+#[derive(InitSpace)]
+pub struct League {
+    /// The league's UUID in Postgres, raw bytes. Also the PDA seed, so the
+    /// off-chain record and the on-chain one address each other with no lookup
+    /// table in between.
+    pub league_id: [u8; 16],
+    /// SHA-256 of the canonically encoded rule set. The whole trust model.
+    pub rules_hash: [u8; 32],
+    /// One token per league. Mixed pots are not a pot — docs/RULES.md § 7.
+    pub token_mint: Pubkey,
+    /// Buy-in in the token's base units. Every member deposits exactly this.
+    pub buy_in: u64,
+    /// Unix seconds after which any member may withdraw their own stake
+    /// unilaterally, whatever else is broken or unbuilt.
+    pub refund_unlock_at: i64,
+    /// Payout split in basis points, indexed by [`prize`]. Sums to 10000 for a
+    /// pot league; all zeroes for a free one.
+    pub payout_bps: [u16; PRIZE_COUNT],
+    /// Protocol fee in basis points, taken once at settlement from the pot,
+    /// before the payout split is applied.
+    ///
+    /// Frozen here with everything else, and part of the hashed rule set members
+    /// sign — a fee we could change after the fact would make the immutability
+    /// claim untrue of the one party with the most to gain from breaking it.
+    /// **Never charged on a timelock refund**; see [`rostr_escrow::refund_stake`].
+    pub fee_bps: u16,
+    /// Where the fee is paid at settlement. `default()` when `fee_bps` is zero.
+    pub fee_recipient: Pubkey,
+    /// False for a league that plays for nothing: no vault, no deposits, but its
+    /// rules hash is anchored here exactly like a pot league's.
+    pub has_pot: bool,
+    pub max_teams: u8,
+    pub member_count: u8,
+    /// Running total of live deposits, in base units. Decreases on refund, so
+    /// it tracks what the vault actually holds rather than what it ever held.
+    pub total_deposited: u64,
+    pub bump: u8,
+}
+
+/// One member's place in one league.
+///
+/// Its existence *is* the consent record: it can only be created by
+/// `join_league`, which requires a matching rules hash.
+#[account]
+#[derive(InitSpace)]
+pub struct Membership {
+    pub league: Pubkey,
+    pub member: Pubkey,
+    /// Base units staked. Zero until `deposit`.
+    pub deposited: u64,
+    /// Set once the stake has been withdrawn under the timelock.
+    pub refunded: bool,
+    pub bump: u8,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
+pub struct InitializeLeagueArgs {
+    pub league_id: [u8; 16],
+    pub rules_hash: [u8; 32],
+    pub buy_in: u64,
+    pub refund_unlock_at: i64,
+    pub payout_bps: [u16; PRIZE_COUNT],
+    pub fee_bps: u16,
+    pub fee_recipient: Pubkey,
+    pub max_teams: u8,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
+pub struct InitializeFreeLeagueArgs {
+    pub league_id: [u8; 16],
+    pub rules_hash: [u8; 32],
+    pub max_teams: u8,
+}
+
+#[derive(Accounts)]
+#[instruction(args: InitializeLeagueArgs)]
+pub struct InitializeLeague<'info> {
+    #[account(
+        init,
+        payer = payer,
+        space = 8 + League::INIT_SPACE,
+        seeds = [b"league", args.league_id.as_ref()],
+        bump,
+    )]
+    pub league: Account<'info, League>,
+
+    pub mint: Account<'info, Mint>,
+
+    /// The pot. A PDA token account whose authority is the league PDA, so no
+    /// key held by any person can move what is in it — only this program can,
+    /// and only through the instructions below.
+    #[account(
+        init,
+        payer = payer,
+        seeds = [b"vault", league.key().as_ref()],
+        bump,
+        token::mint = mint,
+        token::authority = league,
+    )]
+    pub vault: Account<'info, TokenAccount>,
+
+    /// Pays rent. Holds no privileges afterwards — creating a league is not a
+    /// role, and this key is not recorded on the account.
+    #[account(mut)]
+    pub payer: Signer<'info>,
+
+    pub token_program: Program<'info, Token>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+#[instruction(args: InitializeFreeLeagueArgs)]
+pub struct InitializeFreeLeague<'info> {
+    #[account(
+        init,
+        payer = payer,
+        space = 8 + League::INIT_SPACE,
+        seeds = [b"league", args.league_id.as_ref()],
+        bump,
+    )]
+    pub league: Account<'info, League>,
+
+    #[account(mut)]
+    pub payer: Signer<'info>,
+
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct JoinLeague<'info> {
+    #[account(mut, seeds = [b"league", league.league_id.as_ref()], bump = league.bump)]
+    pub league: Account<'info, League>,
+
+    /// Seeded by league and member, so one member cannot hold two places in the
+    /// same league: the second `join_league` collides with an existing account
+    /// rather than needing a check that could be forgotten.
+    #[account(
+        init,
+        payer = member,
+        space = 8 + Membership::INIT_SPACE,
+        seeds = [b"membership", league.key().as_ref(), member.key().as_ref()],
+        bump,
+    )]
+    pub membership: Account<'info, Membership>,
+
+    #[account(mut)]
+    pub member: Signer<'info>,
+
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct Deposit<'info> {
+    #[account(mut, seeds = [b"league", league.league_id.as_ref()], bump = league.bump)]
+    pub league: Account<'info, League>,
+
+    #[account(
+        mut,
+        seeds = [b"membership", league.key().as_ref(), member.key().as_ref()],
+        bump = membership.bump,
+        // Belt and braces: the seeds already bind these, but a mismatch here
+        // would mean crediting one member's stake to another's record.
+        constraint = membership.league == league.key() @ EscrowError::MembershipLeagueMismatch,
+        constraint = membership.member == member.key() @ EscrowError::MembershipMemberMismatch,
+    )]
+    pub membership: Account<'info, Membership>,
+
+    #[account(
+        mut,
+        seeds = [b"vault", league.key().as_ref()],
+        bump,
+        token::mint = league.token_mint,
+        token::authority = league,
+    )]
+    pub vault: Account<'info, TokenAccount>,
+
+    /// The member's own token account. Constraining the mint here is what
+    /// BUILD-PLAN calls rejecting mixed tokens "at the type level": a deposit in
+    /// the wrong token fails account resolution before any handler runs.
+    #[account(
+        mut,
+        constraint = member_token_account.mint == league.token_mint @ EscrowError::WrongMint,
+        constraint = member_token_account.owner == member.key() @ EscrowError::NotTokenOwner,
+    )]
+    pub member_token_account: Account<'info, TokenAccount>,
+
+    pub member: Signer<'info>,
+
+    pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
+pub struct RefundStake<'info> {
+    #[account(mut, seeds = [b"league", league.league_id.as_ref()], bump = league.bump)]
+    pub league: Account<'info, League>,
+
+    #[account(
+        mut,
+        seeds = [b"membership", league.key().as_ref(), member.key().as_ref()],
+        bump = membership.bump,
+        constraint = membership.league == league.key() @ EscrowError::MembershipLeagueMismatch,
+        constraint = membership.member == member.key() @ EscrowError::MembershipMemberMismatch,
+    )]
+    pub membership: Account<'info, Membership>,
+
+    #[account(
+        mut,
+        seeds = [b"vault", league.key().as_ref()],
+        bump,
+        token::mint = league.token_mint,
+        token::authority = league,
+    )]
+    pub vault: Account<'info, TokenAccount>,
+
+    #[account(
+        mut,
+        constraint = member_token_account.mint == league.token_mint @ EscrowError::WrongMint,
+        constraint = member_token_account.owner == member.key() @ EscrowError::NotTokenOwner,
+    )]
+    pub member_token_account: Account<'info, TokenAccount>,
+
+    /// Only the member themselves. A refund is not something anyone else may
+    /// trigger on their behalf, however well-meant.
+    pub member: Signer<'info>,
+
+    pub token_program: Program<'info, Token>,
+}
+
+#[error_code]
+pub enum EscrowError {
+    #[msg("Rules hash is all zeroes; a league cannot take money without rules")]
+    RulesHashMissing,
+    #[msg("Buy-in must be greater than zero")]
+    BuyInZero,
+    #[msg("Buy-in exceeds the cap for an unaudited escrow")]
+    BuyInAboveCap,
+    #[msg("A league needs at least two teams")]
+    LeagueTooSmall,
+    #[msg("Payout shares must sum to exactly 10000 basis points")]
+    PayoutNotWhole,
+    #[msg("The champion's share must be strictly the largest")]
+    ChampionNotLargest,
+    #[msg("Refund unlock time must be in the future")]
+    RefundUnlockNotInFuture,
+    #[msg("Accepted rules hash does not match the league's")]
+    RulesHashMismatch,
+    #[msg("The league already has its full complement of teams")]
+    LeagueFull,
+    #[msg("This member has already staked their buy-in")]
+    AlreadyDeposited,
+    #[msg("This stake has already been refunded")]
+    AlreadyRefunded,
+    #[msg("Nothing was staked, so there is nothing to refund")]
+    NothingDeposited,
+    #[msg("The refund timelock has not passed yet")]
+    RefundLocked,
+    #[msg("Token account is for a different mint than the league's pot")]
+    WrongMint,
+    #[msg("Token account is not owned by the member")]
+    NotTokenOwner,
+    #[msg("Membership does not belong to this league")]
+    MembershipLeagueMismatch,
+    #[msg("Membership does not belong to this member")]
+    MembershipMemberMismatch,
+    #[msg("Pot tokens must have exactly six decimals")]
+    UnsupportedMintDecimals,
+    #[msg("Protocol fee is above the on-chain ceiling")]
+    FeeAboveCeiling,
+    #[msg("A non-zero fee requires a recipient")]
+    FeeRecipientMissing,
+    #[msg("This league plays for nothing and has no vault")]
+    LeagueHasNoPot,
+    #[msg("Arithmetic overflow")]
+    MathOverflow,
+}

@@ -1,0 +1,102 @@
+name: Anchor
+
+# Separate from CI, and path-filtered, because a cold Anchor build is minutes
+# rather than the ~2m30s the TypeScript suite takes. Running it on every docs
+# commit would make the feedback loop on the fast suite worse for no signal.
+#
+# The two path lists are duplicated rather than shared through a YAML anchor:
+# GitHub Actions' workflow parser does not support anchors or aliases, and a
+# workflow using them fails to parse rather than degrading to running always.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "programs/**"
+      - "Anchor.toml"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "vitest.program.config.ts"
+      - ".github/workflows/anchor.yml"
+  pull_request:
+    paths:
+      - "programs/**"
+      - "Anchor.toml"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "vitest.program.config.ts"
+      - ".github/workflows/anchor.yml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Pinned to match Anchor.toml. Any anchor invocation rewrites the active
+  # Solana release, and Anchor 0.31.1 defaults to 2.1.0 whose platform-tools
+  # ship rustc 1.79 — too old for edition 2024. See Anchor.toml.
+  SOLANA_VERSION: 4.0.0
+  ANCHOR_VERSION: 0.31.1
+
+jobs:
+  program:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # No third-party marketplace actions here. This program will hold user
+      # funds, and its build pipeline is part of its attack surface — the same
+      # reason upgrade authority goes to a multisig. Everything below is either
+      # an official action or a pinned download from the vendor.
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            ~/.avm
+            target
+          key: anchor-${{ runner.os }}-${{ env.SOLANA_VERSION }}-${{ env.ANCHOR_VERSION }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            anchor-${{ runner.os }}-${{ env.SOLANA_VERSION }}-${{ env.ANCHOR_VERSION }}-
+
+      - name: Install Solana
+        run: |
+          sh -c "$(curl -sSfL https://release.anza.xyz/v${SOLANA_VERSION}/install)"
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
+
+      - name: Install Anchor
+        run: |
+          if ! command -v avm >/dev/null; then
+            cargo install --git https://github.com/coral-xyz/anchor avm --locked --force
+          fi
+          avm install "$ANCHOR_VERSION"
+          avm use "$ANCHOR_VERSION"
+
+      - name: Localnet keypair
+        run: |
+          solana-keygen new --no-bip39-passphrase --silent --outfile "$HOME/.config/solana/id.json"
+          solana config set --url localhost
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      # Builds, starts a validator, deploys, then runs the vitest program suite.
+      - name: anchor test
+        run: anchor test
+
+      # The program id is baked into declare_id! and Anchor.toml. If they ever
+      # disagree, the deployed program answers at an address the client does not
+      # call, and every test would fail in a way that looks like a logic bug.
+      - name: Program id matches
+        run: |
+          DECLARED=$(grep -oP 'declare_id!\("\K[^"]+' programs/rostr-escrow/src/lib.rs)
+          CONFIGURED=$(grep -oP '^rostr_escrow = "\K[^"]+' Anchor.toml)
+          echo "declare_id!: $DECLARED"
+          echo "Anchor.toml: $CONFIGURED"
+          [ "$DECLARED" = "$CONFIGURED" ]

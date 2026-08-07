@@ -104,19 +104,26 @@ See [`docs/BUILD-PLAN.md`](docs/BUILD-PLAN.md) for the full commit-by-commit pla
 - The season schedule drawn when the draft completes, league state transitions, and a
   standings screen
 
+- **D1–D5: the escrow program** (`programs/rostr-escrow/`) — Anchor workspace, the league
+  account with its terms frozen, join by rules-hash acceptance, deposit to a vault, and
+  the unconditional timelock refund. Free leagues anchor their rules hash the same way.
+  38 tests green on localnet via `anchor test`.
+
 **Both hard deadlines are now covered in code.** Aug 22 is create → join → draft; Sep 9 is
 set a lineup → score the week → standings. What they need is deployment and the
 credentials in `SETUP-REQUIRED.md`, not more code.
 
 **Next, in order:**
 
-1. **D1–D10** — the escrow program. **No longer blocked**: the main PC has Rust, the
-   Solana CLI and Anchor 0.31.1, verified by building and testing an Anchor program on a
-   local validator. See Environment below. **This is main-PC work** — the secondary
-   machine still has no Rust toolchain.
-2. **Pot leagues cannot actually take money yet.** The rules describe a pot and the UI
-   collects a buy-in, but nothing escrows anything until D1–D10 exists. Do not let a real
-   league form around a pot before then.
+1. **D6–D10** — the rest of the escrow. **D1–D5 are done and green on localnet**; see
+   "The escrow" below. What remains is payout by the frozen split (D6), abandonment
+   forfeit (D7), the adversarial suite (D8), upgrade authority to a multisig (D9), and
+   review (D10). **This is main-PC work** — the secondary machine still has no Rust
+   toolchain.
+2. **Pot leagues still cannot take money in the app.** The program accepts deposits, but
+   nothing in `apps/web` or `@rostr/db` calls it — there is no client, and no league row
+   records its on-chain address. Do not let a real league form around a pot until that
+   path exists and D6 can pay it back out.
 3. **Waivers and trades are written but not wired.** `waivers/claims.ts` and
    `waivers/schedule.ts` are finished and tested; nothing calls them, and there is no
    add/drop UI. Needed by Sep 16, not Aug 22.
@@ -416,6 +423,73 @@ Fixtures in `scoring/fixtures.ts` are **constructed, not real box scores**, and 
 as such. Validating against real 2025 data is the outstanding half of B5 and needs the
 Tank01 key.
 
+### The escrow
+
+`programs/rostr-escrow/`, Anchor 0.31.1. Run it with `anchor test` — which builds, starts
+a validator, deploys, and runs `programs/*/tests/**/*.test.ts` through a **separate**
+vitest project (`vitest.program.config.ts`). `pnpm test` deliberately does not include
+them: the 630 tests under `packages/` need no toolchain, and that should stay true.
+
+**Immutability is by omission.** No instruction mutates a `League` after
+`initialize_league`, and the account has **no authority field** — so there is nobody who
+could be tricked or coerced into changing terms, rather than an authority check that must
+be right every time. Adding a setter reopens everything `DECISIONS.md` § "Commissioner
+powers are bounded by the contract" closes.
+
+**`refund_stake` has exactly three conditions**: the clock has passed, you staked, you
+have not already been refunded. It consults no league state, no settlement, no member
+count. **Every extra condition is a new way for money to become permanently stuck**, which
+is the one failure this program exists to make impossible. This is why BUILD-PLAN says
+ship it first. Do not add a condition to it.
+
+**`deposit` takes no amount argument.** It moves `league.buy_in` and nothing else, so
+"everyone stakes the identical amount" is structural rather than a check that could be
+reordered around. A member who wants to overpay has no instruction that permits it.
+
+**Legacy SPL Token, not `token_interface`** — deliberate, and worth not "modernising". A
+Token-2022 mint with the transfer-fee extension delivers less to the vault than the member
+sent, silently breaking equal stakes; a transfer hook is arbitrary code inside a deposit.
+USDC is a legacy mint. Milestone E's roster NFTs are Token-2022 and unrelated to this.
+
+**The vault's authority is the league PDA**, so no key held by any person can move the
+pot — only this program, only through these instructions.
+
+`payout_bps` is positional, indexed by the `prize` module. **That order is
+`NFL_DEFAULT_PAYOUT` in `rules/nfl-ppr.ts`, not the declaration order of the `PrizeKey`
+union** — the two differ, and a client serialising from the wrong one reshuffles the split
+without any error.
+
+**The buy-in is capped at $50** — `MAX_BUY_IN_BASE_UNITS`, decided 2026-08-07. For that to
+mean fifty *dollars* the program also requires pot mints to have **six decimals**
+(`POT_MINT_DECIMALS`), because base units are mint-specific and the same constant would
+otherwise be 0.05 SOL at nine. That narrows `RULES.md` § 7's "any SPL token" to stablecoins
+for season one, deliberately. It is **not** proof of value — a six-decimal token worth $100
+would sail past the cap — and closing that means pinning USDC's mint before mainnet. See
+`SETUP-REQUIRED.md`.
+
+**Free leagues get their own instruction**, `initialize_free_league`: no mint, no vault, no
+buy-in, no payout, no fee — but the rules hash is anchored exactly as a pot league's, and
+members accept it through the same `join_league`. Otherwise "the rules are immutable and
+you can verify them" would hold only for leagues with money in them, and everyone else's
+guarantee would be our database. Separate from `initialize_league` rather than a flag
+because the account set genuinely differs; making the mint and vault optional would let a
+caller create a pot league that can never take a deposit.
+
+**The fee is 1%, taken once at settlement**, capped on-chain at 5% (`MAX_FEE_BPS`, mirrored
+in `packages/core`). It lives in the **hashed rule set** — `pot.feeBps` and
+`pot.feeRecipient`, frozen per league and signed by members — because a fee the operator
+could change afterwards would make the immutability claim untrue of the one party with the
+most to gain from breaking it. **A timelock refund is never charged**; an escape hatch that
+costs a percentage is a weaker guarantee, and that guarantee is why this is shippable
+before review. Adding it moved the rule schema to **version 2** and therefore the golden
+hash — see the changelog in `rules.test.ts`.
+
+`FEE_RECIPIENT` is server-side configuration and is **never read from a request**: a
+client-supplied recipient could redirect the fee, a client-supplied rate could zero it.
+Unset, leagues are created fee-free, which is fine locally; in production the route
+refuses, because frozen rules mean a league created with the wrong recipient can never be
+corrected.
+
 ### The web app
 
 `apps/web`, Next.js 15 App Router. `pnpm --filter @rostr/web dev`. It needs
@@ -552,7 +626,7 @@ legal encoding of a rule set. Its SHA-256 goes on-chain and members sign it when
 join. If encoding drifts, every league created before the drift stops verifying.
 
 There is a **golden fixture test** pinning
-`5afc934db3b3e1b1f5ec7a9e503f61e531aa925a6f966c41ec227118201da36a`. If it fails, do
+`2e9ec043556179b82993a9febb768c9cea715bf5529b7df205d2c9503b9bc1b8`. If it fails, do
 **not** update the constant to make it pass — find what changed the encoding. CI checks it
 on Node 22 and 24 for exactly this reason.
 
@@ -597,6 +671,10 @@ These were discussed at length and decided. Re-proposing them wastes the owner's
 | Abandonment: 3 strikes → autolineup + stake forfeit | **Settled**                                                      |
 | Consolation bracket pays out                        | **Settled** — it is the anti-abandonment mechanism, not a nicety |
 | IP-based sybil blocking                             | **Rejected** — breaks households, defeated by any VPN            |
+| Protocol fee: 1%, once, at settlement               | **Settled** 2026-08-07 — in the hashed rules; never on a refund  |
+| Buy-in capped at $50 per member                     | **Settled** 2026-08-07 — enforced on-chain, not in the UI        |
+| Pot mints must have six decimals (season one)       | **Settled** 2026-08-07 — what makes the $50 cap mean dollars     |
+| Free leagues anchor their rules hash on-chain       | **Settled** 2026-08-07 — `initialize_free_league`                |
 
 ---
 
@@ -610,17 +688,42 @@ by machine. Installed under WSL2/Ubuntu 26.04: Rust 1.97 (stable) alongside a pi
 1.90 default, Solana CLI 4.0.0, Anchor 0.31.1 via AVM, Node 22 via nvm. Verified by
 building and testing an unrelated Anchor program against a local validator.
 
-Two things that cost an hour there and will cost it again:
+Five things that have each cost an hour and will cost it again:
 
-- **`anchor build` rewrites the active Solana release**, dropping it to 2.1.0 with
-  platform-tools v1.43 and rustc 1.79 — too old for dependencies that need edition 2024.
-  Either pin `solana_version` in `Anchor.toml`, or run `cargo-build-sbf` directly with
-  4.0.0 on PATH and generate the IDL separately with `anchor idl build`.
+- **Every `anchor` invocation rewrites the active Solana release** — not just
+  `anchor build`, but `anchor --version` too. Anchor 0.31.1 falls back to 2.1.0, whose
+  platform-tools ship rustc 1.79, too old for dependencies needing edition 2024. **This is
+  now fixed by `solana_version = "4.0.0"` in `Anchor.toml`**: given a version, Anchor sets
+  the active release _to that_ rather than to its own default. Do not remove that line.
+  Verified by bisection — `ln -sfn` the symlink to 4.0.0, then `anchor --version`, and it
+  is 2.1.0 again.
+- **`/tmp` in WSL is a tmpfs, and it is RAM.** A `solana-test-validator` left running
+  filled all 3.9 GB of it with a rocksdb and a 294 MB log, which surfaced as
+  `agave-install` failing with "No space left on device" while `df` showed 926 GB free on
+  `/`. Point test ledgers somewhere under `$HOME`, and check `pgrep -af solana-test-validator`
+  before blaming the disk.
+- **WSL idle-shuts-down, and `/tmp` clears with it.** Nothing that has to survive between
+  commands belongs there. A long-running process is what keeps the VM alive, so the
+  machine behaves differently depending on whether one happens to be running.
+- **`node` is missing in non-interactive WSL shells** unless nvm is loaded from
+  `~/.profile`. Ubuntu's `.bashrc` returns at line 8 for non-interactive shells, so the
+  nvm block near the bottom never runs — while `cargo` and `solana` work, because those
+  live in `.profile`. `anchor test` runs its `[scripts]` through exactly such a shell.
 - **Node on this machine is pnpm 9 by default** while the repo pins 11.20.0. Use
   `corepack pnpm`, and set `CI=true` or pnpm refuses to purge `node_modules` with no TTY.
 
+**One `node_modules` serves two platforms.** The TypeScript side is developed on Windows;
+Anchor must run under WSL. rollup, esbuild and sharp all ship platform-specific optional
+binaries, so a Windows install leaves `anchor test` dying on "Cannot find module
+@rollup/rollup-linux-x64-gnu". `supportedArchitectures` in `pnpm-workspace.yaml` installs
+both. Do not delete it to slim the install.
+
+**Rust builds on `/mnt/c` are slow** — the same program takes seconds on a WSL-native path
+and minutes over the 9p mount, because compilation is many-small-file I/O. Tolerable for
+now; if Milestone D iteration gets painful, keep a WSL-native clone for program work.
+
 `scripts/setup-anchor.sh` is still the right entry point on a fresh machine and is
-idempotent.
+idempotent. It does **not** yet install Node or handle the `.profile` nvm issue above.
 
 **For Anchor work (Milestones D and E)** you need Rust, the Solana CLI, and Anchor.
 

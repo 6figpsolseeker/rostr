@@ -1,0 +1,29 @@
+[package]
+name = "rostr-escrow"
+version = "0.1.0"
+description = "Escrow for rostr league pots — deposits, timelock refund, and settlement"
+edition = "2021"
+license = "MIT"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "rostr_escrow"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
+# Declared only so rustc's check-cfg lint stops warning about them. Anchor's
+# `#[program]` and `#[derive(Accounts)]` macros expand to `cfg(feature = ...)`
+# tests for all three, which rustc reports as unexpected unless the destination
+# crate names them. Six warnings on every build is how a real one gets missed.
+custom-heap = []
+custom-panic = []
+anchor-debug = []
+
+[dependencies]
+anchor-lang = "0.31.1"
+anchor-spl = "0.31.1"

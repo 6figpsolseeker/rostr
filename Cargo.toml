@@ -1,0 +1,19 @@
+[workspace]
+members = [
+    "programs/*"
+]
+resolver = "2"
+
+# `overflow-checks` stays on in release. Anchor's template sets it and it must
+# not be traded away for cycles: this program does arithmetic on token amounts,
+# and a silent wrapping subtraction in a release build is how an escrow pays out
+# more than it holds. The same reasoning as integer milli-points on the
+# TypeScript side — see docs/DECISIONS.md § "Integer milli-points, never floats".
+[profile.release]
+overflow-checks = true
+lto = "fat"
+codegen-units = 1
+[profile.release.build-override]
+opt-level = 3
+incremental = false
+codegen-units = 1

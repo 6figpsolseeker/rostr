@@ -182,12 +182,37 @@ gets burned entirely once settlement is audited, before Week 14 pays out.
 
 ---
 
-### ⬜ Buy-in cap for season one
+### ⬜ Fee recipient address
 
-**Blocks:** nothing technically — it is a number in the program config.
-**Needed by:** **Aug 22**, at deployment.
+**Blocks:** creating a league with a non-zero fee. The program rejects one whose recipient
+is the default pubkey.
+**Needed by:** **Aug 22**, with the first pot league.
 
-A decision, not a task: what is the maximum a league may put into a contract this new?
+The fee is **1%, taken once at settlement** — decided 2026-08-07, documented in
+`docs/RULES.md` § 7, frozen per league in the hashed rule set. What is missing is the
+address it pays to.
+
+It should be a **multisig, not a personal wallet**, and ideally the same one that holds
+upgrade authority. It is written into every league's frozen rules, so a lost key means a
+fee that can never be collected from any league created before the loss — and the rules
+of those leagues can never be edited to point somewhere else.
+
+### ⬜ Pin the USDC mint before mainnet
+
+**Blocks:** nothing on localnet. It is the last gap between the $50 cap and the $50 it is
+supposed to mean.
+**Needed by:** **before any mainnet deployment**.
+
+The program requires pot tokens to have **six decimals**, which is what makes
+`MAX_BUY_IN_BASE_UNITS = 50_000_000` mean fifty dollars rather than fifty million of
+something. That is as tight as this can be without a price oracle, and it is **not a proof
+of value**: nothing stops a six-decimal token worth far more than a dollar, which would
+blow through the cap while satisfying every check.
+
+Pinning USDC's mint address closes it — one constant in `lib.rs`. The reason it is not
+done already is that localnet tests cannot mint at a fixed mainnet address, so it needs
+either a cluster-conditional constant or an allowlist, and either one wants a moment's
+thought rather than being bolted on at deploy time.
 
 ---
 

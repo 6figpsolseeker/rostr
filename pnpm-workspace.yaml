@@ -2,6 +2,23 @@ packages:
   - "packages/*"
   - "apps/*"
 
+# One checkout, two platforms. The TypeScript side is developed on Windows; the
+# Anchor side must run under WSL, because `cargo-build-sbf` does not work
+# reliably on native Windows. `anchor test` therefore runs vitest from Linux
+# against a node_modules that pnpm populated from Windows — and rollup, esbuild
+# and sharp all ship platform-specific optional binaries. Without this, the
+# Linux run dies on "Cannot find module @rollup/rollup-linux-x64-gnu".
+#
+# Installing both architectures costs a little disk and nothing else.
+supportedArchitectures:
+  os:
+    - win32
+    - linux
+  cpu:
+    - x64
+  libc:
+    - glibc
+
 allowBuilds:
   # esbuild ships prebuilt binaries and needs its install script to select one.
   # Required by vitest.
@@ -13,3 +30,7 @@ allowBuilds:
   # every CI run for a websocket path this app barely uses.
   bufferutil: false
   utf-8-validate: false
+  # Same call as bufferutil: an optional native speedup, pulled in by
+  # @solana/spl-token, with a pure-JS fallback. Program tests are not
+  # bigint-bound, so decline the native build rather than compile it everywhere.
+  bigint-buffer: false
