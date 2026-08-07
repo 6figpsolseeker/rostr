@@ -27,7 +27,8 @@ export const PRIZE = {
 /** docs/RULES.md § 7. Sums to 10000, champion strictly largest. */
 export const DEFAULT_PAYOUT = [6000, 1500, 1000, 1000, 500];
 
-/** $50, in a six-decimal stablecoin's base units. */
+/** $5 and $50, in a six-decimal stablecoin's base units. A range, not a price. */
+export const MIN_BUY_IN_BASE_UNITS = 5_000_000;
 export const MAX_BUY_IN_BASE_UNITS = 50_000_000;
 
 /** Six decimals, matching USDC — and required by the program. */

@@ -8,6 +8,7 @@ import {
   type InitArgs,
   MAX_BUY_IN_BASE_UNITS,
   MAX_FEE_BPS,
+  MIN_BUY_IN_BASE_UNITS,
   PRIZE,
   createPotMint,
   expectError,
@@ -128,11 +129,53 @@ describe("initialize_league", () => {
     );
   });
 
+  it("rejects a buy-in below the minimum", async () => {
+    // A cent under $5. Small enough that the transfers to collect and pay it out
+    // would cost more than the pot.
+    await expectError(
+      initialize(validArgs({ buyIn: new anchor.BN(MIN_BUY_IN_BASE_UNITS - 1) })),
+      "BuyInBelowMinimum",
+    );
+  });
+
   it("accepts a buy-in exactly at the cap", async () => {
     const args = validArgs({ buyIn: new anchor.BN(MAX_BUY_IN_BASE_UNITS) });
     await initialize(args);
     const league = await program.account.league.fetch(leaguePda(program, args.leagueId));
     expect(league.buyIn.toString()).toBe(String(MAX_BUY_IN_BASE_UNITS));
+  });
+
+  it("accepts a buy-in exactly at the minimum", async () => {
+    const args = validArgs({ buyIn: new anchor.BN(MIN_BUY_IN_BASE_UNITS) });
+    await initialize(args);
+    const league = await program.account.league.fetch(leaguePda(program, args.leagueId));
+    expect(league.buyIn.toString()).toBe(String(MIN_BUY_IN_BASE_UNITS));
+  });
+
+  /**
+   * The bounds are a range, not a price list. **Any** amount between them is
+   * legal, down to a single base unit — there is no granularity rule, so cents
+   * work as well as whole dollars and awkward amounts as well as round ones.
+   *
+   * Worth pinning explicitly: it would be easy for a later "tidy-up" to add a
+   * whole-dollar constraint that nothing in the rules asks for.
+   */
+  it.each([
+    ["$5.00, the floor", 5_000_000],
+    ["$7.25", 7_250_000],
+    ["$10.00", 10_000_000],
+    ["$12.50", 12_500_000],
+    ["$25.00", 25_000_000],
+    ["$33.33", 33_330_000],
+    ["$47.00", 47_000_000],
+    ["$49.99", 49_990_000],
+    ["$50.00, the ceiling", 50_000_000],
+    ["a single base unit above the floor", 5_000_001],
+  ])("accepts %s", async (_label, units) => {
+    const args = validArgs({ buyIn: new anchor.BN(units) });
+    await initialize(args);
+    const league = await program.account.league.fetch(leaguePda(program, args.leagueId));
+    expect(league.buyIn.toString()).toBe(String(units));
   });
 
   it("rejects a league of one", async () => {

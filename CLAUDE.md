@@ -459,8 +459,12 @@ pot — only this program, only through these instructions.
 union** — the two differ, and a client serialising from the wrong one reshuffles the split
 without any error.
 
-**The buy-in is capped at $50** — `MAX_BUY_IN_BASE_UNITS`, decided 2026-08-07. For that to
-mean fifty *dollars* the program also requires pot mints to have **six decimals**
+**The buy-in is $5 to $50** — `MIN_BUY_IN_BASE_UNITS` and `MAX_BUY_IN_BASE_UNITS`, decided
+2026-08-07. A range, not a price: any amount in between is valid, and there is a test that
+says so for 5, 10, 25, 47 and 50. The floor exists because a pot has fixed costs a stake
+does not scale with — transactions, rent, five payouts — so below a few dollars the pot
+costs more to move than it pays. For the ceiling to
+mean fifty _dollars_ the program also requires pot mints to have **six decimals**
 (`POT_MINT_DECIMALS`), because base units are mint-specific and the same constant would
 otherwise be 0.05 SOL at nine. That narrows `RULES.md` § 7's "any SPL token" to stablecoins
 for season one, deliberately. It is **not** proof of value — a six-decimal token worth $100
@@ -672,7 +676,7 @@ These were discussed at length and decided. Re-proposing them wastes the owner's
 | Consolation bracket pays out                        | **Settled** — it is the anti-abandonment mechanism, not a nicety |
 | IP-based sybil blocking                             | **Rejected** — breaks households, defeated by any VPN            |
 | Protocol fee: 1%, once, at settlement               | **Settled** 2026-08-07 — in the hashed rules; never on a refund  |
-| Buy-in capped at $50 per member                     | **Settled** 2026-08-07 — enforced on-chain, not in the UI        |
+| Buy-in between $5 and $50 per member                | **Settled** 2026-08-07 — a range; both bounds enforced on-chain  |
 | Pot mints must have six decimals (season one)       | **Settled** 2026-08-07 — what makes the $50 cap mean dollars     |
 | Free leagues anchor their rules hash on-chain       | **Settled** 2026-08-07 — `initialize_free_league`                |
 

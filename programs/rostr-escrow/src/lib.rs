@@ -57,12 +57,25 @@ pub mod prize {
 
 /// Maximum buy-in: $50, in a six-decimal stablecoin's base units.
 ///
-/// The single largest lever on exposure while the program is unaudited —
-/// identical code and an identical bug risks $600 across a 12-person league at
-/// this cap, where $500 a head would risk $6,000. Enforced here rather than in
-/// the UI so that it binds every caller, not only the ones who came through our
-/// front end.
+/// A ceiling, not a price — a league may stake any amount up to it. The single
+/// largest lever on exposure while the program is unaudited: identical code and
+/// an identical bug risks $600 across a 12-person league at this cap, where $500
+/// a head would risk $6,000. Enforced here rather than in the UI so that it
+/// binds every caller, not only the ones who came through our front end.
 pub const MAX_BUY_IN_BASE_UNITS: u64 = 50_000_000;
+
+/// Minimum buy-in: $5, in the same base units.
+///
+/// A floor exists because a pot has fixed costs that a stake does not scale
+/// with. Every member's deposit and refund is a transaction, the vault and each
+/// membership account cost rent, and settlement pays out five prizes — at a
+/// one-cent buy-in the fees to move the money exceed the money. A pot that small
+/// is also indistinguishable from a free league, which has its own instruction
+/// and needs none of this machinery.
+///
+/// It bites hardest on the smallest split: 5% of a $5 stake in a two-team league
+/// is 25 cents, which is still a real transfer rather than dust.
+pub const MIN_BUY_IN_BASE_UNITS: u64 = 5_000_000;
 
 /// Pot tokens must have exactly six decimals.
 ///
@@ -113,7 +126,14 @@ pub mod rostr_escrow {
         // can take money. It is also what an uninitialised buffer looks like.
         require!(args.rules_hash != [0u8; 32], EscrowError::RulesHashMissing);
 
+        // Zero gets its own error rather than falling into "below the minimum",
+        // because it almost always means the caller wanted a free league and
+        // reached for the wrong instruction.
         require!(args.buy_in > 0, EscrowError::BuyInZero);
+        require!(
+            args.buy_in >= MIN_BUY_IN_BASE_UNITS,
+            EscrowError::BuyInBelowMinimum
+        );
         require!(
             args.buy_in <= MAX_BUY_IN_BASE_UNITS,
             EscrowError::BuyInAboveCap
@@ -611,8 +631,10 @@ pub struct RefundStake<'info> {
 pub enum EscrowError {
     #[msg("Rules hash is all zeroes; a league cannot take money without rules")]
     RulesHashMissing,
-    #[msg("Buy-in must be greater than zero")]
+    #[msg("A pot league needs a buy-in; use initialize_free_league to play for nothing")]
     BuyInZero,
+    #[msg("Buy-in is below the minimum a pot is worth escrowing")]
+    BuyInBelowMinimum,
     #[msg("Buy-in exceeds the cap for an unaudited escrow")]
     BuyInAboveCap,
     #[msg("A league needs at least two teams")]

@@ -166,6 +166,50 @@ describe("validateLeagueRules", () => {
     expect(validateLeagueRules(bad, NFL)).toContainEqual(expect.stringContaining("90 seconds"));
   });
 
+  it("rejects a buy-in below the minimum", () => {
+    const bad = mutate((d) => {
+      (d.pot as { buyInBaseUnits: string }).buyInBaseUnits = "4999999";
+    });
+    expect(validateLeagueRules(bad, NFL)).toContainEqual(
+      expect.stringContaining("below the 5000000 base-unit minimum"),
+    );
+  });
+
+  it("rejects a buy-in above the cap", () => {
+    const bad = mutate((d) => {
+      (d.pot as { buyInBaseUnits: string }).buyInBaseUnits = "50000001";
+    });
+    expect(validateLeagueRules(bad, NFL)).toContainEqual(
+      expect.stringContaining("above the 50000000 base-unit cap"),
+    );
+  });
+
+  // The bounds are a range, not a price list. Any amount between them is legal,
+  // down to a single base unit — cents included, no granularity rule.
+  it.each([
+    "5000000", // $5.00, the floor
+    "5000001", // one base unit above it
+    "7250000", // $7.25
+    "12500000", // $12.50
+    "33330000", // $33.33
+    "49990000", // $49.99
+    "50000000", // $50.00, the ceiling
+  ])("accepts a buy-in of %s base units", (units) => {
+    const ok = mutate((d) => {
+      (d.pot as { buyInBaseUnits: string }).buyInBaseUnits = units;
+    });
+    expect(validateLeagueRules(ok, NFL)).toEqual([]);
+  });
+
+  it("rejects a fee above the ceiling", () => {
+    const bad = mutate((d) => {
+      (d.pot as { feeBps: number }).feeBps = 501;
+    });
+    expect(validateLeagueRules(bad, NFL)).toContainEqual(
+      expect.stringContaining("above the 500 ceiling"),
+    );
+  });
+
   it("rejects payout shares that do not sum to 100%", () => {
     const bad = mutate((d) => {
       (d.pot!.payout as { basisPoints: number }[])[0]!.basisPoints = 5000;

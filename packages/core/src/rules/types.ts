@@ -21,6 +21,20 @@ export const MILLI_POINTS_PER_POINT = 1000;
 export const BASIS_POINTS_TOTAL = 10_000;
 
 /**
+ * Buy-in bounds, in a six-decimal stablecoin's base units: $5 to $50.
+ *
+ * A range, not a price — a league stakes whatever it likes between them. The
+ * ceiling caps what any single league can lose to a bug in an unaudited escrow;
+ * the floor exists because a pot has fixed costs a stake does not scale with,
+ * so below a few dollars the transfers cost more than the prize.
+ *
+ * Mirrored in `programs/rostr-escrow/src/lib.rs`, which is where they bind.
+ * These exist so a league creator sees a sentence instead of a program error.
+ */
+export const MIN_BUY_IN_BASE_UNITS = 5_000_000;
+export const MAX_BUY_IN_BASE_UNITS = 50_000_000;
+
+/**
  * Ceiling on the protocol fee, in basis points. 5%.
  *
  * Not the fee itself — that is per league and frozen at creation. This is the

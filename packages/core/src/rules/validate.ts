@@ -11,7 +11,12 @@
 
 import type { SportDef } from "../sports/types.js";
 import { slotTypesByKey, statKeysByKey } from "../sports/types.js";
-import { BASIS_POINTS_TOTAL, MAX_FEE_BPS } from "./types.js";
+import {
+  BASIS_POINTS_TOTAL,
+  MAX_BUY_IN_BASE_UNITS,
+  MAX_FEE_BPS,
+  MIN_BUY_IN_BASE_UNITS,
+} from "./types.js";
 import type { LeagueRules, ScoringRule } from "./types.js";
 
 const FAST_PICK_SECONDS = [90, 120, 300, 600];
@@ -227,6 +232,23 @@ function validatePot(rules: LeagueRules, out: string[]): void {
 
   if (!/^[1-9][0-9]*$/.test(pot.buyInBaseUnits)) {
     out.push("buyInBaseUnits must be a positive integer expressed as a decimal string");
+  } else {
+    // BigInt because a u64 buy-in can exceed Number.MAX_SAFE_INTEGER, and a
+    // comparison that silently rounds is exactly the class of bug the
+    // decimal-string representation exists to avoid.
+    const units = BigInt(pot.buyInBaseUnits);
+    if (units < BigInt(MIN_BUY_IN_BASE_UNITS)) {
+      out.push(
+        `buy-in is below the ${MIN_BUY_IN_BASE_UNITS} base-unit minimum ` +
+          `(a pot smaller than this costs more to move than it pays out)`,
+      );
+    }
+    if (units > BigInt(MAX_BUY_IN_BASE_UNITS)) {
+      out.push(
+        `buy-in is above the ${MAX_BUY_IN_BASE_UNITS} base-unit cap ` +
+          `while the escrow is unaudited`,
+      );
+    }
   }
   if (pot.tokenMint.length === 0) out.push("pot requires a token mint");
   if (pot.refundUnlockAt <= 0) out.push("pot requires a refund unlock time");

@@ -344,9 +344,17 @@ Optional per league. When enabled:
   A wider choice needs either a per-token cap or a price oracle; neither is worth building
   before the escrow has been reviewed.
 - Funds lock in escrow until the championship resolves.
-- **The buy-in is capped at $50 per member** while the escrow contract is young. It is
-  enforced by the program, not the interface, so it binds every caller. At twelve members
-  that is a $600 pot — the most any single league can lose to a bug in new code.
+- **The buy-in is between $5 and $50 per member** while the escrow contract is young. Both
+  bounds are enforced by the program, not the interface, so they bind every caller. A
+  league stakes any amount in that range — $5, $10, $25, $47, $50 — the ceiling is a limit,
+  not a price. At twelve members the most a single league can lose to a bug in new code is
+  therefore $600.
+
+  The floor is there because a pot has fixed costs a stake does not scale with: every
+  deposit and refund is a transaction, the vault and each membership cost rent, and
+  settlement pays five prizes. Below a few dollars, moving the money costs more than the
+  money. A pot smaller than that is a free league with extra steps, and free leagues have
+  their own path.
 
 A league that plays for nothing is still a league: its rules are hashed on-chain and
 members accept that hash to join, exactly as below. Only the escrow is skipped.

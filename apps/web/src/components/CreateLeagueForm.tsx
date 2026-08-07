@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import {
   buildNflPprRules,
   hashLeagueRules,
+  MAX_BUY_IN_BASE_UNITS,
+  MIN_BUY_IN_BASE_UNITS,
   NFL_DEFAULT_FEE_BPS,
   NFL_DEFAULT_PAYOUT,
 } from "@rostr/core";
@@ -48,6 +50,12 @@ const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
  * honestly shows nothing than one that invents a recipient.
  */
 const FEE_RECIPIENT = process.env.NEXT_PUBLIC_FEE_RECIPIENT ?? "";
+
+// The bounds are defined in base units, because that is what the program
+// enforces. USDC's six decimals are the only reason these divide cleanly, and
+// the same six decimals are why the program requires them.
+const MIN_BUY_IN_USDC = MIN_BUY_IN_BASE_UNITS / 1_000_000;
+const MAX_BUY_IN_USDC = MAX_BUY_IN_BASE_UNITS / 1_000_000;
 
 /** Two weeks after the championship, so a stuck league can always be unwound. */
 const DEFAULT_REFUND_UNLOCK = "2027-03-01T00:00";
@@ -273,15 +281,27 @@ export function CreateLeagueForm() {
               </p>
 
               <label className="block text-sm">
-                <span className="mb-1 block text-white/60">Buy-in per team (USDC)</span>
+                <span className="mb-1 block text-white/60">
+                  Buy-in per team (USDC) — {MIN_BUY_IN_USDC} to {MAX_BUY_IN_USDC}
+                </span>
+                {/*
+                  step is cents, not whole dollars. The program accepts any u64 between
+                  the two bounds, so a step of 1 would be the interface inventing a
+                  restriction the rules do not have — $12.50 is a legal pot.
+                */}
                 <input
                   type="number"
-                  min="1"
-                  step="1"
+                  min={MIN_BUY_IN_USDC}
+                  max={MAX_BUY_IN_USDC}
+                  step="0.01"
                   value={buyIn}
                   onChange={(e) => setBuyIn(e.target.value)}
                   className="w-32 rounded border border-white/15 bg-transparent px-3 py-2"
                 />
+                <span className="mt-1 block text-xs text-white/40">
+                  Any amount in that range, cents included. The ceiling is a limit on what a
+                  single league can lose while the escrow is unaudited, not a price.
+                </span>
               </label>
 
               <label className="block text-sm">
