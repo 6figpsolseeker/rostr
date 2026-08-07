@@ -21,6 +21,28 @@ export {
 } from "./leagues.js";
 
 export {
+  finalizationHours,
+  loadScheduledWeek,
+  loadWeekResults,
+  persistSchedule,
+  resolveLeagueWeek,
+  WeekError,
+  type ResolveWeekOutcome,
+} from "./week.js";
+
+export {
+  autoFillLineup,
+  ensureLineups,
+  LineupError,
+  loadLineup,
+  loadRosterForWeek,
+  loadWeekLineups,
+  loadWeekStats,
+  setLineup,
+  type SetLineupInput,
+} from "./lineups.js";
+
+export {
   consumeAll,
   consumeRateLimit,
   hashedIp,

@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/draft-tick",
       "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/cron/score-week",
+      "schedule": "*/10 * * * *"
     }
   ]
 }

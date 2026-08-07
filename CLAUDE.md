@@ -47,7 +47,7 @@ Do not build it in August.
 
 See [`docs/BUILD-PLAN.md`](docs/BUILD-PLAN.md) for the full commit-by-commit plan.
 
-**Done — 630 tests, CI green:**
+**Done — 668 tests, CI green:**
 
 - Full specification — rules, data model, live scoring, build plan
 - A1: pnpm monorepo, TS strict, vitest, eslint, prettier, CI
@@ -95,26 +95,30 @@ See [`docs/BUILD-PLAN.md`](docs/BUILD-PLAN.md) for the full commit-by-commit pla
 - `/api/cron/draft-tick` — clocks advance without anyone watching
 
 - C2, C3 and C10: lineup validation, per-player kickoff locks, and the deterministic
-  autolineup (`packages/core/src/season/lineup.ts`, `autolineup.ts`). **Pure only — not
-  yet persisted or exposed**; that is the next commit.
+  autolineup (`packages/core/src/season/lineup.ts`, `autolineup.ts`)
 
-**The Aug 22 path is complete in the app: create → join → draft.** What it still needs is
-deployment and the credentials in `SETUP-REQUIRED.md`, not more code.
+- Lineups persisted and editable (`packages/db/src/lineups.ts`,
+  `apps/web/src/components/LineupEditor.tsx`), and the week resolved end to end
+  (`packages/db/src/week.ts`, `/api/cron/score-week`)
+
+**Both hard deadlines are now covered in code.** Aug 22 is create → join → draft; Sep 9 is
+set a lineup → score the week → standings. What they need is deployment and the
+credentials in `SETUP-REQUIRED.md`, not more code.
 
 **Next, in order:**
 
-1. **Persist lineups and expose them** — the `lineups` table exists, the rules are
-   written, and `results.ts` can now score one. Nothing writes a lineup yet. Needs a
-   `setLineup` in `@rostr/db`, a route, and a screen. Until this lands, C6 has real
-   inputs only in tests.
-2. **Wire the week** — a job that pulls the week's stat lines, calls `resolveWeek`, and
-   persists `matchups`. Everything it needs now exists; nothing calls it.
-3. **D1–D10** — the escrow program. **No longer blocked**: the main PC has Rust, the
+1. **D1–D10** — the escrow program. **No longer blocked**: the main PC has Rust, the
    Solana CLI and Anchor 0.31.1, verified by building and testing an Anchor program on a
-   local validator. See Environment below.
-4. **Pot leagues cannot actually take money yet.** The rules describe a pot and the UI
+   local validator. See Environment below. **This is main-PC work** — the secondary
+   machine still has no Rust toolchain.
+2. **Pot leagues cannot actually take money yet.** The rules describe a pot and the UI
    collects a buy-in, but nothing escrows anything until D1–D10 exists. Do not let a real
    league form around a pot before then.
+3. **Nothing generates a season schedule yet.** `persistSchedule` exists and is tested,
+   but no caller runs it — a league goes from drafted to having no fixtures. Small, and it
+   belongs wherever the draft is marked complete.
+4. **A standings screen.** `computeStandings` and `loadWeekResults` are both ready; there
+   is nowhere to look at them.
 
 **Still open on the draft:** nothing, on the fairness side — the grindable seed is fixed
 (see "The order draw" below). What remains is operational: `SOLANA_RPC_URL` has to be
@@ -314,6 +318,34 @@ and leaves TE empty. There is a test.
 
 An unavailable player still gets started when there is nobody else: an empty slot and an
 inactive player both score nothing, but only one keeps the lineup legal.
+
+**Persistence is `packages/db/src/lineups.ts`.** The lock is enforced there, not just
+greyed out in the UI — `setLineup` loads what is _currently stored_, works out which slots
+have kicked off, and refuses any change to them. A crafted request gets the same answer as
+the screen.
+
+`ensureLineups` is what makes `resolveWeek`'s precondition true. That function throws when
+a scheduled team has no lineup, deliberately — scoring a missing team as zero hands its
+opponent a free win — so the autolineup fills every gap before a week is scored.
+
+### Resolving a week
+
+`packages/db/src/week.ts`, run by `/api/cron/score-week`.
+
+**Scoring and finalising are separate decisions.** Points are rewritten on every run so a
+manager can watch their week; `finalized_at` is set only once every game is `FINAL` **and**
+the correction window has elapsed. A finalised week is never rescored — in a paying week it
+has already decided money, and a silently changed result afterwards is exactly what the
+window exists to prevent.
+
+The window comes from the rules: 48 hours normally, **168 for weeks 14 and 17**, because
+official NFL stat corrections arrive for up to seven days.
+
+Scores read `stat_lines_current`, so a correction that arrived as a new revision is used
+and the superseded one is not. There is a test for that specifically.
+
+`persistSchedule` refuses to overwrite an existing schedule. Rewriting mid-season changes
+who played whom, and every record derived from it.
 
 ### Resolving a week
 
