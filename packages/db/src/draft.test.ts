@@ -618,6 +618,55 @@ describe("recordPick", () => {
     expect(result.source).not.toBe("QUEUE");
   });
 
+  it("starts the season when the draft completes", async () => {
+    // A league that finished drafting and had no fixtures would look finished
+    // and be unplayable.
+    const fx = await started(2);
+
+    for (let i = 0; i < totalPicks(2, 14); i++) {
+      await recordPick(fx.client, {
+        leagueId: fx.leagueId,
+        pool: fx.pool,
+        shape: SHAPE,
+        now: SCHEDULED,
+      });
+    }
+
+    const [league] = await fx.client.query<{ state: string }>(
+      "SELECT state FROM leagues WHERE id = $1",
+      [fx.leagueId],
+    );
+    expect(league?.state).toBe("IN_SEASON");
+
+    const [matchups] = await fx.client.query<{ count: number }>(
+      "SELECT count(*)::int AS count FROM matchups WHERE league_id = $1",
+      [fx.leagueId],
+    );
+    // Two teams, fourteen weeks.
+    expect(Number(matchups?.count)).toBe(14);
+  });
+
+  it("moves the league to DRAFTING when the clock starts", async () => {
+    // Nothing else moved league state, so a drafted league stayed FORMING and
+    // kept accepting members.
+    const fx = await setup();
+    await scheduled(fx);
+
+    const before = await fx.client.query<{ state: string }>(
+      "SELECT state FROM leagues WHERE id = $1",
+      [fx.leagueId],
+    );
+    expect(before[0]?.state).toBe("FORMING");
+
+    await startDraft(fx.client, fx.leagueId, SCHEDULED);
+
+    const after = await fx.client.query<{ state: string }>(
+      "SELECT state FROM leagues WHERE id = $1",
+      [fx.leagueId],
+    );
+    expect(after[0]?.state).toBe("DRAFTING");
+  });
+
   it("marks the draft complete on the final pick", async () => {
     const fx = await started(2);
     const total = totalPicks(2, 14);

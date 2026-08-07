@@ -47,7 +47,7 @@ Do not build it in August.
 
 See [`docs/BUILD-PLAN.md`](docs/BUILD-PLAN.md) for the full commit-by-commit plan.
 
-**Done — 668 tests, CI green:**
+**Done — 670 tests, CI green:**
 
 - Full specification — rules, data model, live scoring, build plan
 - A1: pnpm monorepo, TS strict, vitest, eslint, prettier, CI
@@ -101,6 +101,9 @@ See [`docs/BUILD-PLAN.md`](docs/BUILD-PLAN.md) for the full commit-by-commit pla
   `apps/web/src/components/LineupEditor.tsx`), and the week resolved end to end
   (`packages/db/src/week.ts`, `/api/cron/score-week`)
 
+- The season schedule drawn when the draft completes, league state transitions, and a
+  standings screen
+
 **Both hard deadlines are now covered in code.** Aug 22 is create → join → draft; Sep 9 is
 set a lineup → score the week → standings. What they need is deployment and the
 credentials in `SETUP-REQUIRED.md`, not more code.
@@ -114,11 +117,10 @@ credentials in `SETUP-REQUIRED.md`, not more code.
 2. **Pot leagues cannot actually take money yet.** The rules describe a pot and the UI
    collects a buy-in, but nothing escrows anything until D1–D10 exists. Do not let a real
    league form around a pot before then.
-3. **Nothing generates a season schedule yet.** `persistSchedule` exists and is tested,
-   but no caller runs it — a league goes from drafted to having no fixtures. Small, and it
-   belongs wherever the draft is marked complete.
-4. **A standings screen.** `computeStandings` and `loadWeekResults` are both ready; there
-   is nowhere to look at them.
+3. **Waivers and trades are written but not wired.** `waivers/claims.ts` and
+   `waivers/schedule.ts` are finished and tested; nothing calls them, and there is no
+   add/drop UI. Needed by Sep 16, not Aug 22.
+4. **The playoff bracket.** `playoffField` seeds it; nothing plays it. Weeks 15–17.
 
 **Still open on the draft:** nothing, on the fairness side — the grindable seed is fixed
 (see "The order draw" below). What remains is operational: `SOLANA_RPC_URL` has to be
@@ -346,6 +348,23 @@ and the superseded one is not. There is a test for that specifically.
 
 `persistSchedule` refuses to overwrite an existing schedule. Rewriting mid-season changes
 who played whom, and every record derived from it.
+
+**The schedule is drawn when the draft completes**, inside the same transaction as the
+final pick, seeded from the draft's own order seed. So it is as checkable as the draft
+order and for the same reason: schedule luck is retained deliberately, which means nobody
+may be able to arrange it. A league that finished drafting with no fixtures would look
+finished and be unplayable.
+
+`generateSeasonSchedule` deliberately **does not open a transaction** — it is called from
+inside one. `withTransaction` issues a real `BEGIN` on whichever client it is given, so a
+nested call would make the inner `COMMIT` commit the outer work too. Use `persistSchedule`
+when you need the transaction.
+
+**League state transitions live in the draft**: `startDraft` moves FORMING → DRAFTING, and
+the final pick moves it to IN_SEASON. Nothing else moved state before, so a drafted league
+stayed FORMING forever — still accepting members, and invisible to every job that works on
+live leagues. The enum is FORMING / DRAFTING / IN_SEASON / PLAYOFFS / SETTLED / DISSOLVED;
+an invented value is not a no-op, Postgres fails the cast and the query errors.
 
 ### Resolving a week
 

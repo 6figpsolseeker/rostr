@@ -38,6 +38,7 @@ import type { DraftablePlayer, DraftPick, DraftState, RosterShape } from "@rostr
 import type { SqlClient } from "./client.js";
 import type { RandomnessBeacon } from "./randomness.js";
 import { withTransaction } from "./transaction.js";
+import { generateSeasonSchedule } from "./week.js";
 
 /** Postgres `unique_violation`. */
 function isUniqueViolation(error: unknown): boolean {
@@ -459,6 +460,16 @@ export async function startDraft(db: SqlClient, leagueId: string, now: Date): Pr
     [leagueId, now],
   );
 
+  if (rows.length > 0) {
+    // Nothing else moved league state, so a drafted league stayed FORMING
+    // forever — which meant it kept accepting members and never appeared to any
+    // job that works on live leagues.
+    await db.query(
+      "UPDATE leagues SET state = 'DRAFTING' WHERE id = $1 AND state = 'FORMING'",
+      [leagueId],
+    );
+  }
+
   if (rows.length === 0) {
     const draft = await loadDraft(db, leagueId);
     if (!draft) throw new DraftPersistenceError("League has no draft", "DRAFT_NOT_FOUND");
@@ -597,6 +608,16 @@ export async function recordPick(db: SqlClient, input: RecordPickInput): Promise
           WHERE id = $1`,
         [record.draftId, input.now],
       );
+
+      // The season starts here, in the same transaction as the last pick.
+      //
+      // A league that finished drafting and had no fixtures would look finished
+      // and be unplayable, and the schedule seed is the draft's own — already
+      // from a Solana block nobody could predict, already recorded, so the
+      // schedule is as checkable as the order.
+      await tx.query("UPDATE leagues SET state = 'IN_SEASON' WHERE id = $1", [input.leagueId]);
+
+      await generateSeasonSchedule(tx, input.leagueId, record.draw?.seed ?? record.draftId);
     } else {
       // The next manager's clock starts when the previous pick lands, not when
       // anyone loads the page.

@@ -52,8 +52,11 @@ export async function GET(request: Request): Promise<NextResponse> {
     return NextResponse.json({ at: now.toISOString(), week: null, leagues: [] });
   }
 
+  // The enum is FORMING / DRAFTING / IN_SEASON / PLAYOFFS / SETTLED / DISSOLVED.
+  // An invented value here is not a no-op — Postgres fails to cast it and the
+  // whole job errors.
   const leagues = await client.query<{ id: string; name: string }>(
-    "SELECT id, name FROM leagues WHERE state IN ('DRAFTING', 'ACTIVE')",
+    "SELECT id, name FROM leagues WHERE state IN ('IN_SEASON', 'PLAYOFFS')",
   );
 
   const scored: {

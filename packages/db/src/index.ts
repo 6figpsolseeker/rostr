@@ -22,6 +22,7 @@ export {
 
 export {
   finalizationHours,
+  generateSeasonSchedule,
   loadScheduledWeek,
   loadWeekResults,
   persistSchedule,

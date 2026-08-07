@@ -26,7 +26,7 @@
  * rescored.
  */
 
-import { indexScoringRules, resolveWeek, winnerOf } from "@rostr/core";
+import { generateSchedule, indexScoringRules, resolveWeek, winnerOf } from "@rostr/core";
 import type { LeagueRules, MatchupResult, ScheduledMatchup } from "@rostr/core";
 import type { SqlClient } from "./client.js";
 import { getLeagueRules } from "./leagues.js";
@@ -220,37 +220,91 @@ async function finalizationHold(
 }
 
 /**
- * Write a generated schedule into `matchups`.
+ * Draw a league's season schedule and store it.
+ *
+ * Called when the draft completes, which is the first moment the field is
+ * genuinely final. Seeded from the draft's own order seed — already derived from
+ * a Solana block nobody could predict, already recorded — so the schedule is as
+ * checkable as the draft order, and for the same reason: schedule luck is
+ * retained deliberately, which means nobody may be able to arrange it.
+ *
+ * Idempotent. A league that already has fixtures keeps them.
+ *
+ * **Does not open a transaction**, unlike `persistSchedule`. It is called from
+ * inside the transaction that records the final pick, and `withTransaction`
+ * issues a real `BEGIN` on whichever client it is handed — nesting one would
+ * make the inner `COMMIT` commit the outer work too.
+ */
+export async function generateSeasonSchedule(
+  db: SqlClient,
+  leagueId: string,
+  seed: string,
+): Promise<{ written: number }> {
+  const stored = await getLeagueRules(db, leagueId);
+  if (!stored) throw new WeekError("League has no rules", "LEAGUE_NOT_FOUND");
+
+  // Ordered by join slot so the input to the generator is deterministic — it
+  // sorts internally too, but relying on that would be relying on an
+  // implementation detail of a different module.
+  const teams = await db.query<{ id: string }>(
+    "SELECT id FROM teams WHERE league_id = $1 ORDER BY slot",
+    [leagueId],
+  );
+  if (teams.length < 2) return { written: 0 };
+
+  return writeSchedule(
+    db,
+    leagueId,
+    generateSchedule(
+      teams.map((team) => team.id),
+      stored.rules.schedule.regularSeasonWeeks,
+      seed,
+    ),
+  );
+}
+
+/** The write itself, with no transaction of its own. */
+async function writeSchedule(
+  db: SqlClient,
+  leagueId: string,
+  schedule: readonly ScheduledMatchup[],
+): Promise<{ written: number }> {
+  const [existing] = await db.query<{ count: number }>(
+    "SELECT count(*)::int AS count FROM matchups WHERE league_id = $1",
+    [leagueId],
+  );
+  if (Number(existing?.count ?? 0) > 0) {
+    // Rewriting a schedule mid-season changes who played whom, which changes
+    // every record derived from it.
+    return { written: 0 };
+  }
+
+  for (const matchup of schedule) {
+    await db.query(
+      `INSERT INTO matchups (league_id, week, phase, home_team_id, away_team_id)
+       VALUES ($1, $2, 'REGULAR', $3, $4)`,
+      [leagueId, matchup.week, matchup.homeTeamId, matchup.awayTeamId],
+    );
+  }
+
+  return { written: schedule.length };
+}
+
+/**
+ * Write a generated schedule into `matchups`, in its own transaction.
  *
  * Separate from resolution: the schedule is drawn once, at the start of a
  * season, and resolution runs every week against what was drawn.
+ *
+ * Use `generateSeasonSchedule` from inside an existing transaction instead —
+ * `withTransaction` issues a real `BEGIN`, so nesting is not free.
  */
 export async function persistSchedule(
   db: SqlClient,
   leagueId: string,
   schedule: readonly ScheduledMatchup[],
 ): Promise<{ written: number }> {
-  return withTransaction(db, async (tx) => {
-    const [existing] = await tx.query<{ count: number }>(
-      "SELECT count(*)::int AS count FROM matchups WHERE league_id = $1",
-      [leagueId],
-    );
-    if (Number(existing?.count ?? 0) > 0) {
-      // Rewriting a schedule mid-season changes who played whom, which changes
-      // every record derived from it.
-      return { written: 0 };
-    }
-
-    for (const matchup of schedule) {
-      await tx.query(
-        `INSERT INTO matchups (league_id, week, phase, home_team_id, away_team_id)
-         VALUES ($1, $2, 'REGULAR', $3, $4)`,
-        [leagueId, matchup.week, matchup.homeTeamId, matchup.awayTeamId],
-      );
-    }
-
-    return { written: schedule.length };
-  });
+  return withTransaction(db, (tx) => writeSchedule(tx, leagueId, schedule));
 }
 
 /** Results for a week, for the standings. */
