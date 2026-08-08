@@ -111,6 +111,7 @@ export async function migrate(
     "SELECT version, name, checksum FROM schema_migrations",
   );
   const byVersion = new Map(applied.map((row) => [Number(row.version), row]));
+  const maxApplied = applied.reduce((max, row) => Math.max(max, Number(row.version)), 0);
 
   const didApply: string[] = [];
   const didSkip: string[] = [];
@@ -129,6 +130,18 @@ export async function migrate(
       }
       didSkip.push(migration.filename);
       continue;
+    }
+
+    // Forward-only means forward. A new migration must be newer than everything
+    // already applied; a lower unapplied version means two branches numbered
+    // migrations independently and the higher one deployed first. Applying the
+    // lower one now would build the schema in an order it was never tested in.
+    if (migration.version < maxApplied) {
+      throw new MigrationError(
+        `Migration ${migration.filename} (version ${migration.version}) is older than ` +
+          `the latest applied version (${maxApplied}). ` +
+          `Migrations are forward-only — renumber it above ${maxApplied} and rebase.`,
+      );
     }
 
     await db.exec("BEGIN");

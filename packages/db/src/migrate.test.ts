@@ -60,6 +60,25 @@ describe("migrate", () => {
     await expect(migrate(client, tampered)).rejects.toThrow(/forward-only/);
   });
 
+  it("refuses a migration older than the latest applied version", async () => {
+    // Forward-only: two branches can number migrations independently, and if the
+    // higher one deploys first, applying the lower one afterwards would build the
+    // schema in an order it was never tested in.
+    const client = await fresh();
+    const mig = (version: number, name: string) => ({
+      version,
+      name,
+      filename: `${String(version).padStart(4, "0")}_${name}.sql`,
+      sql: `CREATE TABLE t_${name} (id int);`,
+      checksum: String(version).padEnd(64, "0"),
+    });
+
+    await migrate(client, [mig(9999, "later")]);
+
+    await expect(migrate(client, [mig(9998, "earlier")])).rejects.toThrow(MigrationError);
+    await expect(migrate(client, [mig(9998, "earlier")])).rejects.toThrow(/forward-only|older/i);
+  });
+
   it("rolls back a failing migration rather than half-applying it", async () => {
     const client = await fresh();
 
