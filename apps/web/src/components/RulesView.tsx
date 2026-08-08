@@ -280,20 +280,23 @@ function Pot({ rules }: { rules: LeagueRules }) {
 
 function Governance({ rules }: { rules: LeagueRules }) {
   return (
-    <Section title="Abandonment and settlement">
+    <Section title="Autofill and settlement">
       <div className="grid gap-x-8 sm:grid-cols-2">
+        {/*
+          Worth stating rather than leaving to be discovered: there is no
+          penalty for missing a week. The rule that used to take a stake for it
+          is gone, and a member reading these rules before they sign should see
+          that plainly.
+        */}
         <Row
-          label="Abandoned after"
-          value={`${rules.abandonment.strikesToAbandon} weeks of invalid lineups`}
-        />
-        <Row
-          label="Then"
+          label="Empty slots filled by"
           value={
-            rules.abandonment.forfeitStakeToChampion
-              ? "Autolineup; stake forfeited to champion"
-              : "Autolineup"
+            rules.roster.autofill === "WEEKLY_PROJECTION"
+              ? "This week's projection"
+              : "Season-to-date average"
           }
         />
+        <Row label="Penalty for missing a week" value="None" />
         <Row label="Oracle sources" value={rules.settlement.requiredOracleSources} />
         <Row
           label="Weeks finalise after"
