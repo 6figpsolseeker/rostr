@@ -25,6 +25,25 @@ export {
 } from "./leagues.js";
 
 export {
+  addFreeAgent,
+  availabilityOf,
+  availablePlayers,
+  cancelClaim,
+  dropPlayer,
+  leaguesDueForWaivers,
+  loadWaiverPriority,
+  nextWaiverRun,
+  pendingClaims,
+  processWaivers,
+  seedWaiverPriority,
+  submitClaim,
+  WaiverError,
+  type AddInput,
+  type Availability,
+  type WaiverRunOutcome,
+} from "./waivers.js";
+
+export {
   finalizationHours,
   generateSeasonSchedule,
   loadScheduledWeek,

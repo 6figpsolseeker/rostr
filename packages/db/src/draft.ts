@@ -38,6 +38,7 @@ import type { DraftablePlayer, DraftPick, DraftState, RosterShape } from "@rostr
 import type { SqlClient } from "./client.js";
 import type { RandomnessBeacon } from "./randomness.js";
 import { withTransaction } from "./transaction.js";
+import { seedWaiverPriority } from "./waivers.js";
 import { generateSeasonSchedule } from "./week.js";
 
 /** Postgres `unique_violation`. */
@@ -618,6 +619,12 @@ export async function recordPick(db: SqlClient, input: RecordPickInput): Promise
       await tx.query("UPDATE leagues SET state = 'IN_SEASON' WHERE id = $1", [input.leagueId]);
 
       await generateSeasonSchedule(tx, input.leagueId, record.draw?.seed ?? record.draftId);
+
+      // Reverse of the draft order — the team that picked last claims first,
+      // which is the same balancing instinct the snake applies within a round.
+      // Seeded here because it is the first moment there is a draft order to
+      // reverse, and a league with no priority cannot process a claim.
+      await seedWaiverPriority(tx, input.leagueId);
     } else {
       // The next manager's clock starts when the previous pick lands, not when
       // anyone loads the page.

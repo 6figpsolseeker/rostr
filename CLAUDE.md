@@ -47,7 +47,7 @@ Do not build it in August.
 
 See [`docs/BUILD-PLAN.md`](docs/BUILD-PLAN.md) for the full commit-by-commit plan.
 
-**Done — 670 tests, CI green:**
+**Done — 728 tests, CI green:**
 
 - Full specification — rules, data model, live scoring, build plan
 - A1: pnpm monorepo, TS strict, vitest, eslint, prettier, CI
@@ -101,6 +101,9 @@ See [`docs/BUILD-PLAN.md`](docs/BUILD-PLAN.md) for the full commit-by-commit pla
   `apps/web/src/components/LineupEditor.tsx`), and the week resolved end to end
   (`packages/db/src/week.ts`, `/api/cron/score-week`)
 
+- Waivers and free agency wired end to end (`packages/db/src/waivers.ts`,
+  `apps/web/src/components/PlayerMarket.tsx`, `/api/cron/waivers`)
+
 - The season schedule drawn when the draft completes, league state transitions, and a
   standings screen
 
@@ -137,9 +140,9 @@ credentials in `SETUP-REQUIRED.md`, not more code.
    or lose. The cost is that a league can exist here unanchored, because someone can close
    the tab; the partial index in `0014` finds those.
 
-2. **Waivers and trades are written but not wired.** `waivers/claims.ts` and
-   `waivers/schedule.ts` are finished and tested; nothing calls them and there is no
-   add/drop UI. Needed by Sep 16, not Aug 22.
+2. **Trades are specified but not built.** `docs/RULES.md` §6 describes the veto window
+   and threshold; the tables exist (`trades`, `trade_assets`, `trade_vetoes`); no code
+   touches them. Deadline is week 11, so there is time.
 3. **D6–D10** — the rest of the escrow. **This is main-PC work**; the secondary machine has
    no Rust toolchain. Note that **D6 is not a small job**: "payout by the frozen split"
    needs to know who won, and `RULES.md` § 7 says nobody declares a winner — the contract
@@ -391,6 +394,34 @@ finished and be unplayable.
 inside one. `withTransaction` issues a real `BEGIN` on whichever client it is given, so a
 nested call would make the inner `COMMIT` commit the outer work too. Use `persistSchedule`
 when you need the transaction.
+
+### Waivers
+
+`packages/db/src/waivers.ts`, run by `/api/cron/waivers` hourly. The rules are in
+`@rostr/core`; this module loads their inputs and applies their outputs, and decides
+nothing.
+
+**A drop is not a delete.** Held 24 hours or more, a player goes to waivers; held less, he
+goes straight to free agency. That second rule is ESPN's and it stops a manager adding
+someone, cutting him hours later, and re-adding him to dodge the queue.
+
+**One route handles add, claim and drop**, and which one happens is decided by the
+player's availability rather than by which button was pressed. A client that could choose
+would be able to ask for an immediate add on a player who is on waivers — which is exactly
+what waivers exist to prevent.
+
+Two properties of `processWaivers` are load-bearing: it is **blind** (resolution cannot
+depend on submission order) and **replayable** (pure, so a disputed run can be re-run
+rather than argued about). Both come from `resolveWaiverClaims`; do not reimplement them
+here.
+
+Priority is seeded at draft completion, reversed from the draft order. Winners move to the
+back, losers do not move at all — a failed claim costs nothing, so there is no reason to
+hoard claims.
+
+**Watch the clock in tests.** A player dropped Monday afternoon clears at Wednesday 03:00
+**Eastern**, which is 07:00 UTC — so a test using "Wednesday 18:00 UTC" is _after_ the
+clear, not before it. One test asserted the opposite and was wrong.
 
 ### Joining requires the anchor
 
