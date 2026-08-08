@@ -303,6 +303,39 @@ export class Tank01Provider implements StatsProvider {
     return parseSeasonProjections(raw, DST_REF_PREFIX);
   }
 
+  /**
+   * Projections for **one week**, which is what filling a lineup needs.
+   *
+   * A season total cannot answer "who scores most this Sunday": a player on bye
+   * projects zero for the week and entirely unchanged for the season. Same
+   * endpoint, same parser — the only difference is the `week` parameter and
+   * which shape comes back.
+   *
+   * The guard is the mirror of the season one and matters for the same reason.
+   * Tank01 answers a bad week with the season aggregate rather than an error, so
+   * without it a typo'd week would silently fill every lineup from season totals
+   * while appearing to work.
+   */
+  async listWeekProjections(
+    season: number,
+    week: number,
+  ): Promise<readonly ProviderProjection[]> {
+    const raw = await this.client.get<RawProjectionsBody>("getNFLProjections", {
+      archiveSeason: String(season),
+      week: String(week),
+    });
+
+    if (isSeasonAggregate(raw)) {
+      throw new ProviderError(
+        `Asked for week ${week} projections and got the season aggregate. ` +
+          `Filling a lineup from season totals would look like it worked.`,
+        this.name,
+      );
+    }
+
+    return parseSeasonProjections(raw, DST_REF_PREFIX);
+  }
+
   /** Bye weeks by team abbreviation, for a season. Free with the roster sync. */
   async listByeWeeks(season: number): Promise<ReadonlyMap<string, number>> {
     const teams = await this.client.get<RawTeam[]>("getNFLTeams");

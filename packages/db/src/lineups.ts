@@ -302,6 +302,46 @@ async function loadAverages(
   );
 }
 
+/**
+ * This week's projections, scored under **this league's** rules.
+ *
+ * The provider ships its own fantasy point total and it is discarded, here as
+ * everywhere: ours pays 4 for a passing touchdown where a provider's default may
+ * pay 6. Storing someone else's arithmetic would put a number in front of a
+ * manager that disagrees with the number deciding their matchup. Raw stats in,
+ * `scorePlayer` out — there is one definition of a point in this system.
+ *
+ * A player with no projection is simply absent from the map, and the autolineup
+ * falls back to his season average for that player alone.
+ */
+async function loadProjectedPoints(
+  db: SqlClient,
+  season: number,
+  week: number,
+  rules: LeagueRules,
+): Promise<ReadonlyMap<string, number>> {
+  const rows = await db.query<{ player_id: string; key: string; value: number }>(
+    `SELECT p.player_id, k.key, p.value
+       FROM player_projections p
+       JOIN stat_keys k ON k.id = p.stat_key_id
+      WHERE p.season = $1 AND p.week = $2`,
+    [season, week],
+  );
+
+  const byPlayer = new Map<string, StatLine[]>();
+  for (const row of rows) {
+    const lines = byPlayer.get(row.player_id) ?? [];
+    lines.push({ statKey: row.key, value: Number(row.value) });
+    byPlayer.set(row.player_id, lines);
+  }
+
+  const scoring = indexScoringRules(rules.scoring);
+
+  return new Map(
+    [...byPlayer].map(([playerId, stats]) => [playerId, scorePlayer(stats, scoring)]),
+  );
+}
+
 /** Injury designations that mean a player will not appear. */
 const OUT_STATUSES = new Set(["OUT", "IR", "INACTIVE", "SUSPENDED", "DOUBTFUL", "PUP", "NFI"]);
 
@@ -327,11 +367,20 @@ export async function autoFillLineup(
 
   const averages = await loadAverages(db, [...roster.keys()], season, week, stored.rules);
 
+  // Only fetched when the league ranks on them. A league set to SEASON_AVERAGE
+  // should not pay for a query whose result it ignores.
+  const mode = stored.rules.roster.autofill;
+  const projected =
+    mode === "WEEKLY_PROJECTION"
+      ? await loadProjectedPoints(db, season, week, stored.rules)
+      : new Map<string, number>();
+
   const candidates: AutolineupCandidate[] = [...roster.values()].map((player) => ({
     playerId: player.playerId,
     positions: player.positions,
     kickoffAt: player.kickoffAt,
     averageMilliPoints: averages.get(player.playerId) ?? null,
+    projectedMilliPoints: projected.get(player.playerId) ?? null,
     // A bye and an injury designation both mean "will not appear". Neither is a
     // hard exclusion — a team with nobody else still has to field someone.
     unavailable: player.kickoffAt === null || OUT_STATUSES.has(player.status.toUpperCase()),
@@ -352,6 +401,7 @@ export async function autoFillLineup(
   const filled = autolineup({
     shape: buildRosterShape(stored.rules.roster, NFL),
     roster: candidates,
+    mode,
     locked: [...keep.values()],
   });
 
@@ -405,19 +455,67 @@ export async function ensureLineups(
   leagueId: string,
   week: number,
   now: number,
-): Promise<{ teamsFilled: number }> {
-  const teams = await db.query<{ id: string }>(
-    "SELECT id FROM teams WHERE league_id = $1 ORDER BY slot",
+): Promise<{ teamsFilled: number; teamsOptedOut: number }> {
+  const teams = await db.query<{ id: string; autofill_enabled: boolean; is_bot: boolean }>(
+    "SELECT id, autofill_enabled, is_bot FROM teams WHERE league_id = $1 ORDER BY slot",
     [leagueId],
   );
 
   let teamsFilled = 0;
+  let teamsOptedOut = 0;
+
   for (const team of teams) {
-    await autoFillLineup(db, leagueId, team.id, week, now);
-    teamsFilled++;
+    // A bot has no manager to forget, so the switch is not theirs to hold.
+    if (team.is_bot || team.autofill_enabled) {
+      await autoFillLineup(db, leagueId, team.id, week, now);
+      teamsFilled++;
+      continue;
+    }
+
+    // Opted out. They still get a lineup row — `resolveWeek` throws on a team
+    // with none, and scoring a missing team as zero would hand its opponent a
+    // free win off our own bug. Whatever they set stands; anything they left
+    // empty stays empty and scores nothing, which is what the switch means.
+    await writeEmptySlots(db, leagueId, team.id, week);
+    teamsOptedOut++;
   }
 
-  return { teamsFilled };
+  return { teamsFilled, teamsOptedOut };
+}
+
+/**
+ * Materialise a lineup row for every starting slot, leaving unset slots null.
+ *
+ * Only for teams that turned the autofill off. It writes nothing over a slot the
+ * manager already filled.
+ */
+async function writeEmptySlots(
+  db: SqlClient,
+  leagueId: string,
+  teamId: string,
+  week: number,
+): Promise<void> {
+  const stored = await getLeagueRules(db, leagueId);
+  if (!stored) throw new LineupError("League has no rules", "LEAGUE_NOT_FOUND");
+
+  const shape = buildRosterShape(stored.rules.roster, NFL);
+  const slotTypeIds = await loadSlotTypeIds(db, stored.rules);
+
+  await withTransaction(db, async (tx) => {
+    for (const slot of startingSlots(shape)) {
+      const slotTypeId = slotTypeIds.get(slot.slotType);
+      if (!slotTypeId) continue;
+
+      // DO NOTHING, not DO UPDATE: a slot the manager set themselves must
+      // survive this untouched.
+      await tx.query(
+        `INSERT INTO lineups (team_id, week, slot_type_id, slot_index, player_id)
+         VALUES ($1, $2, $3, $4, NULL)
+         ON CONFLICT (team_id, week, slot_type_id, slot_index) DO NOTHING`,
+        [teamId, week, slotTypeId, slot.slotIndex],
+      );
+    }
+  });
 }
 
 // ---------------------------------------------------------------------------

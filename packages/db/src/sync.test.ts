@@ -7,8 +7,16 @@ import type {
   ProviderInjury,
   ProviderPlayer,
 } from "@rostr/stats";
-import { loadDraftBoard, syncByeWeeks, syncGames, syncPlayers, syncRankings } from "./sync.js";
-import type { AdpCapableProvider } from "./sync.js";
+import {
+  loadDraftBoard,
+  loadProjections,
+  syncByeWeeks,
+  syncGames,
+  syncPlayers,
+  syncProjections,
+  syncRankings,
+} from "./sync.js";
+import type { AdpCapableProvider, ProjectionCapableProvider } from "./sync.js";
 import { seedSport } from "./sports.js";
 import { createTestDatabase } from "./testing.js";
 import type { PGliteClient } from "./testing.js";
@@ -356,5 +364,119 @@ describe("loadDraftBoard", () => {
 
     const [entry] = await loadDraftBoard(client, "nfl", 2026);
     expect(entry?.positions).toContain("QB");
+  });
+});
+
+/**
+ * Projections, season and weekly.
+ *
+ * These exist because the projection sync had **no coverage at all** until
+ * migration 0015 changed the primary key — and an `ON CONFLICT` target that no
+ * longer matches a constraint is not a subtle failure, Postgres refuses the
+ * statement outright. It would have shipped, because nothing ran it.
+ */
+class FakeProjectionProvider implements ProjectionCapableProvider {
+  readonly name = "fake";
+
+  constructor(
+    private season: ProviderProjectionish[] = [],
+    private weekly: Record<number, ProviderProjectionish[]> = {},
+  ) {}
+
+  listSeasonProjections(): Promise<readonly ProviderProjectionish[]> {
+    return Promise.resolve(this.season);
+  }
+
+  listWeekProjections(
+    _season: number,
+    week: number,
+  ): Promise<readonly ProviderProjectionish[]> {
+    return Promise.resolve(this.weekly[week] ?? []);
+  }
+}
+
+type ProviderProjectionish = {
+  externalRef: string;
+  fullName: string;
+  position: string;
+  stats: { statKey: string; value: number }[];
+};
+
+const projection = (
+  ref: string,
+  name: string,
+  stats: { statKey: string; value: number }[],
+): ProviderProjectionish => ({ externalRef: ref, fullName: name, position: "RB", stats });
+
+describe("syncProjections", () => {
+  it("stores season totals under week 0", async () => {
+    const client = await fresh();
+    const players = new FakeProvider([player("1", "Jahmyr Gibbs", "RB")]);
+    await syncPlayers(client, players, "nfl", 2026);
+
+    const provider = new FakeProjectionProvider([
+      projection("1", "Jahmyr Gibbs", [
+        { statKey: "rush_yd", value: 1231 },
+        { statKey: "rush_td", value: 11 },
+      ]),
+    ]);
+
+    expect(await syncProjections(client, provider, "nfl", 2026)).toMatchObject({ inserted: 2 });
+
+    const loaded = await loadProjections(client, "nfl", 2026);
+    expect(loaded.size).toBe(1);
+  });
+
+  it("stores a week separately from the season, for the same player", async () => {
+    const client = await fresh();
+    const players = new FakeProvider([player("1", "Jahmyr Gibbs", "RB")]);
+    await syncPlayers(client, players, "nfl", 2026);
+
+    const provider = new FakeProjectionProvider(
+      [projection("1", "Jahmyr Gibbs", [{ statKey: "rush_yd", value: 1231 }])],
+      { 3: [projection("1", "Jahmyr Gibbs", [{ statKey: "rush_yd", value: 78 }])] },
+    );
+
+    await syncProjections(client, provider, "nfl", 2026);
+    await syncProjections(client, provider, "nfl", 2026, 3);
+
+    // The season projection is what the draft board reads; the week is what the
+    // autofill ranks on. One must not overwrite the other.
+    const season = await loadProjections(client, "nfl", 2026);
+    const week3 = await loadProjections(client, "nfl", 2026, undefined, 3);
+
+    expect(season.get([...season.keys()][0]!)?.[0]?.value).toBe(1231);
+    expect(week3.get([...week3.keys()][0]!)?.[0]?.value).toBe(78);
+  });
+
+  it("re-runs as an update rather than a duplicate", async () => {
+    // The ON CONFLICT target has to match the primary key exactly. When 0015
+    // added `week` to the key and this was not updated, Postgres rejected the
+    // whole statement — so a re-run is the thing worth asserting.
+    const client = await fresh();
+    const players = new FakeProvider([player("1", "Jahmyr Gibbs", "RB")]);
+    await syncPlayers(client, players, "nfl", 2026);
+
+    const provider = new FakeProjectionProvider([], {
+      3: [projection("1", "Jahmyr Gibbs", [{ statKey: "rush_yd", value: 78 }])],
+    });
+
+    expect(await syncProjections(client, provider, "nfl", 2026, 3)).toMatchObject({
+      inserted: 1,
+    });
+    expect(await syncProjections(client, provider, "nfl", 2026, 3)).toMatchObject({
+      inserted: 0,
+      updated: 1,
+    });
+  });
+
+  it("skips a projected player we have never seen", async () => {
+    const client = await fresh();
+    const provider = new FakeProjectionProvider([], {
+      3: [projection("ghost", "Nobody", [{ statKey: "rush_yd", value: 10 }])],
+    });
+
+    const result = await syncProjections(client, provider, "nfl", 2026, 3);
+    expect(result.unmatched).toEqual(["Nobody"]);
   });
 });

@@ -70,3 +70,7 @@ ALTER TABLE teams ADD COLUMN autofill_enabled boolean NOT NULL DEFAULT true;
 -- standing invitation for something to start writing it.
 
 ALTER TABLE teams DROP COLUMN strikes;
+
+-- Same reasoning. Nothing ever set it, and with no abandonment there is no state
+-- for it to record.
+ALTER TABLE teams DROP COLUMN abandoned_at;

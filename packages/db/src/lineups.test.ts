@@ -470,6 +470,70 @@ describe("ensureLineups", () => {
     const lineup = await loadLineup(fx.client, fx.otherTeamId, WEEK, fx.rules);
     expect(lineup.filter((slot) => slot.playerId !== null)).toHaveLength(1);
   });
+
+  it("is on by default, because the point is that forgetting costs nothing", async () => {
+    const fx = await setup();
+    const [row] = await fx.client.query<{ autofill_enabled: boolean }>(
+      "SELECT autofill_enabled FROM teams WHERE id = $1",
+      [fx.teamId],
+    );
+    expect(row?.autofill_enabled).toBe(true);
+  });
+
+  it("leaves a team that opted out empty", async () => {
+    const fx = await setup();
+    await fx.client.query("UPDATE teams SET autofill_enabled = false WHERE id = $1", [
+      fx.teamId,
+    ]);
+
+    const result = await ensureLineups(fx.client, fx.leagueId, WEEK, BEFORE_ANYTHING);
+    expect(result).toMatchObject({ teamsFilled: 1, teamsOptedOut: 1 });
+
+    // Still gets a lineup row for every slot — resolveWeek throws on a team with
+    // none, and scoring a missing team as zero would hand its opponent a free
+    // win off our own bug. The slots are simply empty, and score nothing.
+    const lineup = await loadLineup(fx.client, fx.teamId, WEEK, fx.rules);
+    expect(lineup).toHaveLength(9);
+    expect(lineup.every((slot) => slot.playerId === null)).toBe(true);
+  });
+
+  it("does not touch a slot the opted-out manager set themselves", async () => {
+    // The switch means "do not choose for me", not "do not let me choose".
+    const fx = await setup();
+    await fx.client.query("UPDATE teams SET autofill_enabled = false WHERE id = $1", [
+      fx.teamId,
+    ]);
+
+    const qb = fx.players.get("sun-qb")!;
+    await setLineup(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: fx.teamId,
+      week: WEEK,
+      now: BEFORE_ANYTHING,
+      assignments: [{ slotType: "QB", slotIndex: 0, playerId: qb }],
+    });
+
+    await ensureLineups(fx.client, fx.leagueId, WEEK, BEFORE_ANYTHING);
+
+    const lineup = await loadLineup(fx.client, fx.teamId, WEEK, fx.rules);
+    expect(lineup.find((slot) => slot.slotType === "QB")?.playerId).toBe(qb);
+    expect(lineup.filter((slot) => slot.playerId !== null)).toHaveLength(1);
+  });
+
+  it("fills a bot regardless of the flag", async () => {
+    // There is no manager to forget, so the switch is not a bot's to hold.
+    const fx = await setup();
+    await fx.client.query(
+      "UPDATE teams SET autofill_enabled = false, is_bot = true, owner_id = NULL WHERE id = $1",
+      [fx.teamId],
+    );
+
+    const result = await ensureLineups(fx.client, fx.leagueId, WEEK, BEFORE_ANYTHING);
+    expect(result).toMatchObject({ teamsFilled: 2, teamsOptedOut: 0 });
+
+    const lineup = await loadLineup(fx.client, fx.teamId, WEEK, fx.rules);
+    expect(lineup.some((slot) => slot.playerId !== null)).toBe(true);
+  });
 });
 
 describe("scoring a week end to end", () => {

@@ -254,32 +254,52 @@ export async function syncRankings(
 // Projections
 // ---------------------------------------------------------------------------
 
+type ProviderProjectionRow = {
+  readonly externalRef: string;
+  readonly fullName: string;
+  readonly position: string;
+  readonly stats: readonly { readonly statKey: string; readonly value: number }[];
+};
+
 export interface ProjectionCapableProvider {
   readonly name: string;
-  listSeasonProjections(season: number): Promise<
-    readonly {
-      readonly externalRef: string;
-      readonly fullName: string;
-      readonly position: string;
-      readonly stats: readonly { readonly statKey: string; readonly value: number }[];
-    }[]
-  >;
+  listSeasonProjections(season: number): Promise<readonly ProviderProjectionRow[]>;
+  listWeekProjections(season: number, week: number): Promise<readonly ProviderProjectionRow[]>;
 }
 
 /**
- * Pull projected season totals.
+ * Week 0 is the season aggregate.
+ *
+ * The draft board asks "who is worth picking for the year"; the autofill asks
+ * "who scores most this Sunday". Same table, same shape, different question —
+ * and a sentinel rather than a nullable column, because Postgres treats NULLs
+ * as distinct and the primary key would then permit two season projections from
+ * one source for the same player.
+ */
+export const SEASON_AGGREGATE_WEEK = 0;
+
+/**
+ * Pull projections.
  *
  * Stored as **raw stats, never points** — see the migration. One provider call
  * covers every player and every team defense.
+ *
+ * `week` omitted, or `SEASON_AGGREGATE_WEEK`, pulls projected season totals for
+ * the draft board. A real week pulls that week alone, which is what the autofill
+ * ranks on.
  */
 export async function syncProjections(
   db: SqlClient,
   provider: ProjectionCapableProvider,
   sportKey: string,
   season: number,
+  week: number = SEASON_AGGREGATE_WEEK,
 ): Promise<SyncResult & { unmatched: readonly string[] }> {
   const ids = await loadSportIds(db, sportKey);
-  const projections = await provider.listSeasonProjections(season);
+  const projections =
+    week === SEASON_AGGREGATE_WEEK
+      ? await provider.listSeasonProjections(season)
+      : await provider.listWeekProjections(season, week);
 
   const statKeyIds = new Map(
     (
@@ -344,23 +364,27 @@ export async function syncProjections(
 
     const values = chunk
       .map((_, index) => {
-        const base = index * 5;
-        return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5})`;
+        const base = index * 6;
+        return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6})`;
       })
       .join(", ");
 
     const params = chunk.flatMap((row) => [
       row.playerId,
       season,
+      week,
       provider.name,
       row.statKeyId,
       row.value,
     ]);
 
+    // The conflict target has to match the primary key exactly, and 0015 added
+    // `week` to it. A stale target is not a subtle bug — Postgres refuses the
+    // statement outright with "no unique or exclusion constraint matching".
     const result = await db.query<{ fresh: boolean }>(
-      `INSERT INTO player_projections (player_id, season, source, stat_key_id, value)
+      `INSERT INTO player_projections (player_id, season, week, source, stat_key_id, value)
        VALUES ${values}
-       ON CONFLICT (player_id, season, source, stat_key_id)
+       ON CONFLICT (player_id, season, week, source, stat_key_id)
        DO UPDATE SET value = EXCLUDED.value, updated_at = now()
        RETURNING (xmax = 0) AS fresh`,
       params,
@@ -389,6 +413,7 @@ export async function loadProjections(
   sportKey: string,
   season: number,
   source?: string,
+  week: number = SEASON_AGGREGATE_WEEK,
 ): Promise<ReadonlyMap<string, readonly { statKey: string; value: number }[]>> {
   const ids = await loadSportIds(db, sportKey);
 
@@ -397,9 +422,10 @@ export async function loadProjections(
        FROM player_projections p
        JOIN stat_keys k ON k.id = p.stat_key_id
       WHERE p.season = $1
+        AND p.week = $4
         AND k.sport_id = $2
         AND p.source = COALESCE($3, p.source)`,
-    [season, ids.sportId, source ?? null],
+    [season, ids.sportId, source ?? null, week],
   );
 
   const byPlayer = new Map<string, { statKey: string; value: number }[]>();
