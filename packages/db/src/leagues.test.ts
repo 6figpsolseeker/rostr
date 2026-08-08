@@ -9,8 +9,10 @@ import {
 import type { DraftRules, LeagueRules, PotRules } from "@rostr/core";
 import {
   createLeague,
+  getChainState,
   getLeagueRules,
   LeagueValidationError,
+  recordChainAnchor,
   setRulesUri,
   verifyStoredRules,
 } from "./leagues.js";
@@ -305,5 +307,67 @@ describe("createLeague", () => {
 
     const stored = await getLeagueRules(client, league.id);
     expect(stored?.rules.pot).toBeNull();
+  });
+});
+
+describe("the on-chain anchor", () => {
+  const anchor = { signature: "5xSig".padEnd(88, "a"), cluster: "localnet" };
+
+  async function league(client: PGliteClient, commissionerId: string) {
+    return createLeague(client, NFL, { name: "L", commissionerId, rules: rules() });
+  }
+
+  it("starts unanchored, because anchoring is a separate signature", async () => {
+    const { client, commissionerId } = await setup();
+    const created = await league(client, commissionerId);
+
+    const state = await getChainState(client, created.id);
+    expect(state?.anchoredAt).toBeNull();
+    expect(state?.signature).toBeNull();
+  });
+
+  it("records the transaction that anchored it", async () => {
+    const { client, commissionerId } = await setup();
+    const created = await league(client, commissionerId);
+
+    await recordChainAnchor(client, created.id, anchor);
+
+    const state = await getChainState(client, created.id);
+    expect(state?.anchoredAt).toBeInstanceOf(Date);
+    expect(state?.signature).toBe(anchor.signature);
+    // Without the cluster, a devnet anchor and a mainnet one are
+    // indistinguishable — the PDA is identical on every chain.
+    expect(state?.cluster).toBe("localnet");
+  });
+
+  it("cannot be rewritten to point at a different transaction", async () => {
+    const { client, commissionerId } = await setup();
+    const created = await league(client, commissionerId);
+    await recordChainAnchor(client, created.id, anchor);
+
+    // The real anchor exists on-chain and cannot be undone. Letting the record
+    // move is how a genuine anchor gets papered over with a fake one later.
+    await expect(
+      recordChainAnchor(client, created.id, { signature: "other", cluster: "mainnet-beta" }),
+    ).rejects.toThrow(/anchored/);
+
+    const state = await getChainState(client, created.id);
+    expect(state?.signature).toBe(anchor.signature);
+  });
+
+  it("refuses a timestamp with no transaction behind it", async () => {
+    const { client, commissionerId } = await setup();
+    const created = await league(client, commissionerId);
+
+    // A claim of anchoring with nothing to check is the shape of thing the
+    // column exists to remove.
+    await expect(
+      client.query("UPDATE leagues SET chain_anchored_at = now() WHERE id = $1", [created.id]),
+    ).rejects.toThrow();
+  });
+
+  it("returns nothing for a league that does not exist", async () => {
+    const { client } = await setup();
+    expect(await getChainState(client, "00000000-0000-4000-8000-000000000000")).toBeNull();
   });
 });

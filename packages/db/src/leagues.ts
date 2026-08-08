@@ -144,6 +144,78 @@ export async function setRulesUri(
   await db.query("UPDATE leagues SET rules_uri = $1 WHERE id = $2", [rulesUri, leagueId]);
 }
 
+export interface ChainAnchor {
+  /** The transaction that created the on-chain league account. */
+  readonly signature: string;
+  /** `mainnet-beta`, `devnet`, `localnet`. */
+  readonly cluster: string;
+}
+
+/**
+ * Record that a league's rules are anchored on-chain.
+ *
+ * **Call this only after reading the account back and confirming its rules hash
+ * matches.** The signature arrives from a browser, and a browser can claim
+ * anything; what makes this a fact rather than a report is that the caller
+ * checked the chain. `verifyChainAnchor` in the web app is that check.
+ *
+ * Separate from creation because anchoring is a second transaction, signed by
+ * the commissioner's own wallet rather than by us. That is deliberate — it means
+ * no key of ours is involved in creating a league — and it means a league can
+ * exist here while unanchored, because someone can close a tab. The partial
+ * index in migration 0014 is for finding those.
+ *
+ * Written once. A second call with different values raises, from a trigger
+ * rather than from this function, so it holds against psql too.
+ */
+export async function recordChainAnchor(
+  db: SqlClient,
+  leagueId: string,
+  anchor: ChainAnchor,
+): Promise<void> {
+  await db.query(
+    `UPDATE leagues
+        SET chain_anchored_at = now(), chain_signature = $1, chain_cluster = $2
+      WHERE id = $3`,
+    [anchor.signature, anchor.cluster, leagueId],
+  );
+}
+
+export interface LeagueChainState {
+  readonly anchoredAt: Date | null;
+  readonly signature: string | null;
+  readonly cluster: string | null;
+}
+
+/**
+ * Whether a league's rules are on-chain yet.
+ *
+ * Members should not be asked to consent to a rule set they cannot verify, so
+ * this gates joining.
+ */
+export async function getChainState(
+  db: SqlClient,
+  leagueId: string,
+): Promise<LeagueChainState | null> {
+  const [row] = await db.query<{
+    chain_anchored_at: Date | null;
+    chain_signature: string | null;
+    chain_cluster: string | null;
+  }>(
+    `SELECT chain_anchored_at, chain_signature, chain_cluster
+       FROM leagues WHERE id = $1`,
+    [leagueId],
+  );
+
+  if (!row) return null;
+
+  return {
+    anchoredAt: row.chain_anchored_at,
+    signature: row.chain_signature,
+    cluster: row.chain_cluster,
+  };
+}
+
 export interface StoredLeagueRules {
   readonly leagueId: string;
   readonly hash: string;

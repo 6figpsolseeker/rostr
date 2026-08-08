@@ -11,12 +11,16 @@ export { loadSportIds, seedSport, SportNotSeededError, type SportIds } from "./s
 
 export {
   createLeague,
+  getChainState,
   getLeagueRules,
   LeagueValidationError,
+  recordChainAnchor,
   setRulesUri,
   verifyStoredRules,
+  type ChainAnchor,
   type CreatedLeague,
   type CreateLeagueInput,
+  type LeagueChainState,
   type StoredLeagueRules,
 } from "./leagues.js";
 
