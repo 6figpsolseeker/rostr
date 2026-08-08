@@ -49,6 +49,7 @@ export type LineupProblemCode =
   | "PLAYER_TWICE"
   | "POSITION_NOT_ELIGIBLE"
   | "SLOT_LOCKED"
+  | "PLAYER_LOCKED"
   | "STARTER_EMPTY";
 
 export interface LineupProblem {
@@ -157,6 +158,27 @@ export function validateLineup(input: ValidateLineupInput): readonly LineupProbl
       problems.push({
         code: "NOT_ON_ROSTER",
         message: `${assignment.playerId} is not on this roster`,
+        slotType: assignment.slotType,
+        slotIndex: assignment.slotIndex,
+        playerId: assignment.playerId,
+      });
+      continue;
+    }
+
+    // A player whose own game has kicked off can only be kept where he already
+    // is, never moved into a slot. The check above guards the player leaving a
+    // slot; without this one, an empty slot — which never locks — would let a
+    // manager start a player after watching him score.
+    if (
+      now !== undefined &&
+      currentBySlot.get(slotKey) !== assignment.playerId &&
+      isSlotLocked(assignment.playerId, roster, now)
+    ) {
+      problems.push({
+        code: "PLAYER_LOCKED",
+        message:
+          `${assignment.playerId}'s game has kicked off — ` +
+          `they can no longer be started in ${assignment.slotType} slot ${assignment.slotIndex + 1}`,
         slotType: assignment.slotType,
         slotIndex: assignment.slotIndex,
         playerId: assignment.playerId,
