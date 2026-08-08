@@ -259,7 +259,7 @@ async function loadSlotTypeIds(
  * Only weeks before `week` count — including the current week would rank players
  * on a game that has not finished, or has not started.
  */
-async function loadAverages(
+export async function loadAverages(
   db: SqlClient,
   playerIds: readonly string[],
   season: number,
@@ -314,7 +314,7 @@ async function loadAverages(
  * A player with no projection is simply absent from the map, and the autolineup
  * falls back to his season average for that player alone.
  */
-async function loadProjectedPoints(
+export async function loadProjectedPoints(
   db: SqlClient,
   season: number,
   week: number,
@@ -593,4 +593,41 @@ export async function loadWeekStats(
   }
 
   return byPlayer;
+}
+
+// ---------------------------------------------------------------------------
+// The autofill switch
+// ---------------------------------------------------------------------------
+
+/**
+ * Whether this team gets its empty slots filled at lock.
+ *
+ * A preference, not a rule: it lives on the team rather than in the frozen rule
+ * set, because which *method* the autofill uses decides everyone's playoff seeds
+ * and has to be verifiable, while whether yours runs is nobody else's business.
+ */
+export async function getAutofillEnabled(
+  db: SqlClient,
+  teamId: string,
+): Promise<boolean | null> {
+  const [row] = await db.query<{ autofill_enabled: boolean }>(
+    "SELECT autofill_enabled FROM teams WHERE id = $1",
+    [teamId],
+  );
+  return row?.autofill_enabled ?? null;
+}
+
+/**
+ * Turn the autofill on or off for one team.
+ *
+ * Changeable whenever, including mid-season — it governs what happens at the
+ * next lock and rewrites nothing already stored. Turning it off does not clear a
+ * lineup that has already been filled.
+ */
+export async function setAutofillEnabled(
+  db: SqlClient,
+  teamId: string,
+  enabled: boolean,
+): Promise<void> {
+  await db.query("UPDATE teams SET autofill_enabled = $1 WHERE id = $2", [enabled, teamId]);
 }

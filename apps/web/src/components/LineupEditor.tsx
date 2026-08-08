@@ -31,12 +31,35 @@ interface RosterPlayer {
   status: string;
   kickoffAt: number | null;
   milliPoints: number;
+  /** This week's projection under this league's scoring. Null if unpublished. */
+  projectedMilliPoints: number | null;
+  /** Season to date. Null before week 2, when there is no history yet. */
+  averageMilliPoints: number | null;
 }
 
 interface LineupResponse {
   week: number;
+  autofill: { enabled: boolean; mode: "WEEKLY_PROJECTION" | "SEASON_AVERAGE" };
   slots: Slot[];
   roster: RosterPlayer[];
+}
+
+/**
+ * A projection well above what this player usually does.
+ *
+ * The floor is the part that matters. Without it, a player averaging 0.4 points
+ * projected at 0.6 is "+50%" — technically true, useless to a manager, and it
+ * would put a badge on half the bench. The threshold is a display choice and
+ * lives here rather than in the API, which sends the two raw numbers.
+ */
+const BREAKOUT_RATIO = 1.25;
+const BREAKOUT_FLOOR_MILLI = 6_000;
+
+function isBreakout(player: RosterPlayer): boolean {
+  const { projectedMilliPoints: projected, averageMilliPoints: average } = player;
+  if (projected === null || average === null || average <= 0) return false;
+  if (projected < BREAKOUT_FLOOR_MILLI) return false;
+  return projected >= average * BREAKOUT_RATIO;
 }
 
 const fetcher = async (url: string): Promise<LineupResponse> => {
@@ -132,6 +155,30 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
     }
   }
 
+  async function setAutofill(enabled: boolean): Promise<void> {
+    setSaving(true);
+    setSaveError(null);
+
+    try {
+      const response = await fetch(`/api/leagues/${leagueId}/lineup`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ autofillEnabled: enabled }),
+      });
+
+      if (!response.ok) {
+        const body = (await response.json().catch(() => ({}))) as { error?: string };
+        throw new Error(body.error ?? "Could not change that setting");
+      }
+
+      await mutate();
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   function assign(slot: Slot, playerId: string | null): void {
     const next = data!.slots.map((entry) =>
       entry.slotType === slot.slotType && entry.slotIndex === slot.slotIndex
@@ -158,6 +205,27 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
         <h2 className="text-lg font-medium">Week {data.week}</h2>
         <span className="text-2xl font-semibold tabular-nums">{points(starterPoints)}</span>
       </header>
+
+      <label className="flex items-start gap-3 rounded border border-white/10 px-4 py-3 text-sm">
+        <input
+          type="checkbox"
+          checked={data.autofill.enabled}
+          disabled={saving}
+          onChange={(e) => void setAutofill(e.target.checked)}
+          className="mt-0.5"
+        />
+        <span>
+          <span className="block">Fill my empty slots at kickoff</span>
+          <span className="block text-xs text-white/40">
+            {data.autofill.mode === "WEEKLY_PROJECTION"
+              ? "Uses this week's projections. "
+              : "Uses each player's season average. "}
+            {data.autofill.enabled
+              ? "You can still change anything yourself — this only touches slots you leave empty."
+              : "Off: an empty slot stays empty and scores nothing."}
+          </span>
+        </span>
+      </label>
 
       {(saveError || problems.length > 0) && (
         <div className="space-y-1 rounded border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
@@ -219,7 +287,16 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
                 {untilLock(slot.locksAt, now)}
               </span>
 
-              <span className="w-12 text-right text-sm tabular-nums">
+              <span
+                className="w-12 text-right text-sm tabular-nums text-white/50"
+                title="Projected this week"
+              >
+                {player?.projectedMilliPoints != null
+                  ? points(player.projectedMilliPoints)
+                  : "—"}
+              </span>
+
+              <span className="w-12 text-right text-sm tabular-nums" title="Scored so far">
                 {player ? points(player.milliPoints) : "—"}
               </span>
             </li>
@@ -240,7 +317,25 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
                 <span className="text-amber-400/70">{player.status}</span>
               )}
               {player.kickoffAt === null && <span className="text-white/30">bye</span>}
-              <span className="w-10 text-right tabular-nums">{points(player.milliPoints)}</span>
+              {isBreakout(player) && (
+                <span
+                  className="rounded bg-[--color-turf]/20 px-1 text-[--color-turf]"
+                  title={`Projected ${points(player.projectedMilliPoints ?? 0)} against a season average of ${points(player.averageMilliPoints ?? 0)}`}
+                >
+                  ▲ projected up
+                </span>
+              )}
+              <span
+                className="w-10 text-right tabular-nums text-white/50"
+                title="Projected this week"
+              >
+                {player.projectedMilliPoints != null
+                  ? points(player.projectedMilliPoints)
+                  : "—"}
+              </span>
+              <span className="w-10 text-right tabular-nums" title="Scored so far">
+                {points(player.milliPoints)}
+              </span>
             </li>
           ))}
         </ul>

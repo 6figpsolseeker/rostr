@@ -44,6 +44,13 @@ export {
 } from "./waivers.js";
 
 export {
+  getAutofillEnabled,
+  loadAverages,
+  loadProjectedPoints,
+  setAutofillEnabled,
+} from "./lineups.js";
+
+export {
   finalizationHours,
   generateSeasonSchedule,
   loadScheduledWeek,

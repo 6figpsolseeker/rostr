@@ -3,10 +3,14 @@ import { indexScoringRules, scorePlayer, slotLocksAt, startingSlots } from "@ros
 import { buildRosterShape, NFL } from "@rostr/core";
 import type { LineupAssignment } from "@rostr/core";
 import {
+  getAutofillEnabled,
   LineupError,
+  loadAverages,
   loadLineup,
+  loadProjectedPoints,
   loadRosterForWeek,
   loadWeekStats,
+  setAutofillEnabled,
   setLineup,
 } from "@rostr/db";
 import { db } from "@/lib/db";
@@ -54,10 +58,24 @@ export async function GET(
     const stats = await loadWeekStats(client, NFL.key, context.season, week);
     const scoring = indexScoringRules(context.rules.scoring);
 
+    // What the autofill would rank on, and what it would compare against. Both
+    // are sent raw rather than as a pre-computed "hot" badge: the numbers are
+    // the durable part, and how a screen chooses to dramatise them is not.
+    const playerIds = [...roster.keys()];
+    const projected = await loadProjectedPoints(client, context.season, week, context.rules);
+    const averages = await loadAverages(client, playerIds, context.season, week, context.rules);
+
+    const autofillEnabled = await getAutofillEnabled(client, context.myTeamId);
+
     const now = Math.floor(Date.now() / 1000);
 
     return NextResponse.json({
       week,
+      autofill: {
+        enabled: autofillEnabled ?? true,
+        /** Frozen in the league's rules, so it is the same for everybody. */
+        mode: context.rules.roster.autofill,
+      },
       slots: startingSlots(buildRosterShape(context.rules.roster, NFL)).map((slot) => {
         const assignment = assignments.find(
           (entry) => entry.slotType === slot.slotType && entry.slotIndex === slot.slotIndex,
@@ -81,6 +99,15 @@ export async function GET(
         status: player.status,
         kickoffAt: player.kickoffAt,
         milliPoints: scorePlayer(stats.get(player.playerId) ?? [], scoring),
+        /**
+         * This week's projection, under this league's own scoring. `null` when
+         * the provider has not published one — a rookie, or a week not yet
+         * synced — which is also when the autofill falls back to the average
+         * for that player alone.
+         */
+        projectedMilliPoints: projected.get(player.playerId) ?? null,
+        /** Season to date. `null` before week 2, when there is no history. */
+        averageMilliPoints: averages.get(player.playerId) ?? null,
       })),
     });
   } catch (error) {
@@ -146,6 +173,45 @@ export async function PUT(
         { error: error.message, code: error.code, problems: error.problems },
         { status: STATUS[error.code] ?? 400 },
       );
+    }
+    throw error;
+  }
+}
+
+/**
+ * Turn your own autofill on or off.
+ *
+ * Separate from PUT because it is a different kind of thing: PUT replaces a
+ * lineup and is subject to locks, this changes what happens at the *next* lock
+ * and rewrites nothing already stored. Turning it off does not empty a lineup
+ * that has already been filled for you.
+ *
+ * The team comes from the session, never from the request — the same rule as
+ * everywhere else here, and the reason the join route stopped accepting a
+ * userId.
+ */
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> },
+): Promise<NextResponse> {
+  const { id } = await params;
+
+  try {
+    const context = await draftContext(id);
+    if (!context.myTeamId) {
+      return NextResponse.json({ error: "You are not in this league" }, { status: 403 });
+    }
+
+    const body = (await request.json()) as { autofillEnabled?: unknown };
+    if (typeof body.autofillEnabled !== "boolean") {
+      return NextResponse.json({ error: "autofillEnabled must be a boolean" }, { status: 400 });
+    }
+
+    await setAutofillEnabled(db(), context.myTeamId, body.autofillEnabled);
+    return NextResponse.json({ autofillEnabled: body.autofillEnabled });
+  } catch (error) {
+    if (error instanceof DraftContextError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
     }
     throw error;
   }
