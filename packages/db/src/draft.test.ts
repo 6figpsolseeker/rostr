@@ -11,9 +11,8 @@ import {
 import type { DraftablePlayer, DraftRules, LeagueRules } from "@rostr/core";
 import { createLeague } from "./leagues.js";
 import { createUser } from "./identity.js";
-import { addBot } from "./membership.js";
 import { seedSport } from "./sports.js";
-import { createTestDatabase } from "./testing.js";
+import { addTestTeam, createTestDatabase } from "./testing.js";
 import type { PGliteClient } from "./testing.js";
 import { FixedBeacon } from "./randomness.js";
 import {
@@ -119,7 +118,7 @@ async function setup(teamCount = 4, poolSize = 200): Promise<Fixture> {
 
   const teamIds: string[] = [];
   for (let i = 0; i < teamCount; i++) {
-    const bot = await addBot(db, league.id, `Bot ${i + 1}`);
+    const bot = await addTestTeam(db, league.id, `Bot ${i + 1}`);
     teamIds.push(bot.teamId);
   }
 
@@ -365,7 +364,7 @@ describe("the field locks at the draw", () => {
     const fx = await setup();
     await scheduled(fx);
 
-    await expect(addBot(fx.client, fx.leagueId, "Late Bot")).rejects.toThrow(
+    await expect(addTestTeam(fx.client, fx.leagueId, "Late Bot")).rejects.toThrow(
       /field is locked/i,
     );
   });

@@ -430,3 +430,40 @@ due in the next five weeks.
 
 That turns an impossible 35-day scope into a feasible one, provided the ordering respects
 it. Building settlement in August would be building it instead of the draft.
+
+### One bot per league, and none where there is money
+
+**Decided 2026-08-08.** Bots previously filled any number of unclaimed slots, up to
+twelve, in any league.
+
+The owner's instinct was that bot-heavy leagues make bad trades, or cannot judge a trade
+offered to them. That specific worry was already handled — `RULES.md` §6 has always said
+bots neither vote nor trade, so a bot cannot be offered one. What the review found instead
+was worse and unhandled:
+
+**A bot can win.** The champion takes 60% of the pot. A bot has no wallet and paid no
+buy-in, so a bot champion leaves that share with no recipient — on-chain, where there is
+nobody to appeal to. Two smaller versions of the same thing: bots occupy playoff places
+without staking, and a bot's roster decays (no waivers, no trades, no injury reactions)
+so playing one is a near-free win, which weeks 12–14 distribute unevenly.
+
+Three options were weighed:
+
+| Option                                     | Why not                                                        |
+| ------------------------------------------ | -------------------------------------------------------------- |
+| Bot ineligible for prizes, share passes on | Works, but every payout rule then carries an exception         |
+| Bar bots from the playoffs                 | Arbitrary — a bot could have the best record                   |
+| **No bots in pot leagues at all**          | **Chosen.** The case cannot arise, so nothing has to handle it |
+
+The owner chose the third, and it is the right one: it removes the problem rather than
+managing it, and the escrow program never has to know what a bot is.
+
+**One bot, and only when the count is odd.** A bot exists to square five friends. The
+schedule already handles odd leagues with byes — that is roughly three dead weeks per
+team, which is worse than one predictable opponent, so the bot earns its place. More than
+one is a different product.
+
+`botsAllowed: boolean` became `maxBots: number` in the same change. The boolean was in the
+frozen rule set and **enforced nowhere** — a guarantee members signed that did nothing.
+One field also cannot disagree with itself the way "allowed" and "how many" can.
+schemaVersion 2 -> 3.

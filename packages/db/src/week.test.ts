@@ -3,10 +3,9 @@ import { buildNflPprRules, computeStandings, generateSchedule, NFL } from "@rost
 import type { DraftRules, LeagueRules, MatchupResult } from "@rostr/core";
 import { createLeague } from "./leagues.js";
 import { createUser } from "./identity.js";
-import { addBot } from "./membership.js";
 import { seedSport } from "./sports.js";
 import { setLineup } from "./lineups.js";
-import { createTestDatabase } from "./testing.js";
+import { addTestTeam, createTestDatabase } from "./testing.js";
 import type { PGliteClient } from "./testing.js";
 import {
   finalizationHours,
@@ -63,7 +62,7 @@ async function setup(teamCount = 4): Promise<Fixture> {
 
   const teamIds: string[] = [];
   for (let i = 0; i < teamCount; i++) {
-    teamIds.push((await addBot(db, league.id, `Bot ${i + 1}`)).teamId);
+    teamIds.push((await addTestTeam(db, league.id, `Bot ${i + 1}`)).teamId);
   }
 
   const [sport] = await db.query<{ id: string }>("SELECT id FROM sports WHERE key = $1", [

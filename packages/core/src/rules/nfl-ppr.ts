@@ -97,7 +97,9 @@ export const NFL_PPR_ROSTER: RosterRules = {
 export const NFL_DEFAULT_LEAGUE: LeagueSizeRules = {
   maxTeams: 12,
   minHumans: 2,
-  botsAllowed: true,
+  // One, and only to square an odd number of friends. `buildNflPprRules` drops
+  // this to zero the moment a league has a pot.
+  maxBots: 1,
   visibility: "PRIVATE",
 };
 
@@ -185,18 +187,28 @@ export type NflPprOverrides = {
  * later edit here cannot reach a league that has already been created.
  */
 export function buildNflPprRules(overrides: NflPprOverrides): LeagueRules {
+  const pot = overrides.pot ?? null;
+
   return structuredClone({
-    schemaVersion: 2,
+    schemaVersion: 3,
     sportKey: "nfl",
     seasonYear: overrides.seasonYear,
     scoring: NFL_PPR_SCORING,
     roster: NFL_PPR_ROSTER,
-    league: { ...NFL_DEFAULT_LEAGUE, ...overrides.league },
+    league: {
+      ...NFL_DEFAULT_LEAGUE,
+      ...overrides.league,
+      // Money and bots do not mix, and the override cannot argue. A bot has no
+      // wallet, so a bot champion would leave 60% of the pot with no recipient —
+      // and `validateLeagueRules` refuses the combination anyway, so allowing it
+      // through here would only produce a league that fails to create.
+      ...(pot ? { maxBots: 0 } : {}),
+    },
     draft: overrides.draft,
     schedule: NFL_DEFAULT_SCHEDULE,
     waivers: NFL_DEFAULT_WAIVERS,
     trades: NFL_DEFAULT_TRADES,
-    pot: overrides.pot ?? null,
+    pot,
     abandonment: NFL_DEFAULT_ABANDONMENT,
     settlement: NFL_DEFAULT_SETTLEMENT,
   }) as LeagueRules;

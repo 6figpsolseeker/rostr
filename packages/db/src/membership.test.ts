@@ -11,9 +11,11 @@ import {
 import type { DraftRules, LeagueRules, PotRules } from "@rostr/core";
 import { createLeague, recordChainAnchor } from "./leagues.js";
 import { createUser, linkWallet } from "./identity.js";
-import { addBot, getMembershipProofs, JoinError, joinLeague } from "./membership.js";
+import { addBot, getMembershipProofs, JoinError, joinLeague, removeBot } from "./membership.js";
 import { seedSport } from "./sports.js";
-import { createTestDatabase } from "./testing.js";
+import { createDraftRecord, drawDraftOrder } from "./draft.js";
+import { FixedBeacon } from "./randomness.js";
+import { addTestTeam, createTestDatabase } from "./testing.js";
 import type { PGliteClient } from "./testing.js";
 
 let db: PGliteClient | undefined;
@@ -296,7 +298,7 @@ describe("joinLeague", () => {
 
   it("rejects joining a full league", async () => {
     const fx = await setup();
-    for (let i = 0; i < 12; i++) await addBot(fx.client, fx.leagueId, `Bot ${i}`);
+    for (let i = 0; i < 12; i++) await addTestTeam(fx.client, fx.leagueId, `Team ${i}`);
 
     const m = await member(fx, 1, "a@example.com");
     await expect(
@@ -331,9 +333,46 @@ describe("joinLeague", () => {
   });
 });
 
-describe("addBot", () => {
+describe("bots", () => {
+  /**
+   * A free league with one human, so a bot is both permitted and useful.
+   *
+   * The pot fixture above cannot hold one at all: `buildNflPprRules` forces
+   * `maxBots` to zero whenever there is money, because a bot has no wallet and a
+   * bot champion would leave 60% of the pot with no recipient.
+   */
+  async function freeLeague(humans = 1): Promise<Fixture> {
+    db = await createTestDatabase();
+    await seedSport(db, NFL);
+
+    const commissioner = await createUser(db, "commish@example.com", "Commish");
+    const rules = buildNflPprRules({ seasonYear: 2026, draft: DRAFT }) as LeagueRules;
+    const league = await createLeague(db, NFL, {
+      name: "Free League",
+      commissionerId: commissioner.id,
+      rules,
+    });
+
+    await recordChainAnchor(db, league.id, {
+      signature: "5".repeat(88),
+      cluster: "localnet",
+    });
+
+    for (let i = 0; i < humans; i++) {
+      await addTestTeam(db, league.id, `Human ${i + 1}`);
+    }
+
+    return {
+      client: db,
+      leagueId: league.id,
+      leagueName: "Free League",
+      rulesHash: league.rulesHash,
+      rules,
+    };
+  }
+
   it("adds a bot with no owner", async () => {
-    const fx = await setup();
+    const fx = await freeLeague();
     const bot = await addBot(fx.client, fx.leagueId, "Robo");
 
     const [row] = await fx.client.query<{ is_bot: boolean; owner_id: string | null }>(
@@ -345,40 +384,22 @@ describe("addBot", () => {
   });
 
   it("shares the slot sequence with human teams", async () => {
-    const fx = await setup();
-    const m = await member(fx, 1, "a@example.com");
-
-    await joinLeague(fx.client, {
-      leagueId: fx.leagueId,
-      userId: m.userId,
-      walletAddress: m.address,
-      signature: signJoin(fx, m.address, m.secret),
-      teamName: "A",
-    });
+    const fx = await freeLeague();
     const bot = await addBot(fx.client, fx.leagueId, "Robo");
 
     expect(bot.slot).toBe(2);
   });
 
   it("records no consent, because there is nobody to consent", async () => {
-    const fx = await setup();
+    const fx = await freeLeague();
     await addBot(fx.client, fx.leagueId, "Robo");
+
     expect(await getMembershipProofs(fx.client, fx.leagueId)).toEqual([]);
-  });
-
-  it("refuses to exceed maxTeams", async () => {
-    const fx = await setup();
-    for (let i = 0; i < 12; i++) await addBot(fx.client, fx.leagueId, `Bot ${i}`);
-
-    await expect(addBot(fx.client, fx.leagueId, "One too many")).rejects.toSatisfy(
-      (e: unknown) => e instanceof JoinError && e.code === "LEAGUE_FULL",
-    );
   });
 
   it("does not require an anchor", async () => {
     // A bot signs nothing, stakes nothing, and consents to nothing, so there is
-    // no consent for the anchor to protect. Gating bots would break nothing
-    // meaningful and protect nobody.
+    // no consent for the anchor to protect.
     db = await createTestDatabase();
     await seedSport(db, NFL);
 
@@ -388,8 +409,112 @@ describe("addBot", () => {
       commissionerId: commissioner.id,
       rules: buildNflPprRules({ seasonYear: 2026, draft: DRAFT }) as LeagueRules,
     });
+    await addTestTeam(db, league.id, "Human");
 
-    await expect(addBot(db, league.id, "Robo")).resolves.toMatchObject({ slot: 1 });
+    await expect(addBot(db, league.id, "Robo")).resolves.toMatchObject({ slot: 2 });
+  });
+
+  describe("refusals", () => {
+    it("refuses a league that plays for a pot", async () => {
+      // The reason the cap exists at all. A bot cannot be paid, so a bot in a
+      // paying position would leave that share with nowhere to go — on-chain,
+      // where there is nobody to appeal to.
+      const fx = await setup();
+      await addTestTeam(fx.client, fx.leagueId, "Human");
+
+      await expect(addBot(fx.client, fx.leagueId, "Robo")).rejects.toSatisfy(
+        (e: unknown) => e instanceof JoinError && e.code === "BOTS_NOT_ALLOWED",
+      );
+    });
+
+    it("says why, rather than just refusing", async () => {
+      const fx = await setup();
+      await addTestTeam(fx.client, fx.leagueId, "Human");
+
+      await expect(addBot(fx.client, fx.leagueId, "Robo")).rejects.toThrow(/cannot be paid/i);
+    });
+
+    it("refuses a second bot", async () => {
+      // One squares an odd number of friends. More is a different game.
+      const fx = await freeLeague(3);
+      await addBot(fx.client, fx.leagueId, "Robo");
+
+      await expect(addBot(fx.client, fx.leagueId, "Robo II")).rejects.toSatisfy(
+        (e: unknown) => e instanceof JoinError && e.code === "BOT_LIMIT",
+      );
+    });
+
+    it("refuses when the managers already make an even number", async () => {
+      // A bot would then give somebody a bye rather than prevent one, which is
+      // the opposite of the point.
+      const fx = await freeLeague(2);
+
+      await expect(addBot(fx.client, fx.leagueId, "Robo")).rejects.toSatisfy(
+        (e: unknown) => e instanceof JoinError && e.code === "EVEN_WITHOUT_BOT",
+      );
+    });
+  });
+
+  describe("removeBot", () => {
+    it("gives the seat back when a person turns up", async () => {
+      const fx = await freeLeague();
+      await addBot(fx.client, fx.leagueId, "Robo");
+
+      await removeBot(fx.client, fx.leagueId);
+
+      const [count] = await fx.client.query<{ n: number }>(
+        "SELECT count(*)::int AS n FROM teams WHERE league_id = $1 AND is_bot",
+        [fx.leagueId],
+      );
+      expect(Number(count?.n)).toBe(0);
+    });
+
+    it("lets a bot be added again afterwards", async () => {
+      const fx = await freeLeague();
+      await addBot(fx.client, fx.leagueId, "Robo");
+      await removeBot(fx.client, fx.leagueId);
+
+      await expect(addBot(fx.client, fx.leagueId, "Robo again")).resolves.toBeTruthy();
+    });
+
+    it("refuses once the draft order is drawn", async () => {
+      // The order is derived from the set of teams, and a trigger locks the
+      // field at the draw precisely so nobody can change it afterwards. This is
+      // the check that makes deleting a team safe at all — before the draw the
+      // bot has no roster, no lineup and no matchup to orphan.
+      const fx = await freeLeague();
+      await addBot(fx.client, fx.leagueId, "Robo");
+
+      await createDraftRecord(fx.client, {
+        leagueId: fx.leagueId,
+        rounds: 14,
+        pickSeconds: 90,
+        scheduledAt: new Date("2026-08-22T18:00:00Z"),
+      });
+      await drawDraftOrder(fx.client, {
+        leagueId: fx.leagueId,
+        beacon: new FixedBeacon([
+          {
+            slot: 1,
+            blockhash: "5xot9PVkphiX2adznghwrAuxGs2zeWisNSxMW6hU6Hkj",
+            blockTime: Math.floor(new Date("2026-08-22T18:00:01Z").getTime() / 1000),
+          },
+        ]),
+        now: new Date("2026-08-22T18:00:05Z"),
+      });
+
+      await expect(removeBot(fx.client, fx.leagueId)).rejects.toSatisfy(
+        (e: unknown) => e instanceof JoinError && e.code === "DRAFT_ALREADY_DRAWN",
+      );
+    });
+
+    it("refuses when the league has no bot", async () => {
+      const fx = await freeLeague();
+
+      await expect(removeBot(fx.client, fx.leagueId)).rejects.toSatisfy(
+        (e: unknown) => e instanceof JoinError && e.code === "BOT_NOT_FOUND",
+      );
+    });
   });
 });
 

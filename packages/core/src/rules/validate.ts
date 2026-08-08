@@ -329,6 +329,25 @@ function validateLeagueSize(rules: LeagueRules, out: string[]): void {
   if (l.minHumans < 2) out.push("a league requires at least 2 humans");
   if (l.maxTeams < l.minHumans) out.push("maxTeams cannot be below minHumans");
   if (l.maxTeams < 2) out.push("maxTeams must be at least 2");
+
+  if (!Number.isSafeInteger(l.maxBots) || l.maxBots < 0) {
+    out.push("maxBots must be a non-negative whole number");
+  }
+
+  // A bot has no wallet and pays no buy-in, so a bot finishing in a paying
+  // position would leave that share with no recipient — on-chain, where there is
+  // nobody to appeal to. Barred outright rather than handled.
+  if (rules.pot !== null && l.maxBots > 0) {
+    out.push("a league with a pot cannot allow bots — a bot cannot be paid");
+  }
+
+  // A bot exists to square an odd number of friends. More than one is a
+  // different product, and one nobody asked for.
+  if (l.maxBots > 1) out.push("at most one bot per league");
+
+  if (l.maxBots > 0 && l.maxTeams - l.maxBots < l.minHumans) {
+    out.push("maxBots would leave room for fewer than minHumans");
+  }
 }
 
 /**

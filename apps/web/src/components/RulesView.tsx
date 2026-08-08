@@ -14,6 +14,7 @@ export function RulesView({ rules, hash }: { rules: LeagueRules; hash: string })
       <Banner hash={hash} />
       <Scoring rules={rules} />
       <Roster rules={rules} />
+      <League rules={rules} />
       <Season rules={rules} />
       <Transactions rules={rules} />
       <Pot rules={rules} />
@@ -139,6 +140,41 @@ function Roster({ rules }: { rules: LeagueRules }) {
             rules.roster.lockMode === "PER_PLAYER_KICKOFF"
               ? "At each player's kickoff"
               : "At the week's first kickoff"
+          }
+        />
+      </div>
+    </Section>
+  );
+}
+
+/**
+ * League size and who may occupy a seat.
+ *
+ * The bot rule is here rather than buried in a help page because it is a
+ * guarantee, not a setting: a league with a pot cannot hold one, and that is
+ * part of what a member signs. A rule nobody can read before joining is not
+ * really a rule they agreed to.
+ */
+function League({ rules }: { rules: LeagueRules }) {
+  const l = rules.league;
+
+  return (
+    <Section title="League">
+      <div className="grid gap-x-8 sm:grid-cols-2">
+        <Row label="Teams" value={`Up to ${l.maxTeams}`} />
+        <Row label="Minimum managers" value={String(l.minHumans)} />
+        <Row
+          label="Visibility"
+          value={l.visibility === "PRIVATE" ? "Invite only" : "Anyone can join"}
+        />
+        <Row
+          label="Bots"
+          value={
+            l.maxBots === 0
+              ? rules.pot
+                ? "None — a bot cannot be paid, so a league with a pot cannot hold one"
+                : "None"
+              : `At most ${l.maxBots}, and only to square an odd number of managers`
           }
         />
       </div>

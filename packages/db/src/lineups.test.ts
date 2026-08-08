@@ -4,9 +4,8 @@ import { resolveWeek } from "@rostr/core";
 import type { DraftRules, LeagueRules, LineupAssignment } from "@rostr/core";
 import { createLeague } from "./leagues.js";
 import { createUser } from "./identity.js";
-import { addBot } from "./membership.js";
 import { seedSport } from "./sports.js";
-import { createTestDatabase } from "./testing.js";
+import { addTestTeam, createTestDatabase } from "./testing.js";
 import type { PGliteClient } from "./testing.js";
 import {
   autoFillLineup,
@@ -72,8 +71,8 @@ async function setup(): Promise<Fixture> {
     rules,
   });
 
-  const mine = await addBot(db, league.id, "My Team");
-  const theirs = await addBot(db, league.id, "Their Team");
+  const mine = await addTestTeam(db, league.id, "My Team");
+  const theirs = await addTestTeam(db, league.id, "Their Team");
 
   const [sport] = await db.query<{ id: string }>("SELECT id FROM sports WHERE key = $1", [
     NFL.key,

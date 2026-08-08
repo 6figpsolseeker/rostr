@@ -38,3 +38,37 @@ export async function createTestDatabase(): Promise<PGliteClient> {
   await migrate(client);
   return client;
 }
+
+/**
+ * A human-owned team, without the join ceremony.
+ *
+ * Most tests need a league full of teams so they can draft, score or trade —
+ * not to exercise consent. Going through `joinLeague` would mean a keypair, a
+ * wallet link and a signature per team, which is noise in a test about lineups.
+ *
+ * **Use this rather than `addBot`.** A bot is capped at one per league and
+ * barred from pot leagues entirely, so a fixture built out of bots is a fixture
+ * describing a league that cannot exist. This produces the same rows a real join
+ * produces — a team with an owner — minus only the signature.
+ */
+export async function addTestTeam(
+  db: SqlClient,
+  leagueId: string,
+  name: string,
+): Promise<{ teamId: string; userId: string; slot: number }> {
+  const [user] = await db.query<{ id: string }>(
+    `INSERT INTO users (email, display_name)
+     VALUES ($1, $2) RETURNING id`,
+    [`${name.toLowerCase().replace(/\W+/g, "-")}-${leagueId.slice(0, 8)}@example.test`, name],
+  );
+
+  const [team] = await db.query<{ id: string; slot: number }>(
+    `INSERT INTO teams (league_id, owner_id, is_bot, name, slot)
+     VALUES ($1, $2, false, $3,
+             COALESCE((SELECT max(slot) FROM teams WHERE league_id = $1), 0) + 1)
+     RETURNING id, slot`,
+    [leagueId, user!.id, name],
+  );
+
+  return { teamId: team!.id, userId: user!.id, slot: Number(team!.slot) };
+}

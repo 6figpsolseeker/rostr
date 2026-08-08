@@ -343,9 +343,15 @@ describe("hashLeagueRules", () => {
     //   an existing league unverifiable. Safe only because none exists. Once one
     //   does, a schema bump means supporting both versions rather than moving
     //   this constant.
+    // Moved 2026-08-08: schemaVersion 2 -> 3, replacing league.botsAllowed
+    //   (boolean) with league.maxBots (number). Also a *schema* change. The
+    //   boolean was in the frozen rules and enforced nowhere — a guarantee
+    //   members signed that did nothing. `maxBots` is one field instead of two
+    //   that could disagree, and it is zero in any league with a pot, because a
+    //   bot has no wallet and a bot champion would leave 60% with no recipient.
     // No leagues existed on any of these occasions.
     expect(hashLeagueRules(FIXTURE)).toBe(
-      "2e9ec043556179b82993a9febb768c9cea715bf5529b7df205d2c9503b9bc1b8",
+      "f093a6ec8b7df85afcd058b6a0228bed4c364dda6126be697fba3a758ccbd3b6",
     );
   });
 });

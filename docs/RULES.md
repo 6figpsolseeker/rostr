@@ -122,15 +122,44 @@ A player already locked cannot be moved for that week.
 
 ## 3. League
 
-| Rule                    | Value                                                                     |
-| ----------------------- | ------------------------------------------------------------------------- |
-| Maximum teams           | **12** (humans + bots)                                                    |
-| Minimum humans to start | **2**                                                                     |
-| Bots                    | Fill any unclaimed slot, at the commissioner's discretion, up to 12 total |
-| Visibility              | **Private** (invite only) or **Public** (open join)                       |
+| Rule                    | Value                                               |
+| ----------------------- | --------------------------------------------------- |
+| Maximum teams           | **12**                                              |
+| Minimum humans to start | **2**                                               |
+| Bots                    | **At most one, and never in a league with a pot**   |
+| Visibility              | **Private** (invite only) or **Public** (open join) |
 
-Bots draft and set lineups automatically for the whole season. They cannot propose
-trades, place waiver claims, or vote on vetoes.
+### One bot, and only to square an odd number
+
+A bot exists for a single situation: five friends who want to play and do not want a
+stranger. Five teams is playable — the schedule gives somebody a bye each week — but that
+is roughly three dead weeks per team across a season. One predictable opponent is better
+than that.
+
+So a bot may be added **only when the number of managers is odd**, and only **one**.
+Adding one to an even league would create the bye it exists to prevent. The seat is a
+placeholder: if a sixth friend turns up, the commissioner removes the bot and they take
+it. That is possible right up until the draft order is drawn, after which the field is
+locked for everyone.
+
+### No bots in a league with a pot
+
+**A bot cannot be paid.** It has no wallet and puts in no buy-in, so a bot finishing in a
+paying position would leave that share with no recipient — on-chain, where there is
+nobody to appeal to and nothing to undo.
+
+Every rule that tries to handle it is more complicated than not allowing it. So
+`maxBots` is **zero** in any league with a pot, it is part of the frozen rule set every
+member signs, and league creation refuses the combination outright.
+
+An odd-numbered pot league plays with byes.
+
+### What a bot does and does not do
+
+Bots draft and set lineups automatically for the whole season, using the same auto-pick
+and autolineup a human gets when their clock expires. They **cannot propose or accept
+trades, place waiver claims, or vote on a veto** — a bot with a vote is a commissioner
+with extra steps.
 
 ---
 

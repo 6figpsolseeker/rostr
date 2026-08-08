@@ -49,7 +49,12 @@ export class JoinError extends Error {
       | "INVALID_SIGNATURE"
       | "RULES_MISSING"
       | "LEAGUE_NOT_ANCHORED"
-      | "WRONG_CLUSTER",
+      | "WRONG_CLUSTER"
+      | "BOTS_NOT_ALLOWED"
+      | "BOT_LIMIT"
+      | "EVEN_WITHOUT_BOT"
+      | "BOT_NOT_FOUND"
+      | "DRAFT_ALREADY_DRAWN",
   ) {
     super(message);
     this.name = "JoinError";
@@ -214,10 +219,22 @@ export async function joinLeague(db: SqlClient, input: JoinLeagueInput): Promise
 }
 
 /**
- * Add a bot to fill an unclaimed slot.
+ * Add a bot to square an odd number of managers.
  *
  * Bots have no owner and sign nothing — there is no consent to record, because
- * there is nobody to consent.
+ * there is nobody to consent. That is also why they cannot trade, claim waivers
+ * or vote on a veto: a bot with a vote is a commissioner with extra steps.
+ *
+ * Three refusals, all from the league's own frozen rules:
+ *
+ *   * **Not in a pot league.** `maxBots` is zero whenever there is money. A bot
+ *     has no wallet, so a bot champion would leave 60% of the pot with no
+ *     recipient — on-chain, where there is nobody to appeal to.
+ *   * **One at most.** A bot exists to fix an odd count. More is a different
+ *     game.
+ *   * **Only when the count is odd.** Adding a bot to an even league gives
+ *     somebody a bye instead of preventing one, which is the opposite of the
+ *     point.
  */
 export async function addBot(
   db: SqlClient,
@@ -227,21 +244,52 @@ export async function addBot(
   const stored = await getLeagueRules(db, leagueId);
   if (!stored) throw new JoinError("League has no stored rules", "RULES_MISSING");
 
+  const { maxBots, maxTeams } = stored.rules.league;
+
   return withTransaction(db, async (tx) => {
-    const [count] = await tx.query<{ taken: number }>(
-      "SELECT count(*)::int AS taken FROM teams WHERE league_id = $1",
+    const [counts] = await tx.query<{ taken: number; bots: number; humans: number }>(
+      `SELECT count(*)::int AS taken,
+              count(*) FILTER (WHERE is_bot)::int AS bots,
+              count(*) FILTER (WHERE NOT is_bot)::int AS humans
+         FROM teams WHERE league_id = $1`,
       [leagueId],
     );
-    const taken = Number(count?.taken ?? 0);
-    if (taken >= stored.rules.league.maxTeams) {
-      throw new JoinError("League is full", "LEAGUE_FULL");
+
+    const taken = Number(counts?.taken ?? 0);
+    const bots = Number(counts?.bots ?? 0);
+    const humans = Number(counts?.humans ?? 0);
+
+    if (maxBots === 0) {
+      throw new JoinError(
+        stored.rules.pot
+          ? "This league plays for a pot, and a bot cannot be paid — so it cannot hold one."
+          : "This league does not allow bots.",
+        "BOTS_NOT_ALLOWED",
+      );
     }
+
+    if (bots >= maxBots) {
+      throw new JoinError(
+        `This league already has its ${maxBots === 1 ? "bot" : `${maxBots} bots`}.`,
+        "BOT_LIMIT",
+      );
+    }
+
+    if (humans % 2 === 0) {
+      throw new JoinError(
+        `There are ${humans} managers, which is already even. A bot would give ` +
+          `somebody a bye rather than prevent one.`,
+        "EVEN_WITHOUT_BOT",
+      );
+    }
+
+    if (taken >= maxTeams) throw new JoinError("League is full", "LEAGUE_FULL");
 
     const [team] = await tx.query<{ id: string; slot: number }>(
       `INSERT INTO teams (league_id, is_bot, name, slot)
-       VALUES ($1, true, $2, $3)
+       VALUES ($1, true, $2, COALESCE((SELECT max(slot) FROM teams WHERE league_id = $1), 0) + 1)
        RETURNING id, slot`,
-      [leagueId, name, taken + 1],
+      [leagueId, name],
     );
 
     return { teamId: team!.id, slot: Number(team!.slot) };
@@ -266,6 +314,43 @@ export async function teamForUser(
   );
 
   return row ? { teamId: row.id, name: row.name } : null;
+}
+
+/**
+ * Remove the bot.
+ *
+ * The seat is a placeholder for a person, so when a sixth friend turns up it has
+ * to be possible to give it back. Refused once the draft order is drawn — the
+ * order is derived from the set of teams, and a trigger locks the field at that
+ * moment precisely so nobody can change it afterwards.
+ */
+export async function removeBot(db: SqlClient, leagueId: string): Promise<{ removed: string }> {
+  return withTransaction(db, async (tx) => {
+    const [draft] = await tx.query<{ order_drawn_at: string | null }>(
+      "SELECT order_drawn_at FROM drafts WHERE league_id = $1",
+      [leagueId],
+    );
+    if (draft?.order_drawn_at) {
+      throw new JoinError(
+        "The draft order is already drawn, so the field is locked.",
+        "DRAFT_ALREADY_DRAWN",
+      );
+    }
+
+    const [bot] = await tx.query<{ id: string }>(
+      "SELECT id FROM teams WHERE league_id = $1 AND is_bot ORDER BY slot LIMIT 1",
+      [leagueId],
+    );
+    if (!bot) throw new JoinError("This league has no bot", "BOT_NOT_FOUND");
+
+    // Nothing references a bot before the draft — no roster, no lineup, no
+    // matchup. `ON DELETE RESTRICT` on those tables is what makes that a fact
+    // rather than an assumption: if anything did reference it, this fails loudly
+    // instead of orphaning a season's worth of rows.
+    await tx.query("DELETE FROM teams WHERE id = $1", [bot.id]);
+
+    return { removed: bot.id };
+  });
 }
 
 export interface MembershipProof {

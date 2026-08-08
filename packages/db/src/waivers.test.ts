@@ -3,9 +3,8 @@ import { buildNflPprRules, NFL } from "@rostr/core";
 import type { DraftRules, LeagueRules } from "@rostr/core";
 import { createLeague } from "./leagues.js";
 import { createUser } from "./identity.js";
-import { addBot } from "./membership.js";
 import { seedSport } from "./sports.js";
-import { createTestDatabase } from "./testing.js";
+import { addTestTeam, createTestDatabase } from "./testing.js";
 import type { PGliteClient } from "./testing.js";
 import {
   addFreeAgent,
@@ -61,7 +60,7 @@ async function setup(): Promise<Fixture> {
 
   const teams: string[] = [];
   for (let i = 0; i < 4; i++) {
-    teams.push((await addBot(db, league.id, `Team ${i + 1}`)).teamId);
+    teams.push((await addTestTeam(db, league.id, `Team ${i + 1}`)).teamId);
   }
 
   // Draft positions, so waiver priority can be seeded from them.

@@ -47,7 +47,7 @@ Do not build it in August.
 
 See [`docs/BUILD-PLAN.md`](docs/BUILD-PLAN.md) for the full commit-by-commit plan.
 
-**Done — 728 tests, CI green:**
+**Done — 735 tests, CI green:**
 
 - Full specification — rules, data model, live scoring, build plan
 - A1: pnpm monorepo, TS strict, vitest, eslint, prettier, CI
@@ -422,6 +422,28 @@ hoard claims.
 **Watch the clock in tests.** A player dropped Monday afternoon clears at Wednesday 03:00
 **Eastern**, which is 07:00 UTC — so a test using "Wednesday 18:00 UTC" is _after_ the
 clear, not before it. One test asserted the opposite and was wrong.
+
+### Bots: one, and none where there is money
+
+`league.maxBots` in the frozen rules, enforced in `addBot`. **Zero in any league with a
+pot** — a bot has no wallet and paid no buy-in, so a bot champion would leave 60% of the
+pot with no recipient, on-chain, where there is nobody to appeal to. Barring the case is
+simpler than every rule that tries to handle it, and it means the escrow program never has
+to know what a bot is.
+
+Otherwise one, and only when the manager count is **odd**. A bot squares five friends;
+adding one to an even league creates the bye it exists to prevent. `removeBot` gives the
+seat back when a sixth person turns up, and refuses once the draft order is drawn — the
+field is locked at that moment for everyone.
+
+`botsAllowed: boolean` became `maxBots: number` in the same change. The boolean sat in the
+frozen rule set and was **enforced nowhere** — a guarantee members signed that did nothing.
+One field also cannot disagree with itself the way "allowed" and "how many" can.
+schemaVersion 2 → 3.
+
+**Tests use `addTestTeam` from `testing.ts`, not `addBot`.** A fixture built out of bots
+describes a league that cannot exist. The helper produces the same rows a real join
+produces, minus the signature.
 
 ### Joining requires the anchor
 
@@ -872,7 +894,7 @@ Expect ~30–60 minutes; compiling AVM from source is the slow part.
 
 ```bash
 pnpm install
-pnpm test        # 614 tests, all green
+pnpm test        # 735 tests, all green
 pnpm typecheck
 pnpm lint
 ```

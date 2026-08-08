@@ -164,6 +164,7 @@ export {
   getMembershipProofs,
   JoinError,
   joinLeague,
+  removeBot,
   teamForUser,
   type JoinedLeague,
   type JoinLeagueInput,

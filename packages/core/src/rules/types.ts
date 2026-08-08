@@ -97,7 +97,25 @@ export type RosterRules = {
 export type LeagueSizeRules = {
   readonly maxTeams: number;
   readonly minHumans: number;
-  readonly botsAllowed: boolean;
+  /**
+   * How many bots this league may hold. **Zero in any league with a pot.**
+   *
+   * A number rather than a boolean, because "allowed" and "how many" are the
+   * same fact and two fields encoding one fact can disagree.
+   *
+   * A bot exists for one reason: an odd number of friends. Five people either
+   * play with three dead weeks each — the schedule gives somebody a bye every
+   * week — or add one predictable opponent. One is enough for that; more is a
+   * different game.
+   *
+   * **Zero when there is money.** A bot has no wallet and pays no buy-in, so a
+   * bot that won a pot league would leave the champion's 60% with nowhere to go.
+   * Barring them outright is simpler than every rule that tries to handle it,
+   * and it is the kind of guarantee a member should be able to read before they
+   * sign — which is why it lives here, in the frozen rules, rather than in a
+   * server-side check nobody can verify.
+   */
+  readonly maxBots: number;
   readonly visibility: "PRIVATE" | "PUBLIC";
 };
 
@@ -291,7 +309,7 @@ export type LeagueRules = {
    * one does, a schema change means supporting both versions — the rules of a
    * created league can never be re-encoded.
    */
-  readonly schemaVersion: 2;
+  readonly schemaVersion: 3;
   readonly sportKey: string;
   readonly seasonYear: number;
   readonly scoring: readonly ScoringRule[];
