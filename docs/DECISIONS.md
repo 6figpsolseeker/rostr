@@ -88,9 +88,10 @@ and the owner corrected it:
   the manager was not there to choose — so `autoPick()` skips any player, queued or not,
   that would make the starting lineup unfillable.
 
-The asymmetry is the whole point. Stakes are higher here than on ESPN: three consecutive
-invalid lineups mean the team is abandoned and its stake forfeited. A manager may accept
-that risk knowingly; the app must not impose it on someone who was asleep.
+The asymmetry is the whole point. A roster that cannot field a legal lineup is a season
+of empty slots scoring nothing, in a league where those results move other people's
+playoff seeds. A manager may accept that knowingly; the app must not impose it on someone
+who was asleep.
 
 `pickWouldStrandStarters()` exists so the UI can warn before a manual pick confirms.
 Warn, never block.
@@ -156,15 +157,73 @@ a playoff dispute.
 
 ### Consolation bracket pays out
 
-Not a nicety — **the anti-abandonment mechanism.**
+Not a nicety — **it is what keeps a losing team playing.**
 
 Under winner-take-all, a 2–9 team in Week 11 is mathematically eliminated and gets $0
-whether they play or not. Punishing them for abandoning is empty; they have already lost
-everything they can lose. Paying the consolation bracket means their record still sets
-their seeding, and Week 11 still has money attached.
+whether they play or not, so there is no reason left to open the app. Paying the
+consolation bracket means their record still sets their seeding, and Week 11 still has
+money attached.
+
+This used to be framed as the anti-abandonment mechanism, paired with a rule that took a
+stake from anyone who stopped showing up. That rule is gone (below), so this now carries
+the whole job — which is the better arrangement anyway: giving someone a reason to play
+beats punishing them for not.
 
 Payout is 60/15/10/10/5 — champion, runner-up, regular-season record, consolation winner,
 third place. The champion must always hold the largest single share.
+
+### Abandonment removed; the autofill does the job instead
+
+Decided 2026-08-08, schema 3 → 4.
+
+**The rule could not fire.** It counted consecutive weeks with an _invalid_ lineup, but
+`ensureLineups` autofills every team before a week is scored, so a lineup is never invalid
+at the moment the count would happen. `teams.strikes` existed and nothing incremented it.
+
+It could have been given a workable trigger — weeks where the manager set nothing and the
+autofill did it for them. It was removed instead, and the reasoning is worth keeping:
+
+**Forfeiting a stake for inattention is the wrong rule.** A manager who stops setting
+lineups is not defrauding anyone. They are busy, or bored, or their team is 2–9. The
+league is not harmed either, because the autofill keeps their team competitive — which is
+the actual concern, and it is already solved. What abandonment added on top was a penalty
+people would discover by losing money to it.
+
+**It deletes an escrow instruction.** D7, "abandonment forfeit to champion", would have
+moved one member's stake to another based on a strike count, in a program shipping without
+a commercial audit. Deleting a path that moves money is worth more than hardening one.
+
+**Rejected: keep it, with a better trigger.** The trigger was fixable; the rule was not
+worth fixing.
+
+**Rejected: keep strikes as warnings without forfeiture.** Warnings nobody acts on are
+noise, and the on-chain warning at strikes 1 and 2 was only ever there because money was
+at stake at strike 3.
+
+### The autofill ranks on projections, and that is allowed
+
+Same change. The autofill previously used season-to-date average and `RULES.md` explicitly
+refused projections, on the grounds that a provider changing its model would alter the
+outcome of a rule that can never be amended.
+
+That objection is answerable and was over-weighted. Store the projection used, with its
+source, and the decision is as reproducible as anything else in the system.
+
+The sharper distinction is **fact versus decision**. Settlement requires two independent
+providers to agree before a week finalises, and that is right for facts — did he score? —
+because two sources can disagree about what happened. Projections are opinions and could
+never pass that gate. But filling an empty slot is not a fact, it is a **decision**
+standing in for the manager's own start/sit call, and nobody demands two providers agree
+on one of those either.
+
+So a projection may decide a lineup and may never decide a score. A season average is the
+per-player fallback where no projection exists, and the whole-league alternative if a
+league wants one.
+
+**Weekly, not season.** `player_projections` already held projected season totals for the
+draft board, which cannot answer "who scores most this Sunday" — a player on bye projects
+zero for the week and unchanged for the season. Migration `0015` adds `week` to the key,
+with week 0 meaning the season aggregate so the draft board is untouched.
 
 ---
 

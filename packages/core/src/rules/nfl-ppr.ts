@@ -8,7 +8,6 @@
  */
 
 import type {
-  AbandonmentRules,
   DraftRules,
   LeagueRules,
   LeagueSizeRules,
@@ -92,6 +91,7 @@ export const NFL_PPR_ROSTER: RosterRules = {
   benchSlots: 5,
   irSlots: 2,
   lockMode: "PER_PLAYER_KICKOFF",
+  autofill: "WEEKLY_PROJECTION",
 };
 
 export const NFL_DEFAULT_LEAGUE: LeagueSizeRules = {
@@ -134,12 +134,6 @@ export const NFL_DEFAULT_TRADES: TradeRules = {
   vetoNumerator: 1,
   vetoDenominator: 3,
   deadlineWeek: 11,
-};
-
-export const NFL_DEFAULT_ABANDONMENT: AbandonmentRules = {
-  strikesToAbandon: 3,
-  autolineup: "SEASON_AVERAGE",
-  forfeitStakeToChampion: true,
 };
 
 export const NFL_DEFAULT_SETTLEMENT: SettlementRules = {
@@ -190,7 +184,7 @@ export function buildNflPprRules(overrides: NflPprOverrides): LeagueRules {
   const pot = overrides.pot ?? null;
 
   return structuredClone({
-    schemaVersion: 3,
+    schemaVersion: 4,
     sportKey: "nfl",
     seasonYear: overrides.seasonYear,
     scoring: NFL_PPR_SCORING,
@@ -209,7 +203,6 @@ export function buildNflPprRules(overrides: NflPprOverrides): LeagueRules {
     waivers: NFL_DEFAULT_WAIVERS,
     trades: NFL_DEFAULT_TRADES,
     pot,
-    abandonment: NFL_DEFAULT_ABANDONMENT,
     settlement: NFL_DEFAULT_SETTLEMENT,
   }) as LeagueRules;
 }

@@ -112,6 +112,15 @@ function validateRoster(rules: LeagueRules, sport: SportDef, out: string[]): voi
 
   if (rules.roster.benchSlots < 0) out.push("benchSlots cannot be negative");
   if (rules.roster.irSlots < 0) out.push("irSlots cannot be negative");
+
+  // Checked even though the type already narrows it: rules arrive as JSON from
+  // a request and from the database, where a string is a string.
+  if (
+    rules.roster.autofill !== "WEEKLY_PROJECTION" &&
+    rules.roster.autofill !== "SEASON_AVERAGE"
+  ) {
+    out.push(`roster autofill "${String(rules.roster.autofill)}" is not a known mode`);
+  }
 }
 
 function validateDraft(rules: LeagueRules, out: string[]): void {

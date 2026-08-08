@@ -465,25 +465,41 @@ needs to happen.
 
 ---
 
-## 8. Abandonment
+## 8. Autofill
 
-A team is **abandoned** after **3 consecutive weeks** with an invalid lineup — an empty
-starting slot, or a starter on bye or ruled out.
+**Nobody forfeits a stake for not showing up.** There is no abandonment rule, no strikes,
+and no forfeiture. A manager who stops setting lineups is not defrauding anyone, and a
+rule people would only discover by losing money to it is the wrong rule to have.
 
-Warnings are recorded on-chain at strikes 1 and 2. No one loses a stake without visible
-notice first.
+Instead, **a slot you leave empty gets filled for you at lock**, and it is on by default.
 
-On abandonment:
+**Selection is deterministic**, because a filled team's results move other people's
+playoff seeds and, in a pot league, decide who gets paid: the highest-ranked player
+eligible for each slot, ties broken by ascending player ID. Scarce slots are filled first,
+so a tight end who also qualifies for the FLEX is considered for TE first rather than
+being taken by the FLEX and leaving TE empty.
 
-1. **Autolineup** takes over permanently for that team.
-2. Their share of the pot is **forfeited to the champion** at settlement.
+**The ranking is that week's projection**, scored under this league's own frozen rules
+rather than the provider's. A season average cannot know that this week's opponent is the
+worst run defence in the league, or that the starter ahead of him is out. Where a player
+has no projection — a rookie, or a week not yet published — his season-to-date average is
+used **for him alone**; one gap must not decide how the other slots are filled.
 
-Reversible only by unanimous league consent.
+Which of the two a league uses is frozen at creation, like every other rule.
 
-**Autolineup selection** is deterministic and depends on no third party: the highest
-season-to-date average scorer eligible for each slot, ties broken by ascending player ID.
-It deliberately does not use projections — a projection provider that changes its model
-or goes offline would otherwise alter the outcome of a rule that can never be amended.
+> A projection is an opinion, and opinions could never pass the two-source agreement that
+> § 7 requires before a week's scores finalise. That is the right bar for **facts** — did
+> he score? — because two providers can disagree about what happened. Filling a slot is a
+> **decision** standing in for the manager's own start/sit call, and nobody asks two
+> providers to agree on one of those. The projection used is recorded with the lineup, so
+> the decision is checkable after the fact.
+
+**You can turn it off.** It is a per-team setting, not a league rule, so it is yours alone
+and changeable whenever you like. Off means an empty slot stays empty and scores nothing —
+which is the honest meaning of the switch, and why it is not the default.
+
+Setting your own lineup always overrides it. Autofill only ever touches slots you left
+empty, and never a slot that has already locked.
 
 ---
 

@@ -427,18 +427,21 @@ hoard claims.
 **Eastern**, which is 07:00 UTC — so a test using "Wednesday 18:00 UTC" is _after_ the
 clear, not before it. One test asserted the opposite and was wrong.
 
-### Abandonment does not work, and needs a decision
+### Abandonment is gone. Do not bring it back
 
-`teams.strikes` exists and **nothing increments it.** `RULES.md` §8 says three consecutive
-weeks with an invalid lineup means the team is abandoned and its stake forfeited.
+Removed 2026-08-08 in schema 4, along with `teams.strikes`, and **decided by the owner** —
+not a simplification somebody took on themselves.
 
-That rule cannot fire as written. `ensureLineups` autofills every team before a week is
-scored, so a lineup is never invalid at scoring time. The rule needs a different trigger —
-most likely counting weeks where the _manager_ set nothing and the autolineup did it for
-them.
+It could never fire: it counted consecutive weeks with an _invalid_ lineup, and the
+autofill runs before a week is scored, so a lineup is never invalid at that moment.
 
-**This is the owner's call, not an implementation detail**, because it decides whether
-somebody loses their stake. Do not pick a definition and build it quietly.
+It was removed rather than repaired. A manager who stops setting lineups is not defrauding
+anyone, the autofill already keeps their team competitive so the league is not harmed, and
+a stake forfeited for inattention is a rule people would only meet by losing money to it.
+It also deletes **D7** from the escrow — an instruction that would have moved one member's
+stake to another based on a strike count, in unaudited code.
+
+Reasoning in full in `DECISIONS.md`, including the two alternatives that were rejected.
 
 ### Bots: one, and none where there is money
 
@@ -806,25 +809,27 @@ at T+48h. Validation enforces this.
 
 These were discussed at length and decided. Re-proposing them wastes the owner's time.
 
-| Decision                                            | Status                                                           |
-| --------------------------------------------------- | ---------------------------------------------------------------- |
-| Full PPR scoring                                    | **Settled** — table in `docs/RULES.md` §1                        |
-| Schedule luck retained                              | **Settled** — median scoring was proposed and **rejected**       |
-| Rolling waiver priority                             | **Settled** — FAAB proposed and **rejected** for v1              |
-| NFTs _are_ the roster, not souvenirs                | **Settled** — Token-2022, transfer hook + permanent delegate     |
-| NFTs persist as trophies, labelled "Player YYYY"    | **Settled**                                                      |
-| Trades vetoable, never automatic                    | **Settled** — 48h escrow, ⅓ of uninvolved teams                  |
-| Rules immutable, shown before joining               | **Settled**                                                      |
-| Per-game score updates, not real-time               | **Settled** — cost is not the reason; simplicity is              |
-| Mainnet with the pot live for 2026                  | **Settled** — risks were raised and the owner chose this         |
-| Payout 60/15/10/10/5                                | **Settled** — champion must always be largest                    |
-| Abandonment: 3 strikes → autolineup + stake forfeit | **Settled**                                                      |
-| Consolation bracket pays out                        | **Settled** — it is the anti-abandonment mechanism, not a nicety |
-| IP-based sybil blocking                             | **Rejected** — breaks households, defeated by any VPN            |
-| Protocol fee: 1%, once, at settlement               | **Settled** 2026-08-07 — in the hashed rules; never on a refund  |
-| Buy-in between $5 and $50 per member                | **Settled** 2026-08-07 — a range; both bounds enforced on-chain  |
-| Pot mints must have six decimals (season one)       | **Settled** 2026-08-07 — what makes the $50 cap mean dollars     |
-| Free leagues anchor their rules hash on-chain       | **Settled** 2026-08-07 — `initialize_free_league`                |
+| Decision                                         | Status                                                           |
+| ------------------------------------------------ | ---------------------------------------------------------------- |
+| Full PPR scoring                                 | **Settled** — table in `docs/RULES.md` §1                        |
+| Schedule luck retained                           | **Settled** — median scoring was proposed and **rejected**       |
+| Rolling waiver priority                          | **Settled** — FAAB proposed and **rejected** for v1              |
+| NFTs _are_ the roster, not souvenirs             | **Settled** — Token-2022, transfer hook + permanent delegate     |
+| NFTs persist as trophies, labelled "Player YYYY" | **Settled**                                                      |
+| Trades vetoable, never automatic                 | **Settled** — 48h escrow, ⅓ of uninvolved teams                  |
+| Rules immutable, shown before joining            | **Settled**                                                      |
+| Per-game score updates, not real-time            | **Settled** — cost is not the reason; simplicity is              |
+| Mainnet with the pot live for 2026               | **Settled** — risks were raised and the owner chose this         |
+| Payout 60/15/10/10/5                             | **Settled** — champion must always be largest                    |
+| Abandonment (3 strikes → stake forfeit)          | **Removed** 2026-08-08 — could not fire; autofill does the job   |
+| Consolation bracket pays out                     | **Settled** — it is what keeps an eliminated team playing        |
+| IP-based sybil blocking                          | **Rejected** — breaks households, defeated by any VPN            |
+| Protocol fee: 1%, once, at settlement            | **Settled** 2026-08-07 — in the hashed rules; never on a refund  |
+| Buy-in between $5 and $50 per member             | **Settled** 2026-08-07 — a range; both bounds enforced on-chain  |
+| Pot mints must have six decimals (season one)    | **Settled** 2026-08-07 — what makes the $50 cap mean dollars     |
+| Free leagues anchor their rules hash on-chain    | **Settled** 2026-08-07 — `initialize_free_league`                |
+| Autofill on by default, per-team toggle          | **Settled** 2026-08-08 — method frozen in rules, switch is yours |
+| Autofill ranks on weekly projections             | **Settled** 2026-08-08 — a decision, not a fact; see DECISIONS   |
 
 ---
 

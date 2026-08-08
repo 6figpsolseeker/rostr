@@ -349,9 +349,15 @@ describe("hashLeagueRules", () => {
     //   members signed that did nothing. `maxBots` is one field instead of two
     //   that could disagree, and it is zero in any league with a pot, because a
     //   bot has no wallet and a bot champion would leave 60% with no recipient.
+    // Moved 2026-08-08: schemaVersion 3 -> 4, removing `abandonment` and adding
+    //   `roster.autofill`. Also a *schema* change. Abandonment counted weeks
+    //   with an invalid lineup and could never fire — the autofill runs before
+    //   scoring, so a lineup is never invalid at that moment — and taking
+    //   somebody's stake for inattention was the wrong rule to fix rather than
+    //   delete. It also removes an entire instruction from the escrow.
     // No leagues existed on any of these occasions.
     expect(hashLeagueRules(FIXTURE)).toBe(
-      "f093a6ec8b7df85afcd058b6a0228bed4c364dda6126be697fba3a758ccbd3b6",
+      "a6bfa99a895dd9a05cb9de24e9c916eecb7f020015e6e8fe53d1114f186922a5",
     );
   });
 });

@@ -26,7 +26,6 @@ export {
   MAX_FEE_BPS,
   MILLI_POINTS_PER_POINT,
   MIN_BUY_IN_BASE_UNITS,
-  type AbandonmentRules,
   type DraftRules,
   type LeagueRules,
   type LeagueSizeRules,
@@ -50,7 +49,6 @@ export {
 
 export {
   buildNflPprRules,
-  NFL_DEFAULT_ABANDONMENT,
   NFL_DEFAULT_FEE_BPS,
   NFL_DEFAULT_LEAGUE,
   NFL_DEFAULT_PAYOUT,
@@ -167,7 +165,9 @@ export {
 
 export {
   autolineup,
+  rankingValue,
   seasonAverage,
+  type AutofillMode,
   type AutolineupCandidate,
   type AutolineupInput,
 } from "./season/autolineup.js";

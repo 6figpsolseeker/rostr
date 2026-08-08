@@ -88,6 +88,30 @@ export type RosterRules = {
   readonly irSlots: number;
   /** Per-player at their game's kickoff, or all slots at the week's first kickoff. */
   readonly lockMode: "PER_PLAYER_KICKOFF" | "FIRST_KICKOFF";
+  /**
+   * How a slot the manager left empty gets filled at lock.
+   *
+   * `WEEKLY_PROJECTION` — the highest projected scorer eligible for the slot,
+   * from the provider's projection for that week. `SEASON_AVERAGE` — the
+   * highest season-to-date average. Ties break on ascending player ID in both,
+   * because at that point every real criterion has come up equal and all that
+   * matters is that two machines agree.
+   *
+   * **`WEEKLY_PROJECTION` falls back to `SEASON_AVERAGE` per player**, not per
+   * league: a rookie with no projection, or a week the provider has not
+   * published yet, must not stop the rest of the lineup being filled well. The
+   * projection actually used is recorded with the lineup, so the choice stays
+   * reproducible by anyone — which is the property that matters, since these
+   * results move other people's playoff seeds.
+   *
+   * This is a *decision*, not a fact, and that is why a projection is allowed to
+   * decide it. Facts — did he score? — go through the two-source oracle gate in
+   * `SettlementRules`, because two providers can disagree about what happened.
+   * Projections are opinions and could never pass that gate; but nobody demands
+   * two sources agree on a manager's start/sit call either, and this is standing
+   * in for exactly that.
+   */
+  readonly autofill: "WEEKLY_PROJECTION" | "SEASON_AVERAGE";
 };
 
 // ---------------------------------------------------------------------------
@@ -269,12 +293,26 @@ export type PotRules = {
 // Abandonment
 // ---------------------------------------------------------------------------
 
-export type AbandonmentRules = {
-  /** Consecutive weeks with an invalid lineup before a team is abandoned. */
-  readonly strikesToAbandon: number;
-  readonly autolineup: "SEASON_AVERAGE";
-  readonly forfeitStakeToChampion: boolean;
-};
+/**
+ * Abandonment was removed in schema 4, and it is worth recording why here rather
+ * than only in a commit nobody will read.
+ *
+ * The rule counted consecutive weeks with an *invalid* lineup, and it could
+ * never fire: the autofill runs before a week is scored, so a lineup is never
+ * invalid at the moment the count would happen. `teams.strikes` existed and
+ * nothing ever incremented it.
+ *
+ * It could have been given a workable trigger. It was dropped instead, because
+ * the honest version is worse than nothing: a manager who stops setting lineups
+ * is not defrauding anyone, and taking their stake for inattention is a rule
+ * people would only discover by losing money to it. The autofill already keeps
+ * their team competitive, so the league is not harmed.
+ *
+ * The practical win is that it deletes a whole instruction from the escrow —
+ * D7, "abandonment forfeit to champion", which would have moved one member's
+ * stake to another based on a strike count, in code shipping without a
+ * commercial audit. Deleting a path that moves money beats hardening one.
+ */
 
 // ---------------------------------------------------------------------------
 // Settlement
@@ -301,6 +339,8 @@ export type SettlementRules = {
 export type LeagueRules = {
   /**
    * 1 → 2 added `pot.feeBps` and `pot.feeRecipient`.
+   * 2 → 3 replaced `league.botsAllowed` with `league.maxBots`.
+   * 3 → 4 removed `abandonment` and added `roster.autofill`.
    *
    * Bumping this is the honest way to change the rule schema: it changes the
    * canonical encoding and therefore every hash, so the golden fixture in
@@ -309,7 +349,7 @@ export type LeagueRules = {
    * one does, a schema change means supporting both versions — the rules of a
    * created league can never be re-encoded.
    */
-  readonly schemaVersion: 3;
+  readonly schemaVersion: 4;
   readonly sportKey: string;
   readonly seasonYear: number;
   readonly scoring: readonly ScoringRule[];
@@ -321,6 +361,5 @@ export type LeagueRules = {
   readonly trades: TradeRules;
   /** `null` when the league plays for nothing. */
   readonly pot: PotRules | null;
-  readonly abandonment: AbandonmentRules;
   readonly settlement: SettlementRules;
 };

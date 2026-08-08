@@ -251,3 +251,132 @@ describe("seasonAverage", () => {
     expect(seasonAverage([-4_000, 12_000])).toBe(4_000);
   });
 });
+
+describe("WEEKLY_PROJECTION", () => {
+  const projected = (
+    playerId: string,
+    positions: string[],
+    averageMilliPoints: number | null,
+    projectedMilliPoints: number | null,
+  ): AutolineupCandidate => ({
+    playerId,
+    positions,
+    averageMilliPoints,
+    projectedMilliPoints,
+    kickoffAt: SUNDAY,
+  });
+
+  /**
+   * The whole reason the mode exists. A season average cannot know that this
+   * week's opponent is the worst run defence in the league, or that the usual
+   * starter is out and the backup inherits the carries.
+   */
+  it("starts the better projection over the better average", () => {
+    const roster = [
+      projected("qb-steady", ["QB"], 22_000, 15_000),
+      projected("qb-spot", ["QB"], 9_000, 26_000),
+    ];
+
+    const [byProjection] = autolineup({
+      shape: SHAPE,
+      roster,
+      mode: "WEEKLY_PROJECTION",
+    }).filter((a) => a.slotType === "QB");
+    expect(byProjection?.playerId).toBe("qb-spot");
+
+    // Same roster, same code, other mode — so the difference is the rule and
+    // not something incidental about these two players.
+    const [byAverage] = autolineup({
+      shape: SHAPE,
+      roster,
+      mode: "SEASON_AVERAGE",
+    }).filter((a) => a.slotType === "QB");
+    expect(byAverage?.playerId).toBe("qb-steady");
+  });
+
+  it("defaults to SEASON_AVERAGE when no mode is given", () => {
+    // A caller that has not been taught about projections must not silently
+    // start ranking everybody on null.
+    const roster = [
+      projected("qb-steady", ["QB"], 22_000, 15_000),
+      projected("qb-spot", ["QB"], 9_000, 26_000),
+    ];
+    const [chosen] = autolineup({ shape: SHAPE, roster }).filter((a) => a.slotType === "QB");
+    expect(chosen?.playerId).toBe("qb-steady");
+  });
+
+  /**
+   * Per player, not per league. One rookie the provider does not cover must not
+   * decide how the other eight slots get filled.
+   */
+  it("falls back to the average for a player with no projection", () => {
+    const roster = [
+      projected("qb-known", ["QB"], 10_000, 12_000),
+      projected("qb-rookie", ["QB"], 25_000, null),
+    ];
+
+    const [chosen] = autolineup({
+      shape: SHAPE,
+      roster,
+      mode: "WEEKLY_PROJECTION",
+    }).filter((a) => a.slotType === "QB");
+
+    // Ranked on 25_000, his average — not dumped below the projected player.
+    expect(chosen?.playerId).toBe("qb-rookie");
+  });
+
+  it("still puts an available player ahead of a better-projected bye", () => {
+    // Availability outranks any number. A player on bye scores nothing at all,
+    // whatever the projection says.
+    const roster: AutolineupCandidate[] = [
+      { ...projected("qb-bye", ["QB"], 30_000, 30_000), unavailable: true },
+      projected("qb-playing", ["QB"], 5_000, 5_000),
+    ];
+
+    const [chosen] = autolineup({
+      shape: SHAPE,
+      roster,
+      mode: "WEEKLY_PROJECTION",
+    }).filter((a) => a.slotType === "QB");
+    expect(chosen?.playerId).toBe("qb-playing");
+  });
+
+  it("is reproducible, which is the property that matters", () => {
+    const roster = ROSTER.map((c) => ({
+      ...c,
+      projectedMilliPoints: 20_000 - c.playerId.length,
+    }));
+
+    const once = autolineup({ shape: SHAPE, roster, mode: "WEEKLY_PROJECTION" });
+    const twice = autolineup({
+      shape: SHAPE,
+      roster: [...roster].reverse(),
+      mode: "WEEKLY_PROJECTION",
+    });
+
+    // Same inputs in a different order give the same lineup: these results move
+    // other people's playoff seeds, so "the computer picked" has to be
+    // something anyone can recompute.
+    expect(once).toEqual(twice);
+  });
+
+  it("produces a legal lineup", () => {
+    // The same validator a manager's own edit goes through. If the two ever
+    // disagreed, a team could be auto-set into a lineup it was not allowed to
+    // choose for itself.
+    const candidates = ROSTER.map((c, i) => ({
+      ...c,
+      projectedMilliPoints: (i % 5) * 4_000,
+    }));
+    const assignments = autolineup({
+      shape: SHAPE,
+      roster: candidates,
+      mode: "WEEKLY_PROJECTION",
+    });
+    const roster = new Map(candidates.map((player) => [player.playerId, player]));
+
+    expect(validateLineup({ assignments, shape: SHAPE, roster, requireFull: true })).toEqual(
+      [],
+    );
+  });
+});

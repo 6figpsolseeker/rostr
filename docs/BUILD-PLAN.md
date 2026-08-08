@@ -151,7 +151,6 @@ milli-points internally; formatting to decimals happens only at the display edge
 | C8  | `feat(season): matchup resolution + standings`            | W/L/T, Points For, Points Against                    |
 | C9  | `feat(season): tiebreaker chain`                          | Deterministic to the final step, no coin flips       |
 | C10 | `feat(season): deterministic autolineup`                  | Season-to-date average, ties by player ID            |
-| C11 | `feat(season): abandonment strikes + on-chain warnings`   | 3 strikes → autolineup, visible at 1 and 2           |
 | C12 | `feat(web): matchup view, live scoring, standings`        | Sunday afternoon works                               |
 
 ---
@@ -168,7 +167,6 @@ Calendar-driven, not sequence-driven. Written alongside A and B.
 | D4  | `feat(program): deposit to vault, single SPL token`          | Mixed tokens rejected at the type level                |
 | D5  | `feat(program): unconditional timelock refund`               | **Funds can never be stuck. Ship first.**              |
 | D6  | `feat(program): payout by frozen split`                      | 60/15/10/10/5 enforced by the program                  |
-| D7  | `feat(program): abandonment forfeit to champion`             | Forfeited stake redirects correctly                    |
 | D8  | `test(program): adversarial suite`                           | Double-deposit, early-withdraw, wrong-signer, overflow |
 | D9  | `chore: upgrade authority → multisig, documented`            | Disclosed in README                                    |
 | D10 | `chore: submit for audit`                                    | **Must happen in week one**                            |
