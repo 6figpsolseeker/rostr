@@ -308,10 +308,25 @@ describe("locks", () => {
     expect(codes(problems)).toEqual(["SLOT_LOCKED"]);
   });
 
-  it("never locks an empty slot", () => {
-    // A manager who left a slot empty can still fill it on Sunday: nothing has
-    // happened in that slot for anyone to react to. Locking empty slots at the
-    // week's first kickoff would punish forgetting rather than prevent cheating.
+  it("does not lock an empty slot when the incoming player has not kicked off", () => {
+    // A manager who left a slot empty can still fill it after the week's first
+    // kickoff, as long as the player going in has not played yet: nothing has
+    // happened for anyone to react to. rb1's Sunday game is still ahead here.
+    const problems = validateLineup({
+      assignments: [{ slotType: "RB", slotIndex: 0, playerId: "rb1" }],
+      current: [{ slotType: "RB", slotIndex: 0, playerId: null }],
+      shape: SHAPE,
+      roster: MIXED,
+      now: DURING_THURSDAY,
+    });
+
+    expect(problems).toEqual([]);
+  });
+
+  it("rejects starting a player whose own game has already kicked off", () => {
+    // The other half of a per-player lock. An empty slot never locks, but that
+    // must not let a manager leave it empty, watch a player score, and then
+    // start him. rb1 plays Sunday; by SUNDAY_LATE his game is under way.
     const problems = validateLineup({
       assignments: [{ slotType: "RB", slotIndex: 0, playerId: "rb1" }],
       current: [{ slotType: "RB", slotIndex: 0, playerId: null }],
@@ -320,7 +335,21 @@ describe("locks", () => {
       now: SUNDAY_LATE,
     });
 
-    expect(problems).toEqual([]);
+    expect(codes(problems)).toEqual(["PLAYER_LOCKED"]);
+  });
+
+  it("rejects moving an already-played player into a different slot", () => {
+    // The swap variant: wr3's game (SUNDAY_LATE) is under way, so he cannot be
+    // moved into the flex even though the flex itself is empty.
+    const problems = validateLineup({
+      assignments: [{ slotType: "FLEX", slotIndex: 0, playerId: "wr3" }],
+      current: [{ slotType: "FLEX", slotIndex: 0, playerId: null }],
+      shape: SHAPE,
+      roster: MIXED,
+      now: SUNDAY_LATE + 60,
+    });
+
+    expect(codes(problems)).toEqual(["PLAYER_LOCKED"]);
   });
 
   it("never locks a player on a bye", () => {
