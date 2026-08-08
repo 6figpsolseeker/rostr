@@ -5,3 +5,4 @@
 # make `pnpm idl:check` compare prettier's output against the generator's and
 # fail forever — the check exists to catch a stale IDL, not a stale style.
 packages/escrow/src/idl.ts
+packages/escrow/src/types.ts

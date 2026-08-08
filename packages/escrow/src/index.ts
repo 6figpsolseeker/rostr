@@ -8,6 +8,22 @@
 
 export { ESCROW_IDL, type EscrowIdl } from "./idl.js";
 export {
+  PRIZE_ORDER,
+  depositIx,
+  escrowProgram,
+  initializeFreeLeagueIx,
+  initializeLeagueIx,
+  joinLeagueIx,
+  payoutArray,
+  refundStakeIx,
+  type DepositParams,
+  type InitializeFreeLeagueParams,
+  type InitializeLeagueParams,
+  type JoinLeagueParams,
+  type PrizeKey,
+  type RefundParams,
+} from "./instructions.js";
+export {
   ESCROW_PROGRAM_ID,
   leagueAddresses,
   leagueIdBytes,

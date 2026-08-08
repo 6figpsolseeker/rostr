@@ -1,5 +1,17 @@
+import { randomUUID } from "node:crypto";
 import * as anchor from "@coral-xyz/anchor";
 import { createAssociatedTokenAccount, createMint } from "@solana/spl-token";
+import {
+  depositIx,
+  escrowProgram,
+  initializeFreeLeagueIx,
+  initializeLeagueIx,
+  joinLeagueIx,
+  leaguePda as clientLeaguePda,
+  payoutArray,
+  refundStakeIx,
+  vaultPda as clientVaultPda,
+} from "@rostr/escrow";
 import { beforeAll, describe, expect, it } from "vitest";
 import {
   type FreeLeagueArgs,
@@ -259,6 +271,122 @@ describe("deposit", () => {
     // before `LeagueHasNoPot` is ever reached — which is the stronger outcome.
     await expect(deposit(league, member)).rejects.toThrow();
     expect(await tokenBalance(provider, member.tokenAccount)).toBe(BigInt(BUY_IN));
+  });
+});
+
+/**
+ * The whole money lifecycle driven by `@rostr/escrow` rather than by the raw
+ * Anchor calls the rest of this file uses.
+ *
+ * This is what the web app will actually run, so it is worth exercising against
+ * the real program rather than trusting that the account lists match. A wrong
+ * account order or a missing signer here is a runtime failure with someone's
+ * stake in it; there is no type that catches it.
+ */
+describe("the @rostr/escrow client", () => {
+  it("anchors, joins, stakes and refunds a league end to end", async () => {
+    const client = escrowProgram(provider);
+    const leagueId = randomUUID();
+    const rulesHash = new Uint8Array(32).fill(7);
+    const unlockAt = Math.floor(Date.now() / 1000) + 3;
+
+    const send = async (ix: anchor.web3.TransactionInstruction, signer?: Member) => {
+      const tx = new anchor.web3.Transaction().add(ix);
+      return provider.sendAndConfirm(tx, signer ? [signer.keypair] : []);
+    };
+
+    // 1. The commissioner anchors the league from their own wallet. No key of
+    //    ours is involved at any point in this test.
+    await send(
+      await initializeLeagueIx(client, {
+        leagueId,
+        rulesHash,
+        mint,
+        buyInBaseUnits: String(BUY_IN),
+        refundUnlockAt: unlockAt,
+        payoutBps: payoutArray([
+          { prize: "CHAMPION", basisPoints: 6000 },
+          { prize: "RUNNER_UP", basisPoints: 1500 },
+          { prize: "REGULAR_SEASON", basisPoints: 1000 },
+          { prize: "CONSOLATION", basisPoints: 1000 },
+          { prize: "THIRD_PLACE", basisPoints: 500 },
+        ]),
+        feeBps: 100,
+        feeRecipient: anchor.web3.Keypair.generate().publicKey,
+        maxTeams: 12,
+        payer: provider.wallet.publicKey,
+      }),
+    );
+
+    const league = clientLeaguePda(leagueId);
+    const onChain = await program.account.league.fetch(league);
+    expect([...onChain.rulesHash]).toEqual([...rulesHash]);
+    expect(onChain.feeBps).toBe(100);
+
+    // 2. A member joins by accepting the hash, then stakes.
+    const member = await fundedMember(provider, mint, BUY_IN);
+    await send(
+      await joinLeagueIx(client, { leagueId, rulesHash, member: member.keypair.publicKey }),
+      member,
+    );
+    await send(
+      await depositIx(client, {
+        leagueId,
+        mint,
+        member: member.keypair.publicKey,
+        memberTokenAccount: member.tokenAccount,
+      }),
+      member,
+    );
+
+    expect(await tokenBalance(provider, clientVaultPda(league))).toBe(BigInt(BUY_IN));
+
+    // 3. And gets it back, unilaterally, once the timelock passes.
+    await sleep(5000);
+    await send(
+      await refundStakeIx(client, {
+        leagueId,
+        mint,
+        member: member.keypair.publicKey,
+        memberTokenAccount: member.tokenAccount,
+      }),
+      member,
+    );
+
+    expect(await tokenBalance(provider, member.tokenAccount)).toBe(BigInt(BUY_IN));
+    expect(await tokenBalance(provider, clientVaultPda(league))).toBe(0n);
+  });
+
+  it("anchors a league that plays for nothing", async () => {
+    const client = escrowProgram(provider);
+    const leagueId = randomUUID();
+    const rulesHash = new Uint8Array(32).fill(9);
+
+    const ix = await initializeFreeLeagueIx(client, {
+      leagueId,
+      rulesHash,
+      maxTeams: 12,
+      payer: provider.wallet.publicKey,
+    });
+    await provider.sendAndConfirm(new anchor.web3.Transaction().add(ix), []);
+
+    const onChain = await program.account.league.fetch(clientLeaguePda(leagueId));
+    expect(onChain.hasPot).toBe(false);
+    expect([...onChain.rulesHash]).toEqual([...rulesHash]);
+  });
+
+  it("orders the payout array by the program's indices, not PrizeKey order", () => {
+    // The two orders differ. Serialising from the wrong one reshuffles the split
+    // with no error anywhere, which is why this conversion has one home.
+    expect(
+      payoutArray([
+        { prize: "THIRD_PLACE", basisPoints: 500 },
+        { prize: "CHAMPION", basisPoints: 6000 },
+        { prize: "CONSOLATION", basisPoints: 1000 },
+        { prize: "RUNNER_UP", basisPoints: 1500 },
+        { prize: "REGULAR_SEASON", basisPoints: 1000 },
+      ]),
+    ).toEqual([6000, 1500, 1000, 1000, 500]);
   });
 });
 
