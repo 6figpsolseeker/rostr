@@ -10,7 +10,7 @@
 
 import { buildJoinMessage, isValidWalletAddress, verifyJoinSignature } from "@rostr/core";
 import type { SqlClient } from "./client.js";
-import { getLeagueRules } from "./leagues.js";
+import { getChainState, getLeagueRules } from "./leagues.js";
 import { withTransaction } from "./transaction.js";
 
 export interface JoinLeagueInput {
@@ -20,6 +20,14 @@ export interface JoinLeagueInput {
   /** Base58 signature over `buildJoinMessage(...)`. */
   readonly signature: string;
   readonly teamName: string;
+  /**
+   * The cluster this join is being made against, e.g. `mainnet-beta`.
+   *
+   * When set, the league's anchor must be on that cluster. The PDA is identical
+   * everywhere, so a devnet anchor and a mainnet one are indistinguishable
+   * without it — and a devnet anchor is not an anchor for a real stake.
+   */
+  readonly requireCluster?: string;
 }
 
 export interface JoinedLeague {
@@ -39,7 +47,9 @@ export class JoinError extends Error {
       | "INVALID_WALLET"
       | "WALLET_NOT_LINKED"
       | "INVALID_SIGNATURE"
-      | "RULES_MISSING",
+      | "RULES_MISSING"
+      | "LEAGUE_NOT_ANCHORED"
+      | "WRONG_CLUSTER",
   ) {
     super(message);
     this.name = "JoinError";
@@ -110,6 +120,35 @@ export async function joinLeague(db: SqlClient, input: JoinLeagueInput): Promise
   const stored = await getLeagueRules(db, league.id);
   if (!stored) {
     throw new JoinError("League has no stored rules", "RULES_MISSING");
+  }
+
+  // Nobody consents to rules they cannot verify.
+  //
+  // Joining signs the rules hash, and the whole point of that signature is that
+  // the rules are provably fixed. Until the league is anchored, the only thing
+  // holding them still is a row in our own database — which is exactly the
+  // arrangement this project exists to replace. A member who signed before the
+  // anchor would have consented to a promise, not a fact.
+  //
+  // Bots are not gated: `addBot` signs nothing, stakes nothing, and consents to
+  // nothing, so there is no consent to protect. The guarantee is about people.
+  const chain = await getChainState(db, league.id);
+  if (!chain?.anchoredAt) {
+    throw new JoinError(
+      "This league's rules are not on-chain yet, so they cannot be verified. " +
+        "The commissioner needs to anchor them before anyone joins.",
+      "LEAGUE_NOT_ANCHORED",
+    );
+  }
+
+  // A league anchored on devnet is not anchored for a mainnet stake. The PDA is
+  // identical on every cluster, so "the account exists" is not an answer on its
+  // own — the caller has to say which chain it means.
+  if (input.requireCluster && chain.cluster !== input.requireCluster) {
+    throw new JoinError(
+      `This league is anchored on ${chain.cluster}, not ${input.requireCluster}`,
+      "WRONG_CLUSTER",
+    );
   }
 
   // The wallet must already belong to this user. Otherwise anyone could join

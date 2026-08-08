@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { getLeagueRules, getWallets } from "@rostr/db";
+import { getChainState, getLeagueRules, getWallets } from "@rostr/db";
 import { RulesView } from "@/components/RulesView";
 import { JoinPanel } from "@/components/JoinPanel";
 import { db } from "@/lib/db";
@@ -33,6 +33,12 @@ export default async function LeaguePage({ params }: { params: Promise<{ id: str
   // flashing "sign in" at someone who already is.
   const user = await currentUser();
   const wallets = user ? await getWallets(client, user.id) : [];
+
+  const chain = await getChainState(client, id);
+  const [commissioner] = await client.query<{ commissioner_id: string }>(
+    "SELECT commissioner_id FROM leagues WHERE id = $1",
+    [id],
+  );
 
   return (
     <div className="space-y-10">
@@ -77,6 +83,8 @@ export default async function LeaguePage({ params }: { params: Promise<{ id: str
         open={league.state === "FORMING" && taken < stored.rules.league.maxTeams}
         signedIn={user !== null}
         linkedWallets={wallets.map((wallet) => wallet.address)}
+        anchored={chain?.anchoredAt !== null && chain?.anchoredAt !== undefined}
+        isCommissioner={user !== null && commissioner?.commissioner_id === user.id}
       />
 
       {league.rules_uri && (

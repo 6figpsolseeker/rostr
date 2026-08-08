@@ -26,12 +26,17 @@ export function JoinPanel({
   open,
   signedIn,
   linkedWallets,
+  anchored,
+  isCommissioner,
 }: {
   leagueId: string;
   leagueName: string;
   open: boolean;
   signedIn: boolean;
   linkedWallets: readonly string[];
+  /** Whether the rules are on-chain yet. Joining is refused until they are. */
+  anchored: boolean;
+  isCommissioner: boolean;
 }) {
   const { publicKey, signMessage, connected } = useWallet();
   const [linked, setLinked] = useState<readonly string[]>(linkedWallets);
@@ -49,6 +54,27 @@ export function JoinPanel({
     return (
       <section className="rounded border border-white/10 p-6">
         <p className="text-sm text-white/60">This league is not accepting members.</p>
+      </section>
+    );
+  }
+
+  if (!anchored) {
+    // Refused server-side too — this is so the reason is legible rather than a
+    // rejection out of nowhere.
+    return (
+      <section className="space-y-3 rounded border border-amber-500/30 bg-amber-500/5 p-6">
+        <h2 className="text-lg font-medium">Not open yet</h2>
+        <p className="text-sm text-white/70">
+          These rules are not on-chain yet, so nobody can verify them — and nobody should agree
+          to rules they cannot check. Until they are anchored, the only thing holding them still
+          is this website&rsquo;s database, which is the arrangement this whole project exists
+          to replace.
+        </p>
+        <p className="text-sm text-white/50">
+          {isCommissioner
+            ? "You created this league, so anchoring it is yours to do."
+            : "The commissioner needs to anchor them before anyone joins."}
+        </p>
       </section>
     );
   }

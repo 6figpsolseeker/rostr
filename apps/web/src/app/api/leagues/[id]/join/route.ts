@@ -40,6 +40,10 @@ const STATUS: Record<string, number> = {
   INVALID_WALLET: 400,
   WALLET_NOT_LINKED: 403,
   INVALID_SIGNATURE: 403,
+  // Not an error the joiner caused, and not permanent — the commissioner has to
+  // anchor first. 409 rather than 403 says "wrong state", not "not allowed".
+  LEAGUE_NOT_ANCHORED: 409,
+  WRONG_CLUSTER: 409,
 };
 
 export async function POST(
@@ -80,6 +84,12 @@ export async function POST(
       walletAddress: body.walletAddress,
       signature: body.signature,
       teamName: body.teamName,
+      // The cluster this deployment considers real. Without it a league
+      // anchored on devnet would satisfy a mainnet join, since the PDA is the
+      // same everywhere.
+      ...(process.env["SOLANA_CLUSTER"]
+        ? { requireCluster: process.env["SOLANA_CLUSTER"] }
+        : {}),
     });
     return NextResponse.json(result, { status: 201 });
   } catch (error) {

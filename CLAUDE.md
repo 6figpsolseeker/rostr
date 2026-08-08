@@ -137,11 +137,9 @@ credentials in `SETUP-REQUIRED.md`, not more code.
    or lose. The cost is that a league can exist here unanchored, because someone can close
    the tab; the partial index in `0014` finds those.
 
-2. **Joining is not yet blocked for an unanchored league.** It should be — nobody should
-   consent to rules they cannot verify — but the check belongs in `joinLeague`, where every
-   existing fixture would trip over it, and none of them can anchor from PGlite. Enforce it
-   in the join route, or give the test helpers a way to mark a league anchored. Do not
-   weaken the check to fit the fixtures.
+2. **Waivers and trades are written but not wired.** `waivers/claims.ts` and
+   `waivers/schedule.ts` are finished and tested; nothing calls them and there is no
+   add/drop UI. Needed by Sep 16, not Aug 22.
 3. **D6–D10** — the rest of the escrow. **This is main-PC work**; the secondary machine has
    no Rust toolchain. Note that **D6 is not a small job**: "payout by the frozen split"
    needs to know who won, and `RULES.md` § 7 says nobody declares a winner — the contract
@@ -393,6 +391,24 @@ finished and be unplayable.
 inside one. `withTransaction` issues a real `BEGIN` on whichever client it is given, so a
 nested call would make the inner `COMMIT` commit the outer work too. Use `persistSchedule`
 when you need the transaction.
+
+### Joining requires the anchor
+
+`joinLeague` refuses an unanchored league. Joining signs the rules hash, and the point of
+that signature is that the rules are provably fixed — before the anchor, the only thing
+holding them still is a row in our own database, which is the arrangement this project
+exists to replace. A member who signed first would have consented to a promise.
+
+**`addBot` is deliberately not gated.** A bot signs nothing, stakes nothing and consents
+to nothing, so there is no consent for the anchor to protect. Gating it would break
+fixtures and protect nobody.
+
+`requireCluster` exists because the PDA is identical on every cluster, so a devnet anchor
+and a mainnet one are indistinguishable unless the caller says which it means. The join
+route passes `SOLANA_CLUSTER`.
+
+Test fixtures call the real `recordChainAnchor` rather than writing the column directly,
+so a fixture cannot drift into a state the application could not produce.
 
 **League state transitions live in the draft**: `startDraft` moves FORMING → DRAFTING, and
 the final pick moves it to IN_SEASON. Nothing else moved state before, so a drafted league

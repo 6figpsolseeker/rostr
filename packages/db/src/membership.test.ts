@@ -9,7 +9,7 @@ import {
   NFL_DEFAULT_PAYOUT,
 } from "@rostr/core";
 import type { DraftRules, LeagueRules, PotRules } from "@rostr/core";
-import { createLeague } from "./leagues.js";
+import { createLeague, recordChainAnchor } from "./leagues.js";
 import { createUser, linkWallet } from "./identity.js";
 import { addBot, getMembershipProofs, JoinError, joinLeague } from "./membership.js";
 import { seedSport } from "./sports.js";
@@ -66,6 +66,15 @@ async function setup(overrides: Partial<LeagueRules> = {}): Promise<Fixture> {
     name: "The Money League",
     commissionerId: commissioner.id,
     rules,
+  });
+
+  // Anchored, because joining an unanchored league is refused — see the check in
+  // `joinLeague`. This calls the real `recordChainAnchor` rather than reaching
+  // into the column, so a fixture cannot drift into a state the application
+  // could not produce.
+  await recordChainAnchor(db, league.id, {
+    signature: "5".repeat(88),
+    cluster: "localnet",
   });
 
   return {
@@ -364,5 +373,136 @@ describe("addBot", () => {
     await expect(addBot(fx.client, fx.leagueId, "One too many")).rejects.toSatisfy(
       (e: unknown) => e instanceof JoinError && e.code === "LEAGUE_FULL",
     );
+  });
+
+  it("does not require an anchor", async () => {
+    // A bot signs nothing, stakes nothing, and consents to nothing, so there is
+    // no consent for the anchor to protect. Gating bots would break nothing
+    // meaningful and protect nobody.
+    db = await createTestDatabase();
+    await seedSport(db, NFL);
+
+    const commissioner = await createUser(db, "unanchored@example.com", "Commish");
+    const league = await createLeague(db, NFL, {
+      name: "Unanchored",
+      commissionerId: commissioner.id,
+      rules: buildNflPprRules({ seasonYear: 2026, draft: DRAFT }) as LeagueRules,
+    });
+
+    await expect(addBot(db, league.id, "Robo")).resolves.toMatchObject({ slot: 1 });
+  });
+});
+
+describe("joining an unanchored league", () => {
+  /** The same league, without the anchor the other fixture applies. */
+  async function unanchored(): Promise<Fixture> {
+    db = await createTestDatabase();
+    await seedSport(db, NFL);
+
+    const commissioner = await createUser(db, "commish@example.com", "Commish");
+    const rules = buildNflPprRules({
+      seasonYear: 2026,
+      draft: DRAFT,
+      pot: POT,
+    }) as LeagueRules;
+
+    const league = await createLeague(db, NFL, {
+      name: "The Money League",
+      commissionerId: commissioner.id,
+      rules,
+    });
+
+    return {
+      client: db,
+      leagueId: league.id,
+      leagueName: "The Money League",
+      rulesHash: league.rulesHash,
+      rules,
+    };
+  }
+
+  it("is refused", async () => {
+    // Joining signs the rules hash, and the point of that signature is that the
+    // rules are provably fixed. Before the anchor, the only thing holding them
+    // still is a row in our own database.
+    const fx = await unanchored();
+    const m = await member(fx, 1, "a@example.com");
+
+    await expect(
+      joinLeague(fx.client, {
+        leagueId: fx.leagueId,
+        userId: m.userId,
+        walletAddress: m.address,
+        signature: signJoin(fx, m.address, m.secret),
+        teamName: "A",
+      }),
+    ).rejects.toSatisfy(
+      (e: unknown) => e instanceof JoinError && e.code === "LEAGUE_NOT_ANCHORED",
+    );
+  });
+
+  it("is allowed once anchored", async () => {
+    const fx = await unanchored();
+    const m = await member(fx, 1, "a@example.com");
+
+    await recordChainAnchor(fx.client, fx.leagueId, {
+      signature: "5".repeat(88),
+      cluster: "localnet",
+    });
+
+    await expect(
+      joinLeague(fx.client, {
+        leagueId: fx.leagueId,
+        userId: m.userId,
+        walletAddress: m.address,
+        signature: signJoin(fx, m.address, m.secret),
+        teamName: "A",
+      }),
+    ).resolves.toMatchObject({ slot: 1 });
+  });
+
+  it("refuses an anchor on the wrong cluster", async () => {
+    // The PDA is identical on every cluster, so a devnet anchor and a mainnet
+    // one are indistinguishable without saying which was meant — and a devnet
+    // anchor is not an anchor for a real stake.
+    const fx = await unanchored();
+    const m = await member(fx, 1, "a@example.com");
+
+    await recordChainAnchor(fx.client, fx.leagueId, {
+      signature: "5".repeat(88),
+      cluster: "devnet",
+    });
+
+    await expect(
+      joinLeague(fx.client, {
+        leagueId: fx.leagueId,
+        userId: m.userId,
+        walletAddress: m.address,
+        signature: signJoin(fx, m.address, m.secret),
+        teamName: "A",
+        requireCluster: "mainnet-beta",
+      }),
+    ).rejects.toSatisfy((e: unknown) => e instanceof JoinError && e.code === "WRONG_CLUSTER");
+  });
+
+  it("accepts a matching cluster", async () => {
+    const fx = await unanchored();
+    const m = await member(fx, 1, "a@example.com");
+
+    await recordChainAnchor(fx.client, fx.leagueId, {
+      signature: "5".repeat(88),
+      cluster: "mainnet-beta",
+    });
+
+    await expect(
+      joinLeague(fx.client, {
+        leagueId: fx.leagueId,
+        userId: m.userId,
+        walletAddress: m.address,
+        signature: signJoin(fx, m.address, m.secret),
+        teamName: "A",
+        requireCluster: "mainnet-beta",
+      }),
+    ).resolves.toMatchObject({ slot: 1 });
   });
 });
