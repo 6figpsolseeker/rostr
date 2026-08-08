@@ -72,5 +72,13 @@ export function safeRedirect(next: string | null): string {
   if (!next.startsWith("/")) return "/";
   // `//host` and `/\host` are protocol-relative; browsers treat them as absolute.
   if (next.startsWith("//") || next.startsWith("/\\")) return "/";
+  // The URL parser strips tabs, newlines and carriage returns *before* parsing,
+  // so a value like `/<TAB>/evil.com` slips past the checks above and then
+  // resolves to `//evil.com`. A prefix blocklist cannot cover that; reject any
+  // control character (including DEL) or backslash (0x5c) outright.
+  for (let i = 0; i < next.length; i++) {
+    const code = next.charCodeAt(i);
+    if (code <= 0x1f || code === 0x5c || code === 0x7f) return "/";
+  }
   return next;
 }
