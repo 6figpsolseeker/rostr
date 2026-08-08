@@ -221,6 +221,20 @@ describe("league_rules immutability", () => {
     ).rejects.toThrow(/immutable/i);
   });
 
+  it("rejects TRUNCATE at the database level", async () => {
+    // Row-level BEFORE UPDATE/DELETE triggers do not fire on TRUNCATE, so without
+    // a statement-level guard the app's own role could wipe the immutable rules
+    // while the on-chain hash still pointed at them.
+    const client = await fresh();
+    const leagueId = await seedLeague(client, HASH);
+    await client.query(
+      "INSERT INTO league_rules (league_id, rule_json, canonical, hash) VALUES ($1, $2, $3, $4)",
+      [leagueId, JSON.stringify({ a: 1 }), '{"a":1}', HASH],
+    );
+
+    await expect(client.query("TRUNCATE league_rules")).rejects.toThrow(/immutable/i);
+  });
+
   it("rejects a rule set whose hash disagrees with its league", async () => {
     const client = await fresh();
     const leagueId = await seedLeague(client, HASH);
