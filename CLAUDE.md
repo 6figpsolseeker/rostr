@@ -337,9 +337,10 @@ the screen.
 a scheduled team has no lineup, deliberately — scoring a missing team as zero hands its
 opponent a free win — so the autolineup fills every gap before a week is scored.
 
-### Resolving a week
+### Scoring and finalising a week
 
-`packages/db/src/week.ts`, run by `/api/cron/score-week`.
+`packages/db/src/week.ts`, run by `/api/cron/score-week`. The persistence and job half;
+the pure arithmetic is "Resolving a week" further down.
 
 **Scoring and finalising are separate decisions.** Points are rewritten on every run so a
 manager can watch their week; `finalized_at` is set only once every game is `FINAL` **and**

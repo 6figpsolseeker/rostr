@@ -136,9 +136,10 @@ booking lead time from the critical path without removing review.
 
 **What still limits exposure**, and matters more without a firm's sign-off:
 
-- **A buy-in cap.** The largest single lever: same code and same bug, but a $25 cap on a
-  12-person league risks $300 where a $500 cap risks $6,000. Enforced in the program, not
-  the UI. **Amount still to be decided.**
+- **A buy-in cap.** The largest single lever: same code and same bug, but a $50 ceiling on
+  a 12-person league risks $600 where $500 a head would risk $6,000. Enforced in the
+  program, not the UI, so it binds every caller. **Decided 2026-08-07: $5 to $50**, any
+  amount in between.
 - **The unconditional timelock refund.** Turns "funds are gone" into "funds are stuck
   until a date". Non-negotiable.
 - **Kani proofs.** Already used on `percolator-stake` and `percolator-match`. Free, and
@@ -171,31 +172,93 @@ designations but weak for inactives — those drop 90 minutes before kickoff.
 
 ---
 
-### ⬜ Multisig for program upgrade authority
+### ⬜ Multisig (Squads) — upgrade authority and fee recipient
 
-**Blocks:** deploying the escrow program responsibly.
-**Needed by:** before mainnet deployment, **Aug 22**.
-**Cost:** free (Squads or similar).
+**Blocks:** deploying the escrow responsibly, and creating any league with a fee.
+**Needed by:** **Aug 22**, before mainnet deployment and the first pot league.
+**Cost:** free. Squads v4 is the de facto standard on Solana and is formally verified.
 
-The upgrade authority must not be a single key while the program holds user funds. It
-gets burned entirely once settlement is audited, before Week 14 pays out.
+One multisig serves two roles. They are worth keeping distinct in your head, because they
+fail differently.
+
+**Role 1 — program upgrade authority.** Whoever holds it can replace the program's
+bytecode, and the program holds every member's stake. That makes it, functionally, the
+ability to drain the escrow without needing an exploit at all: deploy a version whose
+`refund_stake` pays somewhere else. A single key means one compromised laptop is every pot.
+
+**Role 2 — fee recipient.** Different failure mode, and the more urgent one. The address is
+frozen into every league's hashed rules at creation and can never be changed — that is the
+immutability guarantee working exactly as designed, and it cuts both ways. Lose the key and
+every fee from every league created before the loss is unrecoverable. There is no admin
+override, because the whole architecture exists to ensure there isn't one.
+
+#### Why M-of-N, and which
+
+A single key fails two independent ways: someone else gets it (theft), or you lose it
+(loss). `M > 1` covers theft; `N > M` covers loss. One key covers neither.
+
+**Use 2-of-3.** For a solo operator this is not about distrusting a co-founder who does not
+exist — it is about surviving a dead drive, a stolen phone, or a house fire.
+
+- **1-of-2** is a single key with extra steps: any one compromised key drains it.
+- **3-of-3** is the worst of both — no theft tolerance _and_ no loss tolerance. Lose one and
+  everything is frozen permanently.
+
+Three keys that fail **independently**:
+
+1. Hardware wallet (Ledger/Keystone) — the day-to-day signer
+2. A key on the main PC, in a password manager
+3. A cold backup — seed on paper or steel, stored somewhere physically separate
+
+The usual mistake is putting all three in one password manager. That is a 1-of-1 in
+costume.
+
+#### Checklist
+
+- [ ] Create a Squads v4 multisig, 2-of-3, with the three keys above
+- [ ] **Record the vault address** — not the config account. A Squads multisig has a config
+      account and one or more vault PDAs; the vault is what owns tokens. Putting the config
+      account in `fee_recipient` sends every fee somewhere nobody can spend from, forever,
+      for every league created with it.
+- [ ] Commit the vault address to this repo. It is public information, and a lost note
+      should not be able to lose the address.
+- [ ] Set `FEE_RECIPIENT` and `NEXT_PUBLIC_FEE_RECIPIENT` to the vault address. Both, and
+      the same value — see `.env.example`.
+- [ ] **Test recovery before trusting it:** execute a real transaction with _each_ pair of
+      keys, not just the convenient pair. A 2-of-3 whose third key was never exercised is a
+      2-of-2 you do not know about yet.
+- [ ] Rehearse `set-upgrade-authority` on devnet. Pointing it at an address you do not
+      control bricks upgradeability instantly and irreversibly.
+- [ ] At mainnet deploy:
+      `solana program set-upgrade-authority <PROGRAM_ID> --new-upgrade-authority <VAULT>`
+- [ ] **Before Dec 13 (Week 14, the first payout):** burn it — set the upgrade authority to
+      `None`. The program becomes immutable.
+
+#### Two things to be honest about
+
+Burning upgrade authority removes the trust assumption, and also removes any ability to fix
+a bug in code holding real money for another month. What makes that survivable is the
+unconditional timelock refund — which is precisely why the build plan says ship that first.
+
+And **a 2-of-3 where one person holds all three keys is not decentralisation.** It is loss
+and theft protection for a single operator. The README should say so plainly: "upgrade
+authority is a 2-of-3 multisig held by the operator, to be burned before the first payout"
+is the accurate sentence. Describing it as "controlled by a multisig" and leaving who holds
+the keys unsaid is the kind of thing this project exists not to do.
 
 ---
 
 ### ⬜ Fee recipient address
 
 **Blocks:** creating a league with a non-zero fee. The program rejects one whose recipient
-is the default pubkey.
+is the default pubkey, and in production the pot-league route refuses rather than create
+leagues that give the fee away.
 **Needed by:** **Aug 22**, with the first pot league.
 
 The fee is **1%, taken once at settlement** — decided 2026-08-07, documented in
 `docs/RULES.md` § 7, frozen per league in the hashed rule set. What is missing is the
-address it pays to.
-
-It should be a **multisig, not a personal wallet**, and ideally the same one that holds
-upgrade authority. It is written into every league's frozen rules, so a lost key means a
-fee that can never be collected from any league created before the loss — and the rules
-of those leagues can never be edited to point somewhere else.
+address it pays to. That address is the Squads **vault**; see the multisig entry above,
+which is where the decision actually lives.
 
 ### ⬜ Pin the USDC mint before mainnet
 
