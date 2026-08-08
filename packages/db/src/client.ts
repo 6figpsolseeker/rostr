@@ -11,4 +11,12 @@ export interface SqlClient {
 
   /** Run a single parameterised statement and return its rows. */
   query<T = Record<string, unknown>>(sql: string, params?: readonly unknown[]): Promise<T[]>;
+
+  /**
+   * Check out a dedicated connection for a transaction, so every statement in it
+   * shares one connection. Present on pool-backed clients (see `PostgresClient`);
+   * absent on a single connection — PGlite, or a connection already checked out —
+   * where the client is used directly. `withTransaction` relies on this.
+   */
+  connect?(): Promise<{ client: SqlClient; release: () => void }>;
 }
