@@ -107,7 +107,14 @@ See [`docs/BUILD-PLAN.md`](docs/BUILD-PLAN.md) for the full commit-by-commit pla
 - **D1–D5: the escrow program** (`programs/rostr-escrow/`) — Anchor workspace, the league
   account with its terms frozen, join by rules-hash acceptance, deposit to a vault, and
   the unconditional timelock refund. Free leagues anchor their rules hash the same way.
-  38 tests green on localnet via `anchor test`.
+  55 tests green on localnet via `anchor test`.
+
+- **`@rostr/escrow`** — the client half. Addresses, the committed IDL and its generated
+  type, and instruction builders for all five instructions. The whole money lifecycle
+  (anchor → join → stake → refund) is exercised through it against the real program.
+
+- **The on-chain anchor recorded** (migration `0014`) — transaction and cluster, write-once
+  by trigger. `recordChainAnchor` / `getChainState` in `packages/db/src/leagues.ts`.
 
 **Both hard deadlines are now covered in code.** Aug 22 is create → join → draft; Sep 9 is
 set a lineup → score the week → standings. What they need is deployment and the
@@ -115,19 +122,38 @@ credentials in `SETUP-REQUIRED.md`, not more code.
 
 **Next, in order:**
 
-1. **D6–D10** — the rest of the escrow. **D1–D5 are done and green on localnet**; see
-   "The escrow" below. What remains is payout by the frozen split (D6), abandonment
-   forfeit (D7), the adversarial suite (D8), upgrade authority to a multisig (D9), and
-   review (D10). **This is main-PC work** — the secondary machine still has no Rust
-   toolchain.
-2. **Pot leagues still cannot take money in the app.** The program accepts deposits, but
-   nothing in `apps/web` or `@rostr/db` calls it — there is no client, and no league row
-   records its on-chain address. Do not let a real league form around a pot until that
-   path exists and D6 can pay it back out.
-3. **Waivers and trades are written but not wired.** `waivers/claims.ts` and
+1. **Wire anchoring into the app.** Everything underneath exists: `@rostr/escrow` builds
+   the instructions, migration `0014` records the result. What is missing is the route
+   that verifies the anchor on-chain before recording it, and the screen where the
+   commissioner signs it.
+
+   **Blocked on credentials, not on code** — `SOLANA_RPC_URL` (the route's entire job is
+   reading the account back, which needs an endpoint) and Supabase (`DATABASE_URL`, or the
+   app does not get past its home page). Writing it without those means code that
+   typechecks and has never once run, on the path that moves money. Set both first.
+
+   **Decided 2026-08-07: the commissioner signs from their own wallet**, not a server
+   keypair — so no private key of ours exists anywhere, and there is none to fund, rotate
+   or lose. The cost is that a league can exist here unanchored, because someone can close
+   the tab; the partial index in `0014` finds those.
+
+2. **Joining is not yet blocked for an unanchored league.** It should be — nobody should
+   consent to rules they cannot verify — but the check belongs in `joinLeague`, where every
+   existing fixture would trip over it, and none of them can anchor from PGlite. Enforce it
+   in the join route, or give the test helpers a way to mark a league anchored. Do not
+   weaken the check to fit the fixtures.
+3. **D6–D10** — the rest of the escrow. **This is main-PC work**; the secondary machine has
+   no Rust toolchain. Note that **D6 is not a small job**: "payout by the frozen split"
+   needs to know who won, and `RULES.md` § 7 says nobody declares a winner — the contract
+   derives it from posted scores. That makes D6 depend on G4–G8 (dual-source oracle, scores
+   on-chain), which the build plan schedules for Dec–Jan. Do not start D6 expecting an
+   afternoon.
+4. **Pot leagues still cannot take money in the app**, and must not, until 1 lands and D6
+   can pay it back out.
+5. **Waivers and trades are written but not wired.** `waivers/claims.ts` and
    `waivers/schedule.ts` are finished and tested; nothing calls them, and there is no
    add/drop UI. Needed by Sep 16, not Aug 22.
-4. **The playoff bracket.** `playoffField` seeds it; nothing plays it. Weeks 15–17.
+6. **The playoff bracket.** `playoffField` seeds it; nothing plays it. Weeks 15–17.
 
 **Still open on the draft:** nothing, on the fairness side — the grindable seed is fixed
 (see "The order draw" below). What remains is operational: `SOLANA_RPC_URL` has to be
@@ -495,6 +521,39 @@ Unset, leagues are created fee-free, which is fine locally; in production the ro
 refuses, because frozen rules mean a league created with the wrong recipient can never be
 corrected.
 
+### The escrow client
+
+`packages/escrow/`. Addresses and instruction builders, and **nothing that signs**. A
+league is anchored by its commissioner's wallet and a stake moved by the member's, so no
+key of ours exists in the flow — there is no server-side signer to fund, rotate or lose.
+If you find yourself adding one, that was a decision (2026-08-07) and not an oversight.
+
+**The IDL and Anchor's generated type are committed**, and that needs saying because it
+looks like checked-in build output. `anchor build` writes both to `target/`, which is
+gitignored, but the web app needs the program's interface and neither Vercel nor the
+TypeScript CI job has a Rust toolchain. So `pnpm idl:sync` regenerates them and
+`pnpm idl:check` fails when they drift. **The check runs in the Anchor job** — the only
+place both halves exist to be compared. Both files are in `.prettierignore`; formatting
+them would make the check compare prettier's output against the generator's and fail
+forever.
+
+**`.accountsPartial()`, not `.accounts()`.** Anchor 0.31 rejects accounts it can derive
+itself, so the typed call refuses PDAs. Passing them explicitly means the addresses come
+from `packages/escrow/src/program.ts` — the derivation the program suite actually
+cross-checks — rather than from Anchor's resolver. One source of truth, and it is the
+tested one.
+
+**`payoutArray()` is the only place the payout order is converted.** `PRIZE_ORDER` here
+matches the program's `prize` module, which is `NFL_DEFAULT_PAYOUT` order and **not** the
+declaration order of `PrizeKey` in `@rostr/core`. Serialising from the wrong one reshuffles
+the split with no error anywhere. The test passes the shares deliberately shuffled, because
+in declaration order the bug is invisible.
+
+A league's Postgres UUID is its on-chain seed, so the row and the account address each
+other with no lookup table. `leagueIdBytes` throws rather than guessing — a silently wrong
+id derives an account the program never wrote, which reads as a logic bug rather than bad
+input.
+
 ### The web app
 
 `apps/web`, Next.js 15 App Router. `pnpm --filter @rostr/web dev`. It needs
@@ -685,8 +744,16 @@ These were discussed at length and decided. Re-proposing them wastes the owner's
 
 ## Environment
 
+**Arriving at either machine: `git pull` then `CI=true corepack pnpm install`.** The
+workspace gains packages (most recently `@rostr/escrow`) and installs platform-specific
+binaries for both Windows and Linux, so a stale `node_modules` fails in ways that look
+like code errors rather than a missing install.
+
 **This repo was started on a secondary Windows PC.** Tooling installed there: Node
-v24.19.0, pnpm 11.20.0, gh 2.97.0, git. No Rust, no Solana CLI, no Anchor.
+v24.19.0, pnpm 11.20.0, gh 2.97.0, git. No Rust, no Solana CLI, no Anchor — so **nothing
+under `programs/` can be built or tested there**. `pnpm test`, `typecheck`, `lint` and the
+whole TypeScript side work fine, including `@rostr/escrow`, because the IDL is committed.
+`anchor test` and `pnpm idl:sync` are main-PC only.
 
 **The main PC now has the Anchor toolchain**, so Milestones D and E are no longer blocked
 by machine. Installed under WSL2/Ubuntu 26.04: Rust 1.97 (stable) alongside a pinned
