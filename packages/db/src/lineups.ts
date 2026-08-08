@@ -190,13 +190,45 @@ export async function setLineup(
   const roster = await loadRosterForWeek(db, input.teamId, season, input.week);
   const current = await loadLineup(db, input.teamId, input.week, stored.rules);
 
-  const problems = validateLineup({
-    assignments: input.assignments,
-    shape: buildRosterShape(stored.rules.roster, NFL),
-    roster,
-    current,
-    now: input.now,
-  });
+  const problems = [
+    ...validateLineup({
+      assignments: input.assignments,
+      shape: buildRosterShape(stored.rules.roster, NFL),
+      roster,
+      current,
+      now: input.now,
+    }),
+  ];
+
+  // The write touches only the submitted slots, so validateLineup — which sees
+  // only those — cannot tell that a submitted player already starts in a slot
+  // this update leaves alone. That would persist him in two slots, and the
+  // duplicate throws in scoring and stalls the whole league's week. Reject a
+  // player who already occupies a different slot this update does not overwrite.
+  const submittedSlots = new Set(
+    input.assignments.map((a) => `${a.slotType}#${a.slotIndex}`),
+  );
+  for (const assignment of input.assignments) {
+    if (assignment.playerId === null) continue;
+    const here = `${assignment.slotType}#${assignment.slotIndex}`;
+    const elsewhere = current.find(
+      (slot) =>
+        slot.playerId === assignment.playerId &&
+        `${slot.slotType}#${slot.slotIndex}` !== here &&
+        !submittedSlots.has(`${slot.slotType}#${slot.slotIndex}`),
+    );
+    if (elsewhere) {
+      problems.push({
+        code: "PLAYER_TWICE",
+        message:
+          `${assignment.playerId} is already starting at ${elsewhere.slotType} ` +
+          `slot ${elsewhere.slotIndex + 1}`,
+        slotType: assignment.slotType,
+        slotIndex: assignment.slotIndex,
+        playerId: assignment.playerId,
+      });
+    }
+  }
 
   if (problems.length > 0) {
     throw new LineupError(

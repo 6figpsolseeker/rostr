@@ -221,6 +221,58 @@ describe("setLineup", () => {
     expect(saved.filter((s) => s.playerId !== null)).toHaveLength(9);
   });
 
+  it("rejects a partial update that duplicates a player already starting elsewhere", async () => {
+    // The write touches only the sent slots, so validation must catch a player
+    // who already starts in a slot this update does not overwrite — otherwise he
+    // ends up in two, and the duplicate crashes scoring for the whole league
+    // when the week resolves.
+    const fx = await setup();
+    await setLineup(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: fx.teamId,
+      week: WEEK,
+      assignments: lineupOf(fx, FULL),
+      now: BEFORE_ANYTHING,
+    });
+
+    await expect(
+      setLineup(fx.client, {
+        leagueId: fx.leagueId,
+        teamId: fx.teamId,
+        week: WEEK,
+        // rb-a already starts at RB:0, which this update leaves untouched.
+        assignments: lineupOf(fx, { "FLEX:0": "rb-a" }),
+        now: BEFORE_ANYTHING,
+      }),
+    ).rejects.toMatchObject({ code: "INVALID_LINEUP" });
+  });
+
+  it("allows moving a player when the same update vacates his old slot", async () => {
+    // The counter-case the duplicate check must not break: rb-a moves to FLEX
+    // while RB:0 is reassigned in the same request, so he is not in two slots.
+    const fx = await setup();
+    await setLineup(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: fx.teamId,
+      week: WEEK,
+      assignments: lineupOf(fx, FULL),
+      now: BEFORE_ANYTHING,
+    });
+
+    const saved = await setLineup(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: fx.teamId,
+      week: WEEK,
+      assignments: lineupOf(fx, { "FLEX:0": "rb-a", "RB:0": "rb-c" }),
+      now: BEFORE_ANYTHING,
+    });
+
+    expect(saved.find((s) => s.slotType === "FLEX")?.playerId).toBe(fx.players.get("rb-a"));
+    expect(saved.find((s) => s.slotType === "RB" && s.slotIndex === 0)?.playerId).toBe(
+      fx.players.get("rb-c"),
+    );
+  });
+
   it("reads back every slot, empty ones included", async () => {
     // A caller should see the shape of the lineup, not only the filled parts.
     const fx = await setup();
