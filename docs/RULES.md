@@ -346,7 +346,7 @@ Trades are **never automatic**. A trade moves through escrow:
 ```
 propose → counterparty accepts → both NFTs move to the escrow PDA
         → 48h veto window opens
-        → ≥ 1/3 of uninvolved teams vote against?
+        → ≥ 1/3 of uninvolved managers vote against?
               yes → NFTs return to their origin wallets
               no  → escrow releases, rosters swap atomically
 ```
@@ -355,7 +355,21 @@ Bots neither vote nor trade. The threshold is one third of _uninvolved_ teams, m
 Yahoo's — deliberately harder to trigger than ESPN's majority, because leagues that veto
 trades they merely dislike are miserable.
 
-**Trade deadline: end of Week 11.** Necessary rather than traditional — without it,
+**A bot is not in the denominator.** Decided 2026-08-08. Bots cannot vote, so counting
+them would make a league with one nearly un-vetoable — the threshold would rise while the
+pool of possible voters did not. One third of uninvolved _managers_, not uninvolved teams.
+In a 12-team league where two are trading, that is 4 of 10. In a 6-manager league with a
+bot, it is 2 of 4.
+
+**The commissioner has no veto override.** Every other platform gives one. This one does
+not, and it is the same reasoning as everything else here: an administrator who can
+reverse a result is the thing the project exists to remove. A trade the league does not
+veto stands.
+
+**Trade deadline: end of Week 11 by default, set by the commissioner at creation.**
+Checked against ESPN on 2026-08-08: they publish a calendar date rather than a week, and
+recent seasons landed around Weeks 12–13. Ours is deliberately a little earlier, and
+frozen per league like every other rule. Necessary rather than traditional — without it,
 an eliminated team can hand its roster to a contender it has a side arrangement with.
 
 ---

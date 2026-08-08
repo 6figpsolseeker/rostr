@@ -140,9 +140,13 @@ credentials in `SETUP-REQUIRED.md`, not more code.
    or lose. The cost is that a league can exist here unanchored, because someone can close
    the tab; the partial index in `0014` finds those.
 
-2. **Trades are specified but not built.** `docs/RULES.md` §6 describes the veto window
-   and threshold; the tables exist (`trades`, `trade_assets`, `trade_vetoes`); no code
-   touches them. Deadline is week 11, so there is time.
+2. **Trades — specified, decided, not built.** `docs/RULES.md` §6 has the flow and the
+   tables exist (`trades`, `trade_assets`, `trade_vetoes`); no code touches them. Three
+   points were settled 2026-08-08 and written into §6, so do not re-open them: the
+   deadline is **commissioner-set** (default 11), **bots are not in the veto denominator**
+   — one third of uninvolved _managers_ — and there is **no commissioner override**.
+   Buildable on either machine. Trading opens in week 1, not at the deadline, so this is
+   wanted earlier than the week-11 date suggests.
 3. **D6–D10** — the rest of the escrow. **This is main-PC work**; the secondary machine has
    no Rust toolchain. Note that **D6 is not a small job**: "payout by the frozen split"
    needs to know who won, and `RULES.md` § 7 says nobody declares a winner — the contract
@@ -422,6 +426,19 @@ hoard claims.
 **Watch the clock in tests.** A player dropped Monday afternoon clears at Wednesday 03:00
 **Eastern**, which is 07:00 UTC — so a test using "Wednesday 18:00 UTC" is _after_ the
 clear, not before it. One test asserted the opposite and was wrong.
+
+### Abandonment does not work, and needs a decision
+
+`teams.strikes` exists and **nothing increments it.** `RULES.md` §8 says three consecutive
+weeks with an invalid lineup means the team is abandoned and its stake forfeited.
+
+That rule cannot fire as written. `ensureLineups` autofills every team before a week is
+scored, so a lineup is never invalid at scoring time. The rule needs a different trigger —
+most likely counting weeks where the _manager_ set nothing and the autolineup did it for
+them.
+
+**This is the owner's call, not an implementation detail**, because it decides whether
+somebody loses their stake. Do not pick a definition and build it quietly.
 
 ### Bots: one, and none where there is money
 
