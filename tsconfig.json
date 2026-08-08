@@ -3,6 +3,7 @@
   "references": [
     { "path": "./packages/core" },
     { "path": "./packages/db" },
+    { "path": "./packages/escrow" },
     { "path": "./packages/pinning" },
     { "path": "./packages/stats" }
   ]

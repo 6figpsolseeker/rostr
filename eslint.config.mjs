@@ -28,4 +28,15 @@ export default tseslint.config(
     files: ["**/cli.ts"],
     rules: { "no-console": "off" },
   },
+  {
+    // Build scripts run under Node directly, not through the bundler, so they
+    // have Node's globals. Declared explicitly rather than pulling in a globals
+    // package for two names.
+    files: ["scripts/**/*.mjs"],
+    languageOptions: {
+      globals: { process: "readonly", console: "readonly" },
+    },
+    // Same reasoning as a CLI: the output is how the script reports what it did.
+    rules: { "no-console": "off" },
+  },
 );

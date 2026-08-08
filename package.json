@@ -24,7 +24,9 @@
     "stats:probe": "node --env-file-if-exists=.env packages/stats/dist/cli.js probe",
     "format": "prettier --write \"**/*.{ts,tsx,json,md}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,json,md}\"",
-    "test:program": "anchor test"
+    "test:program": "anchor test",
+    "idl:sync": "node scripts/sync-idl.mjs",
+    "idl:check": "node scripts/sync-idl.mjs --check"
   },
   "devDependencies": {
     "@coral-xyz/anchor": "^0.31.1",

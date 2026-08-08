@@ -90,6 +90,15 @@ jobs:
       - name: anchor test
         run: anchor test
 
+      # The web app cannot build the IDL — no Rust on Vercel or in the CI job
+      # that runs the TypeScript suite — so `@rostr/escrow` ships a committed
+      # copy. This is the only job that has both halves to compare, which makes
+      # it the only place a stale copy can be caught. A client calling
+      # instructions the program no longer has would otherwise fail at runtime,
+      # on mainnet, holding someone's money.
+      - name: Committed IDL is current
+        run: pnpm idl:check
+
       # The program id is baked into declare_id! and Anchor.toml. If they ever
       # disagree, the deployed program answers at an address the client does not
       # call, and every test would fail in a way that looks like a logic bug.

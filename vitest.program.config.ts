@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
 /**
@@ -13,6 +14,16 @@ import { defineConfig } from "vitest/config";
  * deploys, and sets ANCHOR_PROVIDER_URL and ANCHOR_WALLET for the client.
  */
 export default defineConfig({
+  resolve: {
+    // Resolved to source, like the main config. The point of aliasing it here
+    // is that the program suite can then check the client's address derivation
+    // against the program's own — the only place those two can be compared.
+    alias: {
+      "@rostr/escrow": fileURLToPath(
+        new URL("./packages/escrow/src/index.ts", import.meta.url),
+      ),
+    },
+  },
   test: {
     include: ["programs/*/tests/**/*.test.ts"],
     // A cold validator plus deploy is slow, and the default 5s timeout expires

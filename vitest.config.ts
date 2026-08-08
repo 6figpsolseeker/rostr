@@ -12,6 +12,7 @@ export default defineConfig({
     alias: {
       "@rostr/core": src("core"),
       "@rostr/db": src("db"),
+      "@rostr/escrow": src("escrow"),
       "@rostr/pinning": src("pinning"),
       "@rostr/stats": src("stats"),
     },

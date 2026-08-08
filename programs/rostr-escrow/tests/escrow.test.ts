@@ -1,5 +1,11 @@
 import * as anchor from "@coral-xyz/anchor";
 import { getAccount } from "@solana/spl-token";
+import {
+  ESCROW_PROGRAM_ID,
+  leagueIdBytes,
+  leaguePda as clientLeaguePda,
+  vaultPda as clientVaultPda,
+} from "@rostr/escrow";
 import { beforeAll, describe, expect, it } from "vitest";
 import {
   DEFAULT_FEE_BPS,
@@ -246,6 +252,40 @@ describe("initialize_league", () => {
         .rpc(),
       "UnsupportedMintDecimals",
     );
+  });
+});
+
+/**
+ * The client and the program derive addresses independently — one in
+ * TypeScript from a UUID, one in Rust from seed bytes. If they ever disagree,
+ * every call targets an account the program never wrote, which presents as a
+ * logic bug rather than a mismatched constant.
+ *
+ * `packages/escrow` tests the derivation is self-consistent. This is the only
+ * place it can be checked against the thing it is meant to match.
+ */
+describe("@rostr/escrow address derivation", () => {
+  it("finds the same league account the program creates", async () => {
+    // A real Postgres-shaped UUID, converted the way the app will convert it.
+    const uuid = "3f2b1c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d";
+    const args = validArgs({ leagueId: [...leagueIdBytes(uuid)] });
+
+    await initialize(args);
+
+    const fromClient = clientLeaguePda(uuid);
+    // Fetching through the client's address proves the seeds agree: a wrong
+    // derivation returns "account does not exist", not a wrong league.
+    const league = await program.account.league.fetch(fromClient);
+    expect([...league.rulesHash]).toEqual(args.rulesHash);
+
+    expect(fromClient.toBase58()).toBe(leaguePda(program, args.leagueId).toBase58());
+    expect(clientVaultPda(fromClient).toBase58()).toBe(
+      vaultPda(program, fromClient).toBase58(),
+    );
+  });
+
+  it("agrees with the program id the tests deploy", () => {
+    expect(ESCROW_PROGRAM_ID.toBase58()).toBe(program.programId.toBase58());
   });
 });
 
