@@ -22,10 +22,16 @@ export {
   expectedTermsFromRules,
   fetchOnChainLeague,
   hexToBytes,
+  readMembership,
   verifyLeagueAnchor,
+  verifyOnChainDeposit,
+  verifyOnChainRefund,
   type AnchorVerdict,
+  type DepositVerdict,
   type ExpectedTerms,
   type OnChainLeague,
+  type OnChainMembership,
+  type RefundVerdict,
   type RulesLikeTerms,
 } from "./verify.js";
 export {
