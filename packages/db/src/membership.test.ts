@@ -15,11 +15,13 @@ import {
   addBot,
   getMembershipProofs,
   getOnChainDeposit,
+  getOnChainJoin,
   getOnChainRefund,
   JoinError,
   joinLeague,
   memberWallet,
   recordOnChainDeposit,
+  recordOnChainJoin,
   recordOnChainRefund,
   removeBot,
 } from "./membership.js";
@@ -805,5 +807,37 @@ describe("memberWallet", () => {
 
     expect(await memberWallet(fx.client, fx.leagueId, a.userId)).toBe(a.address);
     expect(await memberWallet(fx.client, fx.leagueId, b.userId)).toBe(b.address);
+describe("on-chain join record (issue #26)", () => {
+  it("records and reads back a member's on-chain join", async () => {
+    const fx = await setup();
+    const m = await member(fx, 1, "a@example.com");
+
+    expect(await getOnChainJoin(fx.client, fx.leagueId, m.address)).toBeNull();
+
+    await recordOnChainJoin(fx.client, fx.leagueId, m.address, "4".repeat(88), "localnet");
+
+    const recorded = await getOnChainJoin(fx.client, fx.leagueId, m.address);
+    expect(recorded).not.toBeNull();
+    expect(recorded?.walletAddress).toBe(m.address);
+    expect(recorded?.signature).toBe("4".repeat(88));
+    expect(recorded?.cluster).toBe("localnet");
+  });
+
+  it("upserts on a re-post rather than duplicating", async () => {
+    const fx = await setup();
+    const m = await member(fx, 1, "a@example.com");
+
+    await recordOnChainJoin(fx.client, fx.leagueId, m.address, "4".repeat(88), "localnet");
+    await recordOnChainJoin(fx.client, fx.leagueId, m.address, "9".repeat(88), "devnet");
+
+    const [rows] = await fx.client.query<{ n: number }>(
+      "SELECT count(*)::int AS n FROM league_onchain_joins WHERE league_id = $1 AND wallet_address = $2",
+      [fx.leagueId, m.address],
+    );
+    expect(Number(rows?.n)).toBe(1);
+
+    const recorded = await getOnChainJoin(fx.client, fx.leagueId, m.address);
+    expect(recorded?.signature).toBe("9".repeat(88));
+    expect(recorded?.cluster).toBe("devnet");
   });
 });
