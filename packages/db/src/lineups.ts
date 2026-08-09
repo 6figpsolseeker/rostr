@@ -205,9 +205,7 @@ export async function setLineup(
   // this update leaves alone. That would persist him in two slots, and the
   // duplicate throws in scoring and stalls the whole league's week. Reject a
   // player who already occupies a different slot this update does not overwrite.
-  const submittedSlots = new Set(
-    input.assignments.map((a) => `${a.slotType}#${a.slotIndex}`),
-  );
+  const submittedSlots = new Set(input.assignments.map((a) => `${a.slotType}#${a.slotIndex}`));
   for (const assignment of input.assignments) {
     if (assignment.playerId === null) continue;
     const here = `${assignment.slotType}#${assignment.slotIndex}`;

@@ -666,3 +666,77 @@ describe("scoring a week end to end", () => {
     expect(mine?.bench).toContain(fx.players.get("thu-qb"));
   });
 });
+
+describe("the database refuses a duplicate starter", () => {
+  /**
+   * Migration 0016. The application check in `setLineup` closes the sequential
+   * case; this is the backstop for everything else — the TOCTOU window between
+   * reading the current lineup and writing, and any future writer that forgets.
+   *
+   * Deliberately written against raw SQL rather than through `setLineup`, because
+   * what is being tested is precisely what happens when the application check is
+   * not the thing standing in the way.
+   */
+  async function slotTypeIds(fx: Fixture): Promise<Map<string, string>> {
+    const rows = await fx.client.query<{ id: string; key: string }>(
+      `SELECT st.id, st.key FROM slot_types st
+         JOIN sports s ON s.id = st.sport_id WHERE s.key = $1`,
+      [NFL.key],
+    );
+    return new Map(rows.map((row) => [row.key, row.id]));
+  }
+
+  it("rejects the same player in two starting slots", async () => {
+    const fx = await setup();
+    const ids = await slotTypeIds(fx);
+    const rb = fx.players.get("rb-a")!;
+
+    await fx.client.query(
+      `INSERT INTO lineups (team_id, week, slot_type_id, slot_index, player_id)
+       VALUES ($1, $2, $3, 0, $4)`,
+      [fx.teamId, WEEK, ids.get("RB"), rb],
+    );
+
+    // Same player, different slot, written directly. Without 0016 this succeeds
+    // and the league's week can never be scored again.
+    await expect(
+      fx.client.query(
+        `INSERT INTO lineups (team_id, week, slot_type_id, slot_index, player_id)
+         VALUES ($1, $2, $3, 0, $4)`,
+        [fx.teamId, WEEK, ids.get("FLEX"), rb],
+      ),
+    ).rejects.toThrow();
+  });
+
+  it("still allows many empty slots", async () => {
+    // The normal state of a lineup: a row per starting slot, most of them NULL.
+    // A non-partial unique index would be fine in Postgres, but the intent is
+    // that the rule is about players, not rows.
+    const fx = await setup();
+    await ensureLineups(fx.client, fx.leagueId, WEEK, BEFORE_ANYTHING);
+
+    const lineup = await loadLineup(fx.client, fx.otherTeamId, WEEK, fx.rules);
+    expect(lineup.filter((slot) => slot.playerId === null).length).toBeGreaterThan(1);
+  });
+
+  it("still allows the same player for a different week", async () => {
+    const fx = await setup();
+    const ids = await slotTypeIds(fx);
+    const rb = fx.players.get("rb-a")!;
+
+    await fx.client.query(
+      `INSERT INTO lineups (team_id, week, slot_type_id, slot_index, player_id)
+       VALUES ($1, $2, $3, 0, $4)`,
+      [fx.teamId, WEEK, ids.get("RB"), rb],
+    );
+
+    // Starting the same player every week is the entire point of a roster.
+    await expect(
+      fx.client.query(
+        `INSERT INTO lineups (team_id, week, slot_type_id, slot_index, player_id)
+         VALUES ($1, $2, $3, 0, $4)`,
+        [fx.teamId, WEEK + 1, ids.get("RB"), rb],
+      ),
+    ).resolves.toBeDefined();
+  });
+});

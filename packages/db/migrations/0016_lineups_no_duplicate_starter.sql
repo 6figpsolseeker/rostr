@@ -1,0 +1,57 @@
+-- One player, one starting slot. Enforced by the database, not only by the check
+-- that runs before the write.
+--
+-- `setLineup` rejects a partial update naming a player who already starts in an
+-- untouched slot. That closes the sequential case and is the right check to
+-- have — but it reads the current lineup *before* the transaction opens, with no
+-- row lock, so two concurrent one-slot updates both see a state in which the
+-- player is not yet placed, both pass, and both write. The duplicate lands
+-- anyway.
+--
+-- It matters more than a normal race because of what a duplicate does
+-- downstream. `resolveWeek` throws on a player in two starting slots, and
+-- `/api/cron/score-week` catches that per league and moves on — so the league is
+-- silently skipped on **every** subsequent run. The week's matchups keep
+-- `home_milli_points` NULL, standings quietly omit the week because
+-- `loadWeekResults` filters on NOT NULL, and nothing repairs the row: the
+-- autofill copies every stored slot forward, duplicate included. One request
+-- from one member stalls scoring for all twelve teams, indefinitely, with no
+-- error surface anywhere.
+--
+-- Same shape of defence the draft already uses, and for the same reason.
+-- `recordPick` takes `SELECT ... FOR UPDATE` as the fast path and relies on
+-- `PRIMARY KEY (draft_id, pick_number)` and `UNIQUE (draft_id, player_id)` as the
+-- backstop "if anything ever writes outside that lock" (0009). Lineups had the
+-- application check and no backstop.
+--
+-- ---------------------------------------------------------------------------
+-- Why DEFERRABLE, and why a constraint rather than a partial index
+-- ---------------------------------------------------------------------------
+--
+-- The first attempt was `CREATE UNIQUE INDEX ... WHERE player_id IS NOT NULL`,
+-- and it broke a legitimate edit. `setLineup` writes its assignments one row at a
+-- time inside one transaction, so moving a player from RB to FLEX passes through
+-- a state where he holds both — the final lineup is legal, an intermediate one is
+-- not. An immediately-checked constraint rejects the move.
+--
+-- `DEFERRABLE INITIALLY DEFERRED` checks at COMMIT instead, which is exactly the
+-- boundary that matters: what is *stored* must be legal, not every step taken to
+-- get there. A unique **constraint** rather than a partial unique index because
+-- only a constraint can be deferred.
+--
+-- Dropping the `WHERE player_id IS NOT NULL` costs nothing here. Postgres unique
+-- constraints treat NULLs as distinct by default, so the many empty slots a
+-- lineup normally carries — one row per starting slot from the moment
+-- `ensureLineups` runs — remain perfectly legal.
+--
+-- One consequence worth knowing: a violation now surfaces at COMMIT, so the
+-- error names the constraint rather than the statement that caused it.
+--
+-- Bench and IR are not in this table; `lineups` holds starting slots only, so
+-- there is no legitimate reason for one player to appear twice for one team in
+-- one week.
+
+ALTER TABLE lineups
+  ADD CONSTRAINT lineups_one_slot_per_player
+  UNIQUE (team_id, week, player_id)
+  DEFERRABLE INITIALLY DEFERRED;
