@@ -51,11 +51,25 @@ export {
 } from "./lineups.js";
 
 export {
+  advancePlayoffs,
+  championship,
+  enterPlayoffs,
+  leaguesInPlayoffs,
+  PlayoffError,
+  playoffState,
+  type AdvanceOutcome,
+  type BracketState,
+  type Championship,
+  type PlayoffState,
+} from "./playoffs.js";
+
+export {
   currentWeek,
   finalizationHours,
   generateSeasonSchedule,
   loadScheduledWeek,
   loadWeekResults,
+  type MatchupPhase,
   persistSchedule,
   resolveLeagueWeek,
   WeekError,

@@ -258,9 +258,29 @@ stays comparable. Byes are distributed evenly — no team sits more than one ext
 Week 15 is 3v6 and 4v5; Week 16 pairs the top seed against the lower surviving seed;
 Week 17 is the championship. Single elimination throughout.
 
+**Every round reseeds.** The best surviving seed always draws the worst, which is what
+makes a good regular season worth having. It also means the bracket cannot be drawn in
+advance: who the top seed plays in Week 16 is not known until Week 15 is scored.
+
+**A playoff bye is not a game.** A team on a bye has no fixture, sets no lineup, and
+scores nothing that week. There is no way to be knocked out by sitting out.
+
+**A tied bracket game goes to the higher seed.** The regular season keeps a tie as a tie
+— it is a real result there — but somebody has to play the following week. The same rule
+settles the championship and the third-place game.
+
+**Third place is played, not awarded.** The two beaten semifinalists meet in Week 17, with
+the better seed at home. A prize decided by anyone's judgement is the thing this project
+exists to remove.
+
+**Nobody declares a champion.** The bracket is derived from the posted scores every time
+it is read; there is no stored winner and no endpoint that sets one.
+
 **Consolation bracket.** The 6 non-qualifying teams play their own bracket across
 Weeks 15–17, seeded by regular-season finish. It carries a real share of the pot
-(see §7) and exists to keep eliminated teams engaged.
+(see §7) and exists to keep eliminated teams engaged. A consolation field needing fewer
+rounds than there are playoff weeks plays the **last** of them, so it still finishes in
+Week 17 — the week its prize settles.
 
 ### Tiebreakers
 

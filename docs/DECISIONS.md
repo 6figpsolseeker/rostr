@@ -402,6 +402,23 @@ player you promised, and the swap executes into a roster spot that no longer hol
 `lockedByTrade` is consulted by dropping and by proposing, so a committed player cannot
 leave by any path.
 
+### The bracket is recomputed, never accumulated
+
+Decided 2026-08-08, while building it. The obvious implementation stores who advanced —
+a `winner_team_id` on each bracket game, read to build the next round. It is wrong for the
+same reason a stored champion would be: NFL stat corrections arrive for up to a week, so a
+Week 15 result can genuinely change after Week 16 has been drawn, and a stored winner
+would then disagree with the score it came from with nothing to reconcile them.
+
+So `buildBracket` walks the ladder from round one on every call. At this size it costs
+nothing, and it makes the bracket a function of two inputs anyone can check: the seeded
+field and the posted scores.
+
+The visible cost is that fixtures appear one round at a time. That is not a limitation
+being worked around — every round reseeds, so who the top seed plays next week is not
+knowable until this week is scored. A screen that drew Week 16 in advance would be
+inventing it.
+
 ### Settlement is derived, not declared
 
 Nobody signs "team 7 won." The contract holds the bracket, the scores, and the rules, and

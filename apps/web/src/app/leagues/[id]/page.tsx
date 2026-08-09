@@ -79,6 +79,12 @@ export default async function LeaguePage({ params }: { params: Promise<{ id: str
           >
             Standings →
           </a>
+          <a
+            href={`/leagues/${league.id}/bracket`}
+            className="text-sm text-[--color-turf] hover:underline"
+          >
+            Bracket →
+          </a>
         </div>
       </header>
 

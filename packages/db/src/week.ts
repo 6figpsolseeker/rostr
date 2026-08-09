@@ -33,6 +33,9 @@ import { getLeagueRules } from "./leagues.js";
 import { ensureLineups, loadWeekLineups, loadWeekStats } from "./lineups.js";
 import { withTransaction } from "./transaction.js";
 
+/** Mirrors the `matchup_phase` enum in migration 0005. */
+export type MatchupPhase = "REGULAR" | "PLAYOFF" | "CONSOLATION";
+
 export class WeekError extends Error {
   constructor(
     message: string,
@@ -337,11 +340,20 @@ export async function persistSchedule(
   return withTransaction(db, (tx) => writeSchedule(tx, leagueId, schedule));
 }
 
-/** Results for a week, for the standings. */
+/**
+ * Results for the standings.
+ *
+ * **Regular-season games only.** Seeds are decided by the regular season, and a
+ * bracket game counting toward a record would let a team improve the seed that
+ * put them in the bracket — and, worse, would keep shifting the standings that
+ * the bracket was built from. `phase` is the filter; the week bound alone is not
+ * enough, because playoff weeks share the same table.
+ */
 export async function loadWeekResults(
   db: SqlClient,
   leagueId: string,
   throughWeek: number,
+  phase: MatchupPhase = "REGULAR",
 ): Promise<readonly MatchupResult[]> {
   const rows = await db.query<{
     week: number;
@@ -352,9 +364,9 @@ export async function loadWeekResults(
   }>(
     `SELECT week, home_team_id, away_team_id, home_milli_points, away_milli_points
        FROM matchups
-      WHERE league_id = $1 AND week <= $2 AND home_milli_points IS NOT NULL
+      WHERE league_id = $1 AND week <= $2 AND phase = $3 AND home_milli_points IS NOT NULL
       ORDER BY week, id`,
-    [leagueId, throughWeek],
+    [leagueId, throughWeek, phase],
   );
 
   return rows.map((row) => ({

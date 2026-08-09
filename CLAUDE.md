@@ -47,7 +47,7 @@ Do not build it in August.
 
 See [`docs/BUILD-PLAN.md`](docs/BUILD-PLAN.md) for the full commit-by-commit plan.
 
-**Done — 815 tests, CI green:**
+**Done — 868 tests, CI green:**
 
 - Full specification — rules, data model, live scoring, build plan
 - A1: pnpm monorepo, TS strict, vitest, eslint, prettier, CI
@@ -148,8 +148,9 @@ credentials in `SETUP-REQUIRED.md`, not more code.
    afternoon.
 3. **Pot leagues still cannot take money in the app**, and must not, until 1 lands and D6
    can pay it back out.
-4. **The playoff bracket.** `playoffField` seeds it; nothing plays it. Weeks 15–17. This
-   is the largest remaining piece that needs no credentials and no Rust.
+4. **Settlement**, which is where the season ends up. `championship()` now derives all
+   five prize-holders from the scores; nothing pays them out yet, and that is D6 — see
+   above for why it is not an afternoon.
 
 **Still open on the draft:** nothing, on the fairness side — the grindable seed is fixed
 (see "The order draw" below). What remains is operational: `SOLANA_RPC_URL` has to be
@@ -417,6 +418,50 @@ hoard claims.
 **Watch the clock in tests.** A player dropped Monday afternoon clears at Wednesday 03:00
 **Eastern**, which is 07:00 UTC — so a test using "Wednesday 18:00 UTC" is _after_ the
 clear, not before it. One test asserted the opposite and was wrong.
+
+### The bracket
+
+`packages/core/src/season/bracket.ts` (pure), `packages/db/src/playoffs.ts` (state),
+laid by `/api/cron/score-week`, drawn at `/leagues/[id]/bracket`.
+
+**A bracket is a function of the field and the scores, recomputed every time.**
+`buildBracket` walks from round one on each call; nothing stores who advanced. That is
+what makes a Week 15 stat correction reshape Week 16 with no leftover "winner" row
+disagreeing with the score it came from. At this size the recomputation is free, and in a
+pot league the bracket decides who is paid — so it has to be reproducible by anyone
+holding the same inputs.
+
+**Every round reseeds.** Best surviving seed against worst. So the top seed's Week 16
+opponent depends on who won in Week 15, which is why fixtures are written one round at a
+time and why the screen shows no future rounds. A greyed-out Week 16 fixture would be an
+invention.
+
+**The higher seed wins a tie.** `winnerOf` in `results.ts` answers `null` for equal
+totals, which is right for the regular season — a tie is a real outcome there. A bracket
+cannot have one. `decidedBySeed` is on the game so the screen can say so rather than
+letting it look like an ordinary win.
+
+**A bye gets no matchup row at all**, unlike a regular-season bye. A row would put a
+lineup requirement on a team that is not playing, and `ensureLineups` would dutifully fill
+one.
+
+**`loadWeekResults` filters on `phase`, defaulting to `REGULAR`.** It did not before, and
+that was a live bug waiting for Week 15: seeds come from the regular season, so a bracket
+game counting toward a record would move the seeds the bracket was built from, and the
+standings would chase the results they produced.
+
+**A bracket plays the _last_ weeks of its window, not the first.** A four-team consolation
+bracket in a three-week window plays 16 and 17 — it must finish in the championship week,
+because that is the week the payout settles.
+
+**`championship()` derives all five prize-holders from the scores.** There is no column
+holding a champion and no endpoint that sets one; `docs/RULES.md` §7 says the result is
+derived, and a stored winner is a value somebody could be persuaded to change. This is
+what D6 will read.
+
+Fixtures are laid **before** scoring in the cron, not after: Week 15 has no matchups until
+`advancePlayoffs` writes them and `resolveLeagueWeek` refuses a week with no schedule, so
+the other order would cost a full cycle every time a round turns over.
 
 ### Trades
 
@@ -956,7 +1001,7 @@ Expect ~30–60 minutes; compiling AVM from source is the slow part.
 
 ```bash
 pnpm install
-pnpm test        # 815 tests, all green
+pnpm test        # 868 tests, all green
 pnpm typecheck
 pnpm lint
 ```

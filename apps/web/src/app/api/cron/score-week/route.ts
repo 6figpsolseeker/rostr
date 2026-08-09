@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 import { NFL } from "@rostr/core";
-import { resolveLeagueWeek, WeekError } from "@rostr/db";
+import {
+  advancePlayoffs,
+  enterPlayoffs,
+  PlayoffError,
+  resolveLeagueWeek,
+  WeekError,
+} from "@rostr/db";
 import { db } from "@/lib/db";
 
 /**
@@ -65,10 +71,27 @@ export async function GET(request: Request): Promise<NextResponse> {
     matchups?: number;
     finalized?: boolean;
     holdReason?: string;
+    bracketGames?: number;
     skipped?: string;
   }[] = [];
 
   for (const league of leagues) {
+    let bracketGames = 0;
+
+    // Bracket fixtures are laid *before* scoring, not after. Week 15 has no
+    // matchups until the regular season finalises and `advancePlayoffs` writes
+    // them, and `resolveLeagueWeek` refuses a week with no schedule — so doing
+    // this second would cost a whole cycle every time a round turns over.
+    //
+    // A league still mid-season refuses, which is not a failure and is why this
+    // does not take the scoring below it down with it.
+    try {
+      await enterPlayoffs(client, league.id);
+      bracketGames = (await advancePlayoffs(client, league.id)).written;
+    } catch (error) {
+      if (!(error instanceof PlayoffError)) throw error;
+    }
+
     try {
       const outcome = await resolveLeagueWeek(client, league.id, week, now);
       scored.push({
@@ -77,6 +100,7 @@ export async function GET(request: Request): Promise<NextResponse> {
         matchups: outcome.matchups,
         finalized: outcome.finalized,
         ...(outcome.holdReason ? { holdReason: outcome.holdReason } : {}),
+        ...(bracketGames > 0 ? { bracketGames } : {}),
       });
     } catch (error) {
       // A league with no schedule yet, or one already final, is not a failure —
@@ -84,6 +108,7 @@ export async function GET(request: Request): Promise<NextResponse> {
       scored.push({
         leagueId: league.id,
         name: league.name,
+        ...(bracketGames > 0 ? { bracketGames } : {}),
         skipped:
           error instanceof WeekError
             ? error.code

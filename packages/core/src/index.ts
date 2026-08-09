@@ -186,6 +186,17 @@ export {
 } from "./season/lineup.js";
 
 export {
+  BracketError,
+  buildBracket,
+  thirdPlaceWinner,
+  type Bracket,
+  type BracketEntrant,
+  type BracketGame,
+  type BracketRound,
+  type BuildBracketInput,
+} from "./season/bracket.js";
+
+export {
   computeRecords,
   computeStandings,
   consolationField,
