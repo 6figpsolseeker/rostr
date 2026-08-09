@@ -47,7 +47,7 @@ Do not build it in August.
 
 See [`docs/BUILD-PLAN.md`](docs/BUILD-PLAN.md) for the full commit-by-commit plan.
 
-**Done — 868 tests, CI green:**
+**Done — 909 tests, CI green:**
 
 - Full specification — rules, data model, live scoring, build plan
 - A1: pnpm monorepo, TS strict, vitest, eslint, prettier, CI
@@ -136,6 +136,12 @@ credentials in `SETUP-REQUIRED.md`, not more code.
   Verified end to end against a real validator, not reasoned about — see
   `programs/rostr-escrow/tests/anchor.test.ts` below.
 
+- **C12 finished — the scoreboard** (`packages/db/src/matchup.ts`,
+  `apps/web/src/components/Scoreboard.tsx`). The standings half had shipped and the
+  matchup half had not, so there was no screen answering "who am I playing and am I
+  winning" — the one people actually open on a Sunday. See "The scoreboard" below for the
+  two rules that are load-bearing.
+
 **Next, in order:**
 
 1. **Click through create → anchor → join in a browser.** Everything either side of the
@@ -153,6 +159,11 @@ credentials in `SETUP-REQUIRED.md`, not more code.
 4. **Settlement**, which is where the season ends up. `championship()` now derives all
    five prize-holders from the scores; nothing pays them out yet, and that is D6 — see
    above for why it is not an afternoon.
+5. **B5's outstanding half — validate scoring against real 2025 box scores.** The engine
+   is still checked only against _constructed_ fixtures, and it decides who gets paid. The
+   Tank01 key is provisioned but lives on the main PC, so this is **main-PC work** despite
+   needing no Rust. Hand-verify a handful of real games against ESPN's totals and record
+   them in `docs/TANK01.md`. Worth doing before Sep 9 rather than after.
 
 **Still open on the draft:** nothing, on the fairness side — the grindable seed is fixed
 (see "The order draw" below). What remains is operational: `SOLANA_RPC_URL` has to be
@@ -574,6 +585,47 @@ the final pick moves it to IN_SEASON. Nothing else moved state before, so a draf
 stayed FORMING forever — still accepting members, and invisible to every job that works on
 live leagues. The enum is FORMING / DRAFTING / IN_SEASON / PLAYOFFS / SETTLED / DISSOLVED;
 an invented value is not a no-op, Postgres fails the cast and the query errors.
+
+### The scoreboard
+
+`packages/db/src/matchup.ts`, `/api/leagues/[id]/matchup`, `Scoreboard.tsx` on
+`/leagues/[id]/matchup`. C12's missing half — the standings shipped long before the screen
+a manager actually looks at on a Sunday.
+
+**It scores through `scoreTeamLineup`, the same function the cron uses.** Not a second
+implementation. A scoreboard that disagreed with the standings would be worse than no
+scoreboard, and there is a test asserting the two match for every matchup in a week.
+
+**A finalised week reports the stored total, never a fresh recompute.** Points are
+recomputed from `stat_lines_current` on every read, which is how a live score stays live —
+but once `finalized_at` is set that number decided a win, a seed, and in weeks 14 and 17 a
+payout. A correction landing afterwards changes `stat_lines_current` and must not change
+the result.
+
+When the two disagree, `restatedMilliPoints` reports what the recompute says and the screen
+shows both. **Do not "fix" this by displaying one number.** A correction that arrived too
+late to count is a real event; hiding it is the silent restatement this project exists to
+prevent, and showing only the live number would rewrite a settled week.
+
+**`yetToPlay` and `inProgress` are given as much weight as the score, deliberately.** Being
+up twenty with three players left is a different position from being up twenty with none,
+and no total conveys that. Both come from `games.kickoff_at` and the game status — the same
+source every lineup lock derives from.
+
+**Game state is never inferred from whether a player has points.** A player can be well into
+his game with nothing to show for it, and reading zero as "has not played" tells a manager
+they are still live when they have already lost. Kickoff passed and not final means
+in-progress, whatever the stat line says. Tested.
+
+A player with no game that week is `BYE`, not `YET_TO_PLAY` — there are no points still
+coming.
+
+`loadWeekMatchups` takes `now` rather than calling `Date.now()`, so game state is
+deterministic and the finalisation cases are testable.
+
+**The week may be supplied by the client here**, unlike the trades route. Nothing on this
+path enforces a rule — it only reads, and browsing back through the season is the point of
+the week selector.
 
 ### Resolving a week
 
@@ -1042,7 +1094,7 @@ Expect ~30–60 minutes; compiling AVM from source is the slow part.
 
 ```bash
 pnpm install
-pnpm test        # 868 tests, all green
+pnpm test        # 909 tests, all green
 pnpm typecheck
 pnpm lint
 ```

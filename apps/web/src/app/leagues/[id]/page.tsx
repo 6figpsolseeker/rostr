@@ -51,6 +51,12 @@ export default async function LeaguePage({ params }: { params: Promise<{ id: str
         </p>
         <div className="flex gap-4">
           <a
+            href={`/leagues/${league.id}/matchup`}
+            className="text-sm text-[--color-turf] hover:underline"
+          >
+            Scoreboard →
+          </a>
+          <a
             href={`/leagues/${league.id}/draft`}
             className="text-sm text-[--color-turf] hover:underline"
           >

@@ -64,6 +64,16 @@ export {
 } from "./playoffs.js";
 
 export {
+  loadTeamMatchup,
+  loadWeekMatchups,
+  MatchupError,
+  type MatchupSide,
+  type MatchupView,
+  type PlayerGameState,
+  type PlayerLine,
+} from "./matchup.js";
+
+export {
   currentWeek,
   finalizationHours,
   generateSeasonSchedule,
