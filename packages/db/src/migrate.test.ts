@@ -76,7 +76,9 @@ describe("migrate", () => {
     await migrate(client, [mig(9999, "later")]);
 
     await expect(migrate(client, [mig(9998, "earlier")])).rejects.toThrow(MigrationError);
-    await expect(migrate(client, [mig(9998, "earlier")])).rejects.toThrow(/forward-only|older/i);
+    await expect(migrate(client, [mig(9998, "earlier")])).rejects.toThrow(
+      /forward-only|older/i,
+    );
   });
 
   it("rolls back a failing migration rather than half-applying it", async () => {
