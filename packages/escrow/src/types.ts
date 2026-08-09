@@ -421,6 +421,368 @@ export type RostrEscrow = {
       ]
     },
     {
+      "name": "payoutFee",
+      "docs": [
+        "Pay the protocol fee out of the vault, once.",
+        "",
+        "Runs before the per-prize payments. The fee is `total * fee_bps / 10000`,",
+        "taken from the whole pot, and sent to `league.fee_recipient`. Idempotent:",
+        "a second call sees `fee_paid == true` and refuses. Skipped entirely when",
+        "`fee_bps == 0`."
+      ],
+      "discriminator": [
+        45,
+        126,
+        145,
+        147,
+        97,
+        0,
+        233,
+        103
+      ],
+      "accounts": [
+        {
+          "name": "league",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  101,
+                  97,
+                  103,
+                  117,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "league.league_id",
+                "account": "league"
+              }
+            ]
+          }
+        },
+        {
+          "name": "standings",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  110,
+                  100,
+                  105,
+                  110,
+                  103,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "league"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "league"
+              }
+            ]
+          }
+        },
+        {
+          "name": "feeRecipientTokenAccount",
+          "writable": true
+        },
+        {
+          "name": "tokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "payoutPrize",
+      "docs": [
+        "Pay one prize out of the vault.",
+        "",
+        "`prize_index` is a `prize` constant (0 = champion … 4 = third place). The",
+        "winner is read from the frozen `FinalStandings`, so the authority cannot",
+        "redirect a prize to anyone else, and the recipient must be a `Membership`",
+        "of this league. The amount is the post-fee pool times `league.payout_bps[",
+        "prize_index]`. Idempotent per prize: a second call for the same index sees",
+        "`paid[index] == true` and refuses. When the last unpaid prize is paid, the",
+        "league is marked settled and its deposited total zeroed."
+      ],
+      "discriminator": [
+        199,
+        184,
+        58,
+        151,
+        237,
+        193,
+        169,
+        220
+      ],
+      "accounts": [
+        {
+          "name": "league",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  101,
+                  97,
+                  103,
+                  117,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "league.league_id",
+                "account": "league"
+              }
+            ]
+          }
+        },
+        {
+          "name": "standings",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  110,
+                  100,
+                  105,
+                  110,
+                  103,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "league"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "league"
+              }
+            ]
+          }
+        },
+        {
+          "name": "winnerMembership",
+          "docs": [
+            "The prize winner, read from the frozen standings. Must be a member of this",
+            "league (enforced by the membership account), so funds only go to someone",
+            "who actually joined — the authority cannot redirect a prize to an outsider."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  101,
+                  109,
+                  98,
+                  101,
+                  114,
+                  115,
+                  104,
+                  105,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "league"
+              },
+              {
+                "kind": "account",
+                "path": "winner"
+              }
+            ]
+          }
+        },
+        {
+          "name": "winnerTokenAccount",
+          "writable": true
+        },
+        {
+          "name": "winner"
+        },
+        {
+          "name": "tokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "prizeIndex",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "postFinalStandings",
+      "docs": [
+        "Freeze the league's final standings on-chain.",
+        "",
+        "This is the **single trusted input** to settlement. The `settle_authority`",
+        "(the league creator at creation; rotatable to the Squads multisig per the",
+        "owner's roadmap) signs, naming the five prize winners. Once written, the",
+        "`FinalStandings` account is immutable, so the split that follows cannot be",
+        "relitigated.",
+        "",
+        "The honest limitation, documented in issue #28: the winners come from an",
+        "off-chain source (a fantasy score feed that is not yet on-chain). The",
+        "program enforces everything *after* this point — the split math, the fee,",
+        "that each winner was actually a member, and that settlement runs once —",
+        "but it cannot itself verify that the standings are correct. A future",
+        "on-chain score oracle would replace `settle_authority` with a",
+        "program-derived signer, removing the one trusted key."
+      ],
+      "discriminator": [
+        151,
+        134,
+        168,
+        24,
+        189,
+        239,
+        7,
+        67
+      ],
+      "accounts": [
+        {
+          "name": "league",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  101,
+                  97,
+                  103,
+                  117,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "league.league_id",
+                "account": "league"
+              }
+            ]
+          }
+        },
+        {
+          "name": "standings",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  110,
+                  100,
+                  105,
+                  110,
+                  103,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "league"
+              }
+            ]
+          }
+        },
+        {
+          "name": "settleAuthority",
+          "docs": [
+            "The single trusted signer for settlement. Set at league creation to the",
+            "league creator; rotatable to the Squads multisig off-chain by creating a",
+            "new league (the field is frozen like the rest)."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "winners",
+          "type": {
+            "array": [
+              "pubkey",
+              5
+            ]
+          }
+        }
+      ]
+    },
+    {
       "name": "refundStake",
       "docs": [
         "Withdraw your own stake, unconditionally, once the timelock has passed.",
@@ -546,6 +908,19 @@ export type RostrEscrow = {
     }
   ],
   "accounts": [
+    {
+      "name": "finalStandings",
+      "discriminator": [
+        30,
+        48,
+        243,
+        221,
+        210,
+        132,
+        41,
+        212
+      ]
+    },
     {
       "name": "league",
       "discriminator": [
@@ -688,9 +1063,101 @@ export type RostrEscrow = {
       "code": 6022,
       "name": "mathOverflow",
       "msg": "Arithmetic overflow"
+    },
+    {
+      "code": 6023,
+      "name": "winnerNotMember",
+      "msg": "A standings winner may not be the default pubkey"
+    },
+    {
+      "code": 6024,
+      "name": "alreadySettled",
+      "msg": "The league has already been settled"
+    },
+    {
+      "code": 6025,
+      "name": "nothingToSettle",
+      "msg": "There is no stake to settle"
+    },
+    {
+      "code": 6026,
+      "name": "standingsLeagueMismatch",
+      "msg": "The frozen standings do not belong to this league"
+    },
+    {
+      "code": 6027,
+      "name": "standingsMismatch",
+      "msg": "A paid winner did not match the frozen standings"
+    },
+    {
+      "code": 6028,
+      "name": "feeNotPaid",
+      "msg": "The protocol fee must be paid before any prize"
+    },
+    {
+      "code": 6029,
+      "name": "invalidPrizeIndex",
+      "msg": "Prize index is out of range"
     }
   ],
   "types": [
+    {
+      "name": "finalStandings",
+      "docs": [
+        "The frozen result of a league, posted once by the settle authority.",
+        "",
+        "Its existence freezes the five prize winners on-chain. After `post_final_",
+        "standings` writes it, the `payout_fee` and `payout_prize` instructions read",
+        "it and distribute the vault. It is immutable: the only mutations are the",
+        "`fee_paid` and `paid` flags that mark each leg of settlement done, so the",
+        "named winners cannot change and the pot cannot be paid twice."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "league",
+            "type": "pubkey"
+          },
+          {
+            "name": "winners",
+            "docs": [
+              "Prize winners in [`prize`] order: champion, runner-up, regular season,",
+              "consolation, third place."
+            ],
+            "type": {
+              "array": [
+                "pubkey",
+                5
+              ]
+            }
+          },
+          {
+            "name": "feePaid",
+            "docs": [
+              "Set once the protocol fee has been paid at settlement."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "paid",
+            "docs": [
+              "Set once each prize has been paid. `settled` is true when all are set."
+            ],
+            "type": {
+              "array": [
+                "bool",
+                5
+              ]
+            }
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
     {
       "name": "initializeFreeLeagueArgs",
       "type": {
@@ -767,6 +1234,10 @@ export type RostrEscrow = {
           },
           {
             "name": "feeRecipient",
+            "type": "pubkey"
+          },
+          {
+            "name": "settleAuthority",
             "type": "pubkey"
           },
           {
@@ -867,6 +1338,24 @@ export type RostrEscrow = {
             "name": "feeRecipient",
             "docs": [
               "Where the fee is paid at settlement. `default()` when `fee_bps` is zero."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "settleAuthority",
+            "docs": [
+              "Who may post the league's final standings. The single trusted input to",
+              "settlement: this key signs `post_final_standings`, which freezes the five",
+              "prize winners on-chain. Everything downstream of that — the split math,",
+              "the fee, the per-winner membership checks, idempotency — is enforced by",
+              "the program, not by trust.",
+              "",
+              "Set at creation to the league creator; the owner's roadmap rotates it to",
+              "the Squads multisig (docs/SETUP-REQUIRED.md) so that no individual",
+              "person can unilaterally name the winners. It is a frozen field like the",
+              "rest, so the rotation is a new league, not an edited one. A future",
+              "on-chain score feed (the trustless oracle) would replace this signer with",
+              "a program-derived one."
             ],
             "type": "pubkey"
           },

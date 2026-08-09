@@ -105,6 +105,15 @@ export const membershipPda = (
     program.programId,
   )[0];
 
+export const standingsPda = (
+  program: anchor.Program,
+  league: anchor.web3.PublicKey,
+): anchor.web3.PublicKey =>
+  anchor.web3.PublicKey.findProgramAddressSync(
+    [Buffer.from("standings"), league.toBuffer()],
+    program.programId,
+  )[0];
+
 export const validArgs = (overrides: Partial<InitArgs> = {}): InitArgs => ({
   leagueId: freshLeagueId(),
   // Any non-zero 32 bytes stands in for a real SHA-256 of the canonical rules.
@@ -192,4 +201,61 @@ export const expectError = async (promise: Promise<unknown>, code: string): Prom
     (err: unknown) => err instanceof anchor.AnchorError && err.error.errorCode.code === code,
     `expected AnchorError ${code}`,
   );
+};
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Send a member-signed transaction, retrying on the intermittent "Blockhash not
+ * found" the WSL embedded validator throws when block production lags the
+ * blockhash lookup. Idempotent at the account level, so a retry is safe.
+ */
+export const sendMemberTx = async (
+  provider: anchor.AnchorProvider,
+  ix: anchor.web3.TransactionInstruction,
+  signer: anchor.web3.Keypair,
+): Promise<string> => {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try {
+      return await provider.sendAndConfirm(
+        new anchor.web3.Transaction().add(ix),
+        [signer],
+        { commitment: "confirmed" },
+      );
+    } catch (err) {
+      lastErr = err;
+      if (String(err).includes("Blockhash not found")) {
+        await sleep(500 * (attempt + 1));
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastErr;
+};
+
+/**
+ * Retry a provider-signed transaction (no extra signer) on the intermittent
+ * "Blockhash not found" the WSL embedded validator throws under load. Safe to
+ * retry because every instruction here is idempotent at the account level.
+ */
+export const retryTx = async (
+  provider: anchor.AnchorProvider,
+  build: () => anchor.web3.Transaction,
+): Promise<string> => {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try {
+      return await provider.sendAndConfirm(build(), [], { commitment: "confirmed" });
+    } catch (err) {
+      lastErr = err;
+      if (String(err).includes("Blockhash not found")) {
+        await sleep(500 * (attempt + 1));
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastErr;
 };

@@ -84,6 +84,7 @@ export function AnchorPanel({
             payoutBps: payoutArray(pot.payout),
             feeBps: pot.feeBps,
             feeRecipient: new PublicKey(pot.feeRecipient),
+            settleAuthority: wallet.publicKey,
             maxTeams,
             payer: wallet.publicKey,
           })

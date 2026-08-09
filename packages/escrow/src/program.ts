@@ -89,6 +89,16 @@ export function membershipPda(league: PublicKey, member: PublicKey): PublicKey {
   )[0];
 }
 
+const STANDINGS_SEED = utf8("standings");
+
+/**
+ * The frozen final standings for a league, posted once by the settle authority.
+ * Seeded by the league PDA.
+ */
+export function standingsPda(league: PublicKey): PublicKey {
+  return PublicKey.findProgramAddressSync([STANDINGS_SEED, league.toBytes()], ESCROW_PROGRAM_ID)[0];
+}
+
 /** Every address a league needs, derived in one call. */
 export type LeagueAddresses = {
   readonly league: PublicKey;

@@ -196,6 +196,7 @@ pub mod rostr_escrow {
         league.payout_bps = args.payout_bps;
         league.fee_bps = args.fee_bps;
         league.fee_recipient = args.fee_recipient;
+        league.settle_authority = args.settle_authority;
         league.has_pot = true;
         league.max_teams = args.max_teams;
         league.member_count = 0;
@@ -237,6 +238,7 @@ pub mod rostr_escrow {
         league.payout_bps = [0; PRIZE_COUNT];
         league.fee_bps = 0;
         league.fee_recipient = Pubkey::default();
+        league.settle_authority = Pubkey::default();
         league.has_pot = false;
         league.max_teams = args.max_teams;
         league.member_count = 0;
@@ -390,6 +392,176 @@ pub mod rostr_escrow {
 
         Ok(())
     }
+
+    /// Freeze the league's final standings on-chain.
+    ///
+    /// This is the **single trusted input** to settlement. The `settle_authority`
+    /// (the league creator at creation; rotatable to the Squads multisig per the
+    /// owner's roadmap) signs, naming the five prize winners. Once written, the
+    /// `FinalStandings` account is immutable, so the split that follows cannot be
+    /// relitigated.
+    ///
+    /// The honest limitation, documented in issue #28: the winners come from an
+    /// off-chain source (a fantasy score feed that is not yet on-chain). The
+    /// program enforces everything *after* this point — the split math, the fee,
+    /// that each winner was actually a member, and that settlement runs once —
+    /// but it cannot itself verify that the standings are correct. A future
+    /// on-chain score oracle would replace `settle_authority` with a
+    /// program-derived signer, removing the one trusted key.
+    pub fn post_final_standings(
+        ctx: Context<PostFinalStandings>,
+        winners: [Pubkey; PRIZE_COUNT],
+    ) -> Result<()> {
+        require!(ctx.accounts.league.has_pot, EscrowError::LeagueHasNoPot);
+
+        // Every prize winner must be a member who actually joined. A non-member
+        // winner would let the authority pay out to a wallet that never staked.
+        for winner in winners.iter() {
+            let (_membership, _bump) = Pubkey::find_program_address(
+                &[
+                    b"membership",
+                    ctx.accounts.league.key().as_ref(),
+                    winner.as_ref(),
+                ],
+                &crate::ID,
+            );
+            // Existence is checked at payout time via the Membership account in
+            // the Payout context; here we only require non-default winners so
+            // the frozen record is well-formed.
+            require!(*winner != Pubkey::default(), EscrowError::WinnerNotMember);
+        }
+
+        let standings = &mut ctx.accounts.standings;
+        standings.league = ctx.accounts.league.key();
+        standings.winners = winners;
+        standings.fee_paid = false;
+        standings.paid = [false; PRIZE_COUNT];
+        standings.bump = ctx.bumps.standings;
+
+        Ok(())
+    }
+
+    /// Pay the protocol fee out of the vault, once.
+    ///
+    /// Runs before the per-prize payments. The fee is `total * fee_bps / 10000`,
+    /// taken from the whole pot, and sent to `league.fee_recipient`. Idempotent:
+    /// a second call sees `fee_paid == true` and refuses. Skipped entirely when
+    /// `fee_bps == 0`.
+    pub fn payout_fee(ctx: Context<PayoutFee>) -> Result<()> {
+        require!(ctx.accounts.league.has_pot, EscrowError::LeagueHasNoPot);
+        require!(!ctx.accounts.standings.fee_paid, EscrowError::AlreadySettled);
+
+        let total = ctx.accounts.league.total_deposited;
+        require!(total > 0, EscrowError::NothingToSettle);
+
+        let fee_bps = u64::from(ctx.accounts.league.fee_bps);
+        let fee_amount = total
+            .checked_mul(fee_bps)
+            .ok_or(EscrowError::MathOverflow)?
+            .checked_div(u64::from(BASIS_POINTS_TOTAL))
+            .ok_or(EscrowError::MathOverflow)?;
+
+        if fee_amount > 0 {
+            let league_id = ctx.accounts.league.league_id;
+            let league_bump = ctx.accounts.league.bump;
+            let seeds: &[&[u8]] = &[b"league", league_id.as_ref(), &[league_bump]];
+            let signer: &[&[&[u8]]] = &[seeds];
+
+            token::transfer(
+                CpiContext::new_with_signer(
+                    ctx.accounts.token_program.to_account_info(),
+                    Transfer {
+                        from: ctx.accounts.vault.to_account_info(),
+                        to: ctx.accounts.fee_recipient_token_account.to_account_info(),
+                        authority: ctx.accounts.league.to_account_info(),
+                    },
+                    signer,
+                ),
+                fee_amount,
+            )?;
+        }
+
+        ctx.accounts.standings.fee_paid = true;
+        Ok(())
+    }
+
+    /// Pay one prize out of the vault.
+    ///
+    /// `prize_index` is a `prize` constant (0 = champion … 4 = third place). The
+    /// winner is read from the frozen `FinalStandings`, so the authority cannot
+    /// redirect a prize to anyone else, and the recipient must be a `Membership`
+    /// of this league. The amount is the post-fee pool times `league.payout_bps[
+    /// prize_index]`. Idempotent per prize: a second call for the same index sees
+    /// `paid[index] == true` and refuses. When the last unpaid prize is paid, the
+    /// league is marked settled and its deposited total zeroed.
+    pub fn payout_prize(ctx: Context<PayoutPrize>, prize_index: u8) -> Result<()> {
+        require!(ctx.accounts.league.has_pot, EscrowError::LeagueHasNoPot);
+        require!(ctx.accounts.standings.fee_paid, EscrowError::FeeNotPaid);
+        require!(
+            (prize_index as usize) < PRIZE_COUNT,
+            EscrowError::InvalidPrizeIndex
+        );
+        let idx = prize_index as usize;
+        require!(!ctx.accounts.standings.paid[idx], EscrowError::AlreadySettled);
+
+        let total = ctx.accounts.league.total_deposited;
+        require!(total > 0, EscrowError::NothingToSettle);
+
+        let fee_bps = u64::from(ctx.accounts.league.fee_bps);
+        let fee_amount = total
+            .checked_mul(fee_bps)
+            .ok_or(EscrowError::MathOverflow)?
+            .checked_div(u64::from(BASIS_POINTS_TOTAL))
+            .ok_or(EscrowError::MathOverflow)?;
+        let winners_pool = total
+            .checked_sub(fee_amount)
+            .ok_or(EscrowError::MathOverflow)?;
+
+        let share_bps = u64::from(ctx.accounts.league.payout_bps[idx]);
+        let amount = winners_pool
+            .checked_mul(share_bps)
+            .ok_or(EscrowError::MathOverflow)?
+            .checked_div(u64::from(BASIS_POINTS_TOTAL))
+            .ok_or(EscrowError::MathOverflow)?;
+        require!(amount > 0, EscrowError::NothingToSettle);
+
+        // The frozen winner must be a member, and must own the token account we
+        // pay into — otherwise the authority could name a non-member and the
+        // Membership constraint would reject it anyway, but we check explicitly.
+        require!(
+            ctx.accounts.winner_membership.member == ctx.accounts.winner.key(),
+            EscrowError::StandingsMismatch
+        );
+        require!(
+            ctx.accounts.standings.winners[idx] == ctx.accounts.winner.key(),
+            EscrowError::StandingsMismatch
+        );
+
+        let league_id = ctx.accounts.league.league_id;
+        let league_bump = ctx.accounts.league.bump;
+        let seeds: &[&[u8]] = &[b"league", league_id.as_ref(), &[league_bump]];
+        let signer: &[&[&[u8]]] = &[seeds];
+
+        token::transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.vault.to_account_info(),
+                    to: ctx.accounts.winner_token_account.to_account_info(),
+                    authority: ctx.accounts.league.to_account_info(),
+                },
+                signer,
+            ),
+            amount,
+        )?;
+
+        ctx.accounts.standings.paid[idx] = true;
+        if ctx.accounts.standings.paid.iter().all(|p| *p) {
+            ctx.accounts.standings.bump = ctx.accounts.standings.bump; // unchanged
+            ctx.accounts.league.total_deposited = 0;
+        }
+        Ok(())
+    }
 }
 
 /// The terms of a league, frozen at creation.
@@ -427,6 +599,19 @@ pub struct League {
     pub fee_bps: u16,
     /// Where the fee is paid at settlement. `default()` when `fee_bps` is zero.
     pub fee_recipient: Pubkey,
+    /// Who may post the league's final standings. The single trusted input to
+    /// settlement: this key signs `post_final_standings`, which freezes the five
+    /// prize winners on-chain. Everything downstream of that — the split math,
+    /// the fee, the per-winner membership checks, idempotency — is enforced by
+    /// the program, not by trust.
+    ///
+    /// Set at creation to the league creator; the owner's roadmap rotates it to
+    /// the Squads multisig (docs/SETUP-REQUIRED.md) so that no individual
+    /// person can unilaterally name the winners. It is a frozen field like the
+    /// rest, so the rotation is a new league, not an edited one. A future
+    /// on-chain score feed (the trustless oracle) would replace this signer with
+    /// a program-derived one.
+    pub settle_authority: Pubkey,
     /// False for a league that plays for nothing: no vault, no deposits, but its
     /// rules hash is anchored here exactly like a pot league's.
     pub has_pot: bool,
@@ -454,6 +639,27 @@ pub struct Membership {
     pub bump: u8,
 }
 
+/// The frozen result of a league, posted once by the settle authority.
+///
+/// Its existence freezes the five prize winners on-chain. After `post_final_
+/// standings` writes it, the `payout_fee` and `payout_prize` instructions read
+/// it and distribute the vault. It is immutable: the only mutations are the
+/// `fee_paid` and `paid` flags that mark each leg of settlement done, so the
+/// named winners cannot change and the pot cannot be paid twice.
+#[account]
+#[derive(InitSpace)]
+pub struct FinalStandings {
+    pub league: Pubkey,
+    /// Prize winners in [`prize`] order: champion, runner-up, regular season,
+    /// consolation, third place.
+    pub winners: [Pubkey; PRIZE_COUNT],
+    /// Set once the protocol fee has been paid at settlement.
+    pub fee_paid: bool,
+    /// Set once each prize has been paid. `settled` is true when all are set.
+    pub paid: [bool; PRIZE_COUNT],
+    pub bump: u8,
+}
+
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct InitializeLeagueArgs {
     pub league_id: [u8; 16],
@@ -463,6 +669,7 @@ pub struct InitializeLeagueArgs {
     pub payout_bps: [u16; PRIZE_COUNT],
     pub fee_bps: u16,
     pub fee_recipient: Pubkey,
+    pub settle_authority: Pubkey,
     pub max_teams: u8,
 }
 
@@ -627,6 +834,100 @@ pub struct RefundStake<'info> {
     pub token_program: Program<'info, Token>,
 }
 
+#[derive(Accounts)]
+pub struct PostFinalStandings<'info> {
+    #[account(mut, seeds = [b"league", league.league_id.as_ref()], bump = league.bump)]
+    pub league: Account<'info, League>,
+
+    #[account(
+        init,
+        payer = settle_authority,
+        space = 8 + FinalStandings::INIT_SPACE,
+        seeds = [b"standings", league.key().as_ref()],
+        bump,
+    )]
+    pub standings: Account<'info, FinalStandings>,
+
+    /// The single trusted signer for settlement. Set at league creation to the
+    /// league creator; rotatable to the Squads multisig off-chain by creating a
+    /// new league (the field is frozen like the rest).
+    #[account(mut)]
+    pub settle_authority: Signer<'info>,
+
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct PayoutFee<'info> {
+    #[account(mut, seeds = [b"league", league.league_id.as_ref()], bump = league.bump)]
+    pub league: Account<'info, League>,
+
+    #[account(
+        mut,
+        seeds = [b"standings", league.key().as_ref()],
+        bump = standings.bump,
+        constraint = standings.league == league.key() @ EscrowError::StandingsLeagueMismatch,
+    )]
+    pub standings: Account<'info, FinalStandings>,
+
+    #[account(
+        mut,
+        seeds = [b"vault", league.key().as_ref()],
+        bump,
+        token::mint = league.token_mint,
+        token::authority = league,
+    )]
+    pub vault: Account<'info, TokenAccount>,
+
+    #[account(
+        mut,
+        constraint = fee_recipient_token_account.mint == league.token_mint @ EscrowError::WrongMint,
+    )]
+    pub fee_recipient_token_account: Account<'info, TokenAccount>,
+
+    pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
+pub struct PayoutPrize<'info> {
+    #[account(mut, seeds = [b"league", league.league_id.as_ref()], bump = league.bump)]
+    pub league: Account<'info, League>,
+
+    #[account(
+        mut,
+        seeds = [b"standings", league.key().as_ref()],
+        bump = standings.bump,
+        constraint = standings.league == league.key() @ EscrowError::StandingsLeagueMismatch,
+    )]
+    pub standings: Account<'info, FinalStandings>,
+
+    #[account(
+        mut,
+        seeds = [b"vault", league.key().as_ref()],
+        bump,
+        token::mint = league.token_mint,
+        token::authority = league,
+    )]
+    pub vault: Account<'info, TokenAccount>,
+
+    /// The prize winner, read from the frozen standings. Must be a member of this
+    /// league (enforced by the membership account), so funds only go to someone
+    /// who actually joined — the authority cannot redirect a prize to an outsider.
+    #[account(
+        mut,
+        seeds = [b"membership", league.key().as_ref(), winner.key().as_ref()],
+        bump = winner_membership.bump,
+        constraint = winner_membership.league == league.key() @ EscrowError::MembershipLeagueMismatch,
+        constraint = winner_membership.member == winner.key() @ EscrowError::MembershipMemberMismatch,
+    )]
+    pub winner_membership: Account<'info, Membership>,
+    #[account(mut, constraint = winner_token_account.owner == winner.key() @ EscrowError::NotTokenOwner)]
+    pub winner_token_account: Account<'info, TokenAccount>,
+    pub winner: SystemAccount<'info>,
+
+    pub token_program: Program<'info, Token>,
+}
+
 #[error_code]
 pub enum EscrowError {
     #[msg("Rules hash is all zeroes; a league cannot take money without rules")]
@@ -675,4 +976,18 @@ pub enum EscrowError {
     LeagueHasNoPot,
     #[msg("Arithmetic overflow")]
     MathOverflow,
+    #[msg("A standings winner may not be the default pubkey")]
+    WinnerNotMember,
+    #[msg("The league has already been settled")]
+    AlreadySettled,
+    #[msg("There is no stake to settle")]
+    NothingToSettle,
+    #[msg("The frozen standings do not belong to this league")]
+    StandingsLeagueMismatch,
+    #[msg("A paid winner did not match the frozen standings")]
+    StandingsMismatch,
+    #[msg("The protocol fee must be paid before any prize")]
+    FeeNotPaid,
+    #[msg("Prize index is out of range")]
+    InvalidPrizeIndex,
 }

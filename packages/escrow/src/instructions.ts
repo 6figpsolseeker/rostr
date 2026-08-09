@@ -18,7 +18,7 @@ import { TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync } from "@solana/spl-tok
 import { SystemProgram, type PublicKey, type TransactionInstruction } from "@solana/web3.js";
 
 import { ESCROW_IDL } from "./idl.js";
-import { leagueIdBytes, leaguePda, membershipPda, vaultPda } from "./program.js";
+import { leagueIdBytes, leaguePda, membershipPda, standingsPda, vaultPda } from "./program.js";
 import type { RostrEscrow } from "./types.js";
 
 /**
@@ -71,6 +71,7 @@ export type InitializeLeagueParams = {
   readonly payoutBps: readonly number[];
   readonly feeBps: number;
   readonly feeRecipient: PublicKey;
+  readonly settleAuthority: PublicKey;
   readonly maxTeams: number;
   /** Pays rent, and holds no privileges afterwards. */
   readonly payer: PublicKey;
@@ -91,6 +92,7 @@ export async function initializeLeagueIx(
       payoutBps: [...params.payoutBps],
       feeBps: params.feeBps,
       feeRecipient: params.feeRecipient,
+      settleAuthority: params.settleAuthority,
       maxTeams: params.maxTeams,
     })
     .accountsPartial({
@@ -209,6 +211,95 @@ export async function refundStakeIx(
       memberTokenAccount:
         params.memberTokenAccount ?? getAssociatedTokenAddressSync(params.mint, params.member),
       member: params.member,
+      tokenProgram: TOKEN_PROGRAM_ID,
+    })
+    .instruction();
+}
+
+export type PostFinalStandingsParams = {
+  readonly leagueId: string;
+  /** The five prize winners in PRIZE_ORDER (champion first). */
+  readonly winners: readonly PublicKey[];
+  /** The settle authority that signs. */
+  readonly settleAuthority: PublicKey;
+};
+
+/**
+ * Freeze the league's final standings on-chain.
+ *
+ * The single trusted input to settlement: the settle authority (the league
+ * creator at creation; rotatable to the Squads multisig) signs, naming the five
+ * winners. After this, `payout_fee` and `payout_prize` distribute the vault.
+ * See the program's `post_final_standings` for the honest limitation — the
+ * winners come from an off-chain score feed that is not yet on-chain.
+ */
+export async function postFinalStandingsIx(
+  program: Program<RostrEscrow>,
+  params: PostFinalStandingsParams,
+): Promise<TransactionInstruction> {
+  const league = leaguePda(params.leagueId);
+
+  return program.methods
+    .postFinalStandings([...params.winners] as PublicKey[])
+    .accountsPartial({
+      league,
+      standings: standingsPda(league),
+      settleAuthority: params.settleAuthority,
+      systemProgram: SystemProgram.programId,
+    })
+    .instruction();
+}
+
+export type PayoutFeeParams = {
+  readonly leagueId: string;
+  readonly feeRecipient: PublicKey;
+  readonly mint: PublicKey;
+};
+
+/** Pay the protocol fee out of the vault, once. Skipped when there is no fee. */
+export async function payoutFeeIx(
+  program: Program<RostrEscrow>,
+  params: PayoutFeeParams,
+): Promise<TransactionInstruction> {
+  const league = leaguePda(params.leagueId);
+
+  return program.methods
+    .payoutFee()
+    .accountsPartial({
+      league,
+      standings: standingsPda(league),
+      vault: vaultPda(league),
+      feeRecipientTokenAccount: getAssociatedTokenAddressSync(params.mint, params.feeRecipient),
+      tokenProgram: TOKEN_PROGRAM_ID,
+    })
+    .instruction();
+}
+
+export type PayoutPrizeParams = {
+  readonly leagueId: string;
+  readonly mint: PublicKey;
+  /** The prize winner, read from the frozen standings. */
+  readonly winner: PublicKey;
+  /** Which prize to pay: 0 = champion … 4 = third place. */
+  readonly prizeIndex: number;
+};
+
+/** Pay one prize out of the vault. Run once per prize after `payout_fee`. */
+export async function payoutPrizeIx(
+  program: Program<RostrEscrow>,
+  params: PayoutPrizeParams,
+): Promise<TransactionInstruction> {
+  const league = leaguePda(params.leagueId);
+
+  return program.methods
+    .payoutPrize(params.prizeIndex)
+    .accountsPartial({
+      league,
+      standings: standingsPda(league),
+      vault: vaultPda(league),
+      winnerMembership: membershipPda(league, params.winner),
+      winnerTokenAccount: getAssociatedTokenAddressSync(params.mint, params.winner),
+      winner: params.winner,
       tokenProgram: TOKEN_PROGRAM_ID,
     })
     .instruction();
