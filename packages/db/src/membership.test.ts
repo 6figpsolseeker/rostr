@@ -11,7 +11,17 @@ import {
 import type { DraftRules, LeagueRules, PotRules } from "@rostr/core";
 import { createLeague, recordChainAnchor } from "./leagues.js";
 import { createUser, linkWallet } from "./identity.js";
-import { addBot, getMembershipProofs, JoinError, joinLeague, removeBot } from "./membership.js";
+import {
+  addBot,
+  getMembershipProofs,
+  getOnChainDeposit,
+  getOnChainRefund,
+  JoinError,
+  joinLeague,
+  recordOnChainDeposit,
+  recordOnChainRefund,
+  removeBot,
+} from "./membership.js";
 import { seedSport } from "./sports.js";
 import { createDraftRecord, drawDraftOrder } from "./draft.js";
 import { FixedBeacon } from "./randomness.js";
@@ -629,5 +639,54 @@ describe("joining an unanchored league", () => {
         requireCluster: "mainnet-beta",
       }),
     ).resolves.toMatchObject({ slot: 1 });
+  });
+});
+
+describe("on-chain stake records (issue #27)", () => {
+  it("records a deposit and reads it back", async () => {
+    const fx = await setup();
+    const m = await member(fx, 1, "a@example.com");
+
+    expect(await getOnChainDeposit(fx.client, fx.leagueId, m.address)).toBeNull();
+
+    await recordOnChainDeposit(fx.client, fx.leagueId, m.address, "50000000", "4".repeat(88), "localnet");
+
+    const recorded = await getOnChainDeposit(fx.client, fx.leagueId, m.address);
+    expect(recorded).not.toBeNull();
+    expect(recorded?.depositedBaseUnits).toBe("50000000");
+    expect(recorded?.depositedCluster).toBe("localnet");
+    expect(recorded?.refundedAt).toBeNull();
+  });
+
+  it("records a refund against the same row", async () => {
+    const fx = await setup();
+    const m = await member(fx, 1, "a@example.com");
+
+    await recordOnChainDeposit(fx.client, fx.leagueId, m.address, "50000000", "4".repeat(88), "localnet");
+    await recordOnChainRefund(fx.client, fx.leagueId, m.address, "7".repeat(88), "localnet");
+
+    const recorded = await getOnChainRefund(fx.client, fx.leagueId, m.address);
+    expect(recorded).not.toBeNull();
+    expect(recorded?.refundedAt).not.toBeNull();
+    expect(recorded?.refundSignature).toBe("7".repeat(88));
+    // The deposit columns survive the refund upsert.
+    expect(recorded?.depositedBaseUnits).toBe("50000000");
+  });
+
+  it("upserts a re-posted deposit rather than duplicating", async () => {
+    const fx = await setup();
+    const m = await member(fx, 1, "a@example.com");
+
+    await recordOnChainDeposit(fx.client, fx.leagueId, m.address, "50000000", "4".repeat(88), "localnet");
+    await recordOnChainDeposit(fx.client, fx.leagueId, m.address, "50000000", "9".repeat(88), "devnet");
+
+    const [rows] = await fx.client.query<{ n: number }>(
+      "SELECT count(*)::int AS n FROM league_onchain_stakes WHERE league_id = $1 AND wallet_address = $2",
+      [fx.leagueId, m.address],
+    );
+    expect(Number(rows?.n)).toBe(1);
+    const recorded = await getOnChainDeposit(fx.client, fx.leagueId, m.address);
+    expect(recorded?.depositedSignature).toBe("9".repeat(88));
+    expect(recorded?.depositedCluster).toBe("devnet");
   });
 });

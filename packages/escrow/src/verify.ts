@@ -20,7 +20,7 @@
 import type { Program } from "@coral-xyz/anchor";
 import type { Connection, PublicKey } from "@solana/web3.js";
 
-import { leaguePda } from "./program.js";
+import { leaguePda, membershipPda } from "./program.js";
 import type { RostrEscrow } from "./types.js";
 
 /** A league's frozen terms, as they exist on-chain. */
@@ -155,4 +155,101 @@ export function clusterOf(connection: Connection): string {
   if (endpoint.includes("testnet")) return "testnet";
   if (endpoint.includes("localhost") || endpoint.includes("127.0.0.1")) return "localnet";
   return "mainnet-beta";
+}
+
+/** A member's on-chain stake state, as it exists on-chain. */
+export interface OnChainMembership {
+  readonly league: PublicKey;
+  readonly member: PublicKey;
+  /** Base units staked. Zero until `deposit`. */
+  readonly deposited: bigint;
+  readonly refunded: boolean;
+  readonly bump: number;
+}
+
+/**
+ * Read a member's `Membership` account, or `null` when it does not exist.
+ *
+ * Used by the deposit and refund verify routes: a stake can only move once the
+ * member has joined on-chain (the `Membership` PDA exists), and the program's
+ * deposit/refund instructions require that account — so the server checks it
+ * here the same way the anchor and join routes check what they depend on.
+ */
+export async function readMembership(
+  program: Program<RostrEscrow>,
+  leagueId: string,
+  member: PublicKey,
+): Promise<OnChainMembership | null> {
+  const league = leaguePda(leagueId);
+  const address = membershipPda(league, member);
+
+  const account = await program.account["membership"]?.fetchNullable(address);
+  if (!account) return null;
+
+  const raw = account as {
+    league: PublicKey;
+    member: PublicKey;
+    deposited: { toString(): string };
+    refunded: boolean;
+    bump: number;
+  };
+
+  return {
+    league: raw.league,
+    member: raw.member,
+    deposited: BigInt(raw.deposited.toString()),
+    refunded: raw.refunded,
+    bump: raw.bump,
+  };
+}
+
+export type DepositVerdict =
+  | { readonly ok: true; readonly deposited: bigint }
+  | { readonly ok: false; readonly reason: "NOT_JOINED" }
+  | { readonly ok: false; readonly reason: "ALREADY_DEPOSITED" };
+
+/**
+ * Confirm a member has staked into a league on-chain.
+ *
+ * Reads the `Membership` account back: it must exist (the on-chain join
+ * happened) and `deposited` must be greater than zero. The server does not take
+ * the client's word for a stake — the vault balance is the source of truth, and
+ * the program enforces that the transferred amount equals `league.buy_in`.
+ */
+export async function verifyOnChainDeposit(
+  program: Program<RostrEscrow>,
+  leagueId: string,
+  member: PublicKey,
+): Promise<DepositVerdict> {
+  const membership = await readMembership(program, leagueId, member);
+  if (!membership) return { ok: false, reason: "NOT_JOINED" };
+  if (membership.deposited === 0n) return { ok: false, reason: "ALREADY_DEPOSITED" };
+
+  return { ok: true, deposited: membership.deposited };
+}
+
+export type RefundVerdict =
+  | { readonly ok: true; readonly deposited: bigint }
+  | { readonly ok: false; readonly reason: "NOT_JOINED" }
+  | { readonly ok: false; readonly reason: "NOTHING_DEPOSITED" }
+  | { readonly ok: false; readonly reason: "ALREADY_REFUNDED" };
+
+/**
+ * Confirm a member has withdrawn their stake on-chain.
+ *
+ * The refund instruction is unconditional after the timelock, so the only
+ * server-side facts worth recording are that the member had staked and that the
+ * refund completed. Reads the `Membership` account back and checks `refunded`.
+ */
+export async function verifyOnChainRefund(
+  program: Program<RostrEscrow>,
+  leagueId: string,
+  member: PublicKey,
+): Promise<RefundVerdict> {
+  const membership = await readMembership(program, leagueId, member);
+  if (!membership) return { ok: false, reason: "NOT_JOINED" };
+  if (membership.deposited === 0n) return { ok: false, reason: "NOTHING_DEPOSITED" };
+  if (membership.refunded) return { ok: false, reason: "ALREADY_REFUNDED" };
+
+  return { ok: true, deposited: membership.deposited };
 }

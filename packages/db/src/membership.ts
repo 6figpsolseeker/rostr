@@ -394,3 +394,127 @@ export async function getMembershipProofs(
     joinedAt: r.joined_at,
   }));
 }
+
+export interface OnChainStake {
+  readonly leagueId: string;
+  readonly walletAddress: string;
+  readonly depositedBaseUnits: string | null;
+  readonly depositedSignature: string | null;
+  readonly depositedCluster: string | null;
+  readonly refundedAt: string | null;
+  readonly refundSignature: string | null;
+  readonly refundCluster: string | null;
+}
+
+/**
+ * Record that a member has staked into a league on-chain.
+ *
+ * The member signs `deposit` from their own wallet — no key of ours is
+ * involved — and the server reads the `Membership` PDA back (deposited > 0)
+ * before recording. The signature is an audit breadcrumb, not the proof. The
+ * amount is taken from the program's `Membership.deposited`, which equals
+ * `league.buy_in` by construction.
+ *
+ * Upserts on (league_id, wallet_address): a re-post after a lost response is
+ * idempotent.
+ */
+export async function recordOnChainDeposit(
+  db: SqlClient,
+  leagueId: string,
+  walletAddress: string,
+  depositedBaseUnits: string,
+  signature: string,
+  cluster: string,
+): Promise<void> {
+  await db.query(
+    `INSERT INTO league_onchain_stakes
+       (league_id, wallet_address, deposited_base_units, deposited_signature, deposited_cluster, deposited_at)
+     VALUES ($1, $2, $3, $4, $5, now())
+     ON CONFLICT (league_id, wallet_address)
+     DO UPDATE SET
+       deposited_base_units = EXCLUDED.deposited_base_units,
+       deposited_signature = EXCLUDED.deposited_signature,
+       deposited_cluster = EXCLUDED.deposited_cluster,
+       deposited_at = now()`,
+    [leagueId, walletAddress, depositedBaseUnits, signature, cluster],
+  );
+}
+
+export async function getOnChainDeposit(
+  db: SqlClient,
+  leagueId: string,
+  walletAddress: string,
+): Promise<OnChainStake | null> {
+  return getOnChainStake(db, leagueId, walletAddress);
+}
+
+/**
+ * Record that a member has withdrawn their stake on-chain.
+ *
+ * The refund instruction is unconditional after the timelock, signed by the
+ * member alone. The server reads the `Membership` PDA back (refunded == true)
+ * before recording. Upserts on (league_id, wallet_address).
+ */
+export async function recordOnChainRefund(
+  db: SqlClient,
+  leagueId: string,
+  walletAddress: string,
+  signature: string,
+  cluster: string,
+): Promise<void> {
+  await db.query(
+    `INSERT INTO league_onchain_stakes
+       (league_id, wallet_address, refunded_at, refund_signature, refund_cluster)
+     VALUES ($1, $2, now(), $3, $4)
+     ON CONFLICT (league_id, wallet_address)
+     DO UPDATE SET
+       refunded_at = now(),
+       refund_signature = EXCLUDED.refund_signature,
+       refund_cluster = EXCLUDED.refund_cluster`,
+    [leagueId, walletAddress, signature, cluster],
+  );
+}
+
+export async function getOnChainRefund(
+  db: SqlClient,
+  leagueId: string,
+  walletAddress: string,
+): Promise<OnChainStake | null> {
+  return getOnChainStake(db, leagueId, walletAddress);
+}
+
+async function getOnChainStake(
+  db: SqlClient,
+  leagueId: string,
+  walletAddress: string,
+): Promise<OnChainStake | null> {
+  const [row] = await db.query<{
+    league_id: string;
+    wallet_address: string;
+    deposited_base_units: string | null;
+    deposited_signature: string | null;
+    deposited_cluster: string | null;
+    refunded_at: string | null;
+    refund_signature: string | null;
+    refund_cluster: string | null;
+  }>(
+    `SELECT league_id, wallet_address, deposited_base_units, deposited_signature,
+            deposited_cluster, refunded_at, refund_signature, refund_cluster
+       FROM league_onchain_stakes
+      WHERE league_id = $1 AND wallet_address = $2`,
+    [leagueId, walletAddress],
+  );
+
+  if (!row) return null;
+
+  return {
+    leagueId: row.league_id,
+    walletAddress: row.wallet_address,
+    depositedBaseUnits: row.deposited_base_units,
+    depositedSignature: row.deposited_signature,
+    depositedCluster: row.deposited_cluster,
+    refundedAt: row.refunded_at,
+    refundSignature: row.refund_signature,
+    refundCluster: row.refund_cluster,
+  };
+}

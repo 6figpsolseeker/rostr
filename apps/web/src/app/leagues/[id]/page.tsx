@@ -3,6 +3,7 @@ import { getChainState, getLeagueRules, getWallets } from "@rostr/db";
 import { RulesView } from "@/components/RulesView";
 import { JoinPanel } from "@/components/JoinPanel";
 import { AnchorPanel } from "@/components/AnchorPanel";
+import { DepositPanel } from "@/components/DepositPanel";
 import { db } from "@/lib/db";
 import { currentUser } from "@/lib/session";
 
@@ -139,6 +140,15 @@ export default async function LeaguePage({ params }: { params: Promise<{ id: str
         <p className="text-xs text-white/40">
           Rule document: <span className="font-mono break-all">{league.rules_uri}</span>
         </p>
+      )}
+
+      {stored.rules.pot && (
+        <DepositPanel
+          leagueId={league.id}
+          tokenMint={stored.rules.pot.tokenMint}
+          hasPot={stored.rules.pot !== null}
+          refundUnlockAt={stored.rules.pot.refundUnlockAt}
+        />
       )}
     </div>
   );

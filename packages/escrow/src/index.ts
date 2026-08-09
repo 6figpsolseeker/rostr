@@ -12,9 +12,15 @@ export {
   clusterOf,
   fetchOnChainLeague,
   hexToBytes,
+  readMembership,
   verifyLeagueAnchor,
+  verifyOnChainDeposit,
+  verifyOnChainRefund,
   type AnchorVerdict,
+  type DepositVerdict,
   type OnChainLeague,
+  type OnChainMembership,
+  type RefundVerdict,
 } from "./verify.js";
 export {
   PRIZE_ORDER,
