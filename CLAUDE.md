@@ -123,22 +123,24 @@ See [`docs/BUILD-PLAN.md`](docs/BUILD-PLAN.md) for the full commit-by-commit pla
 set a lineup → score the week → standings. What they need is deployment and the
 credentials in `SETUP-REQUIRED.md`, not more code.
 
+- **Anchoring wired into the app** — `POST /api/leagues/[id]/anchor`, `AnchorPanel.tsx`,
+  and `readOnlyEscrow()` in `apps/web/src/lib/escrow.ts`. The commissioner signs from
+  their own wallet (decided 2026-08-07), so no private key of ours exists anywhere.
+
+  **The route does not take the client's word for it.** A signature proves _some_
+  transaction happened, not which, so it reads the account back and refuses unless the
+  on-chain hash equals the stored one. The two 409s are deliberately different: `NOT_FOUND`
+  means retry, `HASH_MISMATCH` means the chain holds a different rule set and nobody
+  should join.
+
+  Verified end to end against a real validator, not reasoned about — see
+  `programs/rostr-escrow/tests/anchor.test.ts` below.
+
 **Next, in order:**
 
-1. **Wire anchoring into the app.** Everything underneath exists: `@rostr/escrow` builds
-   the instructions, migration `0014` records the result. What is missing is the route
-   that verifies the anchor on-chain before recording it, and the screen where the
-   commissioner signs it.
-
-   **Blocked on credentials, not on code** — `SOLANA_RPC_URL` (the route's entire job is
-   reading the account back, which needs an endpoint) and Supabase (`DATABASE_URL`, or the
-   app does not get past its home page). Writing it without those means code that
-   typechecks and has never once run, on the path that moves money. Set both first.
-
-   **Decided 2026-08-07: the commissioner signs from their own wallet**, not a server
-   keypair — so no private key of ours exists anywhere, and there is none to fund, rotate
-   or lose. The cost is that a league can exist here unanchored, because someone can close
-   the tab; the partial index in `0014` finds those.
+1. **Click through create → anchor → join in a browser.** Everything either side of the
+   wallet popup is covered by an automated test; the popup itself is not, and cannot be
+   from here. This is the one step that needs a human with Phantom.
 
 2. **D6–D10** — the rest of the escrow. **This is main-PC work**; the secondary machine has
    no Rust toolchain. Note that **D6 is not a small job**: "payout by the frozen split"
@@ -694,6 +696,31 @@ Unset, leagues are created fee-free, which is fine locally; in production the ro
 refuses, because frozen rules mean a league created with the wrong recipient can never be
 corrected.
 
+### The one test that spans both halves
+
+`programs/rostr-escrow/tests/anchor.test.ts`. Everything else tests one side against a
+stand-in for the other: the database tests anchor a league by calling `recordChainAnchor`
+with a made-up signature, and the program tests hash rules no league ever had. **Both pass
+whether or not the two agree.**
+
+They have to agree on exactly 32 bytes. Postgres stores them as hex, the program stores
+them as raw bytes, and the only symptom of a wrong conversion is that `verifyLeagueAnchor`
+reports a mismatch on a league that is correctly anchored — nobody can join, and nothing
+else in the repo fails. So this drives the real `createLeague`, sends the real instruction
+to a real validator, verifies it the way the route does, and joins.
+
+It also builds a provider with `{} as Wallet`, which is what `readOnlyEscrow()` does on the
+server. Anchor never touches the wallet on a read path — but that is an assumption about a
+library, and every other test here holds a funded wallet, so it would have been wrong in
+production and green everywhere else.
+
+`vitest.program.config.ts` aliases `@rostr/db`, `@rostr/db/testing` and `@rostr/core` to
+source for this. Aliasing to source is also what makes each package's own dependencies
+resolve, since the program suite runs from a directory that declares none of them —
+`testWallet()` lives in `packages/db/src/testing.ts` for exactly that reason, because the
+curve library and base58 are dependencies of that package and a test outside it cannot
+import them.
+
 ### The escrow client
 
 `packages/escrow/`. Addresses and instruction builders, and **nothing that signs**. A
@@ -936,7 +963,21 @@ by machine. Installed under WSL2/Ubuntu 26.04: Rust 1.97 (stable) alongside a pi
 1.90 default, Solana CLI 4.0.0, Anchor 0.31.1 via AVM, Node 22 via nvm. Verified by
 building and testing an unrelated Anchor program against a local validator.
 
-Five things that have each cost an hour and will cost it again:
+Six things that have each cost an hour and will cost it again:
+
+- **A long-running local validator drifts behind the wall clock, and timelock tests
+  start failing for no reason.** After ~4 hours one had produced 10,176 slots where
+  400 ms/slot predicts ~36,000, so its on-chain clock was **64 minutes behind** `date`.
+  Tests set `refundUnlockAt` from wall time, so `refund_stake` answers `RefundLocked`
+  on a stake whose timelock has visibly passed, and "rejects a refund unlock in the
+  past" stops rejecting because a past wall time is still in the validator's future.
+  Seven tests failed this way and all 66 passed on a fresh ledger. **Check the drift
+  before debugging the program**, and restart if it is more than a minute or two:
+
+  ```bash
+  echo $(( $(date +%s) - $(solana -u http://127.0.0.1:8899 block-time --output json \
+    $(solana -u http://127.0.0.1:8899 slot) | grep -o '[0-9]\{10\}' | tail -1) ))
+  ```
 
 - **Every `anchor` invocation rewrites the active Solana release** — not just
   `anchor build`, but `anchor --version` too. Anchor 0.31.1 falls back to 2.1.0, whose

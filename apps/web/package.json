@@ -13,6 +13,7 @@
   "dependencies": {
     "@rostr/core": "workspace:*",
     "@rostr/db": "workspace:*",
+    "@rostr/escrow": "workspace:*",
     "@rostr/pinning": "workspace:*",
     "@solana/wallet-adapter-base": "^0.9.24",
     "@solana/wallet-adapter-coinbase": "^0.1.23",

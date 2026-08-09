@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { getChainState, getLeagueRules, getWallets } from "@rostr/db";
 import { RulesView } from "@/components/RulesView";
 import { JoinPanel } from "@/components/JoinPanel";
+import { AnchorPanel } from "@/components/AnchorPanel";
 import { db } from "@/lib/db";
 import { currentUser } from "@/lib/session";
 
@@ -104,6 +105,35 @@ export default async function LeaguePage({ params }: { params: Promise<{ id: str
         anchored={chain?.anchoredAt !== null && chain?.anchoredAt !== undefined}
         isCommissioner={user !== null && commissioner?.commissioner_id === user.id}
       />
+
+      {/*
+        Only the commissioner, and only while it is unanchored. Anchoring is
+        signed by their own wallet, so this is the one place the flow needs a
+        human rather than a job — and until it happens nobody can join, which is
+        why it sits directly under the notice explaining that.
+      */}
+      {!chain?.anchoredAt && user !== null && commissioner?.commissioner_id === user.id && (
+        <AnchorPanel
+          leagueId={league.id}
+          rulesHash={stored.hash}
+          maxTeams={stored.rules.league.maxTeams}
+          pot={
+            stored.rules.pot
+              ? {
+                  tokenMint: stored.rules.pot.tokenMint,
+                  buyInBaseUnits: stored.rules.pot.buyInBaseUnits,
+                  refundUnlockAt: stored.rules.pot.refundUnlockAt,
+                  payout: stored.rules.pot.payout.map((share) => ({
+                    prize: share.prize,
+                    basisPoints: share.basisPoints,
+                  })),
+                  feeBps: stored.rules.pot.feeBps,
+                  feeRecipient: stored.rules.pot.feeRecipient,
+                }
+              : null
+          }
+        />
+      )}
 
       {league.rules_uri && (
         <p className="text-xs text-white/40">

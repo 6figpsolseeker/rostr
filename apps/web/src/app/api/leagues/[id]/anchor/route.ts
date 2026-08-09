@@ -1,0 +1,134 @@
+import { NextResponse } from "next/server";
+import { clusterOf, verifyLeagueAnchor } from "@rostr/escrow";
+import { getChainState, getLeagueRules, recordChainAnchor } from "@rostr/db";
+import { db } from "@/lib/db";
+import { draftContext, DraftContextError } from "@/lib/draft-context";
+import { EscrowConfigError, readOnlyEscrow } from "@/lib/escrow";
+
+/**
+ * Recording that a league's rules are anchored on-chain.
+ *
+ * The commissioner signs `initialize_league` from their own wallet — no key of
+ * ours is involved — and then tells us it happened. **A report is not evidence.**
+ * A signature proves some transaction occurred, not which, and a client can claim
+ * anything. So this reads the account back and confirms it holds *our* rules hash
+ * before recording anything.
+ *
+ * That check is `verifyLeagueAnchor` in `@rostr/escrow` rather than inline here,
+ * so it can be tested against a real validator instead of only in production. All
+ * that is left in this file is the session, the write, and the status codes.
+ */
+export async function POST(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> },
+): Promise<NextResponse> {
+  const { id } = await params;
+
+  try {
+    const context = await draftContext(id);
+    if (!context.userId) {
+      return NextResponse.json({ error: "Sign in first" }, { status: 401 });
+    }
+
+    // Anyone may *verify* an anchor; only the commissioner's action creates one,
+    // and recording it is part of creating a league. It takes no argument from
+    // the caller beyond the league, so the worst a non-commissioner could do is
+    // record something true — but league setup is the commissioner's, and a
+    // narrower door is the right default.
+    if (!context.isCommissioner) {
+      return NextResponse.json(
+        { error: "Only the commissioner can anchor this league" },
+        { status: 403 },
+      );
+    }
+
+    const client = db();
+
+    const stored = await getLeagueRules(client, id);
+    if (!stored) {
+      return NextResponse.json({ error: "League has no stored rules" }, { status: 404 });
+    }
+
+    // Already anchored is success, not an error. Anchoring is a second
+    // transaction the commissioner signs, so a retry after a lost response is
+    // the ordinary case — and the record is write-once anyway, so a second
+    // write would raise from a trigger rather than quietly re-point it.
+    const existing = await getChainState(client, id);
+    if (existing?.anchoredAt) {
+      return NextResponse.json({
+        anchored: true,
+        alreadyRecorded: true,
+        cluster: existing.cluster,
+        signature: existing.signature,
+      });
+    }
+
+    // The signature is an audit breadcrumb, not the proof. It records *which*
+    // transaction created the account so a stranger can go and look at it — but
+    // nothing here trusts it, and the anchor is accepted or refused entirely on
+    // what the account says. Shape-checked only, because a malformed one would
+    // be recorded forever in a write-once column.
+    const body = (await request.json().catch(() => ({}))) as { signature?: unknown };
+    const signature = typeof body.signature === "string" ? body.signature.trim() : "";
+
+    if (!/^[1-9A-HJ-NP-Za-km-z]{64,88}$/.test(signature)) {
+      return NextResponse.json(
+        { error: "A base58 transaction signature is required" },
+        { status: 400 },
+      );
+    }
+
+    const { connection, program } = readOnlyEscrow();
+    const verdict = await verifyLeagueAnchor(program, id, stored.hash);
+
+    if (!verdict.ok) {
+      // Deliberately specific. "Not found" means the transaction has not landed
+      // — retry. "Hash mismatch" means the chain holds a different rule set,
+      // which is not a retry, it is a league nobody should join.
+      return verdict.reason === "NOT_FOUND"
+        ? NextResponse.json(
+            {
+              error:
+                "No league account exists on-chain yet. If the transaction was just sent, " +
+                "give it a moment and try again.",
+              reason: verdict.reason,
+            },
+            { status: 409 },
+          )
+        : NextResponse.json(
+            {
+              error:
+                "The on-chain rules hash does not match this league's. Do not let anyone " +
+                "join: the chain holds a different rule set than the one shown here.",
+              reason: verdict.reason,
+              onChain: verdict.onChain,
+              expected: verdict.expected,
+            },
+            { status: 409 },
+          );
+    }
+
+    // The cluster is read off the endpoint we just queried, not accepted from
+    // the caller. The PDA is identical on every chain, so without it a devnet
+    // anchor is indistinguishable from a mainnet one.
+    const cluster = clusterOf(connection);
+
+    await recordChainAnchor(client, id, { signature, cluster });
+
+    return NextResponse.json({
+      anchored: true,
+      cluster,
+      signature,
+      address: verdict.league.address.toBase58(),
+      rulesHash: verdict.league.rulesHash,
+    });
+  } catch (error) {
+    if (error instanceof DraftContextError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    if (error instanceof EscrowConfigError) {
+      return NextResponse.json({ error: error.message }, { status: 503 });
+    }
+    throw error;
+  }
+}
