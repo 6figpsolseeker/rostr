@@ -265,14 +265,30 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
                       {player.name} ({player.positions.join("/")})
                     </option>
                   )}
-                  {options.map((candidate) => (
-                    <option key={candidate.playerId} value={candidate.playerId}>
-                      {candidate.name} ({candidate.positions.join("/")})
-                      {OUT_STATUSES.has(candidate.status.toUpperCase())
-                        ? ` — ${candidate.status}`
-                        : ""}
-                    </option>
-                  ))}
+                  {options.map((candidate) => {
+                    // His game has started, so he cannot be moved into a slot —
+                    // the server rejects it, and rightly: starting a player
+                    // after seeing him score is the whole reason the lock
+                    // exists. Disabling here means the manager never reaches
+                    // that rejection rather than meeting it with a raw id in
+                    // the message. The server still decides; this only stops
+                    // the screen offering something it knows will fail.
+                    const played = candidate.kickoffAt !== null && now >= candidate.kickoffAt;
+
+                    return (
+                      <option
+                        key={candidate.playerId}
+                        value={candidate.playerId}
+                        disabled={played}
+                      >
+                        {candidate.name} ({candidate.positions.join("/")})
+                        {played ? " — played" : ""}
+                        {OUT_STATUSES.has(candidate.status.toUpperCase())
+                          ? ` — ${candidate.status}`
+                          : ""}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
 
