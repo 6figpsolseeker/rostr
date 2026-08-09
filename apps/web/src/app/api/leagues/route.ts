@@ -124,7 +124,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   // regular season and to week 1, and createLeague refuses rules that do not
   // validate. Checking here only turns a 500-shaped failure into a 400 with a
   // message, since this is the one rule field a client supplies directly.
-  const problems = validateLeagueRules(rules);
+  const problems = validateLeagueRules(rules, NFL);
   if (problems.length > 0) {
     return NextResponse.json({ error: "Those rules are not valid", problems }, { status: 400 });
   }
