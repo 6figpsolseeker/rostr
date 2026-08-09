@@ -1,8 +1,14 @@
+import { randomUUID } from "node:crypto";
 import * as anchor from "@coral-xyz/anchor";
 import { getAccount } from "@solana/spl-token";
 import {
   ESCROW_PROGRAM_ID,
+  clusterOf,
+  escrowProgram,
+  fetchOnChainLeague,
+  hexToBytes,
   leagueIdBytes,
+  verifyLeagueAnchor,
   leaguePda as clientLeaguePda,
   vaultPda as clientVaultPda,
 } from "@rostr/escrow";
@@ -358,5 +364,120 @@ describe("initialize_free_league", () => {
 
   it("still rejects a league of one", async () => {
     await expectError(initializeFree(validFreeArgs({ maxTeams: 1 })), "LeagueTooSmall");
+  });
+});
+
+/**
+ * Reading a league back off the chain.
+ *
+ * This is what the anchoring route will call before it believes a browser that
+ * says "I anchored it". A signature proves some transaction happened; only
+ * fetching the account and finding our hash in it proves which.
+ *
+ * Tested here rather than through the route because the risk is entirely in the
+ * shapes — 32 raw bytes on-chain against a 64-character hex string in Postgres,
+ * a number[] from Anchor against a Uint8Array — and those are only real against
+ * a real deployed program. A mocked connection would agree with whatever the
+ * code already believed.
+ */
+describe("verifyLeagueAnchor", () => {
+  const hexOf = (bytes: number[]) => bytes.map((b) => b.toString(16).padStart(2, "0")).join("");
+
+  it("reads back exactly the hash that was anchored", async () => {
+    const leagueId = randomUUID();
+    const rulesHash = Array.from({ length: 32 }, (_, i) => (i * 7 + 3) % 256);
+    await initialize(validArgs({ leagueId: [...leagueIdBytes(leagueId)], rulesHash }));
+
+    const client = escrowProgram(provider);
+    const onChain = await fetchOnChainLeague(client, leagueId);
+
+    // The conversion is the whole test. A hash that round-trips wrong here is a
+    // verifier that always fails, or worse, always passes.
+    expect(onChain?.rulesHash).toBe(hexOf(rulesHash));
+    expect(onChain?.rulesHash).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it("confirms a league anchored with our rules", async () => {
+    const leagueId = randomUUID();
+    const rulesHash = Array.from({ length: 32 }, (_, i) => (i + 11) % 256);
+    await initialize(validArgs({ leagueId: [...leagueIdBytes(leagueId)], rulesHash }));
+
+    const verdict = await verifyLeagueAnchor(
+      escrowProgram(provider),
+      leagueId,
+      hexOf(rulesHash),
+    );
+
+    expect(verdict.ok).toBe(true);
+    if (verdict.ok) expect(verdict.league.hasPot).toBe(true);
+  });
+
+  it("refuses a league anchored with a different rule set", async () => {
+    // The case that matters. The account exists at the right address, so a check
+    // that only asked "does it exist" would pass — and the member would be
+    // consenting to a document the chain does not hold.
+    const leagueId = randomUUID();
+    const rulesHash = Array.from({ length: 32 }, (_, i) => (i + 11) % 256);
+    await initialize(validArgs({ leagueId: [...leagueIdBytes(leagueId)], rulesHash }));
+
+    const different = [...rulesHash];
+    different[0] = (different[0]! + 1) % 256;
+
+    const verdict = await verifyLeagueAnchor(
+      escrowProgram(provider),
+      leagueId,
+      hexOf(different),
+    );
+
+    expect(verdict.ok).toBe(false);
+    if (!verdict.ok && verdict.reason === "HASH_MISMATCH") {
+      expect(verdict.onChain).toBe(hexOf(rulesHash));
+      expect(verdict.expected).toBe(hexOf(different));
+    } else {
+      throw new Error(`expected HASH_MISMATCH, got ${JSON.stringify(verdict)}`);
+    }
+  });
+
+  it("reports a league that was never anchored", async () => {
+    // The ordinary case: created in the database, the commissioner closed the
+    // tab before signing. A return value, not a throw.
+    const verdict = await verifyLeagueAnchor(
+      escrowProgram(provider),
+      randomUUID(),
+      "a".repeat(64),
+    );
+
+    expect(verdict).toEqual({ ok: false, reason: "NOT_FOUND" });
+    expect(await fetchOnChainLeague(escrowProgram(provider), randomUUID())).toBeNull();
+  });
+
+  it("is case-insensitive, because the two sides come from different places", async () => {
+    const leagueId = randomUUID();
+    const rulesHash = Array.from({ length: 32 }, () => 0xab);
+    await initialize(validArgs({ leagueId: [...leagueIdBytes(leagueId)], rulesHash }));
+
+    const upper = hexOf(rulesHash).toUpperCase();
+    expect((await verifyLeagueAnchor(escrowProgram(provider), leagueId, upper)).ok).toBe(true);
+  });
+
+  it("round-trips a stored hex hash through the instruction args", async () => {
+    // What the route will do: read char(64) out of Postgres, hand it to the
+    // program as bytes, read it back as hex, compare. Every step is a chance to
+    // get the shape wrong.
+    const leagueId = randomUUID();
+    const stored = "3f2b1c4d5e6f4a7b8c9d0e1f2a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d";
+
+    await initialize(
+      validArgs({ leagueId: [...leagueIdBytes(leagueId)], rulesHash: [...hexToBytes(stored)] }),
+    );
+
+    const verdict = await verifyLeagueAnchor(escrowProgram(provider), leagueId, stored);
+    expect(verdict.ok).toBe(true);
+  });
+
+  it("names the cluster from the endpoint rather than trusting a caller", () => {
+    // A devnet anchor is not an anchor for a mainnet stake, and the PDA is
+    // identical on both — so this is what stops the two being confused.
+    expect(clusterOf(provider.connection)).toBe("localnet");
   });
 });
