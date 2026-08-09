@@ -121,11 +121,23 @@ export async function migrate(
 
     if (previous) {
       if (previous.checksum !== migration.checksum) {
+        // Two different files at the same version look exactly like one edited
+        // file, because the check keys on version alone. They need opposite
+        // remedies, so say which this is: "add a new one instead of editing
+        // this" is useless advice for a numbering collision, and it is the more
+        // likely of the two on a project developed in parallel.
+        const collision = previous.name !== migration.name;
+
         throw new MigrationError(
-          `Migration ${migration.filename} has changed since it was applied ` +
-            `(recorded ${previous.checksum.slice(0, 12)}, ` +
-            `now ${migration.checksum.slice(0, 12)}). ` +
-            `Migrations are forward-only — add a new one instead of editing this.`,
+          collision
+            ? `Migration version ${migration.version} is recorded as ` +
+                `"${previous.name}" but is "${migration.name}" on disk. Two branches ` +
+                `numbered a migration independently — this is a collision, not an ` +
+                `edit. See packages/db/migrations/README.md.`
+            : `Migration ${migration.filename} has changed since it was applied ` +
+                `(recorded ${previous.checksum.slice(0, 12)}, ` +
+                `now ${migration.checksum.slice(0, 12)}). ` +
+                `Migrations are forward-only — add a new one instead of editing this.`,
         );
       }
       didSkip.push(migration.filename);
@@ -140,7 +152,9 @@ export async function migrate(
       throw new MigrationError(
         `Migration ${migration.filename} (version ${migration.version}) is older than ` +
           `the latest applied version (${maxApplied}). ` +
-          `Migrations are forward-only — renumber it above ${maxApplied} and rebase.`,
+          `Migrations are forward-only — renumber it above ${maxApplied} and rebase, ` +
+          `but only if this file has not already run on this database. If it has, ` +
+          `renumbering makes it re-run and fail. See packages/db/migrations/README.md.`,
       );
     }
 

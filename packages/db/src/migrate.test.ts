@@ -60,6 +60,34 @@ describe("migrate", () => {
     await expect(migrate(client, tampered)).rejects.toThrow(/forward-only/);
   });
 
+  it("calls a same-version different-file a collision, not an edit", async () => {
+    // These look identical to the checksum check, which keys on version alone,
+    // and they need opposite remedies — "add a new one instead of editing this"
+    // is useless advice for a numbering collision. On a project developed on two
+    // machines plus a fork, the collision is the likelier of the two: it has
+    // happened three times in a day.
+    const client = await fresh();
+    await migrate(client);
+
+    // A different *file* at the same number, so both the name and the contents
+    // differ. Same name with matching contents is not a collision and is
+    // correctly skipped — which is what a first attempt at this test proved.
+    const real = loadMigrations();
+    const collided = real.map((m, i) =>
+      i === 0
+        ? {
+            ...m,
+            name: "something_else",
+            filename: "0001_something_else.sql",
+            checksum: "0".repeat(64),
+          }
+        : m,
+    );
+
+    await expect(migrate(client, collided)).rejects.toThrow(/collision, not an/);
+    await expect(migrate(client, collided)).rejects.toThrow(/something_else/);
+  });
+
   it("refuses a migration older than the latest applied version", async () => {
     // Forward-only: two branches can number migrations independently, and if the
     // higher one deploys first, applying the lower one afterwards would build the
