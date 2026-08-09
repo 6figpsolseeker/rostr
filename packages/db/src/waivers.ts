@@ -42,6 +42,7 @@ import type { DraftablePlayer, LeagueRules, WaiverClaim } from "@rostr/core";
 import type { SqlClient } from "./client.js";
 import { getLeagueRules } from "./leagues.js";
 import { loadDraftBoard } from "./sync.js";
+import { lockedByTrade } from "./trades.js";
 import { withTransaction } from "./transaction.js";
 
 export class WaiverError extends Error {
@@ -55,7 +56,8 @@ export class WaiverError extends Error {
       | "NOT_A_FREE_AGENT"
       | "NOT_ON_WAIVERS"
       | "ROSTER_FULL"
-      | "DUPLICATE_CLAIM",
+      | "DUPLICATE_CLAIM"
+      | "IN_A_TRADE",
   ) {
     super(message);
     this.name = "WaiverError";
@@ -217,6 +219,17 @@ export async function dropPlayer(
 ): Promise<{ destination: "WAIVERS" | "FREE_AGENT"; clearsAt: Date | null }> {
   const stored = await getLeagueRules(db, leagueId);
   if (!stored) throw new WaiverError("League has no rules", "LEAGUE_NOT_FOUND");
+
+  // An accepted trade has already committed this player. Between acceptance and
+  // execution he is effectively in escrow — dropping him would leave the trade
+  // with a hole where a roster spot used to be.
+  const committed = await lockedByTrade(db, leagueId);
+  if (committed.has(playerId)) {
+    throw new WaiverError(
+      "That player is committed to an accepted trade and cannot be dropped until it resolves",
+      "IN_A_TRADE",
+    );
+  }
 
   return withTransaction(db, async (tx) => {
     const [entry] = await tx.query<{ id: string; acquired_at: string }>(

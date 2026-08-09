@@ -68,6 +68,12 @@ export default async function LeaguePage({ params }: { params: Promise<{ id: str
             Players →
           </a>
           <a
+            href={`/leagues/${league.id}/trades`}
+            className="text-sm text-[--color-turf] hover:underline"
+          >
+            Trades →
+          </a>
+          <a
             href={`/leagues/${league.id}/standings`}
             className="text-sm text-[--color-turf] hover:underline"
           >

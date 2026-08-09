@@ -20,6 +20,7 @@ const STATUS: Record<string, number> = {
   NOT_ON_WAIVERS: 409,
   ROSTER_FULL: 409,
   DUPLICATE_CLAIM: 409,
+  IN_A_TRADE: 409,
 };
 
 /** Everyone unrostered, with whether they can be added now or only claimed. */

@@ -57,6 +57,16 @@ const FEE_RECIPIENT = process.env.NEXT_PUBLIC_FEE_RECIPIENT ?? "";
 const MIN_BUY_IN_USDC = MIN_BUY_IN_BASE_UNITS / 1_000_000;
 const MAX_BUY_IN_USDC = MAX_BUY_IN_BASE_UNITS / 1_000_000;
 
+/**
+ * Weeks a trade deadline may fall on.
+ *
+ * Bounded by the regular season at the top — `validateLeagueRules` refuses
+ * anything later — and started at 8 because a deadline before midseason is a
+ * league that has barely played. ESPN and Sleeper both land around 12-13 by
+ * calendar date; 11 is our default and the middle of this range.
+ */
+const TRADE_DEADLINE_WEEKS = [8, 9, 10, 11, 12, 13, 14];
+
 /** Two weeks after the championship, so a stuck league can always be unwound. */
 const DEFAULT_REFUND_UNLOCK = "2027-03-01T00:00";
 
@@ -72,6 +82,7 @@ export function CreateLeagueForm() {
   const [draftAt, setDraftAt] = useState("2026-08-22T14:00");
   const [mode, setMode] = useState<"FAST" | "SLOW">("SLOW");
   const [pickSeconds, setPickSeconds] = useState(14_400);
+  const [tradeDeadlineWeek, setTradeDeadlineWeek] = useState(11);
   const [withPot, setWithPot] = useState(false);
   const [buyIn, setBuyIn] = useState("25");
   const [refundUnlock, setRefundUnlock] = useState(DEFAULT_REFUND_UNLOCK);
@@ -125,12 +136,13 @@ export function CreateLeagueForm() {
         seasonYear: 2026,
         draft: { type: "SNAKE", mode, pickSeconds, scheduledAt },
         league: { visibility },
+        trades: { deadlineWeek: tradeDeadlineWeek },
         pot,
       }) as LeagueRules;
     } catch {
       return null;
     }
-  }, [draftAt, mode, pickSeconds, visibility, pot]);
+  }, [draftAt, mode, pickSeconds, visibility, tradeDeadlineWeek, pot]);
 
   async function submit(event: React.FormEvent): Promise<void> {
     event.preventDefault();
@@ -148,6 +160,7 @@ export function CreateLeagueForm() {
           draftAt: localToUnix(draftAt),
           draftMode: mode,
           pickSeconds,
+          tradeDeadlineWeek,
           pot: pot
             ? {
                 tokenMint: pot.tokenMint,
@@ -261,6 +274,27 @@ export function CreateLeagueForm() {
             ))}
           </div>
         </fieldset>
+
+        <label className="block text-sm">
+          <span className="mb-1 block text-white/60">Trade deadline</span>
+          <select
+            value={tradeDeadlineWeek}
+            onChange={(e) => setTradeDeadlineWeek(Number(e.target.value))}
+            className="rounded border border-white/15 bg-transparent px-3 py-2"
+          >
+            {TRADE_DEADLINE_WEEKS.map((week) => (
+              <option key={week} value={week}>
+                End of week {week}
+                {week === 11 ? " (default)" : ""}
+              </option>
+            ))}
+          </select>
+          <span className="mt-1 block text-xs text-white/40">
+            Yours to set, once. After it passes nothing can be proposed, and an accepted trade
+            whose veto window closes later expires rather than executing — otherwise an
+            eliminated team could hand its roster to a contender.
+          </span>
+        </label>
 
         <fieldset className="space-y-3 rounded border border-white/10 p-4">
           <label className="flex items-center gap-2 text-sm">

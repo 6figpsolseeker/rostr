@@ -11,6 +11,10 @@
     {
       "path": "/api/cron/waivers",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/trades",
+      "schedule": "0 * * * *"
     }
   ]
 }

@@ -47,7 +47,7 @@ Do not build it in August.
 
 See [`docs/BUILD-PLAN.md`](docs/BUILD-PLAN.md) for the full commit-by-commit plan.
 
-**Done — 735 tests, CI green:**
+**Done — 815 tests, CI green:**
 
 - Full specification — rules, data model, live scoring, build plan
 - A1: pnpm monorepo, TS strict, vitest, eslint, prettier, CI
@@ -140,25 +140,16 @@ credentials in `SETUP-REQUIRED.md`, not more code.
    or lose. The cost is that a league can exist here unanchored, because someone can close
    the tab; the partial index in `0014` finds those.
 
-2. **Trades — specified, decided, not built.** `docs/RULES.md` §6 has the flow and the
-   tables exist (`trades`, `trade_assets`, `trade_vetoes`); no code touches them. Three
-   points were settled 2026-08-08 and written into §6, so do not re-open them: the
-   deadline is **commissioner-set** (default 11), **bots are not in the veto denominator**
-   — one third of uninvolved _managers_ — and there is **no commissioner override**.
-   Buildable on either machine. Trading opens in week 1, not at the deadline, so this is
-   wanted earlier than the week-11 date suggests.
-3. **D6–D10** — the rest of the escrow. **This is main-PC work**; the secondary machine has
+2. **D6–D10** — the rest of the escrow. **This is main-PC work**; the secondary machine has
    no Rust toolchain. Note that **D6 is not a small job**: "payout by the frozen split"
    needs to know who won, and `RULES.md` § 7 says nobody declares a winner — the contract
    derives it from posted scores. That makes D6 depend on G4–G8 (dual-source oracle, scores
    on-chain), which the build plan schedules for Dec–Jan. Do not start D6 expecting an
    afternoon.
-4. **Pot leagues still cannot take money in the app**, and must not, until 1 lands and D6
+3. **Pot leagues still cannot take money in the app**, and must not, until 1 lands and D6
    can pay it back out.
-5. **Waivers and trades are written but not wired.** `waivers/claims.ts` and
-   `waivers/schedule.ts` are finished and tested; nothing calls them, and there is no
-   add/drop UI. Needed by Sep 16, not Aug 22.
-6. **The playoff bracket.** `playoffField` seeds it; nothing plays it. Weeks 15–17.
+4. **The playoff bracket.** `playoffField` seeds it; nothing plays it. Weeks 15–17. This
+   is the largest remaining piece that needs no credentials and no Rust.
 
 **Still open on the draft:** nothing, on the fairness side — the grindable seed is fixed
 (see "The order draw" below). What remains is operational: `SOLANA_RPC_URL` has to be
@@ -426,6 +417,54 @@ hoard claims.
 **Watch the clock in tests.** A player dropped Monday afternoon clears at Wednesday 03:00
 **Eastern**, which is 07:00 UTC — so a test using "Wednesday 18:00 UTC" is _after_ the
 clear, not before it. One test asserted the opposite and was wrong.
+
+### Trades
+
+`packages/core/src/trades/veto.ts` (pure), `packages/db/src/trades.ts` (state),
+`/api/cron/trades` hourly, `TradeBlock.tsx` on `/leagues/[id]/trades`. Three points were
+settled by the owner on 2026-08-08 and written into `docs/RULES.md` §6 — **do not
+re-open them**: the deadline is **commissioner-set** (default 11), **bots are not in the
+veto denominator** (one third of uninvolved _managers_), and there is **no commissioner
+override**.
+
+**Nothing here asks who is asking.** There is no commissioner argument on any function —
+an absence, not a check that could be relaxed later. If you find yourself adding an
+"isAdmin" parameter, that is the thing this project exists to remove.
+
+**An empty electorate lets a trade stand.** Two managers and a bot leaves zero uninvolved
+voters, so `vetoesRequired` returns 0 — and a threshold of zero would otherwise mean every
+trade is vetoed before anyone votes. `isVetoed` short-circuits it.
+
+**Accepting freezes the players; it does not move them.** Between acceptance and execution
+they are in escrow: `lockedByTrade` is consulted by `dropPlayer` (which throws
+`IN_A_TRADE`) and by `proposeTrade`. Without it a manager accepts a trade and cuts the
+player they promised, and execution finds a hole where a roster spot used to be.
+
+**Execution releases and re-adds roster rows rather than repointing them.**
+`roster_entries` is append-only with `released_at` precisely so any past week's roster is
+reconstructible; a trade that edited history would make a settled week unverifiable. It
+does **not** go through `dropPlayer` — a traded player must never surface on waivers.
+
+**The deadline is checked twice, against the week the trade would _execute_.** At proposal
+against the earliest week it could land in, and again at resolution — a trade left
+unaccepted for days slides past the first check. A window closing past the deadline
+**expires** the trade, rosters untouched. That is what `EXPIRED` in the `trade_state` enum
+is for; it was unused before.
+
+**`currentWeek()` in `week.ts` exists so no route takes a week from the client.** A
+deadline checked against a client-supplied week is not a deadline — anyone could trade in
+January by posting `week: 1`. Routes that legitimately display an arbitrary week (a past
+lineup) still accept one; routes enforcing a rule must not. `score-week` had this query
+inline and now shares it.
+
+**Bots neither trade nor vote.** A bot has nobody to weigh an offer, so proposing to one
+would either strand the trade or make the bot judge it — and a bot that judges trades is a
+commissioner with extra steps.
+
+`buildNflPprRules` gained a `trades` override so the commissioner can set the deadline at
+creation. The route validates the result rather than trusting the number, because it is
+the one rule field a client supplies directly and the rules are frozen the moment they are
+written.
 
 ### Abandonment is gone. Do not bring it back
 
@@ -816,7 +855,8 @@ These were discussed at length and decided. Re-proposing them wastes the owner's
 | Rolling waiver priority                          | **Settled** — FAAB proposed and **rejected** for v1              |
 | NFTs _are_ the roster, not souvenirs             | **Settled** — Token-2022, transfer hook + permanent delegate     |
 | NFTs persist as trophies, labelled "Player YYYY" | **Settled**                                                      |
-| Trades vetoable, never automatic                 | **Settled** — 48h escrow, ⅓ of uninvolved teams                  |
+| Trades vetoable, never automatic                 | **Settled** — 48h escrow, ⅓ of uninvolved managers               |
+| Trade deadline set by the commissioner           | **Settled** 2026-08-08 — default 11; binds on the execution week |
 | Rules immutable, shown before joining            | **Settled**                                                      |
 | Per-game score updates, not real-time            | **Settled** — cost is not the reason; simplicity is              |
 | Mainnet with the pot live for 2026               | **Settled** — risks were raised and the owner chose this         |
@@ -916,7 +956,7 @@ Expect ~30–60 minutes; compiling AVM from source is the slow part.
 
 ```bash
 pnpm install
-pnpm test        # 735 tests, all green
+pnpm test        # 815 tests, all green
 pnpm typecheck
 pnpm lint
 ```

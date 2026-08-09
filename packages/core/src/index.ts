@@ -210,6 +210,15 @@ export {
 } from "./season/results.js";
 
 export {
+  isVetoed,
+  tradeBlockedBecause,
+  vetoWindowEndsAt,
+  vetoWindowHasClosed,
+  vetoesRequired,
+  type TradeBlock,
+} from "./trades/veto.js";
+
+export {
   createDraft,
   currentPickNumber,
   currentTeam,

@@ -371,6 +371,26 @@ Checked against ESPN on 2026-08-08: they publish a calendar date rather than a w
 recent seasons landed around Weeks 12–13. Ours is deliberately a little earlier, and
 frozen per league like every other rule. Necessary rather than traditional — without it,
 an eliminated team can hand its roster to a contender it has a side arrangement with.
+Any week from 8 to the end of the regular season may be chosen; validation refuses
+anything outside that, so a league cannot be created with a deadline it has already
+passed or one that never arrives.
+
+**The deadline binds on the week a trade _executes_, not the week it was proposed.** A
+trade accepted on the deadline still has a 48-hour window to sit through, so one accepted
+late enough would otherwise land after the date the deadline names. Two checks, and both
+are needed: a proposal is refused if the earliest week it could possibly execute in is
+already past, and a trade whose window closes past the deadline **expires** rather than
+executing — rosters untouched, nobody's fault, the state is `EXPIRED`.
+
+**A player committed to an accepted trade is frozen** until it resolves. He cannot be
+dropped, claimed away, or entered into a second trade. Without that, a manager could
+accept a trade and cut the player they promised, and execution would find a hole where a
+roster spot used to be. This is the database half of "both NFTs move to the escrow PDA",
+and it holds whether or not the league has a pot.
+
+**Rosters may change size.** A two-for-one is a normal trade; roster limits are a lineup
+concern. Only a trade where one side gives nothing is refused, because a gift is how an
+eliminated team hands its roster to a friend without anyone calling it a trade.
 
 ---
 

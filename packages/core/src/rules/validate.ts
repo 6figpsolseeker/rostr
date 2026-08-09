@@ -227,6 +227,14 @@ function validateTrades(rules: LeagueRules, out: string[]): void {
   if (t.vetoNumerator <= 0) out.push("vetoNumerator must be positive");
   if (t.vetoNumerator > t.vetoDenominator) out.push("veto threshold exceeds 100%");
   if (t.vetoWindowHours <= 0) out.push("vetoWindowHours must be positive");
+
+  // The deadline is the commissioner's to set, so it needs a floor as well as a
+  // ceiling. Week 0 would leave trading enabled in the rules and impossible in
+  // practice — members would sign a rule set that says one thing and behaves
+  // like another, and rules cannot be corrected afterwards.
+  if (t.deadlineWeek < 1) {
+    out.push("trade deadline must be at least week 1, or disable trades outright");
+  }
   if (t.deadlineWeek > rules.schedule.regularSeasonWeeks) {
     out.push(
       `trade deadline (week ${t.deadlineWeek}) falls after the regular season ends ` +

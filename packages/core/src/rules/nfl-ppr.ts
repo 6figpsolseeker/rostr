@@ -171,6 +171,12 @@ export type NflPprOverrides = {
   readonly seasonYear: number;
   readonly draft: DraftRules;
   readonly league?: Partial<LeagueSizeRules>;
+  /**
+   * The commissioner's trade settings — in practice the deadline, and whether
+   * trading happens at all. Set once, at creation, and frozen with everything
+   * else; `validateLeagueRules` bounds it to the regular season.
+   */
+  readonly trades?: Partial<TradeRules>;
   readonly pot?: PotRules | null;
 };
 
@@ -201,7 +207,7 @@ export function buildNflPprRules(overrides: NflPprOverrides): LeagueRules {
     draft: overrides.draft,
     schedule: NFL_DEFAULT_SCHEDULE,
     waivers: NFL_DEFAULT_WAIVERS,
-    trades: NFL_DEFAULT_TRADES,
+    trades: { ...NFL_DEFAULT_TRADES, ...overrides.trades },
     pot,
     settlement: NFL_DEFAULT_SETTLEMENT,
   }) as LeagueRules;

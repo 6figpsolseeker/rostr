@@ -369,6 +369,39 @@ One third matches Yahoo's threshold, deliberately harder to trigger than ESPN's 
 Leagues where people veto trades they merely dislike are miserable — the near-universal
 etiquette is to veto collusion, not bad trades.
 
+#### The deadline binds on execution, not on proposal
+
+Decided 2026-08-08, while building it. The obvious implementation checks the deadline when
+a trade is proposed, and it is wrong in a way that only shows up in week 11: an accepted
+trade sits in a 48-hour veto window, so one accepted late enough executes after the date
+the deadline names. The deadline exists to stop an eliminated team handing its roster to a
+contender, and a trade that lands in week 12 does exactly that however it was timed.
+
+So there are two checks. At proposal, against the earliest week the trade could possibly
+execute in — which is a floor, not a guarantee, because a trade left unaccepted for days
+slides past it. And at resolution, against the week the window actually closed in, where a
+trade past the deadline **expires** rather than executing.
+
+Expiring rather than executing-anyway was the choice, and the alternative — refusing to
+accept once the window would close late — was rejected because it makes the last few days
+before the deadline behave differently from every other day for no reason a manager could
+predict. Expiry is visible, states it plainly, and touches nobody's roster.
+
+The corollary is `currentWeek()` in `packages/db/src/week.ts`. The week has to come from
+the schedule, server-side: a deadline checked against a week the client sent is not a
+deadline, because anyone can post `week: 1` in January.
+
+#### Accepting freezes the players
+
+Between acceptance and execution the players are committed. In the on-chain design that is
+literal — both NFTs sit in an escrow PDA — and the database has to give the same guarantee
+for leagues without a pot, or the rule would only hold where there is money.
+
+Without it the attack is trivial and does not even look like one: accept a trade, drop the
+player you promised, and the swap executes into a roster spot that no longer holds him.
+`lockedByTrade` is consulted by dropping and by proposing, so a committed player cannot
+leave by any path.
+
 ### Settlement is derived, not declared
 
 Nobody signs "team 7 won." The contract holds the bracket, the scores, and the rules, and

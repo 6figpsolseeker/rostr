@@ -51,6 +51,7 @@ export {
 } from "./lineups.js";
 
 export {
+  currentWeek,
   finalizationHours,
   generateSeasonSchedule,
   loadScheduledWeek,
@@ -164,6 +165,23 @@ export {
   type RandomnessBeacon,
   type SolanaBeaconOptions,
 } from "./randomness.js";
+
+export {
+  acceptTrade,
+  declineTrade,
+  leaguesWithDueTrades,
+  listTrades,
+  lockedByTrade,
+  proposeTrade,
+  resolveDueTrades,
+  TradeError,
+  vetoTrade,
+  withdrawTrade,
+  type ProposeTradeInput,
+  type TradeResolution,
+  type TradeState,
+  type TradeSummary,
+} from "./trades.js";
 
 export {
   addBot,

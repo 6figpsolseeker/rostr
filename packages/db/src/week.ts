@@ -43,6 +43,36 @@ export class WeekError extends Error {
   }
 }
 
+/**
+ * Which NFL week an instant falls in, from the schedule rather than a calendar
+ * guess: the week of the most recent kickoff at or before it.
+ *
+ * **This exists so no route has to take a week from the client.** A deadline
+ * checked against a client-supplied week is not a deadline — anyone could
+ * trade in January by posting `week: 1`. Callers that legitimately display an
+ * arbitrary week (a lineup for a past week, say) can still accept one; callers
+ * enforcing a rule must use this.
+ *
+ * Returns `null` before the season's first kickoff, when there is no week yet.
+ */
+export async function currentWeek(
+  db: SqlClient,
+  sportKey: string,
+  at: Date,
+): Promise<number | null> {
+  const [row] = await db.query<{ week: number }>(
+    `SELECT g.week
+       FROM games g
+       JOIN sports s ON s.id = g.sport_id
+      WHERE s.key = $1 AND g.kickoff_at <= $2
+      ORDER BY g.kickoff_at DESC
+      LIMIT 1`,
+    [sportKey, at.toISOString()],
+  );
+
+  return row ? Number(row.week) : null;
+}
+
 /** How long after the last kickoff a week may be finalised. */
 export function finalizationHours(rules: LeagueRules, week: number): number {
   return rules.settlement.payingWeeks.includes(week)
