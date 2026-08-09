@@ -87,10 +87,17 @@ async function setup(): Promise<Fixture> {
   );
 
   // Two NFL teams playing each other on Sunday, one on Thursday.
+  //
+  // SEA plays in week 2 and not week 1, which is what a bye actually looks like:
+  // the team is in the season's schedule, just not this week. That distinction is
+  // load-bearing — `loadRosterForWeek` treats a team appearing *nowhere* in the
+  // schedule as unknown rather than as on bye, and locks it conservatively, so a
+  // fixture where SEA never played would be testing the wrong thing.
   await db.query(
     `INSERT INTO games (sport_id, external_ref, season, week, home_team_ref, away_team_ref, kickoff_at)
      VALUES ($1, 'thu', $2, $3, 'PIT', 'CLE', $4),
-            ($1, 'sun', $2, $3, 'CIN', 'BAL', $5)`,
+            ($1, 'sun', $2, $3, 'CIN', 'BAL', $5),
+            ($1, 'sea-w2', $2, $3 + 1, 'SEA', 'ARI', $5)`,
     [sport!.id, SEASON, WEEK, THURSDAY, SUNDAY],
   );
 
@@ -738,5 +745,92 @@ describe("the database refuses a duplicate starter", () => {
         [fx.teamId, WEEK + 1, ids.get("RB"), rb],
       ),
     ).resolves.toBeDefined();
+  });
+});
+
+describe("the schedule is a precondition for locking", () => {
+  /**
+   * Every lock in the system derives from `games.kickoff_at`. A week with no
+   * game rows therefore has no locks at all — not "locks that have not fired
+   * yet", none — and a manager could set their whole lineup on Monday night
+   * having watched every result.
+   *
+   * These are the two shapes of that hole. Both were reachable, and both scored.
+   */
+
+  it("refuses a lineup for a week whose schedule was never ingested", async () => {
+    const fx = await setup();
+    await fx.client.query("DELETE FROM games WHERE season = $1 AND week = $2", [SEASON, WEEK]);
+
+    // Long after every game would have finished, if any had been scheduled.
+    await expect(
+      setLineup(fx.client, {
+        leagueId: fx.leagueId,
+        teamId: fx.teamId,
+        week: WEEK,
+        assignments: lineupOf(fx, FULL),
+        now: SUNDAY_SECONDS + 86_400,
+      }),
+    ).rejects.toThrow(/no schedule loaded/);
+  });
+
+  it("locks a player whose team is nowhere in the schedule", async () => {
+    // Stale after a trade, blank, or renamed by the provider. He never locked,
+    // while `loadWeekStats` keys on player_id alone and scores him anyway — so
+    // he could be started on Monday night having already played.
+    const fx = await setup();
+    const [sport] = await fx.client.query<{ id: string }>(
+      "SELECT id FROM sports WHERE key = $1",
+      [NFL.key],
+    );
+    const [position] = await fx.client.query<{ id: string }>(
+      "SELECT id FROM positions WHERE sport_id = $1 AND key = 'QB'",
+      [sport!.id],
+    );
+    const [orphan] = await fx.client.query<{ id: string }>(
+      `INSERT INTO players (sport_id, external_ref, full_name, primary_position_id, team_ref)
+       VALUES ($1, 'orphan-qb', 'Orphan QB', $2, 'XXX') RETURNING id`,
+      [sport!.id, position!.id],
+    );
+    await fx.client.query(
+      `INSERT INTO roster_entries (team_id, player_id, acquired_via) VALUES ($1, $2, 'DRAFT')`,
+      [fx.teamId, orphan!.id],
+    );
+
+    const roster = await loadRosterForWeek(fx.client, fx.teamId, SEASON, WEEK);
+
+    // Given the week's first kickoff rather than null, so every existing lock
+    // rule applies: movable before the week begins, frozen once it has.
+    expect(roster.get(orphan!.id)?.kickoffAt).toBe(THURSDAY_SECONDS);
+
+    await expect(
+      setLineup(fx.client, {
+        leagueId: fx.leagueId,
+        teamId: fx.teamId,
+        week: WEEK,
+        assignments: [{ slotType: "QB", slotIndex: 0, playerId: orphan!.id }],
+        now: SUNDAY_SECONDS + 86_400,
+      }),
+    ).rejects.toThrow(/kicked off/);
+  });
+
+  it("still lets a genuine bye player be started at any time", async () => {
+    // The documented behaviour, and the reason the two cases had to be told
+    // apart rather than both locked. SEA is in the schedule, just not this week.
+    const fx = await setup();
+    const bye = fx.players.get("bye-te")!;
+
+    const roster = await loadRosterForWeek(fx.client, fx.teamId, SEASON, WEEK);
+    expect(roster.get(bye)?.kickoffAt).toBeNull();
+
+    const saved = await setLineup(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: fx.teamId,
+      week: WEEK,
+      assignments: [{ slotType: "TE", slotIndex: 0, playerId: bye }],
+      now: SUNDAY_SECONDS + 86_400,
+    });
+
+    expect(saved.find((slot) => slot.slotType === "TE")?.playerId).toBe(bye);
   });
 });

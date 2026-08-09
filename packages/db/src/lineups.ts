@@ -49,12 +49,41 @@ export class LineupError extends Error {
   constructor(
     message: string,
     readonly code:
-      "LEAGUE_NOT_FOUND" | "TEAM_NOT_IN_LEAGUE" | "INVALID_LINEUP" | "SLOT_TYPE_UNKNOWN",
+      | "LEAGUE_NOT_FOUND"
+      | "TEAM_NOT_IN_LEAGUE"
+      | "INVALID_LINEUP"
+      | "SLOT_TYPE_UNKNOWN"
+      | "SCHEDULE_MISSING",
     readonly problems: readonly LineupProblem[] = [],
   ) {
     super(message);
     this.name = "LineupError";
   }
+}
+
+/**
+ * Whether the week's schedule has been ingested.
+ *
+ * Every lock in the system is derived from `games.kickoff_at`, so a week with no
+ * game rows has no locks at all — not "locks that have not fired yet", none.
+ * A manager could set their whole lineup on Monday night having watched every
+ * result, and it would be accepted.
+ *
+ * That makes the presence of the schedule a security precondition, not a data
+ * detail, which is why `setLineup` refuses without it rather than proceeding.
+ * Refusing to accept a lineup is a visible, recoverable failure; accepting one
+ * that cannot be locked is a silent one that decides matchups.
+ */
+export async function weekHasSchedule(
+  db: SqlClient,
+  season: number,
+  week: number,
+): Promise<boolean> {
+  const [row] = await db.query<{ count: number }>(
+    "SELECT count(*)::int AS count FROM games WHERE season = $1 AND week = $2",
+    [season, week],
+  );
+  return Number(row?.count ?? 0) > 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -67,6 +96,29 @@ export class LineupError extends Error {
  * `kickoffAt` is `null` when the player's NFL team has no game that week — a
  * bye. That is what stops the slot ever locking, since there is no game to have
  * started.
+ *
+ * ## "No game row" means three different things, and only one of them is a bye
+ *
+ * The lock is derived entirely from `games.kickoff_at`, so a missing row reads
+ * as "never locks". That is right for a bye and catastrophic for the other two:
+ *
+ *   1. **A bye.** The player's team is scheduled this season but not this week.
+ *      Correctly unlockable — he cannot score, so nothing can be acted on.
+ *   2. **The schedule was never ingested.** No game rows exist for the week at
+ *      all, so *nobody* locks and the entire lock system is silently off. See
+ *      `weekHasSchedule`, which is what `setLineup` refuses on.
+ *   3. **The player's `team_ref` matches nothing all season** — stale after a
+ *      trade, blank, or a provider rename. He never locks, while `loadWeekStats`
+ *      keys on `player_id` alone and scores him regardless. That is the exploit:
+ *      start him on Monday night having watched him play.
+ *
+ * Case 3 is resolved here rather than in `@rostr/core`, by giving such a player
+ * the **week's first kickoff** instead of `null`. Every existing lock rule then
+ * applies unchanged: he is freely movable until the week begins and frozen after,
+ * which is the conservative reading of "we do not know when this player plays".
+ *
+ * A genuine bye keeps `null` and keeps the documented behaviour, because his team
+ * *is* in the schedule — just not this week.
  */
 export async function loadRosterForWeek(
   db: SqlClient,
@@ -80,12 +132,22 @@ export async function loadRosterForWeek(
     status: string;
     positions: string[];
     kickoff_at: string | null;
+    team_scheduled: boolean;
   }>(
     `SELECT p.id AS player_id,
             p.full_name,
             p.status,
             array_agg(DISTINCT pos.key) AS positions,
-            g.kickoff_at
+            g.kickoff_at,
+            -- Does this player's team appear anywhere in the season's schedule?
+            -- Distinguishes a bye (scheduled, just not this week) from a
+            -- team_ref that matches nothing at all.
+            EXISTS (
+              SELECT 1 FROM games sg
+               WHERE sg.sport_id = p.sport_id
+                 AND sg.season = $2
+                 AND (sg.home_team_ref = p.team_ref OR sg.away_team_ref = p.team_ref)
+            ) AS team_scheduled
        FROM roster_entries r
        JOIN players p ON p.id = r.player_id
        JOIN positions pos
@@ -97,9 +159,20 @@ export async function loadRosterForWeek(
         AND g.week = $3
         AND (g.home_team_ref = p.team_ref OR g.away_team_ref = p.team_ref)
       WHERE r.team_id = $1 AND r.released_at IS NULL
-      GROUP BY p.id, p.full_name, p.status, g.kickoff_at`,
+      GROUP BY p.id, p.full_name, p.status, g.kickoff_at, p.team_ref, p.sport_id`,
     [teamId, season, week],
   );
+
+  // The earliest kickoff of the week, used as the conservative lock time for a
+  // player whose team is not in the schedule at all. Null when the week has no
+  // games — `setLineup` refuses in that case rather than guessing.
+  const [firstGame] = await db.query<{ kickoff_at: string | null }>(
+    `SELECT min(kickoff_at) AS kickoff_at FROM games WHERE season = $1 AND week = $2`,
+    [season, week],
+  );
+  const weekStartsAt = firstGame?.kickoff_at
+    ? Math.floor(new Date(firstGame.kickoff_at).getTime() / 1000)
+    : null;
 
   return new Map(
     rows.map((row) => [
@@ -111,7 +184,12 @@ export async function loadRosterForWeek(
         positions: row.positions,
         kickoffAt: row.kickoff_at
           ? Math.floor(new Date(row.kickoff_at).getTime() / 1000)
-          : null,
+          : // No game this week. A bye keeps null and stays movable; a player
+            // whose team is nowhere in the schedule gets the week's first
+            // kickoff, so he freezes when the week begins rather than never.
+            row.team_scheduled
+            ? null
+            : weekStartsAt,
       },
     ]),
   );
@@ -187,6 +265,19 @@ export async function setLineup(
   if (!team) throw new LineupError("Team is not in this league", "TEAM_NOT_IN_LEAGUE");
 
   const season = stored.rules.seasonYear;
+
+  // Fail closed. Without the schedule there are no kickoff times, so no lock can
+  // fire and every check below silently passes — a manager could set their whole
+  // lineup after the last whistle. Refusing is visible and recoverable; the
+  // alternative is invisible and decides matchups.
+  if (!(await weekHasSchedule(db, season, input.week))) {
+    throw new LineupError(
+      `Week ${input.week} of ${season} has no schedule loaded, so lineup locks ` +
+        `cannot be enforced. Run the games sync before accepting lineups.`,
+      "SCHEDULE_MISSING",
+    );
+  }
+
   const roster = await loadRosterForWeek(db, input.teamId, season, input.week);
   const current = await loadLineup(db, input.teamId, input.week, stored.rules);
 
