@@ -214,6 +214,7 @@ export {
   addBot,
   getJoinMessage,
   getMembershipProofs,
+<<<<<<< HEAD
   getOnChainDeposit,
   getOnChainRefund,
   JoinError,
@@ -221,10 +222,20 @@ export {
   memberWallet,
   recordOnChainDeposit,
   recordOnChainRefund,
+=======
+  getOnChainJoin,
+  JoinError,
+  joinLeague,
+  recordOnChainJoin,
+>>>>>>> 7d128c5 (fix(escrow): wire the on-chain join into the member join flow (issue #26))
   removeBot,
   teamForUser,
   type JoinedLeague,
   type JoinLeagueInput,
   type MembershipProof,
+<<<<<<< HEAD
   type OnChainStake,
+=======
+  type OnChainJoin,
+>>>>>>> 7d128c5 (fix(escrow): wire the on-chain join into the member join flow (issue #26))
 } from "./membership.js";

@@ -436,10 +436,18 @@ export interface OnChainStake {
  * hash, and a caller with no way to name a wallet has no way to name someone
  * else's.
  *
- * The deposit and refund routes took `walletAddress` from the body with no
- * ownership check at all — the same defect as the original on-chain join route,
- * and the half that made a broken refund verifier into "any signed-in account
- * can mark any staked member as refunded".
+ * It also **inherits a proof rather than restating one**: `joinLeague` already
+ * verified a signature over the rules hash and refused a wallet not linked to
+ * this user, so reading that row back carries all of it.
+ *
+ * `null` when the user has not joined in Postgres, which is the ordering
+ * guarantee the on-chain routes depend on: **no on-chain record without a
+ * consent record behind it.**
+ *
+ * All three on-chain routes — join, deposit, refund — took `walletAddress` from
+ * the request body with no ownership check. In the refund case, composed with an
+ * inverted verifier, that became "any signed-in account can mark any staked
+ * member as refunded".
  */
 export async function memberWallet(
   db: SqlClient,
@@ -567,5 +575,84 @@ async function getOnChainStake(
     refundedAt: row.refunded_at,
     refundSignature: row.refund_signature,
     refundCluster: row.refund_cluster,
+  };
+}
+
+export interface OnChainJoin {
+  readonly leagueId: string;
+  readonly walletAddress: string;
+  readonly userId: string;
+  readonly signature: string;
+  readonly cluster: string;
+  readonly joinedAt: string;
+}
+
+/**
+ * Record that a member has joined a league on-chain.
+ *
+ * The member signs `join_league` from their own wallet — no key of ours is
+ * involved — and then tells us it happened. A report is not evidence: this is
+ * the write that follows `verifyOnChainJoin` finding a `Membership` account at
+ * the PDA for this league and wallet. The signature is an audit breadcrumb
+ * (which transaction created the account), not the proof.
+ *
+ * **This upserts; it is not write-once.** The anchor record is write-once by
+ * trigger because there is exactly one anchoring transaction ever. Here a
+ * re-post after a lost response is the ordinary case and has to succeed, so the
+ * row is keyed on (league, wallet) and rewritten. What makes that safe is not
+ * immutability but authorisation: `user_id` is recorded, and the caller may
+ * only ever write the wallet their own consent row names, so nobody can
+ * overwrite anybody else's record.
+ */
+export async function recordOnChainJoin(
+  db: SqlClient,
+  leagueId: string,
+  walletAddress: string,
+  userId: string,
+  signature: string,
+  cluster: string,
+): Promise<void> {
+  await db.query(
+    `INSERT INTO league_onchain_joins (league_id, wallet_address, user_id, signature, cluster)
+     VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (league_id, wallet_address)
+     DO UPDATE SET signature = EXCLUDED.signature, cluster = EXCLUDED.cluster, joined_at = now()`,
+    [leagueId, walletAddress, userId, signature, cluster],
+  );
+}
+
+/**
+ * The DB-side record of a member's on-chain join, or `null` if they have not
+ * yet joined on-chain (e.g. they joined in Postgres but have not signed
+ * `join_league` yet).
+ */
+export async function getOnChainJoin(
+  db: SqlClient,
+  leagueId: string,
+  walletAddress: string,
+): Promise<OnChainJoin | null> {
+  const [row] = await db.query<{
+    league_id: string;
+    wallet_address: string;
+    user_id: string;
+    signature: string;
+    cluster: string;
+    joined_at: string;
+  }>(
+    `SELECT league_id, wallet_address, user_id, signature, cluster, joined_at
+       FROM league_onchain_joins
+      WHERE league_id = $1 AND wallet_address = $2`,
+    [leagueId, walletAddress],
+  );
+
+  if (!row) return null;
+
+  return {
+    leagueId: row.league_id,
+    walletAddress: row.wallet_address,
+    userId: row.user_id,
+    signature: row.signature,
+    cluster: row.cluster,
+    joinedAt: row.joined_at,
   };
 }
