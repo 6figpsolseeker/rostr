@@ -59,9 +59,25 @@ BEGIN
 
   -- Written on refusal too, so `updated_at` keeps moving under sustained load and
   -- the refill maths does not keep re-crediting the same elapsed time.
-  UPDATE rate_limits
-     SET micro_tokens = v_tokens, updated_at = p_now
-   WHERE bucket = p_bucket AND subject = p_subject;
+  --
+  -- An upsert rather than a plain UPDATE, and that is load-bearing. The INSERT
+  -- above takes **no lock** when the row already exists — ON CONFLICT DO NOTHING
+  -- does not lock the conflicting row — so `purgeIdleRateLimits` can delete it
+  -- between that INSERT and the FOR UPDATE below. In that window the SELECT finds
+  -- nothing, `v_tokens` is NULL, and `LEAST(p_capacity, NULL)` returns
+  -- **p_capacity** rather than NULL, because LEAST skips NULLs. The call is then
+  -- allowed against a notionally full bucket, and a plain UPDATE would match zero
+  -- rows — dropping the charge and leaving the row absent, so the next caller
+  -- starts full again too.
+  --
+  -- The version this replaced handled that explicitly with an IF NOT FOUND branch
+  -- that recreated the row. Removing the branch made the behaviour depend on an
+  -- accident of LEAST's NULL semantics. This restores the guarantee without the
+  -- branch: it recreates a vanished row and is identical to an UPDATE otherwise.
+  INSERT INTO rate_limits (bucket, subject, micro_tokens, updated_at)
+  VALUES (p_bucket, p_subject, v_tokens, p_now)
+  ON CONFLICT (bucket, subject)
+  DO UPDATE SET micro_tokens = EXCLUDED.micro_tokens, updated_at = EXCLUDED.updated_at;
 
   micro_remaining := v_tokens;
   RETURN NEXT;
