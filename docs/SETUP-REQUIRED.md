@@ -35,6 +35,36 @@ free Helius or QuickNode key is more reliable and costs nothing at this volume.
 > playoffs, or record the blockhash somewhere independently checkable. Not urgent in
 > August; do not discover it in January.
 
+### ⬜ Devnet SOL, to deploy the escrow program somewhere a wallet can reach
+
+**Blocks:** trying the anchor flow in a browser, and any testing that is not you and me
+on one machine.
+**Needed by:** before Aug 22, and worth doing sooner — it is how anyone else sees this
+work at all.
+
+The program is deployed to a **local validator only**, and a browser wallet can only
+reach that if it lets you point it at an arbitrary RPC URL. Solflare exposes a custom
+endpoint setting; Phantom's network list has moved around between versions, so check
+before assuming. Devnet sidesteps the question entirely, because every wallet offers it.
+
+Deploying costs roughly **2.5 SOL** on devnet for a 319 KB program. The CLI faucet is
+rate-limited and returned nothing on 2026-08-09; the web faucet at
+<https://faucet.solana.com> gives more, and needs a GitHub sign-in.
+
+Fund this address, which is the deploy keypair on the main PC:
+
+```
+AoF2r5NttSS9A8DtzzTyB1nHxSX9PDMa7txowGvHqWn7
+```
+
+Then `anchor deploy --provider.cluster devnet`, and point **both**
+`SOLANA_RPC_URL` and `NEXT_PUBLIC_SOLANA_RPC_URL` at devnet. They must agree — the
+browser anchors against one and the server verifies against the other, and the PDA is
+identical on every cluster, so a mismatch looks like a league that will not verify
+rather than like a misconfiguration.
+
+Devnet SOL is free and worth nothing; this is a rate limit, not a cost.
+
 ### ⬜ Email provider (`RESEND_API_KEY`, `EMAIL_FROM`)
 
 **Blocks:** anyone signing in who is not sitting at the dev server.
