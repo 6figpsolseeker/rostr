@@ -371,3 +371,102 @@ describe("the on-chain anchor", () => {
     expect(await getChainState(client, "00000000-0000-4000-8000-000000000000")).toBeNull();
   });
 });
+
+describe("the frozen rules are frozen against ordinary SQL", () => {
+  /**
+   * Migration 0019. These are the holes that needed no elevated privilege — any
+   * bug in a route that writes to these tables reaches them, unlike TRUNCATE
+   * which needs table ownership.
+   *
+   * Written as raw SQL on purpose. The point is what happens when the
+   * application layer is *not* the thing standing in the way.
+   */
+  async function frozenLeague(client: PGliteClient, commissionerId: string) {
+    return createLeague(client, NFL, { name: "L", commissionerId, rules: rules() });
+  }
+
+  it("refuses to rewrite the hash that is anchored on-chain", async () => {
+    const { client, commissionerId } = await setup();
+    const created = await frozenLeague(client, commissionerId);
+
+    await expect(
+      client.query("UPDATE leagues SET rules_hash = $1 WHERE id = $2", [
+        "d".repeat(64),
+        created.id,
+      ]),
+    ).rejects.toThrow(/frozen/);
+  });
+
+  it("still allows the other league columns to move", async () => {
+    // The trigger guards one column, not the row — rules_uri and the chain
+    // anchor both have to keep working.
+    const { client, commissionerId } = await setup();
+    const created = await frozenLeague(client, commissionerId);
+
+    await setRulesUri(client, created.id, "ipfs://bafyfake");
+    await recordChainAnchor(client, created.id, { signature: "sig", cluster: "localnet" });
+
+    expect((await getChainState(client, created.id))?.cluster).toBe("localnet");
+  });
+
+  it("refuses a scoring rule added after the freeze", async () => {
+    // league_rules stays correct and still hashes — but the table the app
+    // queries would say something the signed rules do not.
+    const { client, commissionerId } = await setup();
+    const created = await frozenLeague(client, commissionerId);
+
+    const [row] = await client.query<{ stat_key_id: string }>(
+      "SELECT stat_key_id FROM league_scoring_rules WHERE league_id = $1 LIMIT 1",
+      [created.id],
+    );
+
+    await expect(
+      client.query(
+        `INSERT INTO league_scoring_rules (league_id, stat_key_id, kind, milli_points_per_unit)
+         VALUES ($1, $2, 'LINEAR', 999000)`,
+        [created.id, row!.stat_key_id],
+      ),
+    ).rejects.toThrow(/frozen/);
+  });
+
+  it("refuses a roster slot added after the freeze", async () => {
+    const { client, commissionerId } = await setup();
+    const created = await frozenLeague(client, commissionerId);
+
+    const [row] = await client.query<{ slot_type_id: string }>(
+      "SELECT slot_type_id FROM league_roster_slots WHERE league_id = $1 LIMIT 1",
+      [created.id],
+    );
+
+    await expect(
+      client.query(
+        `INSERT INTO league_roster_slots (league_id, slot_type_id, count)
+         VALUES ($1, $2, 10)`,
+        [created.id, row!.slot_type_id],
+      ),
+    ).rejects.toThrow(/frozen/);
+  });
+
+  it("creating a league still works, which is the whole difficulty", async () => {
+    // createLeague writes league_rules BEFORE the denormalised copies, in one
+    // transaction — so "do rules exist" cannot be the test. If this regresses,
+    // no league can be created at all.
+    const { client, commissionerId } = await setup();
+    const created = await frozenLeague(client, commissionerId);
+
+    const [scoring] = await client.query<{ count: number }>(
+      "SELECT count(*)::int AS count FROM league_scoring_rules WHERE league_id = $1",
+      [created.id],
+    );
+    expect(Number(scoring?.count)).toBeGreaterThan(0);
+  });
+
+  it("refuses to truncate the tables that hold consent and draft order", async () => {
+    const { client, commissionerId } = await setup();
+    await frozenLeague(client, commissionerId);
+
+    for (const table of ["leagues", "league_memberships", "teams", "drafts"]) {
+      await expect(client.query(`TRUNCATE ${table} CASCADE`)).rejects.toThrow(/frozen/);
+    }
+  });
+});
