@@ -99,6 +99,7 @@ export default async function LeaguePage({ params }: { params: Promise<{ id: str
       <JoinPanel
         leagueId={league.id}
         leagueName={league.name}
+        rulesHash={stored.hash}
         open={league.state === "FORMING" && taken < stored.rules.league.maxTeams}
         signedIn={user !== null}
         linkedWallets={wallets.map((wallet) => wallet.address)}

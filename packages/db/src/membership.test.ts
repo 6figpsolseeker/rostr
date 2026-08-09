@@ -11,7 +11,7 @@ import {
 import type { DraftRules, LeagueRules, PotRules } from "@rostr/core";
 import { createLeague, recordChainAnchor } from "./leagues.js";
 import { createUser, linkWallet } from "./identity.js";
-import { addBot, getMembershipProofs, JoinError, joinLeague, removeBot } from "./membership.js";
+import { addBot, getMembershipProofs, getOnChainJoin, JoinError, joinLeague, recordOnChainJoin, removeBot } from "./membership.js";
 import { seedSport } from "./sports.js";
 import { createDraftRecord, drawDraftOrder } from "./draft.js";
 import { FixedBeacon } from "./randomness.js";
@@ -629,5 +629,40 @@ describe("joining an unanchored league", () => {
         requireCluster: "mainnet-beta",
       }),
     ).resolves.toMatchObject({ slot: 1 });
+  });
+});
+
+describe("on-chain join record (issue #26)", () => {
+  it("records and reads back a member's on-chain join", async () => {
+    const fx = await setup();
+    const m = await member(fx, 1, "a@example.com");
+
+    expect(await getOnChainJoin(fx.client, fx.leagueId, m.address)).toBeNull();
+
+    await recordOnChainJoin(fx.client, fx.leagueId, m.address, "4".repeat(88), "localnet");
+
+    const recorded = await getOnChainJoin(fx.client, fx.leagueId, m.address);
+    expect(recorded).not.toBeNull();
+    expect(recorded?.walletAddress).toBe(m.address);
+    expect(recorded?.signature).toBe("4".repeat(88));
+    expect(recorded?.cluster).toBe("localnet");
+  });
+
+  it("upserts on a re-post rather than duplicating", async () => {
+    const fx = await setup();
+    const m = await member(fx, 1, "a@example.com");
+
+    await recordOnChainJoin(fx.client, fx.leagueId, m.address, "4".repeat(88), "localnet");
+    await recordOnChainJoin(fx.client, fx.leagueId, m.address, "9".repeat(88), "devnet");
+
+    const [rows] = await fx.client.query<{ n: number }>(
+      "SELECT count(*)::int AS n FROM league_onchain_joins WHERE league_id = $1 AND wallet_address = $2",
+      [fx.leagueId, m.address],
+    );
+    expect(Number(rows?.n)).toBe(1);
+
+    const recorded = await getOnChainJoin(fx.client, fx.leagueId, m.address);
+    expect(recorded?.signature).toBe("9".repeat(88));
+    expect(recorded?.cluster).toBe("devnet");
   });
 });

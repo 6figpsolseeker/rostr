@@ -13,7 +13,9 @@ export {
   fetchOnChainLeague,
   hexToBytes,
   verifyLeagueAnchor,
+  verifyOnChainJoin,
   type AnchorVerdict,
+  type JoinVerdict,
   type OnChainLeague,
 } from "./verify.js";
 export {

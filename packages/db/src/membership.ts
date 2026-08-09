@@ -394,3 +394,74 @@ export async function getMembershipProofs(
     joinedAt: r.joined_at,
   }));
 }
+
+export interface OnChainJoin {
+  readonly leagueId: string;
+  readonly walletAddress: string;
+  readonly signature: string;
+  readonly cluster: string;
+  readonly joinedAt: string;
+}
+
+/**
+ * Record that a member has joined a league on-chain.
+ *
+ * The member signs `join_league` from their own wallet — no key of ours is
+ * involved — and then tells us it happened. A report is not evidence: this is
+ * the write that follows `verifyOnChainJoin` reading the `Membership` PDA back
+ * and confirming it holds this member's key. The signature is an audit
+ * breadcrumb (which transaction created the account), not the proof.
+ *
+ * The primary key is (league_id, wallet_address), so a re-post after a lost
+ * response upserts rather than duplicating — the same write-once discipline the
+ * anchor record uses.
+ */
+export async function recordOnChainJoin(
+  db: SqlClient,
+  leagueId: string,
+  walletAddress: string,
+  signature: string,
+  cluster: string,
+): Promise<void> {
+  await db.query(
+    `INSERT INTO league_onchain_joins (league_id, wallet_address, signature, cluster)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (league_id, wallet_address)
+     DO UPDATE SET signature = EXCLUDED.signature, cluster = EXCLUDED.cluster, joined_at = now()`,
+    [leagueId, walletAddress, signature, cluster],
+  );
+}
+
+/**
+ * The DB-side record of a member's on-chain join, or `null` if they have not
+ * yet joined on-chain (e.g. they joined in Postgres but have not signed
+ * `join_league` yet).
+ */
+export async function getOnChainJoin(
+  db: SqlClient,
+  leagueId: string,
+  walletAddress: string,
+): Promise<OnChainJoin | null> {
+  const [row] = await db.query<{
+    league_id: string;
+    wallet_address: string;
+    signature: string;
+    cluster: string;
+    joined_at: string;
+  }>(
+    `SELECT league_id, wallet_address, signature, cluster, joined_at
+       FROM league_onchain_joins
+      WHERE league_id = $1 AND wallet_address = $2`,
+    [leagueId, walletAddress],
+  );
+
+  if (!row) return null;
+
+  return {
+    leagueId: row.league_id,
+    walletAddress: row.wallet_address,
+    signature: row.signature,
+    cluster: row.cluster,
+    joinedAt: row.joined_at,
+  };
+}

@@ -20,7 +20,7 @@
 import type { Program } from "@coral-xyz/anchor";
 import type { Connection, PublicKey } from "@solana/web3.js";
 
-import { leaguePda } from "./program.js";
+import { leaguePda, membershipPda } from "./program.js";
 import type { RostrEscrow } from "./types.js";
 
 /** A league's frozen terms, as they exist on-chain. */
@@ -138,6 +138,55 @@ export async function verifyLeagueAnchor(
   }
 
   return { ok: true, league };
+}
+
+export type JoinVerdict =
+  | { readonly ok: true; readonly membership: { readonly league: PublicKey; readonly member: PublicKey } }
+  | { readonly ok: false; readonly reason: "NOT_FOUND" }
+  | {
+      readonly ok: false;
+      readonly reason: "MEMBER_MISMATCH";
+      readonly onChainMember: string;
+      readonly expectedMember: string;
+    };
+
+/**
+ * Confirm a member has actually joined a league on-chain.
+ *
+ * The client reports "I joined it, here is the transaction signature", and a
+ * signature proves only that *some* `join_league` happened. What makes the
+ * record a fact is fetching the `Membership` PDA and finding this member's key
+ * in it — exactly the verify-don't-trust discipline the anchor route uses,
+ * applied one level down.
+ *
+ * The PDA is derived from league *and* member, so a correct `membershipPda`
+ * already binds the two. We still read it back and check `member` equals the
+ * key we expect, because the whole point is not trusting the client's claim of
+ * which wallet joined.
+ */
+export async function verifyOnChainJoin(
+  program: Program<RostrEscrow>,
+  leagueId: string,
+  expectedMember: PublicKey,
+): Promise<JoinVerdict> {
+  const league = leaguePda(leagueId);
+  const address = membershipPda(league, expectedMember);
+
+  const account = await program.account["membership"]?.fetchNullable(address);
+  if (!account) return { ok: false, reason: "NOT_FOUND" };
+
+  const raw = account as { league: PublicKey; member: PublicKey };
+
+  if (raw.member.toBase58() !== expectedMember.toBase58()) {
+    return {
+      ok: false,
+      reason: "MEMBER_MISMATCH",
+      onChainMember: raw.member.toBase58(),
+      expectedMember: expectedMember.toBase58(),
+    };
+  }
+
+  return { ok: true, membership: { league: raw.league, member: raw.member } };
 }
 
 /**
