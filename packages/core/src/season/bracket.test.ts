@@ -411,4 +411,81 @@ describe("refusals", () => {
       }),
     ).toThrow(BracketError);
   });
+
+  /**
+   * The code says whose problem it is, and the scoring cron reports it.
+   *
+   * A league whose own frozen rules cannot seat a bracket gets none, and every
+   * other league carries on scoring. `INVARIANT` means the fault is ours, in the
+   * ladder that decides who is paid — it must never read as "that league's
+   * problem" in an operator's logs. The default is `INVARIANT` on purpose: a new
+   * throw site is our bug until someone says otherwise.
+   */
+  const codeOf = (build: () => unknown): string => {
+    try {
+      build();
+    } catch (error) {
+      if (error instanceof BracketError) return error.code;
+      throw error;
+    }
+    throw new Error("expected a BracketError");
+  };
+
+  it("blames the field when the field is too small", () => {
+    expect(
+      codeOf(() =>
+        buildBracket({
+          field: ["a"],
+          weeks: WEEKS,
+          firstRoundByes: 0,
+          results: [],
+          thirdPlace: false,
+        }),
+      ),
+    ).toBe("FIELD_TOO_SMALL");
+  });
+
+  it("blames the field when the byes do not fit it", () => {
+    expect(
+      codeOf(() =>
+        buildBracket({
+          field: FIELD,
+          weeks: WEEKS,
+          firstRoundByes: 6,
+          results: [],
+          thirdPlace: false,
+        }),
+      ),
+    ).toBe("FIELD_TOO_SMALL");
+  });
+
+  it("blames the weeks when there are too few of them", () => {
+    expect(
+      codeOf(() =>
+        buildBracket({
+          field: ["a", "b", "c", "d", "e", "f", "g", "h"],
+          weeks: [16, 17],
+          firstRoundByes: 0,
+          results: [],
+          thirdPlace: false,
+        }),
+      ),
+    ).toBe("NOT_ENOUGH_WEEKS");
+  });
+
+  it("blames itself for an unpairable round, which callers must not file under bad input", () => {
+    // Reachable only if the bye count and the field disagree in a way the caller
+    // was supposed to prevent, so it is our bug rather than the league's.
+    expect(
+      codeOf(() =>
+        buildBracket({
+          field: ["a", "b", "c", "d", "e"],
+          weeks: WEEKS,
+          firstRoundByes: 0,
+          results: [],
+          thirdPlace: false,
+        }),
+      ),
+    ).toBe("INVARIANT");
+  });
 });

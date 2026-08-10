@@ -33,8 +33,23 @@
 
 import type { MatchupResult } from "./standings.js";
 
+/**
+ * Why a bracket could not be built.
+ *
+ * The distinction is which of us has a problem. `FIELD_TOO_SMALL` and
+ * `NOT_ENOUGH_WEEKS` describe a league whose own frozen rules cannot seat a
+ * bracket — that league gets none, and the rest of the world carries on.
+ * `INVARIANT` means this code is wrong, and it must never be filed under "that
+ * league's problem" and forgotten, because it is thrown from the ladder that
+ * decides who gets paid.
+ */
+export type BracketErrorCode = "FIELD_TOO_SMALL" | "NOT_ENOUGH_WEEKS" | "INVARIANT";
+
 export class BracketError extends Error {
-  constructor(message: string) {
+  constructor(
+    message: string,
+    readonly code: BracketErrorCode = "INVARIANT",
+  ) {
     super(message);
     this.name = "BracketError";
   }
@@ -94,10 +109,17 @@ export interface BuildBracketInput {
   /**
    * How many top seeds sit out the first round.
    *
-   * Taken from the league's frozen `byeSeeds` rather than derived, because it is
-   * a number members signed. `validateLeagueRules` already forces it to the only
-   * value that resolves, so the two agree — but if they ever stopped agreeing,
-   * the signed one should win.
+   * The frozen `byeSeeds` **when the field is the size it was frozen for**, and
+   * a count derived from the real field otherwise. `validateLeagueRules` ties
+   * `byeSeeds` to `playoffTeams`, but nothing ties `playoffTeams` to how many
+   * people actually joined — five friends in a twelve-seat league play a
+   * five-team bracket, and applying a bye count sized for six to it produces a
+   * round that cannot be paired.
+   *
+   * So the signed number wins where it applies, and where it cannot apply the
+   * caller derives one. That is a deliberate reversal of what this comment used
+   * to claim: a signed number that describes a league that does not exist is not
+   * a promise worth keeping, and honouring it means no bracket at all.
    */
   readonly firstRoundByes: number;
   /** Finalised results, any week. A game not yet scored is simply absent. */
@@ -115,11 +137,15 @@ export interface BuildBracketInput {
  */
 export function buildBracket(input: BuildBracketInput): Bracket {
   if (input.field.length < 2) {
-    throw new BracketError(`A bracket needs at least two teams, got ${input.field.length}`);
+    throw new BracketError(
+      `A bracket needs at least two teams, got ${input.field.length}`,
+      "FIELD_TOO_SMALL",
+    );
   }
   if (input.firstRoundByes < 0 || input.firstRoundByes >= input.field.length) {
     throw new BracketError(
       `firstRoundByes (${input.firstRoundByes}) must be between 0 and ${input.field.length - 1}`,
+      "FIELD_TOO_SMALL",
     );
   }
 
@@ -140,6 +166,7 @@ export function buildBracket(input: BuildBracketInput): Bracket {
     throw new BracketError(
       `A ${alive.length}-team bracket needs ${roundCount} rounds but only ` +
         `${input.weeks.length} weeks are available`,
+      "NOT_ENOUGH_WEEKS",
     );
   }
   const weeks = input.weeks.slice(input.weeks.length - roundCount);

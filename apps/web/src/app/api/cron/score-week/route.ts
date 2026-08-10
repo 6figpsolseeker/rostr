@@ -72,11 +72,13 @@ export async function GET(request: Request): Promise<NextResponse> {
     finalized?: boolean;
     holdReason?: string;
     bracketGames?: number;
+    bracketProblem?: string;
     skipped?: string;
   }[] = [];
 
   for (const league of leagues) {
     let bracketGames = 0;
+    let bracketProblem: string | null = null;
 
     // Bracket fixtures are laid *before* scoring, not after. Week 15 has no
     // matchups until the regular season finalises and `advancePlayoffs` writes
@@ -89,10 +91,31 @@ export async function GET(request: Request): Promise<NextResponse> {
       await enterPlayoffs(client, league.id);
       bracketGames = (await advancePlayoffs(client, league.id)).written;
     } catch (error) {
-      // A league still mid-season refuses (PlayoffError), and a bracket that
-      // cannot be built for this league (BracketError) is this league's problem.
-      // Neither may abort the shared run and stop every other league scoring.
-      if (!(error instanceof PlayoffError) && !(error instanceof BracketError)) throw error;
+      // **One league's failure may never stop the others scoring.**
+      //
+      // This was an allowlist — rethrow anything that is not a `PlayoffError` —
+      // and it was the only one in the repo. `BracketError` extends `Error`
+      // directly rather than `PlayoffError`, so an undersized field escaped the
+      // per-league catch and aborted the entire run: every league after it in a
+      // query with no `ORDER BY` went unscored, deterministically, every ten
+      // minutes. Adding `BracketError` to the list would fix that one class and
+      // leave `StandingsError` (reachable from the same `seedOrder` call) and
+      // every future class exactly as exposed, because none of these share a
+      // base class for an `instanceof` to catch.
+      //
+      // So it records and continues, like `waivers`, `trades`, `draft-tick`, and
+      // the scoring catch immediately below. An allowlist here fails open on the
+      // one thing it is protecting.
+      //
+      // **Nothing is swallowed.** The failure is reported, because the cost of
+      // silence is a league whose bracket can never be built looking healthy
+      // forever — and `INVARIANT` says the fault is ours, not the league's.
+      bracketProblem =
+        error instanceof BracketError
+          ? `${error.code}: ${error.message}`
+          : error instanceof PlayoffError
+            ? error.code
+            : `UNEXPECTED: ${error instanceof Error ? error.message : String(error)}`;
     }
 
     try {
@@ -104,6 +127,7 @@ export async function GET(request: Request): Promise<NextResponse> {
         finalized: outcome.finalized,
         ...(outcome.holdReason ? { holdReason: outcome.holdReason } : {}),
         ...(bracketGames > 0 ? { bracketGames } : {}),
+        ...(bracketProblem ? { bracketProblem } : {}),
       });
     } catch (error) {
       // A league with no schedule yet, or one already final, is not a failure —
@@ -112,6 +136,7 @@ export async function GET(request: Request): Promise<NextResponse> {
         leagueId: league.id,
         name: league.name,
         ...(bracketGames > 0 ? { bracketGames } : {}),
+        ...(bracketProblem ? { bracketProblem } : {}),
         skipped:
           error instanceof WeekError
             ? error.code
