@@ -389,6 +389,66 @@ describe("the freeze between acceptance and execution", () => {
   });
 });
 
+describe("no double-spend across trades", () => {
+  it("refuses a second accept that commits a player already in an accepted trade", async () => {
+    // Two proposals can each offer the same player — only an *accepted* trade
+    // freezes him. If the second accept is not re-checked, both trades execute
+    // and the player is inserted onto two rosters, minted from nothing.
+    const fx = await setup();
+    const p1 = fx.players.get("p1")!;
+
+    const a = await proposeTrade(fx.client, {
+      leagueId: fx.leagueId,
+      proposerTeamId: fx.teams[0]!,
+      receiverTeamId: fx.teams[1]!,
+      proposerGives: [p1],
+      receiverGives: [fx.players.get("p2")!],
+      week: 5,
+      now: MONDAY,
+    });
+    const b = await proposeTrade(fx.client, {
+      leagueId: fx.leagueId,
+      proposerTeamId: fx.teams[0]!,
+      receiverTeamId: fx.teams[2]!,
+      proposerGives: [p1],
+      receiverGives: [fx.players.get("p3")!],
+      week: 5,
+      now: MONDAY,
+    });
+
+    await acceptTrade(fx.client, a.tradeId, fx.teams[1]!, MONDAY);
+
+    await expect(acceptTrade(fx.client, b.tradeId, fx.teams[2]!, MONDAY)).rejects.toMatchObject({
+      code: "PLAYER_IN_ANOTHER_TRADE",
+    });
+  });
+
+  it("refuses to accept a trade whose offered player was dropped after it was proposed", async () => {
+    const fx = await setup();
+    const p1 = fx.players.get("p1")!;
+
+    const { tradeId } = await proposeTrade(fx.client, {
+      leagueId: fx.leagueId,
+      proposerTeamId: fx.teams[0]!,
+      receiverTeamId: fx.teams[1]!,
+      proposerGives: [p1],
+      receiverGives: [fx.players.get("p2")!],
+      week: 5,
+      now: MONDAY,
+    });
+
+    await fx.client.query(
+      `UPDATE roster_entries SET released_at = $3
+        WHERE team_id = $1 AND player_id = $2 AND released_at IS NULL`,
+      [fx.teams[0], p1, MONDAY.toISOString()],
+    );
+
+    await expect(acceptTrade(fx.client, tradeId, fx.teams[1]!, MONDAY)).rejects.toMatchObject({
+      code: "NOT_YOUR_PLAYER",
+    });
+  });
+});
+
 describe("vetoing", () => {
   it("counts a vote", async () => {
     const fx = await setup();
