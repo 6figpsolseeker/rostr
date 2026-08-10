@@ -83,7 +83,13 @@ export function AnchorPanel({
             refundUnlockAt: pot.refundUnlockAt,
             payoutBps: payoutArray(pot.payout),
             feeBps: pot.feeBps,
-            feeRecipient: new PublicKey(pot.feeRecipient),
+            // A fee-free league has no recipient — `FEE_RECIPIENT` unset means
+            // leagues are created with `feeBps: 0` and an empty string, and
+            // `new PublicKey("")` throws rather than yielding a default. The
+            // program requires a recipient only when `fee_bps > 0`.
+            feeRecipient: pot.feeRecipient
+              ? new PublicKey(pot.feeRecipient)
+              : PublicKey.default,
             maxTeams,
             payer: wallet.publicKey,
           })

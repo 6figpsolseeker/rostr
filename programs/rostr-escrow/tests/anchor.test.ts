@@ -1,8 +1,10 @@
 import * as anchor from "@coral-xyz/anchor";
 import { beforeAll, describe, expect, it } from "vitest";
 import {
+  anchorTermMismatches,
   clusterOf,
   escrowProgram,
+  expectedTermsFromRules,
   hexToBytes,
   initializeFreeLeagueIx,
   initializeLeagueIx,
@@ -189,6 +191,14 @@ describe("create -> anchor -> join", () => {
     expect(wrong.ok).toBe(false);
     if (!wrong.ok) expect(wrong.reason).toBe("HASH_MISMATCH");
 
+    // The economic terms agree too, against an account the program really
+    // wrote. The unit tests compare hand-built objects, so they cannot catch a
+    // field decoded from the wrong type or under the wrong name — this can, and
+    // it is the only place that can.
+    if (verdict.ok) {
+      expect(anchorTermMismatches(verdict.league, expectedTermsFromRules(rules))).toEqual([]);
+    }
+
     await recordChainAnchor(db, league.id, {
       signature,
       cluster: clusterOf(provider.connection),
@@ -244,6 +254,51 @@ describe("create -> anchor -> join", () => {
       league.rulesHash,
     );
     expect(verdict.ok).toBe(true);
+  });
+
+  it("refuses an anchor that carries the signed hash but hostile money terms", async () => {
+    // The attack the terms check exists for, run against a real program.
+    //
+    // The commissioner signs `initialize_league` from their own wallet, so they
+    // choose the account's economic terms — and the program cannot check those
+    // against `rules_hash`, because to it the hash is 32 opaque bytes. So this
+    // anchors the *correct* hash for a league whose signed rules say $23.50,
+    // alongside a $50 buy-in and a refund unlock at `i64::MAX`.
+    //
+    // The hash check passes. It has to: the document really is the one members
+    // read. Only the terms check catches this.
+    const { league, rules } = await createPotLeague("hostile");
+    const pot = rules.pot!;
+
+    const ix = await initializeLeagueIx(program, {
+      leagueId: league.id,
+      rulesHash: hexToBytes(league.rulesHash), // the honest hash
+      mint,
+      buyInBaseUnits: "50000000", // rules say 23500000
+      refundUnlockAt: "9223372036854775807", // funds frozen forever
+      payoutBps: payoutArray(pot.payout),
+      feeBps: pot.feeBps,
+      feeRecipient: new anchor.web3.PublicKey(pot.feeRecipient),
+      maxTeams: rules.league.maxTeams,
+      payer: provider.wallet.publicKey,
+    });
+    await provider.sendAndConfirm(new anchor.web3.Transaction().add(ix), [], {
+      commitment: "confirmed",
+    });
+
+    // The hash verifies — which is exactly why this was invisible before.
+    const verdict = await verifyLeagueAnchor(program, league.id, league.rulesHash);
+    expect(verdict.ok).toBe(true);
+
+    if (verdict.ok) {
+      // Decoding i64::MAX must not throw. Reading it as a JS number did, on
+      // this input specifically, which turned the worst case into a 500.
+      expect(verdict.league.refundUnlockAt).toBe("9223372036854775807");
+
+      const mismatches = anchorTermMismatches(verdict.league, expectedTermsFromRules(rules));
+      expect(mismatches.some((m) => /buyIn/.test(m))).toBe(true);
+      expect(mismatches.some((m) => /refundUnlockAt/.test(m))).toBe(true);
+    }
   });
 
   it("anchors a free league through the other instruction", async () => {
