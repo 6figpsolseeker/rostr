@@ -427,6 +427,27 @@ describe("vetoing", () => {
     });
   });
 
+  it("refuses a veto from a team in another league", async () => {
+    // The electorate is the trade's own league. A team from a different league
+    // is not in it, so its vote must not be counted toward the veto threshold —
+    // otherwise an outsider could force a veto a small league never wanted.
+    const fx = await setup();
+    const tradeId = await propose(fx);
+    await acceptTrade(fx.client, tradeId, fx.teams[1]!, MONDAY);
+
+    const other = await createUser(fx.client, "other@example.com", "Other");
+    const otherLeague = await createLeague(fx.client, NFL, {
+      name: "Other League",
+      commissionerId: other.id,
+      rules: buildNflPprRules({ seasonYear: 2026, draft: DRAFT }) as LeagueRules,
+    });
+    const outsider = (await addTestTeam(fx.client, otherLeague.id, "Outsider")).teamId;
+
+    await expect(vetoTrade(fx.client, tradeId, outsider, MONDAY)).rejects.toMatchObject({
+      code: "NOT_IN_LEAGUE",
+    });
+  });
+
   it("refuses a second vote from the same team", async () => {
     const fx = await setup();
     const tradeId = await propose(fx);
