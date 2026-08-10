@@ -206,39 +206,102 @@ export async function resolveLeagueWeek(
 }
 
 /**
- * Resolve every week up to `throughWeek` that still has an unfinalised matchup.
+ * Resolve every week up to `throughWeek` that is not yet finalised.
  *
  * The scoring cron used to resolve only the single current week. That works for
- * standings weeks (48h window), whose window closes before the next week's first
+ * a standings week (48h window), which closes before the next week's first
  * kickoff moves the pointer on. It does **not** work for a paying week (168h):
- * week 15's Thursday game arrives ~4 days after week 14's last game, so the
- * pointer leaves week 14 three days before its window elapses, and it would never
- * be finalised — leaving the regular-season prize, and any bracket built from it,
- * on provisional scores forever. The same abandons week 17 once week-18 games are
- * ingested.
+ * week 14's last game is a Monday night, week 15's first is the Thursday three
+ * days later, so the pointer leaves week 14 with four days of its window still
+ * to run and it is never finalised — leaving the regular-season prize, and any
+ * bracket seeded from it, on provisional scores forever. The same abandons week
+ * 17, the championship week, once week-18 games are ingested.
  *
- * Sweeping every still-unfinalised week fixes that. Each call is safe and
- * idempotent: a finalised week is filtered out here and would in any case be
- * refused by `resolveLeagueWeek`.
+ * Three properties are load-bearing, and each was got wrong first:
+ *
+ * **One week's failure may not stop the others.** A week that throws is recorded
+ * and the sweep continues. Without that, an old unresolvable week blocks every
+ * later week for that league on every run, forever — including the current one,
+ * which is strictly worse than the bug being fixed, because before the sweep
+ * existed a broken week 3 could not stop week 16 from scoring.
+ *
+ * **The selection and the refusal must agree.** This picks weeks where *no* row
+ * is finalised; `resolveLeagueWeek` refuses a week where *any* row is. Selecting
+ * on "any row unfinalised" instead makes a partially finalised week both
+ * guaranteed to be selected and guaranteed to throw — unresolvable by
+ * construction. That state is reachable: a smaller consolation bracket starts in
+ * a later week than the main one, so a week can be finalised holding only
+ * consolation fixtures and then receive playoff fixtures on a later advance.
+ *
+ * **It is bounded.** A league with a long tail of never-finalisable weeks — a
+ * postponed game, a feed that never marked a game final — would otherwise re-run
+ * the full lineup-and-scoring work for every one of them on every pass. The cap
+ * takes the most recent, because those are the ones with money and an audience
+ * attached, and the caller is told what was left behind rather than being left to
+ * infer it from silence.
  */
+export const SWEEP_LIMIT = 4;
+
+export interface SweepOutcome {
+  readonly outcomes: readonly ResolveWeekOutcome[];
+  /** Weeks that threw, so a caller can surface them rather than guess. */
+  readonly failures: readonly { readonly week: number; readonly reason: string }[];
+  /** Older unfinalised weeks the cap left for a later run. */
+  readonly deferred: readonly number[];
+}
+
 export async function resolveLeagueWeeksThrough(
   db: SqlClient,
   leagueId: string,
   throughWeek: number,
   now: Date,
-): Promise<readonly ResolveWeekOutcome[]> {
+  limit: number = SWEEP_LIMIT,
+): Promise<SweepOutcome> {
+  // `NOT EXISTS` rather than `finalized_at IS NULL`: a week is a candidate only
+  // when none of its rows are finalised. See the note above on why the two
+  // predicates have to be complements.
   const weeks = await db.query<{ week: number }>(
-    `SELECT DISTINCT week FROM matchups
-      WHERE league_id = $1 AND week <= $2 AND finalized_at IS NULL
-      ORDER BY week`,
+    `SELECT DISTINCT m.week
+       FROM matchups m
+      WHERE m.league_id = $1
+        AND m.week <= $2
+        AND NOT EXISTS (
+              SELECT 1 FROM matchups f
+               WHERE f.league_id = m.league_id
+                 AND f.week = m.week
+                 AND f.finalized_at IS NOT NULL
+            )
+      ORDER BY m.week`,
     [leagueId, throughWeek],
   );
 
+  const all = weeks.map((row) => Number(row.week));
+  // Ascending, and the *last* `limit` of them — the most recent. Ascending order
+  // matters: a later week's fixtures may not exist until an earlier one
+  // finalises, so resolving out of order would silently skip a round.
+  const take = all.slice(Math.max(0, all.length - limit));
+  const deferred = all.slice(0, Math.max(0, all.length - limit));
+
   const outcomes: ResolveWeekOutcome[] = [];
-  for (const { week } of weeks) {
-    outcomes.push(await resolveLeagueWeek(db, leagueId, Number(week), now));
+  const failures: { week: number; reason: string }[] = [];
+
+  for (const week of take) {
+    try {
+      outcomes.push(await resolveLeagueWeek(db, leagueId, week, now));
+    } catch (error) {
+      failures.push({
+        week,
+        reason:
+          error instanceof WeekError
+            ? error.code
+            : error instanceof Error
+              ? error.message
+              : String(error),
+      });
+    }
   }
-  return outcomes;
+
+  return { outcomes, failures, deferred };
 }
 
 /**

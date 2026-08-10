@@ -69,9 +69,9 @@ export async function GET(request: Request): Promise<NextResponse> {
   const scored: {
     leagueId: string;
     name: string;
-    matchups?: number;
-    finalized?: boolean;
-    holdReason?: string;
+    weeks?: { week: number; matchups: number; finalized: boolean; holdReason?: string }[];
+    failedWeeks?: readonly { readonly week: number; readonly reason: string }[];
+    deferredWeeks?: readonly number[];
     bracketGames?: number;
     bracketProblem?: string;
     skipped?: string;
@@ -121,19 +121,34 @@ export async function GET(request: Request): Promise<NextResponse> {
 
     try {
       // A single explicit week is targeted directly; otherwise sweep every
-      // still-unfinalised week up to the current one, so a paying week (168h
-      // window) finalises even after the pointer has moved past it to the
-      // playoffs. The current week's outcome is what the status line reports.
-      const outcomes = Number.isFinite(requestedWeek)
-        ? [await resolveLeagueWeek(client, league.id, week, now)]
+      // not-yet-finalised week up to the current one, so a paying week (168h
+      // window) finalises even after the pointer has moved past it — week 14 is
+      // abandoned four days early by week 15's Thursday game, and week 17, the
+      // championship week, once week-18 games are ingested.
+      const sweep = Number.isFinite(requestedWeek)
+        ? {
+            outcomes: [await resolveLeagueWeek(client, league.id, week, now)],
+            failures: [],
+            deferred: [],
+          }
         : await resolveLeagueWeeksThrough(client, league.id, week, now);
-      const outcome = outcomes.find((o) => o.week === week) ?? outcomes.at(-1);
+
+      // **Every week reports itself.** Collapsing a sweep to one row meant
+      // publishing an older week's matchup count and hold reason under the
+      // current week's number, and — worse — asserting `finalized: true` for a
+      // week that was never examined, which is the reading an operator would
+      // take as "nothing left to do".
       scored.push({
         leagueId: league.id,
         name: league.name,
-        matchups: outcome?.matchups ?? 0,
-        finalized: outcome?.finalized ?? true,
-        ...(outcome?.holdReason ? { holdReason: outcome.holdReason } : {}),
+        weeks: sweep.outcomes.map((o) => ({
+          week: o.week,
+          matchups: o.matchups,
+          finalized: o.finalized,
+          ...(o.holdReason ? { holdReason: o.holdReason } : {}),
+        })),
+        ...(sweep.failures.length > 0 ? { failedWeeks: sweep.failures } : {}),
+        ...(sweep.deferred.length > 0 ? { deferredWeeks: sweep.deferred } : {}),
         ...(bracketGames > 0 ? { bracketGames } : {}),
         ...(bracketProblem ? { bracketProblem } : {}),
       });

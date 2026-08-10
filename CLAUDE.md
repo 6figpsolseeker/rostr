@@ -179,7 +179,8 @@ addresses a bug that is live on `main` right now.** Verified individually on 202
   wallet, so they choose the account's terms independently of the document members sign — a
   hostile `refund_unlock_at` leaves every deposit permanently stuck. **This is the one with
   money at stake.**
-- **#34** — `loadWeekResults` filters `home_milli_points IS NOT NULL`, never `finalized_at`,
+- **#34 — FIXED**, see "The bracket waits for final" below. `loadWeekResults` filtered
+  `home_milli_points IS NOT NULL`, never `finalized_at`,
   so the bracket advances and `championship()` crowns from provisional scores.
 - **#36** — `acceptTrade` checks state and receiver only. Two proposals can name the same
   player, and `resolveTrade` inserts him onto both receivers unconditionally. The
@@ -571,6 +572,38 @@ what D6 will read.
 Fixtures are laid **before** scoring in the cron, not after: Week 15 has no matchups until
 `advancePlayoffs` writes them and `resolveLeagueWeek` refuses a week with no schedule, so
 the other order would cost a full cycle every time a round turns over.
+
+### The bracket waits for final, and the sweep is what makes final happen
+
+`bracketFor` reads **finalised** results only, so a round advances and the champion is
+derived from a settled score — never a live one, a 0-0 before kickoff, or one inside the
+correction window. `championship()` also asks for finalised **seeding**, because the best
+regular-season record is a paid prize (1000 bps) and Week 14 is a 168h week: every game is
+final on the Monday and a correction can flip the holder for another seven days. The
+standings screen deliberately keeps the live read — that table is meant to move.
+
+**The two halves are one change.** Requiring finalised results without the sweep would
+leave the champion permanently underivable: the cron resolved only the pointer week, and
+week 17's 168h window closes _after_ week-18 games move the pointer off it. Week 14 is
+abandoned the same way, four days early, by week 15's Thursday game.
+
+Three properties of `resolveLeagueWeeksThrough` are load-bearing, and each was wrong first:
+
+- **A week that throws is recorded and the sweep continues.** Without it, one old
+  unresolvable week blocks every later week for that league on every run — worse than the
+  bug being fixed, since before the sweep a broken week 3 could not stop week 16 scoring.
+- **Selection and refusal must be complements.** The sweep picks weeks where _no_ row is
+  finalised; `resolveLeagueWeek` refuses weeks where _any_ row is. Selecting on "any row
+  unfinalised" makes a mixed week both guaranteed to be selected and guaranteed to throw.
+  That state is reachable — a smaller consolation bracket starts in a _later_ week, so a
+  week can finalise holding only consolation fixtures and then receive playoff ones.
+- **It is bounded** (`SWEEP_LIMIT`), most-recent-first, and says what it deferred. A tail of
+  never-finalisable weeks would otherwise re-run the full lineup-and-scoring work for each,
+  every ten minutes, forever.
+
+The bracket screen keeps the **unfiltered** score read, so a played-but-not-final game shows
+its real score with no winner marked — and says "waiting on the correction window" rather
+than rendering as a blank page for seven days.
 
 ### One league's failure never stops the others
 

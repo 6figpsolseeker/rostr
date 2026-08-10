@@ -292,7 +292,7 @@ describe("resolveLeagueWeeksThrough", () => {
       "SELECT finalized_at FROM matchups WHERE league_id = $1 AND week = $2 LIMIT 1",
       [fx.leagueId, WEEK],
     );
-    return row?.finalized_at != null;
+    return Boolean(row?.finalized_at);
   };
 
   it("finalises a prior week that the single-week pointer leaves behind", async () => {
@@ -309,9 +309,18 @@ describe("resolveLeagueWeeksThrough", () => {
     expect(await week1Finalized(fx)).toBe(false);
 
     // The sweep resolves every unfinalised week up to the pointer, so week 1 is
-    // finalised.
-    const outcomes = await resolveLeagueWeeksThrough(fx.client, fx.leagueId, 5, AFTER_STANDARD);
-    expect(outcomes.find((o) => o.week === WEEK)?.finalized).toBe(true);
+    // finalised. The limit is raised past the default because this fixture has
+    // fourteen weeks of fixtures and none of them finalised — the default of 4
+    // is sized for the real case, where the unfinalised set at any moment is the
+    // paying week plus the playoff weeks that followed it.
+    const sweep = await resolveLeagueWeeksThrough(
+      fx.client,
+      fx.leagueId,
+      5,
+      AFTER_STANDARD,
+      10,
+    );
+    expect(sweep.outcomes.find((o) => o.week === WEEK)?.finalized).toBe(true);
     expect(await week1Finalized(fx)).toBe(true);
   });
 
@@ -321,10 +330,109 @@ describe("resolveLeagueWeeksThrough", () => {
     await finishGames(fx);
     await resolveLeagueWeek(fx.client, fx.leagueId, WEEK, AFTER_STANDARD);
 
-    // Only week 1 has finished games, so it is the only one that can finalise;
-    // a second sweep finds it already done and nothing else pending to finalise.
+    // Bounded by `week <= WEEK`, so weeks 2-14 are out of range rather than
+    // absent — this asserts the pointer bound, not that the season is done.
     const again = await resolveLeagueWeeksThrough(fx.client, fx.leagueId, WEEK, AFTER_STANDARD);
-    expect(again).toHaveLength(0);
+    expect(again.outcomes).toHaveLength(0);
+    expect(again.failures).toHaveLength(0);
+  });
+
+  it("does not let one unresolvable week stop the weeks after it", async () => {
+    // The regression that matters. Before the sweep existed, a broken week 3
+    // could not stop week 16 from scoring, because the cron touched exactly one
+    // week. A sweep without per-week isolation makes that possible — and the
+    // oldest broken week wins, permanently, because it is re-selected every run.
+    const fx = await setup();
+    await schedule(fx);
+    await finishGames(fx);
+
+    // Week 2 cannot resolve: one of its matchups names a team from another
+    // league, so `ensureLineups` never gives it a lineup and `resolveWeek`
+    // refuses rather than scoring the missing side as zero — which would hand
+    // its opponent a free win off our own bug.
+    //
+    // Deleting a lineup would not do it: `ensureLineups` runs first and autofills
+    // one, which is the whole reason that function exists.
+    const other = await createUser(fx.client, "other@example.com", "Other");
+    const otherLeague = await createLeague(fx.client, NFL, {
+      name: "Elsewhere",
+      commissionerId: other.id,
+      rules: fx.rules,
+    });
+    const outsider = await addTestTeam(fx.client, otherLeague.id, "Outsider");
+
+    await fx.client.query(
+      `INSERT INTO matchups (league_id, week, phase, home_team_id, away_team_id)
+       VALUES ($1, 2, 'REGULAR', $2, $3)`,
+      [fx.leagueId, fx.teamIds[0], outsider.teamId],
+    );
+
+    const sweep = await resolveLeagueWeeksThrough(
+      fx.client,
+      fx.leagueId,
+      5,
+      AFTER_STANDARD,
+      10,
+    );
+
+    // Week 2 failed and said so — silence would read as "nothing to do".
+    expect(sweep.failures.some((f) => f.week === 2)).toBe(true);
+    // And week 1 was still resolved and finalised despite it.
+    expect(sweep.outcomes.find((o) => o.week === WEEK)?.finalized).toBe(true);
+    expect(await week1Finalized(fx)).toBe(true);
+  });
+
+  it("skips a part-finalised week rather than wedging on it", async () => {
+    // The sweep selects weeks with no finalised row; `resolveLeagueWeek` refuses
+    // weeks with any finalised row. If those two predicates are not complements,
+    // a mixed week is selected *and* refused — unresolvable by construction, and
+    // with no isolation it takes every later week with it.
+    //
+    // Reachable: a smaller consolation bracket starts in a later week than the
+    // main one, so a week can finalise holding only consolation fixtures and
+    // then receive playoff fixtures on a later advance.
+    const fx = await setup();
+    await schedule(fx);
+    await finishGames(fx);
+    await resolveLeagueWeek(fx.client, fx.leagueId, WEEK, AFTER_STANDARD);
+
+    // Week 1 is finalised; now add an unfinalised row to it.
+    await fx.client.query(
+      `INSERT INTO matchups (league_id, week, phase, home_team_id, away_team_id)
+       SELECT $1, $2, 'PLAYOFF', home_team_id, away_team_id
+         FROM matchups WHERE league_id = $1 AND week = $2 AND phase = 'REGULAR' LIMIT 1`,
+      [fx.leagueId, WEEK],
+    );
+
+    const sweep = await resolveLeagueWeeksThrough(fx.client, fx.leagueId, 5, AFTER_STANDARD);
+
+    // Not selected at all, so it cannot throw and cannot block anything.
+    expect(sweep.outcomes.some((o) => o.week === WEEK)).toBe(false);
+    expect(sweep.failures.some((f) => f.week === WEEK)).toBe(false);
+  });
+
+  it("bounds the sweep and reports what it left behind", async () => {
+    // A league with a long tail of never-finalisable weeks — a postponed game, a
+    // feed that never marks one final — would otherwise re-run the full
+    // lineup-and-scoring work for every one of them, every ten minutes, forever.
+    const fx = await setup();
+    await schedule(fx);
+
+    const sweep = await resolveLeagueWeeksThrough(
+      fx.client,
+      fx.leagueId,
+      10,
+      AFTER_STANDARD,
+      3,
+    );
+
+    expect(sweep.outcomes.length + sweep.failures.length).toBeLessThanOrEqual(3);
+    expect(sweep.deferred.length).toBeGreaterThan(0);
+    // The most recent are taken, because those are the ones with money and an
+    // audience attached; the older ones are named rather than dropped silently.
+    expect(Math.max(...sweep.deferred)).toBeLessThan(
+      Math.min(...sweep.outcomes.map((o) => o.week)),
+    );
   });
 });
 
