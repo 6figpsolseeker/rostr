@@ -26,7 +26,8 @@
     "format:check": "prettier --check \"**/*.{ts,tsx,json,md}\"",
     "test:program": "anchor test",
     "idl:sync": "node scripts/sync-idl.mjs",
-    "idl:check": "node scripts/sync-idl.mjs --check"
+    "idl:check": "node scripts/sync-idl.mjs --check",
+    "test:web": "vitest run --config vitest.web.config.ts"
   },
   "devDependencies": {
     "@coral-xyz/anchor": "^0.31.1",
