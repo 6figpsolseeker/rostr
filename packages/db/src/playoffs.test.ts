@@ -29,20 +29,23 @@ interface Fixture {
   client: PGliteClient;
   leagueId: string;
   rules: LeagueRules;
-  /** Eight teams in join order. Seeds are decided by the fixture's results. */
+  /** The league's teams in join order. Seeds are decided by the fixture's results. */
   teams: string[];
 }
 
 /**
- * Eight teams and a one-week "regular season" that produces a known order.
+ * `teamCount` teams (eight by default) and a one-week "regular season" that
+ * produces a known order.
  *
  * The season is short on purpose. `advancePlayoffs` cares that every regular
  * game is final, not that fourteen weeks were played, so one round of results is
  * a complete season as far as seeding is concerned — and it keeps the seed order
  * legible: winners on points descending, then losers on points descending.
  *
- * Seeds end up 1..8 as `t0, t2, t4, t6, t1, t3, t5, t7`. Six make the playoffs;
- * the last two are the consolation bracket.
+ * At the default eight, seeds end up 1..8 as `t0, t2, t4, t6, t1, t3, t5, t7`;
+ * six make the playoffs and the last two are the consolation bracket. Smaller
+ * counts exist to exercise a field smaller than `playoffTeams`, where the
+ * frozen bye count no longer fits.
  */
 async function setup(overrides?: Partial<LeagueRules>, teamCount = 8): Promise<Fixture> {
   db = await createTestDatabase();
@@ -235,22 +238,85 @@ describe("laying the first round", () => {
 });
 
 describe("small leagues (fewer teams than the playoff field)", () => {
-  it("does not crash a five-team league", async () => {
+  /** The first round the bracket actually plays, with its byes and pairings. */
+  const firstRound = async (fx: Fixture) => {
+    const state = await playoffState(fx.client, fx.leagueId);
+    const round = state.playoffs?.bracket.rounds[0];
+    if (!round) throw new Error("no first round");
+    return round;
+  };
+
+  it("seats a five-team field on three byes rather than throwing", async () => {
     // A pot league gets no bots, so five friends is a five-team league. The
-    // frozen bye count is 2 (sized for a six-team field); applied to five teams
-    // it leaves three to pair — odd — and the bracket throws, which the shared
-    // scoring cron then rethrows, taking down every league's scoring with it.
+    // frozen bye count is 2, sized for a six-team field; applied to five it
+    // leaves three to pair — odd — and the bracket threw, which the shared
+    // scoring cron rethrew, taking every other league's scoring down with it.
     const fx = await setup(undefined, 5);
 
     await expect(advancePlayoffs(fx.client, fx.leagueId)).resolves.toBeDefined();
-    expect((await playoffState(fx.client, fx.leagueId)).playoffs).not.toBeNull();
+
+    // Asserting the shape, not merely that it resolved. `resolves.toBeDefined()`
+    // passes on any bracket at all, including a wrongly seeded one.
+    const round = await firstRound(fx);
+    expect(round.byes).toHaveLength(3);
+    expect(round.games).toHaveLength(1);
+    expect(round.entrants).toHaveLength(5);
+    // Byes go to the best seeds, so the single game is the two worst. With five
+    // teams the fixture seeds t0, t2, t1, t3, t4 — two winners on points, then
+    // the rest on points — so seeds 4 and 5 are t3 and t4.
+    expect(round.byes.map((b) => b.seed)).toEqual([1, 2, 3]);
+    expect([round.games[0]?.homeTeamId, round.games[0]?.awayTeamId].sort()).toEqual(
+      [fx.teams[3], fx.teams[4]].sort(),
+    );
   });
 
-  it("does not crash a three-team league", async () => {
+  it("seats a four-team field, which never threw and was silently mis-seeded", async () => {
+    // The quiet half of this bug, and the reason it is not only about crashes.
+    // Two byes and one game is a *legal* round, so four teams produced no error
+    // — it just played a bracket nobody agreed to: seeds 1 and 2 both idle in
+    // week 15, three alive in week 16, so seed 1 byes twice and plays a single
+    // game all postseason. With byes sized to the real field, all four play.
+    const fx = await setup(undefined, 4);
+
+    await advancePlayoffs(fx.client, fx.leagueId);
+
+    const round = await firstRound(fx);
+    expect(round.byes).toHaveLength(0);
+    expect(round.games).toHaveLength(2);
+  });
+
+  it("seats a three-team field", async () => {
     const fx = await setup(undefined, 3);
 
     await expect(advancePlayoffs(fx.client, fx.leagueId)).resolves.toBeDefined();
-    expect((await playoffState(fx.client, fx.leagueId)).playoffs).not.toBeNull();
+
+    const round = await firstRound(fx);
+    expect(round.byes).toHaveLength(1);
+    expect(round.games).toHaveLength(1);
+  });
+
+  it("gives a two-team league a bracket with no byes", async () => {
+    const fx = await setup(undefined, 2);
+
+    await expect(advancePlayoffs(fx.client, fx.leagueId)).resolves.toBeDefined();
+
+    const round = await firstRound(fx);
+    expect(round.byes).toHaveLength(0);
+    expect(round.games).toHaveLength(1);
+  });
+
+  it("still honours the signed bye count when the field is the size it was frozen for", async () => {
+    // The derived count must not quietly replace the signed one everywhere —
+    // `byeSeeds` is a number members agreed to, and it wins wherever it applies.
+    // `byesFor(6)` is 2 as well, so this asserts the branch, not the arithmetic:
+    // an eight-team league fills all six playoff seats.
+    const fx = await setup(undefined, 8);
+
+    await advancePlayoffs(fx.client, fx.leagueId);
+
+    const round = await firstRound(fx);
+    expect(round.entrants).toHaveLength(6);
+    expect(round.byes.map((b) => b.seed)).toEqual([1, 2]);
   });
 });
 

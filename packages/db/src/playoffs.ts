@@ -155,9 +155,15 @@ async function bracketFor(
       // field is the size it was frozen for. A smaller field — a league that
       // never reached that many teams (a pot league gets no bots, so five
       // friends is a five-team playoff) — takes whatever byes its own size needs
-      // to form a valid round, exactly as the consolation bracket does. Applying
-      // the frozen count to a smaller field leaves an odd first round, which
-      // throws — and the scoring cron rethrows it across every league.
+      // to form a valid round, exactly as the consolation bracket does.
+      //
+      // Applying the frozen count to a smaller field fails in two ways, and the
+      // quieter one is worse. Five teams leaves three to pair in the first round,
+      // which throws. **Four teams does not throw at all** — two byes and one
+      // game is a legal round — it just plays a bracket nobody agreed to: seeds
+      // 1 and 2 both sit out week 15, three are alive in week 16, so seed 1 byes
+      // a second time and plays one game in the entire postseason. A wrong bye
+      // count changes who plays whom in a bracket that decides the pot.
       firstRoundByes:
         phase === "PLAYOFF" && field.length === rules.schedule.playoffTeams
           ? rules.schedule.byeSeeds

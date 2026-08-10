@@ -184,7 +184,8 @@ addresses a bug that is live on `main` right now.** Verified individually on 202
 - **#36** — `acceptTrade` checks state and receiver only. Two proposals can name the same
   player, and `resolveTrade` inserts him onto both receivers unconditionally. The
   `(team_id, player_id)` unique index is per-team and does not stop it.
-- **#38** — `BracketError extends Error`, not `PlayoffError`, so the score-week cron's guard
+- **#38 — FIXED**, see "One league's failure never stops the others" below.
+  `BracketError extends Error`, not `PlayoffError`, so the score-week cron's guard
   rethrows it and one undersized league aborts scoring for every league.
 
 **Three of those four are bugs in code written in this repo the same week** (#34 and #38 in
@@ -570,6 +571,43 @@ what D6 will read.
 Fixtures are laid **before** scoring in the cron, not after: Week 15 has no matchups until
 `advancePlayoffs` writes them and `resolveLeagueWeek` refuses a week with no schedule, so
 the other order would cost a full cycle every time a round turns over.
+
+### One league's failure never stops the others
+
+Every cron loops over leagues, and a throw inside that loop must never escape it. Four
+routes do this; three always did it correctly. `score-week`'s playoff block was the
+exception and the **only** deny-by-default catch in the repo — an `instanceof PlayoffError`
+allowlist that rethrew everything else.
+
+`BracketError extends Error` directly, so an undersized field escaped, aborted the whole
+run, and left every league after it in a query with **no `ORDER BY`** unscored — the same
+set every ten minutes, deterministically.
+
+**The fix is the shape, not the class.** Adding `BracketError` to the allowlist would have
+left `StandingsError` — reachable from the same `seedOrder` call — and every future class
+exactly as exposed, because none of these share a base class for an `instanceof` to catch.
+So it records and continues, like `waivers`, `trades`, `draft-tick`, and `score-week`'s own
+scoring catch. **If you find yourself adding an error class to an allowlist inside a
+per-league loop, the allowlist is the bug.**
+
+**Nothing is swallowed.** The failure is reported as `bracketProblem`, because a league
+whose bracket can never be built would otherwise look healthy forever. `BracketError`
+carries a `code`: `FIELD_TOO_SMALL` and `NOT_ENOUGH_WEEKS` are that league's own frozen
+rules, `INVARIANT` is our bug in the ladder that decides who gets paid, and it defaults to
+`INVARIANT` so a new throw site is ours until someone says otherwise.
+
+**Byes are sized to the real field.** `byeSeeds` is a signed number, but nothing ties
+`playoffTeams` to how many people actually joined — five friends in a twelve-seat league
+play a five-team bracket. The signed count wins where it fits and is derived where it
+cannot, which is a deliberate reversal of what `bracket.ts` used to claim. The quiet case
+matters more than the crash: **four teams never threw**, it just played a bracket nobody
+agreed to, with seed 1 idle twice and one game all postseason.
+
+Still open, and not this fix: a pot league with **6 or 7 members can never settle**.
+`consolationField` is `standings.slice(playoffTeams)`, so at the default `playoffTeams: 6`
+the consolation field is 0 or 1, `bracketFor` returns null, `consolationWinner` stays null
+— and since CONSOLATION is a paid prize, `championship().complete` can never be true.
+Validation only checks `playoffTeams > maxTeams`, and rules are frozen at creation.
 
 ### Trades
 

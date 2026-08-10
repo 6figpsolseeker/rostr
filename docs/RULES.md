@@ -255,6 +255,12 @@ not a game: it contributes no win, no loss, and no points either way, so win per
 stays comparable. Byes are distributed evenly — no team sits more than one extra time.
 
 **Playoffs.** The top **6** of 12 qualify. Seeds 1–2 receive a Week 15 bye.
+
+Those numbers describe a full league. Where fewer people joined than the league has
+playoff places, every team that exists makes the playoffs and the byes are whatever that
+field needs to form a valid round — five teams gives **three** byes, not two. The signed
+`byeSeeds` is honoured wherever it can be, and a bye count sized for a league that never
+filled would leave a round that cannot be paired at all.
 Week 15 is 3v6 and 4v5; Week 16 pairs the top seed against the lower surviving seed;
 Week 17 is the championship. Single elimination throughout.
 
