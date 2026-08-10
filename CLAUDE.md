@@ -661,7 +661,22 @@ trade is vetoed before anyone votes. `isVetoed` short-circuits it.
 
 **Accepting freezes the players; it does not move them.** Between acceptance and execution
 they are in escrow: `lockedByTrade` is consulted by `dropPlayer` (which throws
-`IN_A_TRADE`) and by `proposeTrade`. Without it a manager accepts a trade and cuts the
+`IN_A_TRADE`), by `proposeTrade`, and by `acceptTrade` — the proposal's checks are stale by
+the time anyone accepts.
+
+**In `acceptTrade`, take every row lock first and read the freeze set second.** The obvious
+order is wrong and looks right: two concurrent accepts of the same player both read an
+empty freeze set _before_ either takes a lock, the loser then blocks, wakes after the winner
+commits, re-checks a snapshot that predates it, and passes. Both trades reach ACCEPTED. The
+lock would be doing real work and guarding a value already read. PGlite is single-connection,
+so no test in this repo can catch that — it has to be got right by reading.
+
+**Execution refuses rather than inserting when the release matches no row** (`ASSET_GONE`,
+recorded as EXPIRED). This is the last line of defence and the only one that does not depend
+on knowing _how_ the player left: accepted twice, dropped through a path that skipped the
+freeze, or claimed off waivers. Upstream checks each close one route; this closes the
+outcome. The `(team_id, player_id)` unique index cannot — it is per-team, so the same player
+on two different teams satisfies it. Without it a manager accepts a trade and cuts the
 player they promised, and execution finds a hole where a roster spot used to be.
 
 **Execution releases and re-adds roster rows rather than repointing them.**
