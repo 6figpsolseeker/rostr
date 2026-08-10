@@ -45,6 +45,7 @@ export class TradeError extends Error {
       | "TRADE_NOT_FOUND"
       | "NOT_YOUR_TRADE"
       | "NOT_YOUR_PLAYER"
+      | "NOT_IN_LEAGUE"
       | "WRONG_STATE"
       | "TRADES_DISABLED"
       | "PAST_DEADLINE"
@@ -426,10 +427,20 @@ export async function vetoTrade(
     throw new TradeError("A team in the trade cannot vote on it", "INVOLVED_CANNOT_VETO");
   }
 
-  const [team] = await db.query<{ is_bot: boolean }>("SELECT is_bot FROM teams WHERE id = $1", [
-    actingTeamId,
-  ]);
-  if (team?.is_bot) throw new TradeError("Bots do not vote", "BOT_CANNOT_VETO");
+  // Scope the voter to the trade's own league. Without the league join this
+  // found the team by id alone, so a team in a *different* league could cast a
+  // counted vote — its vote raised the tally while the electorate (the trade
+  // league's uninvolved managers) did not, letting an outsider force a veto.
+  const [team] = await db.query<{ is_bot: boolean }>(
+    `SELECT t.is_bot FROM teams t
+       JOIN trades tr ON tr.id = $2
+      WHERE t.id = $1 AND t.league_id = tr.league_id`,
+    [actingTeamId, tradeId],
+  );
+  if (!team) {
+    throw new TradeError("Only a team in this league can vote on its trades", "NOT_IN_LEAGUE");
+  }
+  if (team.is_bot) throw new TradeError("Bots do not vote", "BOT_CANNOT_VETO");
 
   const [existing] = await db.query<{ team_id: string }>(
     "SELECT team_id FROM trade_vetoes WHERE trade_id = $1 AND team_id = $2",
