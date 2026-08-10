@@ -142,7 +142,80 @@ credentials in `SETUP-REQUIRED.md`, not more code.
   winning" — the one people actually open on a Sunday. See "The scoreboard" below for the
   two rules that are load-bearing.
 
+### Outside review, 2026-08-10 — read this before touching the PR queue
+
+Two outside reviewers have opened PRs. **They are not the same kind of contribution and
+should not be treated the same way.**
+
+**0x-SquidSol.** Seven PRs already merged (#3, #5, #8, #10, #12, #14, #16), each followed
+by a fix of our own on top. Four still open — **#32, #34, #36, #38 — and every one of them
+addresses a bug that is live on `main` right now.** Verified individually on 2026-08-10:
+
+- **#32** — `verifyLeagueAnchor` compares `rulesHash` and nothing else. `OnChainLeague` does
+  not even expose `refundUnlockAt`, `feeRecipient` or `payoutBps`, so three of the economic
+  terms cannot be checked at all. The commissioner signs `initialize_league` from their own
+  wallet, so they choose the account's terms independently of the document members sign — a
+  hostile `refund_unlock_at` leaves every deposit permanently stuck. **This is the one with
+  money at stake.**
+- **#34** — `loadWeekResults` filters `home_milli_points IS NOT NULL`, never `finalized_at`,
+  so the bracket advances and `championship()` crowns from provisional scores.
+- **#36** — `acceptTrade` checks state and receiver only. Two proposals can name the same
+  player, and `resolveTrade` inserts him onto both receivers unconditionally. The
+  `(team_id, player_id)` unique index is per-team and does not stop it.
+- **#38** — `BracketError extends Error`, not `PlayoffError`, so the score-week cron's guard
+  rethrows it and one undersized league aborts scoring for every league.
+
+**Three of those four are bugs in code written in this repo the same week** (#34 and #38 in
+the playoff work, #36 in trades). Squid's diagnoses have been right every time so far. What
+has _not_ been checked is whether each proposed **fix** is correct — that is a separate
+question from whether the bug is real, and it is the one still open.
+
+**vip-ultr (Ammar).** Three PRs, one closed. His diagnoses are also correct — `join_league`
+genuinely was never invoked — but the implementations have needed substantial work.
+
+- **#29 — closed**, superseded by #39, which builds on his commit. Reviewed by three agents
+  under separate mandates (security / state-machine / conformance). Four defects, all
+  confirmed by reading the code: the route took `walletAddress` from the request body with
+  no ownership check; a comment claimed a Postgres membership check that was actually a
+  `getLeagueRules` call; `verifyOnChainJoin` compared a key against a PDA derived from that
+  same key, so `MEMBER_MISMATCH` could never fire while its docstring claimed the opposite;
+  and the retry re-sent an `init` instruction that cannot succeed twice.
+- **#30 — open, do not merge as-is.** `verifyOnChainRefund` is **inverted**: the program sets
+  `refunded = true` and keeps `deposited` as history, so a genuine refund lands in exactly
+  the state the verifier rejects. It returns `ok` only for members who have _not_ refunded.
+  Both routes also take the wallet from the body, same as #29. Composed: any signed-in
+  account can mark any staked member as refunded, and no real refund can ever be recorded.
+  No Rust changed, so the on-chain guarantee is intact — this is funds _accounting_, not
+  funds loss.
+- **#31 — open, effectively unreviewed.** It adds `settle_authority` to the `League` account
+  and an instruction where that authority posts the winners. Before anything else, weigh
+  that against `CLAUDE.md`'s "immutability is by omission… the account has **no authority
+  field**" and `DECISIONS.md`'s "Settlement is derived, not declared". The author is upfront
+  that it is a "trust-minimized bridge"; the question is whether the code matches that
+  description and whether the owner accepts the trade.
+
+**A pattern worth naming, because it recurs across both reviewers and across our own work:**
+several of these PRs ship a comment asserting a guarantee the code does not provide. This
+repo treats comments as specification, so a false comment is a defect in its own right —
+review them as such, and fix the comment before arguing about the code.
+
+**Two program-level problems surfaced that no PR fixes**, both needing Rust and a decision
+before Aug 22:
+
+- **Seat-squatting (issue #18).** `join_league` is permissionless and there is no eviction
+  instruction, so throwaway keypairs can fill a league's seats for a fraction of a SOL and
+  permanently block every real member's deposit. Found independently by Squid and by an
+  adversarial review of #29. It predates everything here; wiring the app to `join_league` is
+  what makes it reachable.
+- **The browser defaults to mainnet.** `WalletProviders.tsx` falls back to
+  `clusterApiUrl("mainnet-beta")` when `NEXT_PUBLIC_SOLANA_RPC_URL` is unset, while the
+  server verifies with `SOLANA_RPC_URL` and the db join gates on `SOLANA_CLUSTER`. Three
+  independent sources of "which chain", no cross-check, and the most dangerous default.
+
 **Next, in order:**
+
+0. **The PR queue above.** Squid's four fix live bugs; #39 needs `anchor test` before it can
+   merge. This outranks new features.
 
 1. **Click through create → anchor → join in a browser.** Everything either side of the
    wallet popup is covered by an automated test; the popup itself is not, and cannot be
