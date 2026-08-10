@@ -13,6 +13,7 @@ import {
   loadWeekResults,
   persistSchedule,
   resolveLeagueWeek,
+  resolveLeagueWeeksThrough,
 } from "./week.js";
 
 let db: PGliteClient | undefined;
@@ -282,6 +283,48 @@ describe("resolveLeagueWeek", () => {
     await expect(resolveLeagueWeek(fx.client, fx.leagueId, WEEK, DURING)).rejects.toMatchObject(
       { code: "NO_SCHEDULE" },
     );
+  });
+});
+
+describe("resolveLeagueWeeksThrough", () => {
+  const week1Finalized = async (fx: Fixture): Promise<boolean> => {
+    const [row] = await fx.client.query<{ finalized_at: string | null }>(
+      "SELECT finalized_at FROM matchups WHERE league_id = $1 AND week = $2 LIMIT 1",
+      [fx.leagueId, WEEK],
+    );
+    return row?.finalized_at != null;
+  };
+
+  it("finalises a prior week that the single-week pointer leaves behind", async () => {
+    // Week 1 is final and its 48h window has elapsed, but the pointer is on a
+    // later week. This is exactly how a paying week is abandoned once the season
+    // moves on: resolving only the pointer week never revisits it.
+    const fx = await setup();
+    await schedule(fx);
+    await finishGames(fx);
+
+    // Resolving only week 5 (which has fixtures but no finished games) leaves
+    // week 1 unfinalised — the bug.
+    await resolveLeagueWeek(fx.client, fx.leagueId, 5, AFTER_STANDARD);
+    expect(await week1Finalized(fx)).toBe(false);
+
+    // The sweep resolves every unfinalised week up to the pointer, so week 1 is
+    // finalised.
+    const outcomes = await resolveLeagueWeeksThrough(fx.client, fx.leagueId, 5, AFTER_STANDARD);
+    expect(outcomes.find((o) => o.week === WEEK)?.finalized).toBe(true);
+    expect(await week1Finalized(fx)).toBe(true);
+  });
+
+  it("leaves nothing to do once every week through the pointer is finalised", async () => {
+    const fx = await setup();
+    await schedule(fx);
+    await finishGames(fx);
+    await resolveLeagueWeek(fx.client, fx.leagueId, WEEK, AFTER_STANDARD);
+
+    // Only week 1 has finished games, so it is the only one that can finalise;
+    // a second sweep finds it already done and nothing else pending to finalise.
+    const again = await resolveLeagueWeeksThrough(fx.client, fx.leagueId, WEEK, AFTER_STANDARD);
+    expect(again).toHaveLength(0);
   });
 });
 

@@ -206,6 +206,42 @@ export async function resolveLeagueWeek(
 }
 
 /**
+ * Resolve every week up to `throughWeek` that still has an unfinalised matchup.
+ *
+ * The scoring cron used to resolve only the single current week. That works for
+ * standings weeks (48h window), whose window closes before the next week's first
+ * kickoff moves the pointer on. It does **not** work for a paying week (168h):
+ * week 15's Thursday game arrives ~4 days after week 14's last game, so the
+ * pointer leaves week 14 three days before its window elapses, and it would never
+ * be finalised — leaving the regular-season prize, and any bracket built from it,
+ * on provisional scores forever. The same abandons week 17 once week-18 games are
+ * ingested.
+ *
+ * Sweeping every still-unfinalised week fixes that. Each call is safe and
+ * idempotent: a finalised week is filtered out here and would in any case be
+ * refused by `resolveLeagueWeek`.
+ */
+export async function resolveLeagueWeeksThrough(
+  db: SqlClient,
+  leagueId: string,
+  throughWeek: number,
+  now: Date,
+): Promise<readonly ResolveWeekOutcome[]> {
+  const weeks = await db.query<{ week: number }>(
+    `SELECT DISTINCT week FROM matchups
+      WHERE league_id = $1 AND week <= $2 AND finalized_at IS NULL
+      ORDER BY week`,
+    [leagueId, throughWeek],
+  );
+
+  const outcomes: ResolveWeekOutcome[] = [];
+  for (const { week } of weeks) {
+    outcomes.push(await resolveLeagueWeek(db, leagueId, Number(week), now));
+  }
+  return outcomes;
+}
+
+/**
  * Why a week may not be finalised yet, or `null` if it may.
  *
  * Two conditions, both necessary: every game must be final, and the correction
@@ -354,7 +390,14 @@ export async function loadWeekResults(
   leagueId: string,
   throughWeek: number,
   phase: MatchupPhase = "REGULAR",
+  finalizedOnly = false,
 ): Promise<readonly MatchupResult[]> {
+  // `finalizedOnly` is what the playoff bracket asks for. Advancement and the
+  // derived champion must key on a settled result, not a provisional one: a
+  // bracket built from live or not-yet-finalised scores advances the wrong team
+  // (and lays orphan fixtures), and a paying week's result can still change
+  // inside the correction window. A finalised matchup always has points, so this
+  // narrows rather than contradicts the `home_milli_points IS NOT NULL` guard.
   const rows = await db.query<{
     week: number;
     home_team_id: string;
@@ -364,7 +407,9 @@ export async function loadWeekResults(
   }>(
     `SELECT week, home_team_id, away_team_id, home_milli_points, away_milli_points
        FROM matchups
-      WHERE league_id = $1 AND week <= $2 AND phase = $3 AND home_milli_points IS NOT NULL
+      WHERE league_id = $1 AND week <= $2 AND phase = $3 AND home_milli_points IS NOT NULL${
+        finalizedOnly ? " AND finalized_at IS NOT NULL" : ""
+      }
       ORDER BY week, id`,
     [leagueId, throughWeek, phase],
   );
