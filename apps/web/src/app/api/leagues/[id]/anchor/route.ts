@@ -28,9 +28,12 @@ import { EscrowConfigError, readOnlyEscrow } from "@/lib/escrow";
  * Both checks live in `@rostr/escrow` rather than inline here — `verifyLeagueAnchor`
  * so it can be exercised against a real validator, `expectedTermsFromRules` and
  * `anchorTermMismatches` so the mapping and the comparison are covered by the fast
- * suite. `apps/web` has no test project, so anything inline in this file would be
- * verified only by being run in production. What is left here is the session, the
- * write, and the status codes.
+ * suite, which needs no credentials and no chain. What is left here is the session,
+ * the write, and the status codes.
+ *
+ * `apps/web` does now have a test project (`pnpm test:web`), but it requires a
+ * database and would require a validator to reach this route — so keeping the
+ * checkable parts checkable without either is still the right split.
  */
 export async function POST(
   request: Request,
