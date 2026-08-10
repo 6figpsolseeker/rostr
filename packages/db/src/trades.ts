@@ -338,12 +338,48 @@ export async function acceptTrade(
     vetoWindowEndsAt(Math.floor(now.getTime() / 1000), stored.rules.trades) * 1000,
   );
 
-  await db.query(
-    "UPDATE trades SET state = 'ACCEPTED', veto_deadline = $2 WHERE id = $1 AND state = 'PROPOSED'",
-    [tradeId, deadline.toISOString()],
-  );
+  return withTransaction(db, async (tx) => {
+    // Re-validate every asset now, not only at propose time. Accepting is the
+    // moment the trade freezes for execution, and the proposal's checks are
+    // stale: since then a player could have been dropped, or committed to a
+    // different trade that was accepted first. Skipping this is what lets one
+    // player be committed to two accepted trades and duplicated onto two rosters
+    // when both execute. The row lock serialises two accepts racing for the same
+    // player; the freeze set then catches whichever loses.
+    const assets = await tx.query<{ from_team_id: string; player_id: string }>(
+      "SELECT from_team_id, player_id FROM trade_assets WHERE trade_id = $1",
+      [tradeId],
+    );
+    const frozen = await lockedByTrade(tx, row!.league_id);
 
-  return loadTrade(db, tradeId);
+    for (const asset of assets) {
+      const [owned] = await tx.query<{ id: string }>(
+        `SELECT id FROM roster_entries
+          WHERE team_id = $1 AND player_id = $2 AND released_at IS NULL
+          FOR UPDATE`,
+        [asset.from_team_id, asset.player_id],
+      );
+      if (!owned) {
+        throw new TradeError(
+          `${asset.player_id} is no longer on team ${asset.from_team_id}'s roster`,
+          "NOT_YOUR_PLAYER",
+        );
+      }
+      if (frozen.has(asset.player_id)) {
+        throw new TradeError(
+          `${asset.player_id} is already committed to an accepted trade`,
+          "PLAYER_IN_ANOTHER_TRADE",
+        );
+      }
+    }
+
+    await tx.query(
+      "UPDATE trades SET state = 'ACCEPTED', veto_deadline = $2 WHERE id = $1 AND state = 'PROPOSED'",
+      [tradeId, deadline.toISOString()],
+    );
+
+    return loadTrade(tx, tradeId);
+  });
 }
 
 /** Decline an offer. Only the team it was made to. */
