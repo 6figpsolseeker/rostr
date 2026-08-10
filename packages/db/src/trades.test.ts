@@ -610,6 +610,100 @@ describe("vetoing", () => {
     await expect(vetoTrade(fx.client, tradeId, outsider, MONDAY)).rejects.toMatchObject({
       code: "NOT_IN_LEAGUE",
     });
+
+    // **The tally is the property, not the error code.** A refusal at the door
+    // proves nothing about the count that actually decides the trade — that is
+    // read separately, and it used to count every row regardless of league.
+    const [trade] = await listTrades(fx.client, fx.leagueId);
+    expect(trade?.vetoes).toBe(0);
+
+    // And the trade the outsider tried to block still goes through.
+    const [resolution] = await resolveDueTrades(fx.client, fx.leagueId, AFTER_WINDOW);
+    expect(resolution?.outcome).toBe("EXECUTED");
+  });
+
+  it("cannot even record a veto row from outside the trade's league", async () => {
+    // The guard in `vetoTrade` closes the door. This asserts the stronger thing:
+    // after migration 0020 the row is *unrepresentable*, so a future path that
+    // inserts one — or a hand-written statement — cannot reintroduce the bug.
+    //
+    // It matters because `trade_vetoes.team_id` is ON DELETE RESTRICT, so a bad
+    // row could not be cleaned up by deleting the team afterwards.
+    const fx = await setup();
+    const tradeId = await propose(fx);
+    await acceptTrade(fx.client, tradeId, fx.teams[1]!, MONDAY);
+
+    const other = await createUser(fx.client, "outside@example.com", "Outside");
+    const otherLeague = await createLeague(fx.client, NFL, {
+      name: "Somewhere Else",
+      commissionerId: other.id,
+      rules: buildNflPprRules({ seasonYear: 2026, draft: DRAFT }) as LeagueRules,
+    });
+    const outsider = (await addTestTeam(fx.client, otherLeague.id, "Outsider")).teamId;
+
+    // Claiming the trade's league does not help: the voter is not in it.
+    await expect(
+      fx.client.query(
+        `INSERT INTO trade_vetoes (trade_id, team_id, league_id, created_at)
+         VALUES ($1, $2, $3, $4)`,
+        [tradeId, outsider, fx.leagueId, MONDAY.toISOString()],
+      ),
+    ).rejects.toThrow(/trade_vetoes_voter_in_league/);
+
+    // Nor does claiming their own: the trade is not in it.
+    await expect(
+      fx.client.query(
+        `INSERT INTO trade_vetoes (trade_id, team_id, league_id, created_at)
+         VALUES ($1, $2, $3, $4)`,
+        [tradeId, outsider, otherLeague.id, MONDAY.toISOString()],
+      ),
+    ).rejects.toThrow(/trade_vetoes_trade_in_league/);
+  });
+
+  it("does not count a veto from a bot or from a team in the trade", async () => {
+    // The constraint scopes by league; it cannot express "not a bot" or "not a
+    // party to this trade", so the tally still has to. Two rows, because two is
+    // the threshold here — if they counted, this trade would be vetoed.
+    const fx = await setup();
+    const tradeId = await propose(fx);
+    await acceptTrade(fx.client, tradeId, fx.teams[1]!, MONDAY);
+
+    // A bot in this league, and the proposer themselves.
+    const [bot] = await fx.client.query<{ id: string }>(
+      `INSERT INTO teams (league_id, owner_id, is_bot, name, slot)
+       VALUES ($1, NULL, true, 'Bot', 99) RETURNING id`,
+      [fx.leagueId],
+    );
+    for (const teamId of [bot!.id, fx.teams[0]!]) {
+      await fx.client.query(
+        `INSERT INTO trade_vetoes (trade_id, team_id, league_id, created_at)
+         VALUES ($1, $2, $3, $4)`,
+        [tradeId, teamId, fx.leagueId, MONDAY.toISOString()],
+      );
+    }
+
+    const [trade] = await listTrades(fx.client, fx.leagueId);
+    expect(trade?.vetoes).toBe(0);
+
+    const [resolution] = await resolveDueTrades(fx.client, fx.leagueId, AFTER_WINDOW);
+    expect(resolution?.outcome).toBe("EXECUTED");
+  });
+
+  it("still counts a veto from inside the league", async () => {
+    // The scoping must not become a way to lose real votes. Two uninvolved
+    // managers is the threshold here, so this is the mirror of the test above.
+    const fx = await setup();
+    const tradeId = await propose(fx);
+    await acceptTrade(fx.client, tradeId, fx.teams[1]!, MONDAY);
+
+    await vetoTrade(fx.client, tradeId, fx.teams[2]!, MONDAY);
+    await vetoTrade(fx.client, tradeId, fx.teams[3]!, MONDAY);
+
+    const [trade] = await listTrades(fx.client, fx.leagueId);
+    expect(trade?.vetoes).toBe(2);
+
+    const [resolution] = await resolveDueTrades(fx.client, fx.leagueId, AFTER_WINDOW);
+    expect(resolution?.outcome).toBe("VETOED");
   });
 
   it("refuses a second vote from the same team", async () => {
