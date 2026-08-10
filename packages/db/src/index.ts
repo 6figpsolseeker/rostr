@@ -95,6 +95,7 @@ export {
   loadRosterForWeek,
   loadWeekLineups,
   loadWeekStats,
+  PRIMARY_PROJECTION_SOURCE,
   PRIMARY_STAT_SOURCE,
   setLineup,
   type SetLineupInput,

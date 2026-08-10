@@ -12,6 +12,7 @@
 
 import type { StatsProvider } from "@rostr/stats";
 import type { SqlClient } from "./client.js";
+import { PRIMARY_PROJECTION_SOURCE } from "./lineups.js";
 import { loadSportIds } from "./sports.js";
 
 export interface SyncResult {
@@ -412,7 +413,13 @@ export async function loadProjections(
   db: SqlClient,
   sportKey: string,
   season: number,
-  source?: string,
+  // **Defaults to one source, and that is a change.** This used to be
+  // `COALESCE($3, p.source)` — omitting the argument meant *no filter*, so every
+  // vendor's rows came back and the caller summed them. The draft board's only
+  // call site omits it, so a second projections provider would have doubled the
+  // numbers the board is sorted by. An optional filter that defaults to "all"
+  // is not a filter; the caller who most needs it is the one who forgets.
+  source: string = PRIMARY_PROJECTION_SOURCE,
   week: number = SEASON_AGGREGATE_WEEK,
 ): Promise<ReadonlyMap<string, readonly { statKey: string; value: number }[]>> {
   const ids = await loadSportIds(db, sportKey);
@@ -424,8 +431,8 @@ export async function loadProjections(
       WHERE p.season = $1
         AND p.week = $4
         AND k.sport_id = $2
-        AND p.source = COALESCE($3, p.source)`,
-    [season, ids.sportId, source ?? null, week],
+        AND p.source = $3`,
+    [season, ids.sportId, source, week],
   );
 
   const byPlayer = new Map<string, { statKey: string; value: number }[]>();
