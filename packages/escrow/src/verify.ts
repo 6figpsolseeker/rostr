@@ -20,6 +20,7 @@
 import type { Program } from "@coral-xyz/anchor";
 import type { Connection, PublicKey } from "@solana/web3.js";
 
+import { payoutArray } from "./instructions.js";
 import { leaguePda } from "./program.js";
 import type { RostrEscrow } from "./types.js";
 
@@ -32,8 +33,18 @@ export interface OnChainLeague {
   /** Base units as a decimal string. Zero for a free league. */
   readonly buyIn: string;
   readonly tokenMint: string;
-  /** Unix seconds after which a stake may be withdrawn unilaterally. */
-  readonly refundUnlockAt: number;
+  /**
+   * Unix seconds after which a stake may be withdrawn unilaterally, as a
+   * decimal string.
+   *
+   * A string rather than a number because this is an `i64` the creator chooses
+   * freely — the program requires only that it is in the future, so `i64::MAX`
+   * is a legal value and is exactly the hostile one: it locks every deposit
+   * forever. `BN.toNumber()` **throws** above 2^53, so decoding it as a number
+   * turns the worst case this check exists to catch into an exception thrown
+   * before any comparison happens.
+   */
+  readonly refundUnlockAt: string;
   readonly feeBps: number;
   /** Base58; where the settlement fee is paid. */
   readonly feeRecipient: string;
@@ -88,7 +99,7 @@ export async function fetchOnChainLeague(
     hasPot: boolean;
     buyIn: { toString(): string };
     tokenMint: PublicKey;
-    refundUnlockAt: { toNumber(): number };
+    refundUnlockAt: { toString(): string };
     feeBps: number;
     feeRecipient: PublicKey;
     payoutBps: number[];
@@ -102,7 +113,7 @@ export async function fetchOnChainLeague(
     hasPot: raw.hasPot,
     buyIn: raw.buyIn.toString(),
     tokenMint: raw.tokenMint.toBase58(),
-    refundUnlockAt: raw.refundUnlockAt.toNumber(),
+    refundUnlockAt: raw.refundUnlockAt.toString(),
     feeBps: raw.feeBps,
     feeRecipient: raw.feeRecipient.toBase58(),
     payoutBps: [...raw.payoutBps],
@@ -155,17 +166,24 @@ export async function verifyLeagueAnchor(
 /**
  * The terms a league's *signed rules* say its on-chain account should hold.
  *
- * The caller builds this from the canonical rule set it already has — the escrow
- * package does not depend on the rules schema, so the mapping (and the payout
- * ordering; see `PRIZE_ORDER` / `payoutArray`) stays with the caller. Every field
- * here is one the program stores independently of `rules_hash`.
+ * The caller builds this from the canonical rule set it already has, because the
+ * escrow package does not depend on the rules schema. The payout ordering is
+ * **not** the caller's to invent: apply `payoutArray()` from this package, which
+ * is the one place `PRIZE_ORDER` is applied — serialising from the declaration
+ * order of `PrizeKey` instead reshuffles the split with no error anywhere.
+ *
+ * Every field here is one the program stores independently of `rules_hash`.
+ *
+ * The six money fields are compared only for a pot league; a free league carries
+ * zeroes and defaults for all of them.
  */
 export interface ExpectedTerms {
   readonly hasPot: boolean;
   readonly maxTeams: number;
-  /** Base units as a decimal string. Only compared for a pot league. */
+  /** Base units as a decimal string. */
   readonly buyIn: string;
-  readonly refundUnlockAt: number;
+  /** Unix seconds, as a decimal string — see `OnChainLeague.refundUnlockAt`. */
+  readonly refundUnlockAt: string;
   readonly tokenMint: string;
   readonly feeBps: number;
   readonly feeRecipient: string;
@@ -173,7 +191,54 @@ export interface ExpectedTerms {
 }
 
 /**
- * Every on-chain economic term that disagrees with the signed rules.
+ * The shape of a rule set this needs, and nothing more.
+ *
+ * Structural rather than an import of `LeagueRules`: the escrow package must not
+ * depend on the rules schema, and a structural type keeps the mapping here — in
+ * the fast test suite, next to `payoutArray` — instead of inline in a route that
+ * nothing tests.
+ */
+export interface RulesLikeTerms {
+  readonly league: { readonly maxTeams: number };
+  readonly pot: {
+    readonly tokenMint: string;
+    readonly buyInBaseUnits: string;
+    readonly refundUnlockAt: number;
+    readonly feeBps: number;
+    readonly feeRecipient: string;
+    readonly payout: readonly { readonly prize: string; readonly basisPoints: number }[];
+  } | null;
+}
+
+/**
+ * What a league's signed rules say its account should hold.
+ *
+ * `pot == null` rather than `pot !== null` is deliberate: a stored document that
+ * omits the key parses as `undefined`, and treating that as "has a pot" would
+ * tell a genuine free league its rules imply one — a mismatch it could never
+ * resolve, on the exact league shape this is meant to protect.
+ */
+export function expectedTermsFromRules(rules: RulesLikeTerms): ExpectedTerms {
+  const pot = rules.pot;
+
+  return {
+    hasPot: pot !== null && pot !== undefined,
+    maxTeams: rules.league.maxTeams,
+    buyIn: pot?.buyInBaseUnits ?? "0",
+    refundUnlockAt: String(pot?.refundUnlockAt ?? 0),
+    tokenMint: pot?.tokenMint ?? "",
+    feeBps: pot?.feeBps ?? 0,
+    feeRecipient: pot?.feeRecipient ?? "",
+    payoutBps: pot ? payoutArray(pot.payout) : [0, 0, 0, 0, 0],
+  };
+}
+
+/**
+ * The on-chain economic terms that disagree with the signed rules.
+ *
+ * Not necessarily *every* one: a pot-versus-free divergence is returned alone,
+ * because the money fields of a free account are zeroes that would produce six
+ * more lines all saying the same thing.
  *
  * `verifyLeagueAnchor` proves the chain holds *our hash*; it cannot prove the
  * chain holds *our terms*, because the program stores them as a separate copy it
@@ -206,7 +271,19 @@ export function anchorTermMismatches(
     ne("refundUnlockAt", onChain.refundUnlockAt, expected.refundUnlockAt);
     ne("tokenMint", onChain.tokenMint, expected.tokenMint);
     ne("feeBps", onChain.feeBps, expected.feeBps);
-    ne("feeRecipient", onChain.feeRecipient, expected.feeRecipient);
+
+    // A recipient only means something when there is a fee to pay it. The
+    // program itself requires one only when `fee_bps > 0`, so a fee-free league
+    // legitimately carries a default or empty recipient — and `feeBps` is
+    // compared just above, so a creator cannot use this to smuggle a fee in.
+    //
+    // Without this, a league created while `FEE_RECIPIENT` is unset stores
+    // `feeRecipient: ""`, which no base58 key can equal. That is not a retry:
+    // the PDA is one-shot, so a false mismatch here means the league can never
+    // be anchored at all, only recreated under a new id.
+    if (expected.feeBps > 0 || onChain.feeBps > 0) {
+      ne("feeRecipient", onChain.feeRecipient, expected.feeRecipient);
+    }
 
     if (
       onChain.payoutBps.length !== expected.payoutBps.length ||

@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
-import { anchorTermMismatches, clusterOf, payoutArray, verifyLeagueAnchor } from "@rostr/escrow";
+import {
+  anchorTermMismatches,
+  clusterOf,
+  expectedTermsFromRules,
+  verifyLeagueAnchor,
+} from "@rostr/escrow";
 import { getChainState, getLeagueRules, recordChainAnchor } from "@rostr/db";
 import { db } from "@/lib/db";
 import { draftContext, DraftContextError } from "@/lib/draft-context";
@@ -14,9 +19,18 @@ import { EscrowConfigError, readOnlyEscrow } from "@/lib/escrow";
  * anything. So this reads the account back and confirms it holds *our* rules hash
  * before recording anything.
  *
- * That check is `verifyLeagueAnchor` in `@rostr/escrow` rather than inline here,
- * so it can be tested against a real validator instead of only in production. All
- * that is left in this file is the session, the write, and the status codes.
+ * **A matching hash is not enough.** The program stores the economic terms as a
+ * separate copy it has no way to check against the hash, so a creator can anchor
+ * the benign document members sign while initialising a hostile buy-in, refund
+ * unlock, fee recipient or payout split. The hash would verify and the money
+ * would not be the money anyone agreed to.
+ *
+ * Both checks live in `@rostr/escrow` rather than inline here — `verifyLeagueAnchor`
+ * so it can be exercised against a real validator, `expectedTermsFromRules` and
+ * `anchorTermMismatches` so the mapping and the comparison are covered by the fast
+ * suite. `apps/web` has no test project, so anything inline in this file would be
+ * verified only by being run in production. What is left here is the session, the
+ * write, and the status codes.
  */
 export async function POST(
   request: Request,
@@ -49,12 +63,51 @@ export async function POST(
       return NextResponse.json({ error: "League has no stored rules" }, { status: 404 });
     }
 
+    const { connection, program } = readOnlyEscrow();
+
+    /**
+     * What the chain says, checked against what members signed.
+     *
+     * Both the hash and the terms, in one place, because a caller that checked
+     * one and not the other is exactly the hole this route exists to close.
+     */
+    const inspect = async () => {
+      const verdict = await verifyLeagueAnchor(program, id, stored.hash);
+      return {
+        verdict,
+        mismatches: verdict.ok
+          ? anchorTermMismatches(verdict.league, expectedTermsFromRules(stored.rules))
+          : [],
+      };
+    };
+
     // Already anchored is success, not an error. Anchoring is a second
     // transaction the commissioner signs, so a retry after a lost response is
     // the ordinary case — and the record is write-once anyway, so a second
     // write would raise from a trigger rather than quietly re-point it.
+    //
+    // **It is still re-checked.** Returning early on the stored boolean alone
+    // would mean the terms check never runs for any league anchored before it
+    // existed, and nothing else in the system ever reads the account again —
+    // so a league recorded once would be trusted forever on the strength of a
+    // check that may never have happened.
     const existing = await getChainState(client, id);
     if (existing?.anchoredAt) {
+      const { verdict, mismatches } = await inspect();
+
+      if (!verdict.ok || mismatches.length > 0) {
+        return NextResponse.json(
+          {
+            error:
+              "This league is recorded as anchored, but the account on-chain no longer " +
+              "matches the rules shown here. Nobody should join or deposit.",
+            reason: verdict.ok ? "TERMS_MISMATCH" : verdict.reason,
+            mismatches,
+          },
+          { status: 409 },
+        );
+      }
+
       return NextResponse.json({
         anchored: true,
         alreadyRecorded: true,
@@ -78,8 +131,7 @@ export async function POST(
       );
     }
 
-    const { connection, program } = readOnlyEscrow();
-    const verdict = await verifyLeagueAnchor(program, id, stored.hash);
+    const { verdict, mismatches } = await inspect();
 
     if (!verdict.ok) {
       // Deliberately specific. "Not found" means the transaction has not landed
@@ -114,18 +166,6 @@ export async function POST(
     // terms the signed rules imply against what the account actually holds, and
     // refuse an anchor that diverges: like a hash mismatch, it is a league nobody
     // should join or deposit into, and the account can never be corrected.
-    const pot = stored.rules.pot;
-    const mismatches = anchorTermMismatches(verdict.league, {
-      hasPot: pot !== null,
-      maxTeams: stored.rules.league.maxTeams,
-      buyIn: pot?.buyInBaseUnits ?? "0",
-      refundUnlockAt: pot?.refundUnlockAt ?? 0,
-      tokenMint: pot?.tokenMint ?? "",
-      feeBps: pot?.feeBps ?? 0,
-      feeRecipient: pot?.feeRecipient ?? "",
-      payoutBps: pot ? payoutArray(pot.payout) : [0, 0, 0, 0, 0],
-    });
-
     if (mismatches.length > 0) {
       return NextResponse.json(
         {

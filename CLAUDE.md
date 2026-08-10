@@ -129,9 +129,31 @@ credentials in `SETUP-REQUIRED.md`, not more code.
 
   **The route does not take the client's word for it.** A signature proves _some_
   transaction happened, not which, so it reads the account back and refuses unless the
-  on-chain hash equals the stored one. The two 409s are deliberately different: `NOT_FOUND`
-  means retry, `HASH_MISMATCH` means the chain holds a different rule set and nobody
-  should join.
+  chain agrees with the signed rules. Three 409s, deliberately different: `NOT_FOUND`
+  means retry; `HASH_MISMATCH` means the chain holds a different rule set; `TERMS_MISMATCH`
+  means the hash matches but the money does not. The last two are not retries — they are
+  leagues nobody should join.
+
+  **A matching hash is not enough, and that is the whole of PR #32.** The program stores
+  the economic terms as a separate copy it has no way to check against the hash, so a
+  creator can anchor the exact document members sign while initialising a hostile buy-in,
+  fee recipient, payout split or `refund_unlock_at`. The last is the worst: `refund_stake`
+  is the only way tokens leave the vault and it requires the clock to have passed, so a
+  far-future value freezes every deposit permanently, and the program permits it — its
+  only check is that the value is in the future.
+
+  Two things about this check are load-bearing. **It re-runs on an already-anchored
+  league** rather than returning early on the stored boolean, because nothing else in the
+  system ever reads the account again and a league recorded before the check existed would
+  otherwise be trusted forever. And **a false positive is unrecoverable** — no setter, no
+  `close`, the PDA derived from the league's UUID — so a wrongly refused league can never
+  be anchored, only recreated under a new id. That is why the fee recipient is compared
+  only when a fee is actually charged: fee-free leagues legitimately carry an empty one.
+
+  `expectedTermsFromRules` and `anchorTermMismatches` live in `@rostr/escrow`, not in the
+  route, because `apps/web` has no test project — a mapping inline in a route is verified
+  only by being run in production, and both defects found in review were in the mapping
+  rather than the comparison.
 
   Verified end to end against a real validator, not reasoned about — see
   `programs/rostr-escrow/tests/anchor.test.ts` below.

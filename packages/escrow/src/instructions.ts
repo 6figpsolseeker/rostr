@@ -67,7 +67,12 @@ export type InitializeLeagueParams = {
   readonly mint: PublicKey;
   /** Base units, as a decimal string — a u64, so never a JS number. */
   readonly buyInBaseUnits: string;
-  readonly refundUnlockAt: number;
+  /**
+   * Unix seconds. A number for ordinary use, or a decimal string for values an
+   * `i64` can hold and a JS number cannot — which a hostile creator may well
+   * choose, and a test must be able to express.
+   */
+  readonly refundUnlockAt: number | string;
   readonly payoutBps: readonly number[];
   readonly feeBps: number;
   readonly feeRecipient: PublicKey;

@@ -11,12 +11,14 @@ export {
   anchorTermMismatches,
   bytesToHex,
   clusterOf,
+  expectedTermsFromRules,
   fetchOnChainLeague,
   hexToBytes,
   verifyLeagueAnchor,
   type AnchorVerdict,
   type ExpectedTerms,
   type OnChainLeague,
+  type RulesLikeTerms,
 } from "./verify.js";
 export {
   PRIZE_ORDER,
