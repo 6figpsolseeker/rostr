@@ -32,7 +32,13 @@ export interface OnChainLeague {
   /** Base units as a decimal string. Zero for a free league. */
   readonly buyIn: string;
   readonly tokenMint: string;
+  /** Unix seconds after which a stake may be withdrawn unilaterally. */
+  readonly refundUnlockAt: number;
   readonly feeBps: number;
+  /** Base58; where the settlement fee is paid. */
+  readonly feeRecipient: string;
+  /** Payout split in basis points, positional (see `PRIZE_ORDER`). */
+  readonly payoutBps: readonly number[];
   readonly maxTeams: number;
   readonly memberCount: number;
 }
@@ -82,7 +88,10 @@ export async function fetchOnChainLeague(
     hasPot: boolean;
     buyIn: { toString(): string };
     tokenMint: PublicKey;
+    refundUnlockAt: { toNumber(): number };
     feeBps: number;
+    feeRecipient: PublicKey;
+    payoutBps: number[];
     maxTeams: number;
     memberCount: number;
   };
@@ -93,7 +102,10 @@ export async function fetchOnChainLeague(
     hasPot: raw.hasPot,
     buyIn: raw.buyIn.toString(),
     tokenMint: raw.tokenMint.toBase58(),
+    refundUnlockAt: raw.refundUnlockAt.toNumber(),
     feeBps: raw.feeBps,
+    feeRecipient: raw.feeRecipient.toBase58(),
+    payoutBps: [...raw.payoutBps],
     maxTeams: raw.maxTeams,
     memberCount: raw.memberCount,
   };
@@ -138,6 +150,76 @@ export async function verifyLeagueAnchor(
   }
 
   return { ok: true, league };
+}
+
+/**
+ * The terms a league's *signed rules* say its on-chain account should hold.
+ *
+ * The caller builds this from the canonical rule set it already has — the escrow
+ * package does not depend on the rules schema, so the mapping (and the payout
+ * ordering; see `PRIZE_ORDER` / `payoutArray`) stays with the caller. Every field
+ * here is one the program stores independently of `rules_hash`.
+ */
+export interface ExpectedTerms {
+  readonly hasPot: boolean;
+  readonly maxTeams: number;
+  /** Base units as a decimal string. Only compared for a pot league. */
+  readonly buyIn: string;
+  readonly refundUnlockAt: number;
+  readonly tokenMint: string;
+  readonly feeBps: number;
+  readonly feeRecipient: string;
+  readonly payoutBps: readonly number[];
+}
+
+/**
+ * Every on-chain economic term that disagrees with the signed rules.
+ *
+ * `verifyLeagueAnchor` proves the chain holds *our hash*; it cannot prove the
+ * chain holds *our terms*, because the program stores them as a separate copy it
+ * has no way to check against the hash. So a creator can anchor the benign
+ * document members sign while initialising the account with a hostile buy-in,
+ * refund unlock, fee recipient or payout split — and members who verified only
+ * the hash would deposit against terms they never agreed to. Closing that is the
+ * caller's job: derive the expected terms from the same signed rules and assert
+ * the account matches, refusing the anchor otherwise.
+ *
+ * Returns an empty array when everything agrees.
+ */
+export function anchorTermMismatches(
+  onChain: OnChainLeague,
+  expected: ExpectedTerms,
+): string[] {
+  const out: string[] = [];
+  const ne = (label: string, got: unknown, want: unknown): void => {
+    if (got !== want) out.push(`${label}: on-chain ${String(got)}, expected ${String(want)}`);
+  };
+
+  ne("hasPot", onChain.hasPot, expected.hasPot);
+  ne("maxTeams", onChain.maxTeams, expected.maxTeams);
+
+  // The money terms only mean anything for a pot league; a free one carries
+  // zeroes/defaults for all of them, and the hasPot check above already caught a
+  // pot-vs-free divergence.
+  if (expected.hasPot && onChain.hasPot) {
+    ne("buyIn", onChain.buyIn, expected.buyIn);
+    ne("refundUnlockAt", onChain.refundUnlockAt, expected.refundUnlockAt);
+    ne("tokenMint", onChain.tokenMint, expected.tokenMint);
+    ne("feeBps", onChain.feeBps, expected.feeBps);
+    ne("feeRecipient", onChain.feeRecipient, expected.feeRecipient);
+
+    if (
+      onChain.payoutBps.length !== expected.payoutBps.length ||
+      onChain.payoutBps.some((v, i) => v !== expected.payoutBps[i])
+    ) {
+      out.push(
+        `payoutBps: on-chain [${onChain.payoutBps.join(",")}], ` +
+          `expected [${expected.payoutBps.join(",")}]`,
+      );
+    }
+  }
+
+  return out;
 }
 
 /**
