@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { clusterOf, verifyLeagueAnchor } from "@rostr/escrow";
+import { anchorTermMismatches, clusterOf, payoutArray, verifyLeagueAnchor } from "@rostr/escrow";
 import { getChainState, getLeagueRules, recordChainAnchor } from "@rostr/db";
 import { db } from "@/lib/db";
 import { draftContext, DraftContextError } from "@/lib/draft-context";
@@ -106,6 +106,37 @@ export async function POST(
             },
             { status: 409 },
           );
+    }
+
+    // The hash matches, but the program stores the economic terms as a separate
+    // copy it cannot check against the hash — so a matching hash does not prove a
+    // matching buy-in, refund unlock, fee recipient or payout split. Compare the
+    // terms the signed rules imply against what the account actually holds, and
+    // refuse an anchor that diverges: like a hash mismatch, it is a league nobody
+    // should join or deposit into, and the account can never be corrected.
+    const pot = stored.rules.pot;
+    const mismatches = anchorTermMismatches(verdict.league, {
+      hasPot: pot !== null,
+      maxTeams: stored.rules.league.maxTeams,
+      buyIn: pot?.buyInBaseUnits ?? "0",
+      refundUnlockAt: pot?.refundUnlockAt ?? 0,
+      tokenMint: pot?.tokenMint ?? "",
+      feeBps: pot?.feeBps ?? 0,
+      feeRecipient: pot?.feeRecipient ?? "",
+      payoutBps: pot ? payoutArray(pot.payout) : [0, 0, 0, 0, 0],
+    });
+
+    if (mismatches.length > 0) {
+      return NextResponse.json(
+        {
+          error:
+            "The on-chain league holds different terms than the rules shown here. Do not let " +
+            "anyone join or deposit: the account was initialised with terms nobody agreed to.",
+          reason: "TERMS_MISMATCH",
+          mismatches,
+        },
+        { status: 409 },
+      );
     }
 
     // The cluster is read off the endpoint we just queried, not accepted from

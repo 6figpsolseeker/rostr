@@ -8,12 +8,14 @@
 
 export { ESCROW_IDL, type EscrowIdl } from "./idl.js";
 export {
+  anchorTermMismatches,
   bytesToHex,
   clusterOf,
   fetchOnChainLeague,
   hexToBytes,
   verifyLeagueAnchor,
   type AnchorVerdict,
+  type ExpectedTerms,
   type OnChainLeague,
 } from "./verify.js";
 export {
