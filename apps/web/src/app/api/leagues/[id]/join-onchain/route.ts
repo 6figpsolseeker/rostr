@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { PublicKey } from "@solana/web3.js";
 import { clusterOf, verifyOnChainJoin } from "@rostr/escrow";
-import { getOnChainJoin, getLeagueRules, recordOnChainJoin } from "@rostr/db";
+import { getChainState, getMemberWallet, getOnChainJoin, recordOnChainJoin } from "@rostr/db";
 import { db } from "@/lib/db";
 import { currentUser } from "@/lib/session";
 import { EscrowConfigError, readOnlyEscrow } from "@/lib/escrow";
@@ -11,13 +11,23 @@ import { EscrowConfigError, readOnlyEscrow } from "@/lib/escrow";
  *
  * The member signs `join_league` from their own wallet — no key of ours is
  * involved — and then tells us it happened. **A report is not evidence.** A
- * signature proves some transaction occurred, not which; and a client can claim
- * anything. So this reads the `Membership` PDA back and confirms it holds this
- * member's key before recording anything.
+ * signature proves some transaction occurred, not which; so this reads the
+ * `Membership` PDA back before recording anything.
  *
- * That check is `verifyOnChainJoin` in `@rostr/escrow` rather than inline here,
- * so it is tested against a real validator instead of only in production — the
- * same discipline as the anchor route one level up.
+ * ## The wallet is never taken from the request
+ *
+ * It is read from the caller's own `league_memberships` row. That single choice
+ * does three things a body field could not: it proves the caller joined this
+ * league in Postgres (the ordering this record depends on), it inherits the
+ * signature `joinLeague` already verified over the rules hash, and it makes it
+ * impossible to write a record against somebody else's wallet.
+ *
+ * An earlier version of this route accepted `walletAddress` in the body and
+ * checked only its shape. Any signed-in account could then attribute a
+ * fabricated signature to another member's wallet, and — because a recorded row
+ * short-circuits this handler — the real member could never correct it. That is
+ * the same defect `/api/leagues/[id]/join` was fixed for: **if you find yourself
+ * reading an identifier out of a body, stop.**
  */
 export async function POST(
   request: Request,
@@ -31,16 +41,9 @@ export async function POST(
       return NextResponse.json({ error: "Sign in first" }, { status: 401 });
     }
 
-    const body = (await request.json().catch(() => ({}))) as {
-      walletAddress?: unknown;
-      signature?: unknown;
-    };
-    const walletAddress = typeof body.walletAddress === "string" ? body.walletAddress.trim() : "";
+    const body = (await request.json().catch(() => ({}))) as { signature?: unknown };
     const signature = typeof body.signature === "string" ? body.signature.trim() : "";
 
-    if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(walletAddress)) {
-      return NextResponse.json({ error: "A Solana wallet address is required" }, { status: 400 });
-    }
     if (!/^[1-9A-HJ-NP-Za-km-z]{64,88}$/.test(signature)) {
       return NextResponse.json(
         { error: "A base58 transaction signature is required" },
@@ -50,16 +53,32 @@ export async function POST(
 
     const client = db();
 
-    // The member must exist in Postgres (the db-side join) before the on-chain
-    // half is recorded. This keeps the two facts independent but ordered: no
-    // on-chain record without a consent record behind it.
-    const stored = await getLeagueRules(client, id);
-    if (!stored) {
-      return NextResponse.json({ error: "League has no stored rules" }, { status: 404 });
+    // The consent record is the source of the wallet, so its absence is also
+    // the ordering check: no on-chain record without a db-side join behind it.
+    const walletAddress = await getMemberWallet(client, id, user.id);
+    if (!walletAddress) {
+      return NextResponse.json(
+        { error: "You have not joined this league yet", reason: "NOT_A_MEMBER" },
+        { status: 403 },
+      );
     }
 
-    // Already recorded on-chain is success, not an error — re-posting after a
-    // lost response is the ordinary case, and the record is upserted.
+    // Which chain this league lives on was fixed when it was anchored, and the
+    // db-side join already refuses a league that is not anchored. Recording an
+    // on-chain join for an unanchored league would assert a fact about a chain
+    // nobody has committed to; recording one observed on a *different* cluster
+    // would be worse, because the PDA is byte-identical everywhere and the row
+    // would look right.
+    const chain = await getChainState(client, id);
+    if (!chain?.anchoredAt) {
+      return NextResponse.json(
+        { error: "This league is not anchored on-chain yet", reason: "NOT_ANCHORED" },
+        { status: 409 },
+      );
+    }
+
+    // Already recorded is success, not an error — re-posting after a lost
+    // response is the ordinary case, and only this member can write this row.
     const existing = await getOnChainJoin(client, id, walletAddress);
     if (existing?.joinedAt) {
       return NextResponse.json({
@@ -71,45 +90,43 @@ export async function POST(
     }
 
     // The signature is an audit breadcrumb, not the proof. The join is accepted
-    // or refused entirely on what the Membership account says.
+    // or refused entirely on whether the Membership account exists.
     const { connection, program } = readOnlyEscrow();
+    const cluster = clusterOf(connection);
+
+    if (chain.cluster && chain.cluster !== cluster) {
+      return NextResponse.json(
+        {
+          error:
+            `This league is anchored on ${chain.cluster}, but the server is reading ` +
+            `${cluster}. Refusing to record a join observed on the wrong chain.`,
+          reason: "WRONG_CLUSTER",
+        },
+        { status: 409 },
+      );
+    }
+
     const verdict = await verifyOnChainJoin(program, id, new PublicKey(walletAddress));
 
     if (!verdict.ok) {
-      // Deliberately specific. "Not found" means the transaction has not landed
-      // — retry. "Member mismatch" means the chain holds a different wallet,
-      // which is not a retry, it is a record nobody should trust.
-      return verdict.reason === "NOT_FOUND"
-        ? NextResponse.json(
-            {
-              error:
-                "No membership account exists on-chain yet. If the transaction was just sent, " +
-                "give it a moment and try again.",
-              reason: verdict.reason,
-            },
-            { status: 409 },
-          )
-        : NextResponse.json(
-            {
-              error:
-                "The on-chain membership belongs to a different wallet than the one that joined " +
-                "here. Do not trust this join.",
-              reason: verdict.reason,
-              onChain: verdict.onChainMember,
-              expected: verdict.expectedMember,
-            },
-            { status: 409 },
-          );
+      return NextResponse.json(
+        {
+          error:
+            "No membership account exists on-chain yet. If the transaction was just sent, " +
+            "give it a moment and try again.",
+          reason: verdict.reason,
+        },
+        { status: 409 },
+      );
     }
 
-    const cluster = clusterOf(connection);
-
-    await recordOnChainJoin(client, id, walletAddress, signature, cluster);
+    await recordOnChainJoin(client, id, walletAddress, user.id, signature, cluster);
 
     return NextResponse.json({
       joined: true,
       cluster,
       signature,
+      walletAddress,
       league: verdict.membership.league.toBase58(),
       member: verdict.membership.member.toBase58(),
     });

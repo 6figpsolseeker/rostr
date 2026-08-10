@@ -2,7 +2,6 @@ import * as anchor from "@coral-xyz/anchor";
 import { beforeAll, describe, expect, it } from "vitest";
 import {
   clusterOf,
-  escrowProgram,
   hexToBytes,
   initializeLeagueIx,
   joinLeagueIx,
@@ -81,7 +80,11 @@ async function createPotLeague(name: string) {
   };
 }
 
-async function anchorOnChain(leagueId: string, rulesHash: string, rules: ReturnType<typeof buildNflPprRules>) {
+async function anchorOnChain(
+  leagueId: string,
+  rulesHash: string,
+  rules: ReturnType<typeof buildNflPprRules>,
+) {
   const pot = rules.pot;
   if (!pot) throw new Error("expected a pot league");
   const ix = await initializeLeagueIx(program, {
@@ -107,7 +110,10 @@ describe("on-chain join is now wired (issue #26)", () => {
     const sig = await anchorOnChain(league.id, league.rulesHash, rules);
     const verdict = await verifyLeagueAnchor(program, league.id, league.rulesHash);
     expect(verdict.ok).toBe(true);
-    await recordChainAnchor(db, league.id, { signature: sig, cluster: clusterOf(provider.connection) });
+    await recordChainAnchor(db, league.id, {
+      signature: sig,
+      cluster: clusterOf(provider.connection),
+    });
 
     const wallet = testWallet(31);
     const user = await createUser(db, "fixed-member@example.com", "Member");
@@ -158,17 +164,30 @@ describe("on-chain join is now wired (issue #26)", () => {
     );
     expect(joinVerdict.ok).toBe(true);
 
-    // And the db record persists, mirroring recordOnChainJoin in the route.
-    await recordOnChainJoin(db, league.id, wallet.address, "3".repeat(88), clusterOf(provider.connection));
+    // And the db record persists. The route derives the wallet from the
+    // caller's own consent row rather than accepting one in the body, so the
+    // user id is part of the record and is what makes the row attributable.
+    await recordOnChainJoin(
+      db,
+      league.id,
+      wallet.address,
+      user.id,
+      "3".repeat(88),
+      clusterOf(provider.connection),
+    );
     const recorded = await getOnChainJoin(db, league.id, wallet.address);
     expect(recorded).not.toBeNull();
     expect(recorded?.walletAddress).toBe(wallet.address);
+    expect(recorded?.userId).toBe(user.id);
   });
 
   it("member_count increments on-chain after the join", async () => {
     const { league, rules } = await createPotLeague("count");
     const sig = await anchorOnChain(league.id, league.rulesHash, rules);
-    await recordChainAnchor(db, league.id, { signature: sig, cluster: clusterOf(provider.connection) });
+    await recordChainAnchor(db, league.id, {
+      signature: sig,
+      cluster: clusterOf(provider.connection),
+    });
 
     const wallet = testWallet(32);
     const user = await createUser(db, "count-member@example.com", "Member");
@@ -219,7 +238,11 @@ describe("on-chain join is now wired (issue #26)", () => {
       [Buffer.from("league"), Buffer.from(league.id.replace(/-/g, ""), "hex")],
       program.programId,
     )[0];
-    const memberPk = membershipPda(program, leaguePk, new anchor.web3.PublicKey(wallet.address));
+    const memberPk = membershipPda(
+      program,
+      leaguePk,
+      new anchor.web3.PublicKey(wallet.address),
+    );
     const accountInfo = await provider.connection.getAccountInfo(memberPk);
     expect(accountInfo).not.toBeNull();
   });

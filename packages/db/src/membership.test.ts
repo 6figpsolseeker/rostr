@@ -808,27 +808,59 @@ describe("memberWallet", () => {
     expect(await memberWallet(fx.client, fx.leagueId, a.userId)).toBe(a.address);
     expect(await memberWallet(fx.client, fx.leagueId, b.userId)).toBe(b.address);
 describe("on-chain join record (issue #26)", () => {
+  /** Join the league for real, so there is a consent row to read back. */
+  async function joined(
+    fx: Fixture,
+    seed: number,
+    email: string,
+  ): Promise<{ userId: string; address: string }> {
+    const m = await member(fx, seed, email);
+    await joinLeague(fx.client, {
+      leagueId: fx.leagueId,
+      userId: m.userId,
+      walletAddress: m.address,
+      signature: signJoin(fx, m.address, m.secret),
+      teamName: `Team ${seed}`,
+    });
+    return { userId: m.userId, address: m.address };
+  }
+
   it("records and reads back a member's on-chain join", async () => {
     const fx = await setup();
-    const m = await member(fx, 1, "a@example.com");
+    const m = await joined(fx, 1, "a@example.com");
 
     expect(await getOnChainJoin(fx.client, fx.leagueId, m.address)).toBeNull();
 
-    await recordOnChainJoin(fx.client, fx.leagueId, m.address, "4".repeat(88), "localnet");
+    await recordOnChainJoin(
+      fx.client,
+      fx.leagueId,
+      m.address,
+      m.userId,
+      "4".repeat(88),
+      "localnet",
+    );
 
     const recorded = await getOnChainJoin(fx.client, fx.leagueId, m.address);
     expect(recorded).not.toBeNull();
     expect(recorded?.walletAddress).toBe(m.address);
+    expect(recorded?.userId).toBe(m.userId);
     expect(recorded?.signature).toBe("4".repeat(88));
     expect(recorded?.cluster).toBe("localnet");
   });
 
   it("upserts on a re-post rather than duplicating", async () => {
+    // A re-post after a lost response is the ordinary case and has to succeed.
+    // This row is deliberately not write-once — see the migration header. What
+    // makes it safe is that only this member's own session can write it.
     const fx = await setup();
-    const m = await member(fx, 1, "a@example.com");
+    const m = await joined(fx, 1, "a@example.com");
 
-    await recordOnChainJoin(fx.client, fx.leagueId, m.address, "4".repeat(88), "localnet");
-    await recordOnChainJoin(fx.client, fx.leagueId, m.address, "9".repeat(88), "devnet");
+    for (const [sig, cluster] of [
+      ["4".repeat(88), "localnet"],
+      ["9".repeat(88), "localnet"],
+    ] as const) {
+      await recordOnChainJoin(fx.client, fx.leagueId, m.address, m.userId, sig, cluster);
+    }
 
     const [rows] = await fx.client.query<{ n: number }>(
       "SELECT count(*)::int AS n FROM league_onchain_joins WHERE league_id = $1 AND wallet_address = $2",
@@ -836,8 +868,68 @@ describe("on-chain join record (issue #26)", () => {
     );
     expect(Number(rows?.n)).toBe(1);
 
-    const recorded = await getOnChainJoin(fx.client, fx.leagueId, m.address);
-    expect(recorded?.signature).toBe("9".repeat(88));
-    expect(recorded?.cluster).toBe("devnet");
+    expect((await getOnChainJoin(fx.client, fx.leagueId, m.address))?.signature).toBe(
+      "9".repeat(88),
+    );
+  });
+
+  it("cannot record a join for a user who never consented", async () => {
+    // The foreign key is the last line of defence behind the route, which reads
+    // the wallet from the consent row rather than from the request.
+    const fx = await setup();
+    const m = await joined(fx, 1, "a@example.com");
+
+    await expect(
+      recordOnChainJoin(
+        fx.client,
+        fx.leagueId,
+        m.address,
+        "00000000-0000-0000-0000-000000000000",
+        "4".repeat(88),
+        "localnet",
+      ),
+    ).rejects.toThrow();
+  });
+});
+
+describe("getMemberWallet", () => {
+  it("returns the wallet a member signed their consent with", async () => {
+    const fx = await setup();
+    const m = await member(fx, 1, "a@example.com");
+    await joinLeague(fx.client, {
+      leagueId: fx.leagueId,
+      userId: m.userId,
+      walletAddress: m.address,
+      signature: signJoin(fx, m.address, m.secret),
+      teamName: "A",
+    });
+
+    expect(await getMemberWallet(fx.client, fx.leagueId, m.userId)).toBe(m.address);
+  });
+
+  it("returns null for someone who has not joined", async () => {
+    // This is the whole security property. The on-chain route derives the
+    // wallet from this function, so a null here is what stops a signed-in
+    // stranger writing a record against somebody else's wallet — and what
+    // enforces "no on-chain record without a consent record behind it".
+    const fx = await setup();
+    const stranger = await member(fx, 2, "stranger@example.com");
+
+    expect(await getMemberWallet(fx.client, fx.leagueId, stranger.userId)).toBeNull();
+  });
+
+  it("does not leak a membership across leagues", async () => {
+    const fx = await setup();
+    const other = await setup();
+    const m = await member(fx, 1, "a@example.com");
+    await joinLeague(fx.client, {
+      leagueId: fx.leagueId,
+      userId: m.userId,
+      walletAddress: m.address,
+      signature: signJoin(fx, m.address, m.secret),
+      teamName: "A",
+    });
+
+    expect(await getMemberWallet(fx.client, other.leagueId, m.userId)).toBeNull();
   });
 });
