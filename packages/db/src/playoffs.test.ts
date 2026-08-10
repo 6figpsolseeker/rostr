@@ -44,7 +44,7 @@ interface Fixture {
  * Seeds end up 1..8 as `t0, t2, t4, t6, t1, t3, t5, t7`. Six make the playoffs;
  * the last two are the consolation bracket.
  */
-async function setup(overrides?: Partial<LeagueRules>): Promise<Fixture> {
+async function setup(overrides?: Partial<LeagueRules>, teamCount = 8): Promise<Fixture> {
   db = await createTestDatabase();
   await seedSport(db, NFL);
 
@@ -60,12 +60,17 @@ async function setup(overrides?: Partial<LeagueRules>): Promise<Fixture> {
   });
 
   const teams: string[] = [];
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < teamCount; i++) {
     teams.push((await addTestTeam(db, league.id, `Team ${i + 1}`)).teamId);
   }
 
-  const points = [200_000, 100_000, 190_000, 90_000, 180_000, 80_000, 170_000, 70_000];
-  for (let i = 0; i < 8; i += 2) {
+  // Distinct, descending totals so the seed order is deterministic. The 8-team
+  // values are kept verbatim because the seeding tests assert against them.
+  const points =
+    teamCount === 8
+      ? [200_000, 100_000, 190_000, 90_000, 180_000, 80_000, 170_000, 70_000]
+      : teams.map((_, i) => 200_000 - i * 5_000);
+  for (let i = 0; i + 1 < teamCount; i += 2) {
     await db.query(
       `INSERT INTO matchups
          (league_id, week, phase, home_team_id, away_team_id,
@@ -226,6 +231,26 @@ describe("laying the first round", () => {
     expect(first.written).toBe(3);
     expect(second.written).toBe(0);
     expect(await fixtures(fx, 15)).toHaveLength(2);
+  });
+});
+
+describe("small leagues (fewer teams than the playoff field)", () => {
+  it("does not crash a five-team league", async () => {
+    // A pot league gets no bots, so five friends is a five-team league. The
+    // frozen bye count is 2 (sized for a six-team field); applied to five teams
+    // it leaves three to pair — odd — and the bracket throws, which the shared
+    // scoring cron then rethrows, taking down every league's scoring with it.
+    const fx = await setup(undefined, 5);
+
+    await expect(advancePlayoffs(fx.client, fx.leagueId)).resolves.toBeDefined();
+    expect((await playoffState(fx.client, fx.leagueId)).playoffs).not.toBeNull();
+  });
+
+  it("does not crash a three-team league", async () => {
+    const fx = await setup(undefined, 3);
+
+    await expect(advancePlayoffs(fx.client, fx.leagueId)).resolves.toBeDefined();
+    expect((await playoffState(fx.client, fx.leagueId)).playoffs).not.toBeNull();
   });
 });
 
