@@ -10,10 +10,12 @@ import type { PGliteClient } from "./testing.js";
 import {
   autoFillLineup,
   ensureLineups,
+  loadAverages,
   loadLineup,
   loadRosterForWeek,
   loadWeekLineups,
   loadWeekStats,
+  PRIMARY_STAT_SOURCE,
   setLineup,
 } from "./lineups.js";
 
@@ -621,7 +623,7 @@ describe("scoring a week end to end", () => {
     ] as const) {
       await fx.client.query(
         `INSERT INTO stat_lines (player_id, season, week, stat_key_id, value, source)
-         VALUES ($1, $2, $3, $4, $5, 'test')`,
+         VALUES ($1, $2, $3, $4, $5, 'tank01')`,
         [fx.players.get("sun-qb"), SEASON, WEEK, statKeys.get(statKey), value],
       );
     }
@@ -832,5 +834,114 @@ describe("the schedule is a precondition for locking", () => {
     });
 
     expect(saved.find((slot) => slot.slotType === "TE")?.playerId).toBe(bye);
+  });
+});
+
+describe("one source decides the score", () => {
+  /**
+   * `stat_lines_current` is `DISTINCT ON (…, source)`, so two providers reporting
+   * the same stat are two rows, and `scorePlayer` folds over whatever it is
+   * handed. Reading unfiltered counted every shared stat twice — and only for the
+   * players both providers covered, so the distortion was uneven and reordered
+   * rankings rather than merely inflating them.
+   *
+   * Latent rather than live: nothing writes `stat_lines` in production yet. The
+   * second provider is a planned, deliberate addition (`docs/RULES.md` §7), which
+   * is exactly why this is fixed before it arrives rather than after — the day it
+   * fires is a paying week.
+   */
+  const statId = async (fx: Fixture, key: string): Promise<string> => {
+    const [row] = await fx.client.query<{ id: string }>(
+      `SELECT k.id FROM stat_keys k JOIN sports s ON s.id = k.sport_id
+        WHERE s.key = $1 AND k.key = $2`,
+      [NFL.key, key],
+    );
+    return row!.id;
+  };
+
+  const writeStat = async (
+    fx: Fixture,
+    playerId: string,
+    key: string,
+    value: number,
+    source: string,
+    revision = 0,
+  ): Promise<void> => {
+    await fx.client.query(
+      `INSERT INTO stat_lines (player_id, season, week, stat_key_id, value, source, revision)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [playerId, SEASON, WEEK, await statId(fx, key), value, source, revision],
+    );
+  };
+
+  it("counts a stat once when two providers both report it", async () => {
+    const fx = await setup();
+    const qb = fx.players.get("sun-qb")!;
+
+    await writeStat(fx, qb, "pass_yd", 300, PRIMARY_STAT_SOURCE);
+    await writeStat(fx, qb, "pass_yd", 300, "sportsdataio");
+
+    const stats = await loadWeekStats(fx.client, NFL.key, SEASON, WEEK);
+
+    // One entry, not two. Unfiltered this was [300, 300] and scored double.
+    expect(stats.get(qb)).toHaveLength(1);
+    expect(stats.get(qb)?.[0]?.value).toBe(300);
+  });
+
+  it("keeps both providers visible for the agreement gate to compare", async () => {
+    // The guard against a later "simplification" that collapses sources in the
+    // view. `docs/RULES.md` §7 requires two providers to *agree* before a paying
+    // week finalises, and the view is the only place their values sit side by
+    // side. Filtering at read time preserves that; collapsing at storage
+    // destroys it, and would have to be undone to ship G4/G5.
+    const fx = await setup();
+    const qb = fx.players.get("sun-qb")!;
+
+    await writeStat(fx, qb, "pass_yd", 300, PRIMARY_STAT_SOURCE);
+    await writeStat(fx, qb, "pass_yd", 305, "sportsdataio");
+
+    const rows = await fx.client.query<{ source: string; value: number }>(
+      `SELECT source, value FROM stat_lines_current
+        WHERE player_id = $1 AND season = $2 AND week = $3`,
+      [qb, SEASON, WEEK],
+    );
+
+    expect(rows).toHaveLength(2);
+    expect(rows.map((r) => Number(r.value)).sort()).toEqual([300, 305]);
+  });
+
+  it("still takes the latest revision within the chosen source", async () => {
+    // The fix must not be implemented by keying on revision globally: revisions
+    // resolve *within* a source, so a correction replaces rather than adds.
+    const fx = await setup();
+    const qb = fx.players.get("sun-qb")!;
+
+    await writeStat(fx, qb, "pass_yd", 300, PRIMARY_STAT_SOURCE, 0);
+    await writeStat(fx, qb, "pass_yd", 250, PRIMARY_STAT_SOURCE, 1);
+    await writeStat(fx, qb, "pass_yd", 999, "sportsdataio", 0);
+
+    const stats = await loadWeekStats(fx.client, NFL.key, SEASON, WEEK);
+
+    expect(stats.get(qb)).toHaveLength(1);
+    expect(stats.get(qb)?.[0]?.value).toBe(250);
+  });
+
+  it("averages a season from one source, so the autolineup ranks honestly", async () => {
+    // `loadAverages` feeds `autoFillLineup`, which is the fallback ranking for
+    // any player without a projection. A doubled average changes *which* players
+    // are started, not only what they score.
+    const fx = await setup();
+    const qb = fx.players.get("sun-qb")!;
+
+    await fx.client.query(
+      `INSERT INTO stat_lines (player_id, season, week, stat_key_id, value, source, revision)
+       VALUES ($1, $2, 1, $3, 300, $4, 0), ($1, $2, 1, $3, 300, 'sportsdataio', 0)`,
+      [qb, SEASON, await statId(fx, "pass_yd"), PRIMARY_STAT_SOURCE],
+    );
+
+    const averages = await loadAverages(fx.client, [qb], SEASON, 2, fx.rules);
+
+    // 300 passing yards at 0.04/yd is 12 points, once.
+    expect(averages.get(qb)).toBe(12_000);
   });
 });
