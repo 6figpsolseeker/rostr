@@ -82,6 +82,7 @@ export {
   type MatchupPhase,
   persistSchedule,
   resolveLeagueWeek,
+  resolveLeagueWeeksThrough,
   WeekError,
   type ResolveWeekOutcome,
 } from "./week.js";

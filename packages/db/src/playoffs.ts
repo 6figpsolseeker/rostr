@@ -143,7 +143,11 @@ async function bracketFor(
   // there is simply no bracket.
   if (field.length < 2) return null;
 
-  const results = await loadWeekResults(db, leagueId, lastWeek(rules), phase);
+  // Finalised results only. A round advances, and the champion is derived, only
+  // from a settled score — never a live, provisional, or within-correction-window
+  // one. Otherwise the bracket lays fixtures off a 0-0 game that has not kicked
+  // off, and a Week 17 leader is crowned before the game is even played.
+  const results = await loadWeekResults(db, leagueId, lastWeek(rules), phase, true);
 
   return {
     phase,

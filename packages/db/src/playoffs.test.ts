@@ -104,6 +104,22 @@ async function score(
   );
 }
 
+/** Points written, but `finalized_at` left NULL — a live or within-window score. */
+async function scoreProvisional(
+  fx: Fixture,
+  week: number,
+  homeTeamId: string,
+  homePoints: number,
+  awayPoints: number,
+): Promise<void> {
+  await fx.client.query(
+    `UPDATE matchups
+        SET home_milli_points = $3, away_milli_points = $4
+      WHERE league_id = $1 AND week = $2 AND home_team_id = $5 AND phase <> 'REGULAR'`,
+    [fx.leagueId, week, homePoints, awayPoints, homeTeamId],
+  );
+}
+
 async function fixtures(fx: Fixture, week: number) {
   return fx.client.query<{ home_team_id: string; away_team_id: string; phase: string }>(
     `SELECT home_team_id, away_team_id, phase FROM matchups
@@ -472,6 +488,49 @@ describe("advancing round by round", () => {
     const result = await championship(fx.client, fx.leagueId);
     expect(result.champion).toBeNull();
     expect(result.complete).toBe(false);
+  });
+});
+
+describe("advances and crowns only on finalised results", () => {
+  it("does not lay the next round from a provisional (non-finalised) result", async () => {
+    // A round must not advance off a live or within-correction-window score:
+    // the bracket would lay fixtures off a result that can still change, and off
+    // a game that may not have kicked off (a 0-0 shows as a tie).
+    const fx = await setup();
+    await advancePlayoffs(fx.client, fx.leagueId);
+
+    await scoreProvisional(fx, 15, fx.teams[4]!, 120_000, 100_000);
+    await scoreProvisional(fx, 15, fx.teams[6]!, 90_000, 130_000);
+
+    const outcome = await advancePlayoffs(fx.client, fx.leagueId);
+
+    expect(outcome.written).toBe(0);
+    expect(await fixtures(fx, 16)).toHaveLength(0);
+  });
+
+  it("does not crown a champion from a provisional final, but does once it finalises", async () => {
+    const fx = await setup();
+    await advancePlayoffs(fx.client, fx.leagueId);
+    await score(fx, 15, fx.teams[4]!, 120_000, 100_000);
+    await score(fx, 15, fx.teams[6]!, 90_000, 130_000);
+    await advancePlayoffs(fx.client, fx.leagueId);
+    await score(fx, 16, fx.teams[0]!, 130_000, 100_000);
+    await score(fx, 16, fx.teams[2]!, 100_000, 130_000);
+    await advancePlayoffs(fx.client, fx.leagueId);
+
+    // Week 17 scored but not finalised — still inside the 168h correction window.
+    await scoreProvisional(fx, 17, fx.teams[0]!, 140_000, 120_000);
+    await scoreProvisional(fx, 17, fx.teams[2]!, 90_000, 110_000);
+    await scoreProvisional(fx, 17, fx.teams[5]!, 100_000, 90_000);
+
+    expect((await championship(fx.client, fx.leagueId)).champion).toBeNull();
+
+    // Finalise it, and the champion is derived.
+    await score(fx, 17, fx.teams[0]!, 140_000, 120_000);
+    await score(fx, 17, fx.teams[2]!, 90_000, 110_000);
+    await score(fx, 17, fx.teams[5]!, 100_000, 90_000);
+
+    expect((await championship(fx.client, fx.leagueId)).champion).toBe(fx.teams[0]);
   });
 });
 

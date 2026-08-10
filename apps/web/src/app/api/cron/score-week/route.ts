@@ -5,6 +5,7 @@ import {
   enterPlayoffs,
   PlayoffError,
   resolveLeagueWeek,
+  resolveLeagueWeeksThrough,
   WeekError,
 } from "@rostr/db";
 import { db } from "@/lib/db";
@@ -119,13 +120,20 @@ export async function GET(request: Request): Promise<NextResponse> {
     }
 
     try {
-      const outcome = await resolveLeagueWeek(client, league.id, week, now);
+      // A single explicit week is targeted directly; otherwise sweep every
+      // still-unfinalised week up to the current one, so a paying week (168h
+      // window) finalises even after the pointer has moved past it to the
+      // playoffs. The current week's outcome is what the status line reports.
+      const outcomes = Number.isFinite(requestedWeek)
+        ? [await resolveLeagueWeek(client, league.id, week, now)]
+        : await resolveLeagueWeeksThrough(client, league.id, week, now);
+      const outcome = outcomes.find((o) => o.week === week) ?? outcomes.at(-1);
       scored.push({
         leagueId: league.id,
         name: league.name,
-        matchups: outcome.matchups,
-        finalized: outcome.finalized,
-        ...(outcome.holdReason ? { holdReason: outcome.holdReason } : {}),
+        matchups: outcome?.matchups ?? 0,
+        finalized: outcome?.finalized ?? true,
+        ...(outcome?.holdReason ? { holdReason: outcome.holdReason } : {}),
         ...(bracketGames > 0 ? { bracketGames } : {}),
         ...(bracketProblem ? { bracketProblem } : {}),
       });
