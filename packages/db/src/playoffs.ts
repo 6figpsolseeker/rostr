@@ -151,10 +151,17 @@ async function bracketFor(
     bracket: buildBracket({
       field,
       weeks: rules.schedule.playoffWeeks,
-      // Only the main bracket carries the league's frozen bye count. The
-      // consolation field is whatever is left over, so its byes are whatever
-      // its own size needs — there is no signed number for it.
-      firstRoundByes: phase === "PLAYOFF" ? rules.schedule.byeSeeds : byesFor(field.length),
+      // The main bracket carries the league's frozen bye count only when the
+      // field is the size it was frozen for. A smaller field — a league that
+      // never reached that many teams (a pot league gets no bots, so five
+      // friends is a five-team playoff) — takes whatever byes its own size needs
+      // to form a valid round, exactly as the consolation bracket does. Applying
+      // the frozen count to a smaller field leaves an odd first round, which
+      // throws — and the scoring cron rethrows it across every league.
+      firstRoundByes:
+        phase === "PLAYOFF" && field.length === rules.schedule.playoffTeams
+          ? rules.schedule.byeSeeds
+          : byesFor(field.length),
       results,
       // Third place is a prize, so it exists only where one is paid. The
       // consolation bracket pays its winner and nobody else.

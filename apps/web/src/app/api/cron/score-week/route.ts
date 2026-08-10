@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { NFL } from "@rostr/core";
+import { BracketError, NFL } from "@rostr/core";
 import {
   advancePlayoffs,
   enterPlayoffs,
@@ -89,7 +89,10 @@ export async function GET(request: Request): Promise<NextResponse> {
       await enterPlayoffs(client, league.id);
       bracketGames = (await advancePlayoffs(client, league.id)).written;
     } catch (error) {
-      if (!(error instanceof PlayoffError)) throw error;
+      // A league still mid-season refuses (PlayoffError), and a bracket that
+      // cannot be built for this league (BracketError) is this league's problem.
+      // Neither may abort the shared run and stop every other league scoring.
+      if (!(error instanceof PlayoffError) && !(error instanceof BracketError)) throw error;
     }
 
     try {
