@@ -12,9 +12,11 @@ import {
   ensureLineups,
   loadAverages,
   loadLineup,
+  loadProjectedPoints,
   loadRosterForWeek,
   loadWeekLineups,
   loadWeekStats,
+  PRIMARY_PROJECTION_SOURCE,
   PRIMARY_STAT_SOURCE,
   setLineup,
 } from "./lineups.js";
@@ -943,5 +945,104 @@ describe("one source decides the score", () => {
 
     // 300 passing yards at 0.04/yd is 12 points, once.
     expect(averages.get(qb)).toBe(12_000);
+  });
+});
+
+describe("one source ranks the autofill", () => {
+  /**
+   * The projection sibling of the stat double-count.
+   *
+   * `player_projections` is keyed on `(player, season, week, source, stat_key)`
+   * precisely so a second opinion does not overwrite the first, and `scorePlayer`
+   * folds over every row — so an unfiltered read projects a dual-covered player
+   * at roughly double while single-covered players stay as they are. That is a
+   * *reordering*, and the ranking is what decides who starts.
+   *
+   * Wider than it looks: `autofill_enabled` defaults to true and the autofill
+   * also fills gaps in a hand-set lineup, so this reaches every manager in a
+   * league, not only abandoned teams.
+   */
+  const projStatId = async (fx: Fixture, key: string): Promise<string> => {
+    const [row] = await fx.client.query<{ id: string }>(
+      `SELECT k.id FROM stat_keys k JOIN sports s ON s.id = k.sport_id
+        WHERE s.key = $1 AND k.key = $2`,
+      [NFL.key, key],
+    );
+    return row!.id;
+  };
+
+  const project = async (
+    fx: Fixture,
+    playerId: string,
+    key: string,
+    value: number,
+    source: string,
+    week = WEEK,
+  ): Promise<void> => {
+    await fx.client.query(
+      `INSERT INTO player_projections (player_id, season, week, source, stat_key_id, value)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [playerId, SEASON, week, source, await projStatId(fx, key), value],
+    );
+  };
+
+  it("projects a player once when two providers both cover him", async () => {
+    const fx = await setup();
+    const qb = fx.players.get("sun-qb")!;
+
+    await project(fx, qb, "pass_yd", 300, PRIMARY_PROJECTION_SOURCE);
+    await project(fx, qb, "pass_yd", 300, "sportsdataio");
+
+    const projected = await loadProjectedPoints(fx.client, SEASON, WEEK, fx.rules);
+
+    // 300 yards at 0.04/yd is 12 points. Unfiltered this was 24.
+    expect(projected.get(qb)).toBe(12_000);
+  });
+
+  it("selects the named source rather than adding to it", async () => {
+    // Proves the parameter picks one opinion. A fix that summed and then halved,
+    // or averaged, would pass the test above and fail this one.
+    const fx = await setup();
+    const qb = fx.players.get("sun-qb")!;
+
+    await project(fx, qb, "pass_yd", 300, PRIMARY_PROJECTION_SOURCE);
+    await project(fx, qb, "pass_yd", 100, "sportsdataio");
+
+    const other = await loadProjectedPoints(fx.client, SEASON, WEEK, fx.rules, "sportsdataio");
+
+    expect(other.get(qb)).toBe(4_000);
+  });
+
+  it("keeps the second opinion on the table", async () => {
+    // Migration 0013 exists so a second opinion never overwrites the first.
+    // Filtering at read time preserves that; narrowing the key would not, and
+    // this fails if anyone later "simplifies" it that way.
+    const fx = await setup();
+    const qb = fx.players.get("sun-qb")!;
+
+    await project(fx, qb, "pass_yd", 300, PRIMARY_PROJECTION_SOURCE);
+    await project(fx, qb, "pass_yd", 250, "sportsdataio");
+
+    const rows = await fx.client.query<{ source: string }>(
+      "SELECT source FROM player_projections WHERE player_id = $1 AND week = $2",
+      [qb, WEEK],
+    );
+
+    expect(rows).toHaveLength(2);
+  });
+
+  it("does not mix the season aggregate into a weekly projection", async () => {
+    // Week 0 is the season total the draft board uses. The weekly read is exact
+    // equality on week, so the two can never be summed — a regression pin rather
+    // than a fix, since this already held.
+    const fx = await setup();
+    const qb = fx.players.get("sun-qb")!;
+
+    await project(fx, qb, "pass_yd", 4000, PRIMARY_PROJECTION_SOURCE, 0);
+    await project(fx, qb, "pass_yd", 300, PRIMARY_PROJECTION_SOURCE, WEEK);
+
+    const projected = await loadProjectedPoints(fx.client, SEASON, WEEK, fx.rules);
+
+    expect(projected.get(qb)).toBe(12_000);
   });
 });

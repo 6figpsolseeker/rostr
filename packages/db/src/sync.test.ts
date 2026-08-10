@@ -423,7 +423,10 @@ describe("syncProjections", () => {
 
     expect(await syncProjections(client, provider, "nfl", 2026)).toMatchObject({ inserted: 2 });
 
-    const loaded = await loadProjections(client, "nfl", 2026);
+    // The fake provider stamps 'fake', so the read has to name it — the default
+    // is the real provider, deliberately, so a caller who forgets gets nothing
+    // rather than everything.
+    const loaded = await loadProjections(client, "nfl", 2026, "fake");
     expect(loaded.size).toBe(1);
   });
 
@@ -442,8 +445,8 @@ describe("syncProjections", () => {
 
     // The season projection is what the draft board reads; the week is what the
     // autofill ranks on. One must not overwrite the other.
-    const season = await loadProjections(client, "nfl", 2026);
-    const week3 = await loadProjections(client, "nfl", 2026, undefined, 3);
+    const season = await loadProjections(client, "nfl", 2026, "fake");
+    const week3 = await loadProjections(client, "nfl", 2026, "fake", 3);
 
     expect(season.get([...season.keys()][0]!)?.[0]?.value).toBe(1231);
     expect(week3.get([...week3.keys()][0]!)?.[0]?.value).toBe(78);

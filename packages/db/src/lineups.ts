@@ -74,6 +74,29 @@ import { withTransaction } from "./transaction.js";
  * So: a line of code, changed by a reviewed commit, identical everywhere.
  */
 export const PRIMARY_STAT_SOURCE = "tank01";
+/**
+ * The provider whose *projections* rank the autofill.
+ *
+ * Deliberately separate from `PRIMARY_STAT_SOURCE`, even though one vendor
+ * satisfies both today. The two choices have opposite drivers: a stats source is
+ * chosen for factual accuracy and sits under the two-provider agreement gate in
+ * `docs/RULES.md` §7; a projections source is chosen for model quality and is
+ * **exempt** from that gate — §7 is explicit that a projection is an opinion, and
+ * opinions could never pass an agreement test. Coupling them would mean that
+ * swapping the stats oracle silently re-ranks every autolineup.
+ *
+ * The filter itself is not optional. `player_projections` is keyed on
+ * `(player, season, week, source, stat_key)` precisely so a second opinion does
+ * not overwrite the first (migration 0013), and `scorePlayer` folds over every
+ * row it is handed — so reading unfiltered projects a dual-covered player at
+ * roughly double and leaves single-covered players alone. That is a *reordering*,
+ * not a scale, and the ranking is what decides who starts.
+ *
+ * `DECISIONS.md` puts it best: store the projection used, **with its source**,
+ * and the decision is as reproducible as anything else in the system. A number
+ * summed across two vendors is reproducible from neither.
+ */
+export const PRIMARY_PROJECTION_SOURCE = "tank01";
 
 export class LineupError extends Error {
   constructor(
@@ -471,13 +494,14 @@ export async function loadProjectedPoints(
   season: number,
   week: number,
   rules: LeagueRules,
+  source: string = PRIMARY_PROJECTION_SOURCE,
 ): Promise<ReadonlyMap<string, number>> {
   const rows = await db.query<{ player_id: string; key: string; value: number }>(
     `SELECT p.player_id, k.key, p.value
        FROM player_projections p
        JOIN stat_keys k ON k.id = p.stat_key_id
-      WHERE p.season = $1 AND p.week = $2`,
-    [season, week],
+      WHERE p.season = $1 AND p.week = $2 AND p.source = $3`,
+    [season, week, source],
   );
 
   const byPlayer = new Map<string, StatLine[]>();

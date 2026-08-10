@@ -341,6 +341,25 @@ you need one of each. What matters is who is the best one left at a position.
 touchdown, so a provider's number on the draft board would disagree with the number that
 decides matchups. The same `scorePlayer()` produces both.
 
+**And read from one source — `PRIMARY_PROJECTION_SOURCE`.** `player_projections` is keyed
+on `(player, season, week, source, stat_key)` so a second opinion never overwrites the
+first, and `scorePlayer` folds over every row — so an unfiltered read projects a
+dual-covered player at roughly double and leaves single-covered players alone. That is a
+reordering, and the ranking is what decides who starts. It reaches every manager, not only
+abandoned teams: `autofill_enabled` defaults to true and the autofill also fills gaps in a
+hand-set lineup.
+
+**It is a separate constant from `PRIMARY_STAT_SOURCE`, on purpose.** One vendor satisfies
+both today, but the choices have opposite drivers: a stats source is picked for factual
+accuracy under §7's two-provider agreement gate, and a projections source is picked for
+model quality and is _exempt_ from that gate — §7 says a projection is an opinion, and
+opinions cannot pass an agreement test. Coupled, swapping the stats oracle would silently
+re-rank every autolineup.
+
+`loadProjections` used to default to _every_ source (`COALESCE($3, p.source)`), and the
+draft board is its only caller and omitted the argument — so the board would have doubled
+too. An optional filter defaulting to "all" is not a filter.
+
 One provider call covers the whole season — `getNFLProjections` with **no `week`**.
 See [`docs/TANK01.md`](docs/TANK01.md), which records the verbatim response shape.
 
