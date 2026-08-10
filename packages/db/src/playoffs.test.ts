@@ -237,6 +237,76 @@ describe("laying the first round", () => {
   });
 });
 
+describe("a pot league too small for a consolation bracket", () => {
+  /**
+   * Six members and the default rules is a league that can never settle.
+   *
+   * `consolationField` is `standings.slice(playoffTeams)`, and `playoffTeams`
+   * defaults to 6 — so at six members the consolation field is empty, at seven
+   * it is one team, and `bracketFor` returns null for both. That is correct on
+   * its own terms: there is no bracket to play.
+   *
+   * But CONSOLATION is a **paid** prize in the default payout, and `complete`
+   * requires every paid prize to have a holder. So the league plays a full
+   * postseason, crowns a champion — and never becomes complete, which is the
+   * flag settlement will read. Validation only compares `playoffTeams` against
+   * `maxTeams`, never against how many people actually joined, and the rules are
+   * frozen at creation, so an affected league cannot be corrected afterwards.
+   *
+   * This test asserts the defect rather than the desired behaviour. It is here
+   * so the decision is visible and so whatever fix is chosen has something to
+   * flip. See CLAUDE.md, "One league's failure never stops the others".
+   */
+  const POT = {
+    tokenMint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+    buyInBaseUnits: "25000000",
+    payout: [
+      { prize: "CHAMPION", basisPoints: 6000 },
+      { prize: "RUNNER_UP", basisPoints: 1500 },
+      { prize: "REGULAR_SEASON", basisPoints: 1000 },
+      { prize: "CONSOLATION", basisPoints: 1000 },
+      { prize: "THIRD_PLACE", basisPoints: 500 },
+    ],
+    refundUnlockAt: 1_773_000_000,
+    feeBps: 100,
+    feeRecipient: "6dNUCTMTgoHhbfgDzKtiPvBpJ2LzMwGqBpKmUDgQtNMK",
+  } as unknown as LeagueRules["pot"];
+
+  it("crowns a champion and still never completes", async () => {
+    const base = buildNflPprRules({ seasonYear: 2026, draft: DRAFT });
+    // No bots where there is money: a bot has no wallet and paid no buy-in.
+    const fx = await setup({ pot: POT, league: { ...base.league, maxBots: 0 } }, 6);
+
+    // Seeds are t0, t2, t4, t1, t3, t5 — the three winners on points, then the
+    // three losers. All six make the playoffs; nobody is left for consolation.
+    const state = await playoffState(fx.client, fx.leagueId);
+    expect(state.playoffs?.field).toHaveLength(6);
+    expect(state.consolation).toBeNull();
+
+    await advancePlayoffs(fx.client, fx.leagueId);
+    await score(fx, 15, fx.teams[4]!, 120_000, 100_000); // seed 3 beats seed 6
+    await score(fx, 15, fx.teams[1]!, 120_000, 100_000); // seed 4 beats seed 5
+    await advancePlayoffs(fx.client, fx.leagueId);
+    await score(fx, 16, fx.teams[0]!, 130_000, 100_000); // seed 1 beats seed 4
+    await score(fx, 16, fx.teams[2]!, 130_000, 100_000); // seed 2 beats seed 3
+    await advancePlayoffs(fx.client, fx.leagueId);
+    await score(fx, 17, fx.teams[0]!, 140_000, 120_000); // final
+    await score(fx, 17, fx.teams[4]!, 110_000, 90_000); // third place
+
+    const result = await championship(fx.client, fx.leagueId);
+
+    // Every prize this league can decide *is* decided.
+    expect(result.champion).toBe(fx.teams[0]);
+    expect(result.runnerUp).toBe(fx.teams[2]);
+    expect(result.thirdPlace).toBe(fx.teams[4]);
+    expect(result.regularSeason).toBe(fx.teams[0]);
+
+    // And the one it cannot is paid, so the league never settles.
+    expect(result.consolation).toBeNull();
+    expect(result.complete).toBe(false);
+  });
+});
+
 describe("small leagues (fewer teams than the playoff field)", () => {
   /** The first round the bracket actually plays, with its byes and pairings. */
   const firstRound = async (fx: Fixture) => {
