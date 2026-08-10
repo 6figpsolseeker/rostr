@@ -140,7 +140,7 @@ async function score(
 ): Promise<void> {
   await fx.client.query(
     `INSERT INTO stat_lines (player_id, season, week, stat_key_id, value, source, revision)
-     VALUES ($1, $2, $3, $4, $5, 'test', $6)`,
+     VALUES ($1, $2, $3, $4, $5, 'tank01', $6)`,
     [fx.players.get(handle), SEASON, WEEK, fx.statKeys.get("pass_yd"), passYards, revision],
   );
 }
@@ -407,7 +407,7 @@ describe("the bench", () => {
     );
     await fx.client.query(
       `INSERT INTO stat_lines (player_id, season, week, stat_key_id, value, source, revision)
-       VALUES ($1, $2, $3, $4, 500, 'test', 0)`,
+       VALUES ($1, $2, $3, $4, 500, 'tank01', 0)`,
       [spare!.id, SEASON, WEEK, fx.statKeys.get("pass_yd")],
     );
 

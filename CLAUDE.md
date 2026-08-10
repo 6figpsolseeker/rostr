@@ -487,6 +487,19 @@ official NFL stat corrections arrive for up to seven days.
 Scores read `stat_lines_current`, so a correction that arrived as a new revision is used
 and the superseded one is not. There is a test for that specifically.
 
+**And from one source — `PRIMARY_STAT_SOURCE`.** The view keys on `source` as well as
+revision, so two providers reporting the same stat are two rows and `scorePlayer` folds over
+both. Unfiltered, every shared stat counted twice — and only for the players both providers
+covered, so the distortion was uneven and reordered the autolineup rather than merely
+inflating scores. A revision only supersedes _within_ a source, so a correction would have
+added rather than replaced.
+
+**Filtering at read time is not the same as ignoring the second provider, and the difference
+is the point.** `RULES.md` §7 requires two independent sources to agree before a paying week
+finalises, and the view is the only place their values sit side by side. Collapsing them in
+the view or averaging them away would delete that comparison at the storage layer and have
+to be undone to ship G4/G5. There is a test asserting both rows survive.
+
 `persistSchedule` refuses to overwrite an existing schedule. Rewriting mid-season changes
 who played whom, and every record derived from it.
 

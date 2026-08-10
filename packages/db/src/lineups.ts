@@ -45,6 +45,36 @@ import type { SqlClient } from "./client.js";
 import { getLeagueRules } from "./leagues.js";
 import { withTransaction } from "./transaction.js";
 
+/**
+ * The provider whose stats decide scores.
+ *
+ * `stat_lines` records the source on every row and the view keys on it, so two
+ * providers reporting the same stat produce two rows. Everything that scores
+ * must therefore say which one it means; nothing may read across them.
+ *
+ * **This is not the agreement gate.** `docs/RULES.md` §7 requires two
+ * independent providers to agree before a paying week finalises — that check
+ * (G4/G5) reads the same view *without* a source filter, compares the two, and
+ * freezes the week on disagreement. This constant only decides which one is
+ * scored in the meantime. If it ever becomes the answer to "which provider is
+ * right", the second provider has stopped being a check.
+ *
+ * A constant rather than league rules, env, or a table:
+ *
+ *   - **Not rules.** They are hashed, signed and frozen for the life of a
+ *     league, so a provider that shut down mid-season would leave every existing
+ *     league permanently unscoreable. The rules already hold the right
+ *     abstraction — `settlement.requiredOracleSources` says *how many* must
+ *     agree, not which.
+ *   - **Not env.** The scoring cron and the web app are separate processes; a
+ *     drifted value would give two different scores for one week, silently.
+ *   - **Not a table yet.** That is administrable state with no administrator,
+ *     and G5 needs its own shape regardless.
+ *
+ * So: a line of code, changed by a reviewed commit, identical everywhere.
+ */
+export const PRIMARY_STAT_SOURCE = "tank01";
+
 export class LineupError extends Error {
   constructor(
     message: string,
@@ -386,6 +416,7 @@ export async function loadAverages(
   season: number,
   week: number,
   rules: LeagueRules,
+  source: string = PRIMARY_STAT_SOURCE,
 ): Promise<ReadonlyMap<string, number | null>> {
   if (playerIds.length === 0 || week <= 1) {
     return new Map(playerIds.map((id) => [id, null]));
@@ -395,8 +426,8 @@ export async function loadAverages(
     `SELECT s.player_id, s.week, k.key, s.value
        FROM stat_lines_current s
        JOIN stat_keys k ON k.id = s.stat_key_id
-      WHERE s.player_id = ANY($1) AND s.season = $2 AND s.week < $3`,
-    [playerIds, season, week],
+      WHERE s.player_id = ANY($1) AND s.season = $2 AND s.week < $3 AND s.source = $4`,
+    [playerIds, season, week, source],
   );
 
   // Group by player and week before scoring: a stat line is per-key, and a
@@ -690,20 +721,34 @@ export async function loadWeekLineups(
  *
  * Reads `stat_lines_current`, so a stat correction that arrived as a new
  * revision is picked up and the superseded one is not.
+ *
+ * **From one source, and that is not the same thing as ignoring the other.**
+ * The view is `DISTINCT ON (player, season, week, stat_key, source)` — one row
+ * *per source* — and `scorePlayer` folds over whatever it is handed. Reading it
+ * unfiltered means every stat two providers both report is counted twice, and
+ * only for the players they both cover, so the distortion is uneven and
+ * reorders rankings rather than merely inflating them.
+ *
+ * `docs/RULES.md` §7 requires two independent providers to *agree* before a
+ * paying week finalises, so the second one is coming deliberately. Both rows
+ * stay in the view, side by side, which is exactly what that agreement gate
+ * (G4/G5) has to read. This picks which one scoring consumes; it does not
+ * decide which one is true, and it must not be turned into that.
  */
 export async function loadWeekStats(
   db: SqlClient,
   sportKey: string,
   season: number,
   week: number,
+  source: string = PRIMARY_STAT_SOURCE,
 ): Promise<ReadonlyMap<string, readonly StatLine[]>> {
   const rows = await db.query<{ player_id: string; key: string; value: number }>(
     `SELECT s.player_id, k.key, s.value
        FROM stat_lines_current s
        JOIN stat_keys k ON k.id = s.stat_key_id
        JOIN sports sp ON sp.id = k.sport_id
-      WHERE sp.key = $1 AND s.season = $2 AND s.week = $3`,
-    [sportKey, season, week],
+      WHERE sp.key = $1 AND s.season = $2 AND s.week = $3 AND s.source = $4`,
+    [sportKey, season, week, source],
   );
 
   const byPlayer = new Map<string, StatLine[]>();

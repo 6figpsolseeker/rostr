@@ -61,7 +61,7 @@ players           id, sport_id, external_ref, full_name, primary_position_id,
                   eligible_position_ids[], team_ref, status, active
 player_seasons    id, player_id, season, team_ref, bye_week
 stat_lines        id, player_id, season, week, stat_key_id, value,
-                  finalized_at, revision
+                  source, revision
 ```
 
 `external_ref` is the provider's ID. `stat_lines.revision` exists because the NFL
