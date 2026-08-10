@@ -36,6 +36,8 @@ const DRAFT: DraftRules = {
 
 const HOUR = 3600 * 1000;
 const MONDAY = new Date("2026-10-12T18:00:00Z");
+/** Past the 48-hour veto window, so an accepted trade is due to resolve. */
+const AFTER_WINDOW = new Date(MONDAY.getTime() + 49 * HOUR);
 
 interface Fixture {
   client: PGliteClient;
@@ -418,9 +420,111 @@ describe("no double-spend across trades", () => {
 
     await acceptTrade(fx.client, a.tradeId, fx.teams[1]!, MONDAY);
 
-    await expect(acceptTrade(fx.client, b.tradeId, fx.teams[2]!, MONDAY)).rejects.toMatchObject({
-      code: "PLAYER_IN_ANOTHER_TRADE",
+    await expect(acceptTrade(fx.client, b.tradeId, fx.teams[2]!, MONDAY)).rejects.toMatchObject(
+      {
+        code: "PLAYER_IN_ANOTHER_TRADE",
+      },
+    );
+
+    // The error code is not the property. **The property is that the player ends
+    // up owned by exactly one team** — a test that stops at the throw passes
+    // just as happily against a fix that closes this route and leaves another
+    // open, which is what happened here.
+    const trades = await listTrades(fx.client, fx.leagueId);
+    expect(trades.find((t) => t.tradeId === b.tradeId)?.state).toBe("PROPOSED");
+
+    await resolveDueTrades(fx.client, fx.leagueId, AFTER_WINDOW);
+
+    const owners = await fx.client.query<{ team_id: string }>(
+      "SELECT team_id FROM roster_entries WHERE player_id = $1 AND released_at IS NULL",
+      [p1],
+    );
+    expect(owners).toHaveLength(1);
+  });
+
+  it("refuses to execute a trade whose asset left the roster after acceptance", async () => {
+    // The last line of defence, and the only one that does not depend on knowing
+    // *how* he left. Execution used to release from the old team — matching no
+    // row — and then insert onto the new one unconditionally, so the player
+    // existed twice. Every route to that outcome ends here.
+    const fx = await setup();
+    const p1 = fx.players.get("p1")!;
+
+    const trade = await proposeTrade(fx.client, {
+      leagueId: fx.leagueId,
+      proposerTeamId: fx.teams[0]!,
+      receiverTeamId: fx.teams[1]!,
+      proposerGives: [p1],
+      receiverGives: [fx.players.get("p2")!],
+      week: 5,
+      now: MONDAY,
     });
+    await acceptTrade(fx.client, trade.tradeId, fx.teams[1]!, MONDAY);
+
+    // Straight to the table, standing in for any path that releases him without
+    // consulting the freeze — a free-agent add's drop leg does exactly this.
+    await fx.client.query(
+      "UPDATE roster_entries SET released_at = now() WHERE team_id = $1 AND player_id = $2 AND released_at IS NULL",
+      [fx.teams[0]!, p1],
+    );
+
+    const [resolution] = await resolveDueTrades(fx.client, fx.leagueId, AFTER_WINDOW);
+
+    // Recorded, not retried hourly for the rest of the season, and not executed.
+    expect(resolution?.outcome).toBe("EXPIRED");
+
+    const owners = await fx.client.query<{ team_id: string }>(
+      "SELECT team_id FROM roster_entries WHERE player_id = $1 AND released_at IS NULL",
+      [p1],
+    );
+    expect(owners).toHaveLength(0);
+
+    // And the other side of the trade did not move either — all or nothing.
+    const p2Owners = await fx.client.query<{ team_id: string }>(
+      "SELECT team_id FROM roster_entries WHERE player_id = $1 AND released_at IS NULL",
+      [fx.players.get("p2")!],
+    );
+    expect(p2Owners.map((row) => row.team_id)).toEqual([fx.teams[1]!]);
+  });
+
+  it("settles the other trades even when one cannot execute", async () => {
+    // One trade that can never execute must not stop the rest from settling —
+    // the same rule as every other loop in this repo.
+    const fx = await setup();
+    const p1 = fx.players.get("p1")!;
+    const p3 = fx.players.get("p3")!;
+
+    const broken = await proposeTrade(fx.client, {
+      leagueId: fx.leagueId,
+      proposerTeamId: fx.teams[0]!,
+      receiverTeamId: fx.teams[1]!,
+      proposerGives: [p1],
+      receiverGives: [fx.players.get("p2")!],
+      week: 5,
+      now: MONDAY,
+    });
+    const healthy = await proposeTrade(fx.client, {
+      leagueId: fx.leagueId,
+      proposerTeamId: fx.teams[2]!,
+      receiverTeamId: fx.teams[3]!,
+      proposerGives: [p3],
+      receiverGives: [fx.players.get("p4")!],
+      week: 5,
+      now: MONDAY,
+    });
+
+    await acceptTrade(fx.client, broken.tradeId, fx.teams[1]!, MONDAY);
+    await acceptTrade(fx.client, healthy.tradeId, fx.teams[3]!, MONDAY);
+
+    await fx.client.query(
+      "UPDATE roster_entries SET released_at = now() WHERE team_id = $1 AND player_id = $2 AND released_at IS NULL",
+      [fx.teams[0]!, p1],
+    );
+
+    const resolutions = await resolveDueTrades(fx.client, fx.leagueId, AFTER_WINDOW);
+
+    expect(resolutions.find((r) => r.tradeId === broken.tradeId)?.outcome).toBe("EXPIRED");
+    expect(resolutions.find((r) => r.tradeId === healthy.tradeId)?.outcome).toBe("EXECUTED");
   });
 
   it("refuses to accept a trade whose offered player was dropped after it was proposed", async () => {

@@ -55,7 +55,8 @@ export class TradeError extends Error {
       | "BOT_CANNOT_VETO"
       | "INVOLVED_CANNOT_VETO"
       | "ALREADY_VETOED"
-      | "ROSTER_WOULD_OVERFLOW",
+      | "ROSTER_WOULD_OVERFLOW"
+      | "ASSET_GONE",
   ) {
     super(message);
     this.name = "TradeError";
@@ -344,14 +345,21 @@ export async function acceptTrade(
     // stale: since then a player could have been dropped, or committed to a
     // different trade that was accepted first. Skipping this is what lets one
     // player be committed to two accepted trades and duplicated onto two rosters
-    // when both execute. The row lock serialises two accepts racing for the same
-    // player; the freeze set then catches whichever loses.
+    // when both execute.
+    //
+    // **Order is the whole of the concurrency argument.** Take every row lock
+    // first, and only then read the freeze set. Read the other way round — the
+    // obvious way round — and two concurrent accepts of the same player both
+    // compute an empty freeze set *before* either takes a lock; the loser then
+    // blocks, wakes after the winner commits, re-checks a snapshot that predates
+    // it, and passes. Both trades reach ACCEPTED and the player is minted. The
+    // lock would be doing real work and guarding a value already read.
     const assets = await tx.query<{ from_team_id: string; player_id: string }>(
       "SELECT from_team_id, player_id FROM trade_assets WHERE trade_id = $1",
       [tradeId],
     );
-    const frozen = await lockedByTrade(tx, row!.league_id);
 
+    // Pass one: ownership, and take the lock on every asset.
     for (const asset of assets) {
       const [owned] = await tx.query<{ id: string }>(
         `SELECT id FROM roster_entries
@@ -365,6 +373,12 @@ export async function acceptTrade(
           "NOT_YOUR_PLAYER",
         );
       }
+    }
+
+    // Pass two, with every lock now held, so a competing accept has either
+    // already committed and is visible here, or is still blocked behind us.
+    const frozen = await lockedByTrade(tx, row!.league_id);
+    for (const asset of assets) {
       if (frozen.has(asset.player_id)) {
         throw new TradeError(
           `${asset.player_id} is already committed to an accepted trade`,
@@ -537,10 +551,38 @@ export async function resolveDueTrades(
       continue;
     }
 
-    out.push(await resolveTrade(db, row.id, stored.rules, now, pastDeadline));
+    // One trade that cannot execute must not stop the rest from settling —
+    // the same rule as every other loop over leagues or weeks in this repo.
+    //
+    // An asset that has left its roster is not recoverable: the trade can never
+    // execute, and rosters are untouched. That is exactly what EXPIRED means, so
+    // it is recorded as that rather than left ACCEPTED to be retried hourly for
+    // the rest of the season.
+    try {
+      out.push(await resolveTrade(db, row.id, stored.rules, now, pastDeadline));
+    } catch (error) {
+      if (!(error instanceof TradeError) || error.code !== "ASSET_GONE") throw error;
+
+      await tradeCannotExecute(db, row.id, now);
+      out.push({ tradeId: row.id, outcome: "EXPIRED", vetoes: 0, required: 0 });
+    }
   }
 
   return out;
+}
+
+/**
+ * A trade that can never execute, recorded rather than retried.
+ *
+ * Separate from the veto and deadline paths because the reason differs and a
+ * reader should be able to tell them apart, even though the state is the same:
+ * nothing moved, and nothing will.
+ */
+async function tradeCannotExecute(db: SqlClient, tradeId: string, now: Date): Promise<void> {
+  await db.query("UPDATE trades SET state = 'EXPIRED', resolved_at = $2 WHERE id = $1", [
+    tradeId,
+    now.toISOString(),
+  ]);
 }
 
 async function resolveTrade(
@@ -586,11 +628,30 @@ async function resolveTrade(
       // append-only with `released_at` precisely so any past week's roster can be
       // reconstructed — a trade that edited history would make a settled week
       // unverifiable.
-      await tx.query(
+      const released = await tx.query<{ id: string }>(
         `UPDATE roster_entries SET released_at = $3
-          WHERE team_id = $1 AND player_id = $2 AND released_at IS NULL`,
+          WHERE team_id = $1 AND player_id = $2 AND released_at IS NULL
+        RETURNING id`,
         [asset.from_team_id, asset.player_id, now.toISOString()],
       );
+
+      // **Nothing is created that was not destroyed.** The insert used to be
+      // unconditional, so if the release matched no row — the player having left
+      // that roster since the trade was accepted — a second copy of him appeared
+      // on the receiver, owned by two teams at once. The `(team_id, player_id)`
+      // unique index cannot catch it, being per-team.
+      //
+      // This is the last line of defence rather than the first, and it is the one
+      // that holds regardless of how he left: accepted twice, dropped through a
+      // path that did not consult the freeze, or claimed off waivers. Upstream
+      // checks each close one route; this closes the outcome.
+      if (released.length === 0) {
+        throw new TradeError(
+          `${asset.player_id} is no longer on team ${asset.from_team_id}'s roster, ` +
+            `so this trade cannot be executed`,
+          "ASSET_GONE",
+        );
+      }
 
       await tx.query(
         `INSERT INTO roster_entries (team_id, player_id, acquired_via, acquired_at)
