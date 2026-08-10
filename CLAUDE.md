@@ -648,6 +648,15 @@ January by posting `week: 1`. Routes that legitimately display an arbitrary week
 lineup) still accept one; routes enforcing a rule must not. `score-week` had this query
 inline and now shares it.
 
+**A veto is scoped to the trade's own league, at three layers.** `vetoTrade` refuses an
+outside voter (`NOT_IN_LEAGUE`); the tally in `loadTrade` counts only rows from teams that
+are in the league, not bots, and not party to the trade — the _same three conditions as the
+electorate it is compared against_, because a numerator and denominator that disagree are
+what force a veto nobody cast; and migration `0020` makes an out-of-league row
+unrepresentable with a composite foreign key. Guarding only the door was not enough:
+`trade_vetoes.team_id` is ON DELETE RESTRICT, so a row already written could not be cleaned
+up by deleting the team.
+
 **Bots neither trade nor vote.** A bot has nobody to weigh an offer, so proposing to one
 would either strand the trade or make the bot judge it — and a bot that judges trades is a
 commissioner with extra steps.

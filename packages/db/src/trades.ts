@@ -125,9 +125,29 @@ async function loadTrade(db: SqlClient, tradeId: string): Promise<TradeSummary> 
     [tradeId],
   );
 
+  // **The tally must be scoped exactly like the electorate it is compared to.**
+  //
+  // `vetoTrade` refuses a voter from outside the trade's league, but that guards
+  // the door and not the count. Counting every row for the trade meant a vote
+  // written before that guard existed — or by any future path that inserts one —
+  // still moved the numerator while `uninvolvedManagers` scoped the denominator
+  // to this league. The two disagreeing is what forces a veto the league never
+  // cast, and `trade_vetoes.team_id` is `ON DELETE RESTRICT`, so a stale row
+  // cannot be cleaned up by removing the team.
+  //
+  // The same three conditions as the electorate: this league, not a bot, not a
+  // party to the trade. Counting is a read, so it must not trust that every
+  // writer got it right.
   const [votes] = await db.query<{ n: number }>(
-    "SELECT count(*)::int AS n FROM trade_vetoes WHERE trade_id = $1",
-    [tradeId],
+    `SELECT count(*)::int AS n
+       FROM trade_vetoes v
+       JOIN teams t ON t.id = v.team_id
+      WHERE v.trade_id = $1
+        AND t.league_id = $2
+        AND NOT t.is_bot
+        AND t.id <> $3
+        AND t.id <> $4`,
+    [tradeId, trade.league_id, trade.proposer_team_id, trade.receiver_team_id],
   );
 
   const stored = await getLeagueRules(db, trade.league_id);
@@ -449,7 +469,11 @@ export async function vetoTrade(
   if (existing) throw new TradeError("You have already voted", "ALREADY_VETOED");
 
   await db.query(
-    "INSERT INTO trade_vetoes (trade_id, team_id, created_at) VALUES ($1, $2, $3)",
+    // The league is stored on the vote, not inferred at read time: the composite
+    // foreign keys in 0020 use it to make an out-of-league vote unrepresentable
+    // rather than merely uncounted.
+    `INSERT INTO trade_vetoes (trade_id, team_id, league_id, created_at)
+       SELECT $1, $2, t.league_id, $3 FROM trades t WHERE t.id = $1`,
     [tradeId, actingTeamId, now.toISOString()],
   );
 
