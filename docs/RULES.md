@@ -266,7 +266,8 @@ Week 17 is the championship. Single elimination throughout.
 
 **Every round reseeds.** The best surviving seed always draws the worst, which is what
 makes a good regular season worth having. It also means the bracket cannot be drawn in
-advance: who the top seed plays in Week 16 is not known until Week 15 is scored.
+advance: who the top seed plays in Week 16 is not known until Week 15 is **final** —
+scored is not enough, because a score inside the correction window can still change.
 
 **A playoff bye is not a game.** A team on a bye has no fixture, sets no lineup, and
 scores nothing that week. There is no way to be knocked out by sitting out.
@@ -498,11 +499,11 @@ Finalisation is **two-tier**, because the NFL issues official stat corrections f
 **seven days** after a game and a reclassified fumble can flip a matchup long after it
 looked settled:
 
-| Week                                                    | Provisional | Final        | Why                                                                                        |
-| ------------------------------------------------------- | ----------- | ------------ | ------------------------------------------------------------------------------------------ |
-| Regular season 1–13, playoffs 15–16                     | immediately | **T+48h**    | No funds move. A late correction restates standings and the bracket, which is recoverable. |
-| **Week 14** (regular-season prize)                      | immediately | **T+7 days** | Money moves. Must outlast the correction window.                                           |
-| **Week 17** (championship, runner-up, 3rd, consolation) | immediately | **T+7 days** | Money moves. Must outlast the correction window.                                           |
+| Week                                                    | Provisional | Final        | Why                                                                                                                                                |
+| ------------------------------------------------------- | ----------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Regular season 1–13, playoffs 15–16                     | immediately | **T+48h**    | No funds move. The bracket advances only on finalised results, so a correction inside the window restates the round _before_ the next one is laid. |
+| **Week 14** (regular-season prize)                      | immediately | **T+7 days** | Money moves. Must outlast the correction window.                                                                                                   |
+| **Week 17** (championship, runner-up, 3rd, consolation) | immediately | **T+7 days** | Money moves. Must outlast the correction window.                                                                                                   |
 
 Any week that pays out waits the full seven days. Weeks that only affect standings
 finalise in 48 hours so the season keeps moving. A correction arriving after a paying

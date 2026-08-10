@@ -75,12 +75,16 @@ export interface PlayoffState {
  * arithmetic. Nothing is cached, because a cached bracket is a second answer
  * that can disagree with the first.
  */
-export async function playoffState(db: SqlClient, leagueId: string): Promise<PlayoffState> {
+export async function playoffState(
+  db: SqlClient,
+  leagueId: string,
+  finalizedSeeding = false,
+): Promise<PlayoffState> {
   const stored = await getLeagueRules(db, leagueId);
   if (!stored) throw new PlayoffError("League has no rules", "LEAGUE_NOT_FOUND");
 
   const rules = stored.rules;
-  const seeds = await seedOrder(db, leagueId, rules);
+  const seeds = await seedOrder(db, leagueId, rules, finalizedSeeding);
 
   const playoffs = await bracketFor(
     db,
@@ -111,8 +115,26 @@ export async function playoffState(db: SqlClient, leagueId: string): Promise<Pla
   };
 }
 
-/** The regular-season standings, which are the bracket's seeding. */
-async function seedOrder(db: SqlClient, leagueId: string, rules: LeagueRules) {
+/**
+ * The regular-season standings, which are the bracket's seeding.
+ *
+ * `finalizedOnly` is off by default because the seeding a *screen* shows should
+ * move with live scores — that is the standings table, and it is meant to.
+ *
+ * `championship()` asks for it on, because the best regular-season record is a
+ * **paid prize** (1000 bps) and deriving it from provisional scores is the same
+ * defect as crowning a champion from them. Week 14 is a 168h paying week: every
+ * game is final on the Monday and the window runs a further seven days, and a
+ * stat correction inside it can flip the holder. `advancePlayoffs` is already
+ * gated on the regular season being complete, so the write path never needed
+ * this; the read path did.
+ */
+async function seedOrder(
+  db: SqlClient,
+  leagueId: string,
+  rules: LeagueRules,
+  finalizedOnly = false,
+) {
   const teams = await db.query<{ id: string }>(
     "SELECT id FROM teams WHERE league_id = $1 ORDER BY slot",
     [leagueId],
@@ -122,6 +144,7 @@ async function seedOrder(db: SqlClient, leagueId: string, rules: LeagueRules) {
     leagueId,
     rules.schedule.regularSeasonWeeks,
     "REGULAR",
+    finalizedOnly,
   );
 
   return computeStandings(
@@ -344,7 +367,10 @@ export async function championship(db: SqlClient, leagueId: string): Promise<Cha
   const stored = await getLeagueRules(db, leagueId);
   if (!stored) throw new PlayoffError("League has no rules", "LEAGUE_NOT_FOUND");
 
-  const state = await playoffState(db, leagueId);
+  // Finalised seeding, because this is the function settlement reads. The
+  // regular-season prize is derived from the seeding, and a prize decided from a
+  // score that can still be corrected is the defect this whole change is about.
+  const state = await playoffState(db, leagueId, true);
   const paid = new Set(
     (stored.rules.pot?.payout ?? [])
       .filter((share) => share.basisPoints > 0)

@@ -46,8 +46,10 @@ export default async function BracketPage({ params }: { params: Promise<{ id: st
 
   const state = seasonOver ? await playoffState(client, id) : null;
 
-  // Points come off the same rows the bracket was built from, so a score shown
-  // beside a fixture is the score that decided it.
+  // **Deliberately unfiltered, unlike the bracket above it.** The ladder advances
+  // only on finalised results; these scores are live, so a played-but-not-yet-final
+  // game shows its real score with no winner marked. That gap is the correction
+  // window, and the screen says so rather than looking broken.
   const scores = new Map<string, { home: number; away: number }>();
   for (const phase of ["PLAYOFF", "CONSOLATION"] as const) {
     for (const row of await loadWeekResults(client, id, 99, phase)) {
@@ -62,6 +64,19 @@ export default async function BracketPage({ params }: { params: Promise<{ id: st
       });
     }
   }
+
+  // Every game in the last laid round has a live score, but the ladder has not
+  // resolved — so the week is played and not yet final. Derived from the same two
+  // sources the screen already holds rather than a third query, so it cannot
+  // disagree with what is rendered beside it.
+  const lastRound = state?.playoffs?.bracket.rounds.at(-1);
+  const awaitingFinal =
+    !!lastRound &&
+    lastRound.games.length > 0 &&
+    lastRound.games.every((game) =>
+      scores.has(`${game.week}:${game.homeTeamId}:${game.awayTeamId}`),
+    ) &&
+    lastRound.survivors === null;
 
   const Game = ({ game }: { game: BracketGame }) => {
     const score = scores.get(`${game.week}:${game.homeTeamId}:${game.awayTeamId}`);
@@ -133,6 +148,26 @@ export default async function BracketPage({ params }: { params: Promise<{ id: st
           The bracket is drawn when the regular season finishes. Seeding it early would give a
           bracket that changes under the teams in it.
         </p>
+      )}
+
+      {/*
+        The gap between "the final was played" and "the final is final".
+
+        The bracket advances only on finalised results, and the championship week
+        waits 168 hours for official stat corrections. So for seven days the
+        screen holds a played game with a real score and no champion — which
+        reads as a broken page unless it says otherwise. It is not a delay in
+        deciding; it is the week not being decided yet.
+      */}
+      {!state?.champion && awaitingFinal && (
+        <section className="rounded border border-white/10 px-4 py-3">
+          <p className="text-sm text-white/70">Waiting on the correction window.</p>
+          <p className="mt-1 text-xs text-white/50">
+            The games are played, but official stat corrections arrive for up to seven days and
+            this week pays out. No champion is named until the week is final — which is the
+            point: a result that can still change is not a result.
+          </p>
+        </section>
       )}
 
       {state?.champion && (
