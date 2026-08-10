@@ -213,6 +213,7 @@ export {
 export {
   addBot,
   getJoinMessage,
+  getMemberWallet,
   getMembershipProofs,
 <<<<<<< HEAD
   getOnChainDeposit,
