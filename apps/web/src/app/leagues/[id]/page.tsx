@@ -1,5 +1,11 @@
 import { notFound } from "next/navigation";
-import { getChainState, getLeagueRules, getWallets } from "@rostr/db";
+import {
+  getChainState,
+  getLeagueRules,
+  getMemberWallet,
+  getOnChainJoin,
+  getWallets,
+} from "@rostr/db";
 import { RulesView } from "@/components/RulesView";
 import { JoinPanel } from "@/components/JoinPanel";
 import { AnchorPanel } from "@/components/AnchorPanel";
@@ -40,6 +46,14 @@ export default async function LeaguePage({ params }: { params: Promise<{ id: str
     "SELECT commissioner_id FROM leagues WHERE id = $1",
     [id],
   );
+
+  // Has this user joined in Postgres but not yet on-chain? Resolved here rather
+  // than in the panel's own state, because the two halves are separate
+  // transactions with a wallet popup between them — a reload in that gap would
+  // otherwise leave a member with no control that reaches the second half.
+  const memberWallet = user ? await getMemberWallet(client, id, user.id) : null;
+  const resumable =
+    memberWallet !== null && (await getOnChainJoin(client, id, memberWallet)) === null;
 
   return (
     <div className="space-y-10">
@@ -105,6 +119,7 @@ export default async function LeaguePage({ params }: { params: Promise<{ id: str
         linkedWallets={wallets.map((wallet) => wallet.address)}
         anchored={chain?.anchoredAt !== null && chain?.anchoredAt !== undefined}
         isCommissioner={user !== null && commissioner?.commissioner_id === user.id}
+        resumable={resumable}
       />
 
       {/*

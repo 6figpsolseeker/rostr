@@ -398,9 +398,39 @@ export async function getMembershipProofs(
 export interface OnChainJoin {
   readonly leagueId: string;
   readonly walletAddress: string;
+  readonly userId: string;
   readonly signature: string;
   readonly cluster: string;
   readonly joinedAt: string;
+}
+
+/**
+ * The wallet a user signed their consent with, for one league.
+ *
+ * **This is what the on-chain half must be recorded against — never an address
+ * out of a request.** The db-side join already proved this user holds this key
+ * (`joinLeague` verifies a signature over the rules hash and refuses a wallet
+ * that is not linked to them), so reading it back here inherits that proof
+ * instead of asking the client to restate it.
+ *
+ * `null` when the user has not joined this league in Postgres, which is also
+ * the ordering guarantee: no on-chain record without a consent record behind
+ * it.
+ */
+export async function getMemberWallet(
+  db: SqlClient,
+  leagueId: string,
+  userId: string,
+): Promise<string | null> {
+  const [row] = await db.query<{ address: string }>(
+    `SELECT w.address
+       FROM league_memberships m
+       JOIN wallets w ON w.id = m.wallet_id
+      WHERE m.league_id = $1 AND m.user_id = $2`,
+    [leagueId, userId],
+  );
+
+  return row?.address ?? null;
 }
 
 /**
@@ -408,27 +438,32 @@ export interface OnChainJoin {
  *
  * The member signs `join_league` from their own wallet — no key of ours is
  * involved — and then tells us it happened. A report is not evidence: this is
- * the write that follows `verifyOnChainJoin` reading the `Membership` PDA back
- * and confirming it holds this member's key. The signature is an audit
- * breadcrumb (which transaction created the account), not the proof.
+ * the write that follows `verifyOnChainJoin` finding a `Membership` account at
+ * the PDA for this league and wallet. The signature is an audit breadcrumb
+ * (which transaction created the account), not the proof.
  *
- * The primary key is (league_id, wallet_address), so a re-post after a lost
- * response upserts rather than duplicating — the same write-once discipline the
- * anchor record uses.
+ * **This upserts; it is not write-once.** The anchor record is write-once by
+ * trigger because there is exactly one anchoring transaction ever. Here a
+ * re-post after a lost response is the ordinary case and has to succeed, so the
+ * row is keyed on (league, wallet) and rewritten. What makes that safe is not
+ * immutability but authorisation: `user_id` is recorded, and the caller may
+ * only ever write the wallet their own consent row names, so nobody can
+ * overwrite anybody else's record.
  */
 export async function recordOnChainJoin(
   db: SqlClient,
   leagueId: string,
   walletAddress: string,
+  userId: string,
   signature: string,
   cluster: string,
 ): Promise<void> {
   await db.query(
-    `INSERT INTO league_onchain_joins (league_id, wallet_address, signature, cluster)
-     VALUES ($1, $2, $3, $4)
+    `INSERT INTO league_onchain_joins (league_id, wallet_address, user_id, signature, cluster)
+     VALUES ($1, $2, $3, $4, $5)
      ON CONFLICT (league_id, wallet_address)
      DO UPDATE SET signature = EXCLUDED.signature, cluster = EXCLUDED.cluster, joined_at = now()`,
-    [leagueId, walletAddress, signature, cluster],
+    [leagueId, walletAddress, userId, signature, cluster],
   );
 }
 
@@ -445,11 +480,12 @@ export async function getOnChainJoin(
   const [row] = await db.query<{
     league_id: string;
     wallet_address: string;
+    user_id: string;
     signature: string;
     cluster: string;
     joined_at: string;
   }>(
-    `SELECT league_id, wallet_address, signature, cluster, joined_at
+    `SELECT league_id, wallet_address, user_id, signature, cluster, joined_at
        FROM league_onchain_joins
       WHERE league_id = $1 AND wallet_address = $2`,
     [leagueId, walletAddress],
@@ -460,6 +496,7 @@ export async function getOnChainJoin(
   return {
     leagueId: row.league_id,
     walletAddress: row.wallet_address,
+    userId: row.user_id,
     signature: row.signature,
     cluster: row.cluster,
     joinedAt: row.joined_at,

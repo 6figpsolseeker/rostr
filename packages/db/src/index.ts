@@ -200,6 +200,7 @@ export {
 export {
   addBot,
   getJoinMessage,
+  getMemberWallet,
   getMembershipProofs,
   getOnChainJoin,
   JoinError,

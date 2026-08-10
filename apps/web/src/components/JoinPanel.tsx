@@ -3,11 +3,13 @@
 import { useState } from "react";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
-import { PublicKey, Transaction } from "@solana/web3.js";
+import { Transaction } from "@solana/web3.js";
 import {
   escrowProgram,
   hexToBytes,
   joinLeagueIx,
+  leaguePda,
+  membershipPda,
 } from "@rostr/escrow";
 import { AnchorProvider, type Wallet } from "@coral-xyz/anchor";
 import bs58 from "bs58";
@@ -32,8 +34,35 @@ import bs58 from "bs58";
  * the program's `Membership` account exists. Without it, `deposit` and
  * `refund_stake` have no account to act on, and the on-chain member count — which
  * the program uses to refuse a full league — stays at zero. The server does not
- * take the client's word for it: the `/join-onchain` route reads the `Membership`
- * PDA back and checks it holds this member's key before recording anything.
+ * take the client's word for it: `/join-onchain` reads the `Membership` PDA back
+ * before recording, and derives the wallet from the caller's own consent row
+ * rather than from anything sent here.
+ *
+ * ## The fifth step has to survive leaving the page
+ *
+ * The two halves are separate transactions with a wallet popup between them, so
+ * "close the tab and come back later" is ordinary rather than exceptional.
+ * `resumable` is resolved **server-side** from the consent row and the on-chain
+ * record. If the step lived only in this component's `useState`, a reload would
+ * strand the member with a db membership, no `Membership` account, and no
+ * control anywhere that reaches one. It also has to render when the league is
+ * full, because the member who took the final seat is exactly the one who most
+ * needs it.
+ *
+ * ## Retrying must not re-send the transaction
+ *
+ * `join_league` uses `init`, so a second send fails with "account already in
+ * use" — it is emphatically *not* idempotent. The signature is therefore held
+ * in state once the transaction lands, and a retry re-POSTs that signature
+ * instead of signing again. Otherwise the only recovery path from a dropped
+ * response is the one path that cannot work.
+ *
+ * In-memory state alone is not enough, because a reload loses it and leaves the
+ * same dead end. So the retry also asks the chain whether the `Membership`
+ * account already exists and, if it does, recovers the transaction that created
+ * it. Between them the two cover every way an attempt can be interrupted: the
+ * account either does not exist (send it) or does (record what already
+ * happened).
  */
 export function JoinPanel({
   leagueId,
@@ -44,6 +73,7 @@ export function JoinPanel({
   linkedWallets,
   anchored,
   isCommissioner,
+  resumable = false,
 }: {
   leagueId: string;
   leagueName: string;
@@ -55,21 +85,37 @@ export function JoinPanel({
   /** Whether the rules are on-chain yet. Joining is refused until they are. */
   anchored: boolean;
   isCommissioner: boolean;
+  /**
+   * This user joined in Postgres but has no on-chain record yet, so the fifth
+   * step is still owed. Server-resolved, so it survives a reload.
+   */
+  resumable?: boolean;
 }) {
   const { connection } = useConnection();
   const { publicKey, signMessage, signTransaction, connected } = useWallet();
   const [linked, setLinked] = useState<readonly string[]>(linkedWallets);
   const [teamName, setTeamName] = useState("");
   const [message, setMessage] = useState<string | null>(null);
-  const [status, setStatus] = useState<"idle" | "loading" | "linking" | "signing" | "done" | "onchain" | "onchain-signing">(
-    "idle",
-  );
+  const [status, setStatus] = useState<
+    "idle" | "loading" | "linking" | "signing" | "done" | "onchain" | "onchain-signing"
+  >(resumable ? "onchain" : "idle");
   const [error, setError] = useState<string | null>(null);
+
+  /**
+   * The `join_league` signature, once the transaction has landed.
+   *
+   * Held so a failed POST can be retried without signing again — see the note
+   * on retrying at the top of this file. `null` means nothing has been sent.
+   */
+  const [sentSignature, setSentSignature] = useState<string | null>(null);
 
   const address = publicKey?.toBase58() ?? null;
   const isLinked = address !== null && linked.includes(address);
 
-  if (!open) {
+  // A member who still owes the on-chain half keeps the panel even once the
+  // league is full — the member who took the final seat is precisely the one
+  // this would otherwise strand, since `open` counts their own team.
+  if (!open && !resumable) {
     return (
       <section className="rounded border border-white/10 p-6">
         <p className="text-sm text-white/60">This league is not accepting members.</p>
@@ -215,24 +261,59 @@ export function JoinPanel({
     setStatus("onchain-signing");
 
     try {
-      const provider = new AnchorProvider(connection, { publicKey, signTransaction } as unknown as Wallet, {
-        commitment: "confirmed",
-      });
-      const program = escrowProgram(provider);
+      // Send only if we have not already. `join_league` is `init`, so a second
+      // send fails with "account already in use" — re-signing would turn every
+      // recoverable POST failure into a permanent dead end.
+      let signature = sentSignature;
 
-      const ix = await joinLeagueIx(program, {
-        leagueId,
-        rulesHash: hexToBytes(rulesHash),
-        member: publicKey,
-      });
+      // A reload loses `sentSignature`, so in-memory state is not enough: ask
+      // the chain whether the account already exists. It does exactly when a
+      // previous attempt landed and its POST did not, which is the case this
+      // whole retry path exists for. Recovering the creating transaction is
+      // what lets the audit record still name a real signature rather than
+      // inventing one.
+      if (signature === null) {
+        const membership = membershipPda(leaguePda(leagueId), publicKey);
+        if ((await connection.getAccountInfo(membership)) !== null) {
+          const [creating] = await connection.getSignaturesForAddress(membership, { limit: 1 });
+          if (!creating) {
+            throw new Error(
+              "Your membership account exists on-chain but the transaction that created " +
+                "it could not be found. An archival RPC endpoint can still confirm it.",
+            );
+          }
+          signature = creating.signature;
+          setSentSignature(signature);
+        }
+      }
 
-      const tx = new Transaction().add(ix);
-      const signature = await provider.sendAndConfirm(tx, [], { commitment: "confirmed" });
+      if (signature === null) {
+        const provider = new AnchorProvider(
+          connection,
+          { publicKey, signTransaction } as unknown as Wallet,
+          { commitment: "confirmed" },
+        );
+        const program = escrowProgram(provider);
 
+        const ix = await joinLeagueIx(program, {
+          leagueId,
+          rulesHash: hexToBytes(rulesHash),
+          member: publicKey,
+        });
+
+        const tx = new Transaction().add(ix);
+        signature = await provider.sendAndConfirm(tx, [], { commitment: "confirmed" });
+
+        // Recorded before the POST, so a failure below retries the POST alone.
+        setSentSignature(signature);
+      }
+
+      // No wallet address: the server reads it from this member's own consent
+      // row. A body field would let anyone write anyone else's record.
       const response = await fetch(`/api/leagues/${leagueId}/join-onchain`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ walletAddress: address, signature }),
+        body: JSON.stringify({ signature }),
       });
 
       if (!response.ok) {
@@ -243,9 +324,9 @@ export function JoinPanel({
       setStatus("done");
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
-      // Stay on the on-chain step so the member can retry; the db join already
-      // happened, and re-signing join_league is idempotent (the PDA exists or
-      // not — either way a replay is harmless).
+      // Back to the on-chain step so the member can retry. If the transaction
+      // already landed, `sentSignature` is set and the retry re-posts it rather
+      // than signing again.
       setStatus("onchain");
     }
   }
@@ -280,19 +361,38 @@ export function JoinPanel({
         </div>
       ) : (
         <div className="space-y-4">
-          {status === "onchain" || status === "onchain-signing" ? (
+          {status === "done" ? (
+            <div className="space-y-2 rounded border border-[--color-turf]/30 bg-[--color-turf]/5 p-4">
+              <p className="text-sm text-white/80">
+                Joined, on both sides. Your consent is recorded here and your{" "}
+                <code className="font-mono text-xs">Membership</code> account exists on-chain.
+              </p>
+              <p className="text-xs text-white/40">Reload to see the league as a member.</p>
+            </div>
+          ) : status === "onchain" || status === "onchain-signing" ? (
             <div className="space-y-3 rounded border border-[--color-turf]/30 bg-[--color-turf]/5 p-4">
               <p className="text-sm text-white/80">
                 You are in. One more step to make it real on-chain: sign{" "}
                 <code className="font-mono text-xs">join_league</code> from your wallet so your
-                membership account exists. Until you do, you cannot stake into the pot.
+                membership account exists. Until you do, the program has no account to stake
+                against.
               </p>
+              {sentSignature !== null && (
+                <p className="text-xs text-white/40">
+                  Your transaction already landed — this will not ask your wallet again, it just
+                  re-sends the confirmation to us.
+                </p>
+              )}
               <button
                 onClick={() => void onchainJoin()}
                 disabled={status === "onchain-signing"}
                 className="rounded bg-[--color-turf] px-4 py-2 text-sm font-medium text-black disabled:opacity-40"
               >
-                {status === "onchain-signing" ? "Waiting for your wallet…" : "Confirm on-chain"}
+                {status === "onchain-signing"
+                  ? "Waiting…"
+                  : sentSignature !== null
+                    ? "Retry confirmation"
+                    : "Confirm on-chain"}
               </button>
               {error && <p className="text-sm text-red-400">{error}</p>}
             </div>
@@ -323,7 +423,9 @@ export function JoinPanel({
                   </pre>
                   <button
                     onClick={() => void join()}
-                    disabled={status === "signing" || status === "done"}
+                    // `"done"` is handled by its own branch above, so it cannot
+                    // reach here — TypeScript narrows it away.
+                    disabled={status === "signing"}
                     className="rounded bg-[--color-turf] px-4 py-2 text-sm font-medium text-black disabled:opacity-40"
                   >
                     {status === "signing" ? "Waiting for your wallet…" : "Sign and join"}

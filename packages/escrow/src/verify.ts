@@ -141,28 +141,36 @@ export async function verifyLeagueAnchor(
 }
 
 export type JoinVerdict =
-  | { readonly ok: true; readonly membership: { readonly league: PublicKey; readonly member: PublicKey } }
-  | { readonly ok: false; readonly reason: "NOT_FOUND" }
   | {
-      readonly ok: false;
-      readonly reason: "MEMBER_MISMATCH";
-      readonly onChainMember: string;
-      readonly expectedMember: string;
-    };
+      readonly ok: true;
+      readonly membership: { readonly league: PublicKey; readonly member: PublicKey };
+    }
+  | { readonly ok: false; readonly reason: "NOT_FOUND" };
 
 /**
  * Confirm a member has actually joined a league on-chain.
  *
  * The client reports "I joined it, here is the transaction signature", and a
- * signature proves only that *some* `join_league` happened. What makes the
- * record a fact is fetching the `Membership` PDA and finding this member's key
- * in it — exactly the verify-don't-trust discipline the anchor route uses,
- * applied one level down.
+ * signature proves only that *some* transaction happened. What makes the record
+ * a fact is that an account exists at the `Membership` PDA for this league and
+ * this wallet — which only `join_league` can create, and only with that wallet
+ * as a signer paying its rent.
  *
- * The PDA is derived from league *and* member, so a correct `membershipPda`
- * already binds the two. We still read it back and check `member` equals the
- * key we expect, because the whole point is not trusting the client's claim of
- * which wallet joined.
+ * **Be precise about what this does and does not establish.** The PDA is
+ * derived from `(league, member)`, and the program writes `membership.member`
+ * from the same key it seeds with, so re-reading the account and comparing
+ * `member` against the key we derived from would be a tautology — it can never
+ * disagree. There is deliberately no such check here, and no `MEMBER_MISMATCH`
+ * verdict, because a check that cannot fail reads as a guarantee and is not one.
+ *
+ * So this proves *somebody holding that wallet's key signed `join_league` for
+ * that league*. It does **not** prove the caller is that somebody. Binding the
+ * wallet to a person is the caller's job and cannot be done from here — the
+ * route derives the wallet from the caller's own consent row rather than
+ * accepting one in a request.
+ *
+ * Contrast `verifyLeagueAnchor`, which genuinely can disagree: it compares the
+ * on-chain rules hash against the one in Postgres, an independent source.
  */
 export async function verifyOnChainJoin(
   program: Program<RostrEscrow>,
@@ -176,15 +184,6 @@ export async function verifyOnChainJoin(
   if (!account) return { ok: false, reason: "NOT_FOUND" };
 
   const raw = account as { league: PublicKey; member: PublicKey };
-
-  if (raw.member.toBase58() !== expectedMember.toBase58()) {
-    return {
-      ok: false,
-      reason: "MEMBER_MISMATCH",
-      onChainMember: raw.member.toBase58(),
-      expectedMember: expectedMember.toBase58(),
-    };
-  }
 
   return { ok: true, membership: { league: raw.league, member: raw.member } };
 }
