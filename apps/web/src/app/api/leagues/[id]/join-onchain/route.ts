@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { PublicKey } from "@solana/web3.js";
-import { clusterOf, verifyOnChainJoin } from "@rostr/escrow";
-import { getChainState, getMemberWallet, getOnChainJoin, recordOnChainJoin } from "@rostr/db";
+import { verifyOnChainJoin } from "@rostr/escrow";
+import { getChainState, memberWallet, getOnChainJoin, recordOnChainJoin } from "@rostr/db";
 import { db } from "@/lib/db";
 import { currentUser } from "@/lib/session";
 import { EscrowConfigError, readOnlyEscrow } from "@/lib/escrow";
+import { assertRpcCluster, ClusterConfigError } from "@/lib/cluster";
 
 /**
  * Recording that a member has joined a league on-chain.
@@ -55,7 +56,7 @@ export async function POST(
 
     // The consent record is the source of the wallet, so its absence is also
     // the ordering check: no on-chain record without a db-side join behind it.
-    const walletAddress = await getMemberWallet(client, id, user.id);
+    const walletAddress = await memberWallet(client, id, user.id);
     if (!walletAddress) {
       return NextResponse.json(
         { error: "You have not joined this league yet", reason: "NOT_A_MEMBER" },
@@ -92,7 +93,17 @@ export async function POST(
     // The signature is an audit breadcrumb, not the proof. The join is accepted
     // or refused entirely on whether the Membership account exists.
     const { connection, program } = readOnlyEscrow();
-    const cluster = clusterOf(connection);
+    // Two different questions, and both have to be asked.
+    //
+    // `assertRpcCluster` confirms the endpoint really is the chain this
+    // deployment declares — by genesis hash, because a private RPC’s hostname
+    // says nothing about what is behind it.
+    //
+    // The comparison below then confirms that chain is also the one this
+    // *league* was anchored on. A correctly configured server reading the right
+    // chain can still be looking at a league anchored somewhere else, and the
+    // PDA is byte-identical everywhere, so the row would look right.
+    const cluster = await assertRpcCluster(connection);
 
     if (chain.cluster && chain.cluster !== cluster) {
       return NextResponse.json(
@@ -131,7 +142,7 @@ export async function POST(
       member: verdict.membership.member.toBase58(),
     });
   } catch (error) {
-    if (error instanceof EscrowConfigError) {
+    if (error instanceof EscrowConfigError || error instanceof ClusterConfigError) {
       return NextResponse.json({ error: error.message }, { status: 503 });
     }
     throw error;

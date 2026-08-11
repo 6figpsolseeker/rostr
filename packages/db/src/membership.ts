@@ -588,35 +588,6 @@ export interface OnChainJoin {
 }
 
 /**
- * The wallet a user signed their consent with, for one league.
- *
- * **This is what the on-chain half must be recorded against — never an address
- * out of a request.** The db-side join already proved this user holds this key
- * (`joinLeague` verifies a signature over the rules hash and refuses a wallet
- * that is not linked to them), so reading it back here inherits that proof
- * instead of asking the client to restate it.
- *
- * `null` when the user has not joined this league in Postgres, which is also
- * the ordering guarantee: no on-chain record without a consent record behind
- * it.
- */
-export async function getMemberWallet(
-  db: SqlClient,
-  leagueId: string,
-  userId: string,
-): Promise<string | null> {
-  const [row] = await db.query<{ address: string }>(
-    `SELECT w.address
-       FROM league_memberships m
-       JOIN wallets w ON w.id = m.wallet_id
-      WHERE m.league_id = $1 AND m.user_id = $2`,
-    [leagueId, userId],
-  );
-
-  return row?.address ?? null;
-}
-
-/**
  * Record that a member has joined a league on-chain.
  *
  * The member signs `join_league` from their own wallet — no key of ours is

@@ -807,6 +807,28 @@ describe("memberWallet", () => {
 
     expect(await memberWallet(fx.client, fx.leagueId, a.userId)).toBe(a.address);
     expect(await memberWallet(fx.client, fx.leagueId, b.userId)).toBe(b.address);
+  });
+
+  it("does not leak a membership across leagues", async () => {
+    // The other axis. Being a member somewhere must not answer for a league you
+    // are not in — otherwise a member of league A could have an on-chain record
+    // written against their wallet in league B.
+    const fx = await setup();
+    const other = await setup();
+    const m = await member(fx, 1, "a@example.com");
+
+    await joinLeague(fx.client, {
+      leagueId: fx.leagueId,
+      userId: m.userId,
+      walletAddress: m.address,
+      signature: signJoin(fx, m.address, m.secret),
+      teamName: "A",
+    });
+
+    expect(await memberWallet(fx.client, other.leagueId, m.userId)).toBeNull();
+  });
+});
+
 describe("on-chain join record (issue #26)", () => {
   /** Join the league for real, so there is a consent row to read back. */
   async function joined(
@@ -889,47 +911,5 @@ describe("on-chain join record (issue #26)", () => {
         "localnet",
       ),
     ).rejects.toThrow();
-  });
-});
-
-describe("getMemberWallet", () => {
-  it("returns the wallet a member signed their consent with", async () => {
-    const fx = await setup();
-    const m = await member(fx, 1, "a@example.com");
-    await joinLeague(fx.client, {
-      leagueId: fx.leagueId,
-      userId: m.userId,
-      walletAddress: m.address,
-      signature: signJoin(fx, m.address, m.secret),
-      teamName: "A",
-    });
-
-    expect(await getMemberWallet(fx.client, fx.leagueId, m.userId)).toBe(m.address);
-  });
-
-  it("returns null for someone who has not joined", async () => {
-    // This is the whole security property. The on-chain route derives the
-    // wallet from this function, so a null here is what stops a signed-in
-    // stranger writing a record against somebody else's wallet — and what
-    // enforces "no on-chain record without a consent record behind it".
-    const fx = await setup();
-    const stranger = await member(fx, 2, "stranger@example.com");
-
-    expect(await getMemberWallet(fx.client, fx.leagueId, stranger.userId)).toBeNull();
-  });
-
-  it("does not leak a membership across leagues", async () => {
-    const fx = await setup();
-    const other = await setup();
-    const m = await member(fx, 1, "a@example.com");
-    await joinLeague(fx.client, {
-      leagueId: fx.leagueId,
-      userId: m.userId,
-      walletAddress: m.address,
-      signature: signJoin(fx, m.address, m.secret),
-      teamName: "A",
-    });
-
-    expect(await getMemberWallet(fx.client, other.leagueId, m.userId)).toBeNull();
   });
 });
