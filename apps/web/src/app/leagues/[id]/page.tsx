@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import {
   getChainState,
   getLeagueRules,
-  getMemberWallet,
+  memberWallet,
   getOnChainJoin,
   getWallets,
 } from "@rostr/db";
@@ -52,9 +52,8 @@ export default async function LeaguePage({ params }: { params: Promise<{ id: str
   // than in the panel's own state, because the two halves are separate
   // transactions with a wallet popup between them — a reload in that gap would
   // otherwise leave a member with no control that reaches the second half.
-  const memberWallet = user ? await getMemberWallet(client, id, user.id) : null;
-  const resumable =
-    memberWallet !== null && (await getOnChainJoin(client, id, memberWallet)) === null;
+  const myWallet = user ? await memberWallet(client, id, user.id) : null;
+  const resumable = myWallet !== null && (await getOnChainJoin(client, id, myWallet)) === null;
 
   return (
     <div className="space-y-10">
