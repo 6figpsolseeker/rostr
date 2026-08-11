@@ -1194,28 +1194,28 @@ at T+48h. Validation enforces this.
 
 These were discussed at length and decided. Re-proposing them wastes the owner's time.
 
-| Decision                                         | Status                                                           |
-| ------------------------------------------------ | ---------------------------------------------------------------- |
-| Full PPR scoring                                 | **Settled** — table in `docs/RULES.md` §1                        |
-| Schedule luck retained                           | **Settled** — median scoring was proposed and **rejected**       |
-| Rolling waiver priority                          | **Settled** — FAAB proposed and **rejected** for v1              |
-| NFTs _are_ the roster, not souvenirs             | **Settled** — Token-2022, transfer hook + permanent delegate     |
-| NFTs persist as trophies, labelled "Player YYYY" | **Settled**                                                      |
-| Trades vetoable, never automatic                 | **Settled** — 48h escrow, ⅓ of uninvolved managers               |
-| Trade deadline set by the commissioner           | **Settled** 2026-08-08 — default 11; binds on the execution week |
-| Rules immutable, shown before joining            | **Settled**                                                      |
-| Per-game score updates, not real-time            | **Settled** — cost is not the reason; simplicity is              |
-| Mainnet with the pot live for 2026               | **Settled** — risks were raised and the owner chose this         |
-| Payout 60/15/10/10/5                             | **Settled** — champion must always be largest                    |
-| Abandonment (3 strikes → stake forfeit)          | **Removed** 2026-08-08 — could not fire; autofill does the job   |
-| Consolation bracket pays out                     | **Settled** — it is what keeps an eliminated team playing        |
-| IP-based sybil blocking                          | **Rejected** — breaks households, defeated by any VPN            |
-| Protocol fee: 1%, once, at settlement            | **Settled** 2026-08-07 — in the hashed rules; never on a refund  |
-| Buy-in between $5 and $50 per member             | **Settled** 2026-08-07 — a range; both bounds enforced on-chain  |
-| Pot mints must have six decimals (season one)    | **Settled** 2026-08-07 — what makes the $50 cap mean dollars     |
-| Free leagues anchor their rules hash on-chain    | **Settled** 2026-08-07 — `initialize_free_league`                |
-| Autofill on by default, per-team toggle          | **Settled** 2026-08-08 — method frozen in rules, switch is yours |
-| Autofill ranks on weekly projections             | **Settled** 2026-08-08 — a decision, not a fact; see DECISIONS   |
+| Decision                                         | Status                                                                   |
+| ------------------------------------------------ | ------------------------------------------------------------------------ |
+| Full PPR scoring                                 | **Settled** — table in `docs/RULES.md` §1                                |
+| Schedule luck retained                           | **Settled** — median scoring was proposed and **rejected**               |
+| Rolling waiver priority                          | **Settled** — FAAB proposed and **rejected** for v1                      |
+| NFTs _are_ the roster, not souvenirs             | **Settled** — Token-2022, transfer hook + permanent delegate             |
+| NFTs persist as trophies, labelled "Player YYYY" | **Settled**                                                              |
+| Trades vetoable, never automatic                 | **Settled** — 48h escrow, ⅓ of uninvolved managers                       |
+| Trade deadline set by the commissioner           | **Settled** 2026-08-08 — default 11; binds on the execution week         |
+| Rules immutable, shown before joining            | **Settled**                                                              |
+| Per-game score updates, not real-time            | **Settled** — cost is not the reason; simplicity is                      |
+| Mainnet with the pot live for 2026               | **Settled** — risks were raised and the owner chose this                 |
+| Payout 70/20/10, or winner-take-all              | **Settled** 2026-08-10 — the commissioner picks; champion always largest |
+| Abandonment (3 strikes → stake forfeit)          | **Removed** 2026-08-08 — could not fire; autofill does the job           |
+| Consolation bracket played but unpaid            | **Changed** 2026-08-10 — a paid consolation cannot settle a small league |
+| IP-based sybil blocking                          | **Rejected** — breaks households, defeated by any VPN                    |
+| Protocol fee: 1%, once, at settlement            | **Settled** 2026-08-07 — in the hashed rules; never on a refund          |
+| Buy-in between $5 and $50 per member             | **Settled** 2026-08-07 — a range; both bounds enforced on-chain          |
+| Pot mints must have six decimals (season one)    | **Settled** 2026-08-07 — what makes the $50 cap mean dollars             |
+| Free leagues anchor their rules hash on-chain    | **Settled** 2026-08-07 — `initialize_free_league`                        |
+| Autofill on by default, per-team toggle          | **Settled** 2026-08-08 — method frozen in rules, switch is yours         |
+| Autofill ranks on weekly projections             | **Settled** 2026-08-08 — a decision, not a fact; see DECISIONS           |
 
 ---
 

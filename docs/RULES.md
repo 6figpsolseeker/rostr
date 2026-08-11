@@ -469,16 +469,29 @@ that does none of the rest of this — charges 3–5%.
 
 ### Payout
 
+The commissioner picks one of two shapes at creation. Both are frozen with everything
+else, and in both the champion holds the largest single share.
+
+**Split (default)**
+
 | Prize                      | Share   | Settles |
 | -------------------------- | ------- | ------- |
-| **Champion**               | **60%** | Week 17 |
-| Runner-up                  | 15%     | Week 17 |
+| **Champion**               | **70%** | Week 17 |
+| Runner-up                  | 20%     | Week 17 |
 | Regular-season best record | 10%     | Week 14 |
-| Consolation bracket winner | 10%     | Week 17 |
-| 3rd place                  | 5%      | Week 17 |
 
-Percentages are a creation-time setting, frozen with everything else. The champion must
-always hold the largest single share.
+**Winner takes all**
+
+| Prize        | Share    | Settles |
+| ------------ | -------- | ------- |
+| **Champion** | **100%** | Week 17 |
+
+**Why no consolation or third-place share.** Both prizes depend on how many people
+joined — a consolation bracket needs at least two teams left over, a third-place game
+needs two semifinalists — while the payout is frozen before anyone joins. A payout naming
+a prize the field turns out to be too small to award can never be completed, so the pot
+never settles, and frozen rules mean it cannot be corrected. The consolation bracket is
+still played; it just carries no share.
 
 The split is not decoration. Under winner-take-all, a 2–9 team in Week 11 has no
 remaining reason to open the app, and abandonment becomes the rational move. Paying the

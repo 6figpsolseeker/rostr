@@ -355,9 +355,18 @@ describe("hashLeagueRules", () => {
     //   scoring, so a lineup is never invalid at that moment — and taking
     //   somebody's stake for inattention was the wrong rule to fix rather than
     //   delete. It also removes an entire instruction from the escrow.
+    // Moved 2026-08-10: schemaVersion 4 -> 5, changing the default payout from
+    //   60/15/10/10/5 to 70/20/10 and adding NFL_WINNER_TAKE_ALL_PAYOUT as an
+    //   option. A *defaults* change in shape, but it fixes a correctness bug:
+    //   consolation and third place are only decidable above a certain league
+    //   size (8 and 4 members respectively, at six playoff places), while the
+    //   payout is frozen before anyone joins. Paying a prize the field may not
+    //   be able to award meant `championship().complete` could never become
+    //   true, so the pot never settled and frozen rules made it uncorrectable.
+    //   The consolation bracket is still played; it just carries no share.
     // No leagues existed on any of these occasions.
     expect(hashLeagueRules(FIXTURE)).toBe(
-      "a6bfa99a895dd9a05cb9de24e9c916eecb7f020015e6e8fe53d1114f186922a5",
+      "8fa9b46a9dfd0d0939d0736b3e6db32a73e8a6b5aff547351a8ed2291f60bcf2",
     );
   });
 });

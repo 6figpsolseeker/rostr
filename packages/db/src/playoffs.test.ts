@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { buildNflPprRules, NFL } from "@rostr/core";
+import { buildNflPprRules, NFL, NFL_DEFAULT_PAYOUT } from "@rostr/core";
 import type { DraftRules, LeagueRules } from "@rostr/core";
 import { createLeague } from "./leagues.js";
 import { createUser } from "./identity.js";
@@ -255,23 +255,25 @@ describe("laying the first round", () => {
 
 describe("a pot league too small for a consolation bracket", () => {
   /**
-   * Six members and the default rules is a league that can never settle.
+   * A payout can name a prize the field is not big enough to award.
    *
-   * `consolationField` is `standings.slice(playoffTeams)`, and `playoffTeams`
-   * defaults to 6 — so at six members the consolation field is empty, at seven
-   * it is one team, and `bracketFor` returns null for both. That is correct on
-   * its own terms: there is no bracket to play.
+   * `consolationField` is `standings.slice(playoffTeams)`, so at six members the
+   * consolation field is empty and at seven it is one team; `bracketFor` returns
+   * null for both, correctly — there is no bracket to play. A third-place game
+   * needs two semifinalists, so it does not exist below four members.
    *
-   * But CONSOLATION is a **paid** prize in the default payout, and `complete`
-   * requires every paid prize to have a holder. So the league plays a full
-   * postseason, crowns a champion — and never becomes complete, which is the
-   * flag settlement will read. Validation only compares `playoffTeams` against
-   * `maxTeams`, never against how many people actually joined, and the rules are
-   * frozen at creation, so an affected league cannot be corrected afterwards.
+   * `complete` requires every **paid** prize to have a holder, and it is the flag
+   * settlement reads. So a payout naming one of those prizes in a league too
+   * small to award it never completes: the pot simply never settles, and the
+   * rules being frozen at creation means it cannot be corrected afterwards.
+   * Validation compares `playoffTeams` against `maxTeams`, never against how many
+   * people actually joined — and cannot, since nobody has joined yet.
    *
-   * This test asserts the defect rather than the desired behaviour. It is here
-   * so the decision is visible and so whatever fix is chosen has something to
-   * flip. See CLAUDE.md, "One league's failure never stops the others".
+   * **The default payout no longer names either of them** (70/20/10 on champion,
+   * runner-up and best record — all decidable at any size), which is what fixed
+   * this. The test below keeps the old five-way split *explicitly* to pin the
+   * residual: a custom payout can still name an unawardable prize, and nothing
+   * yet refuses it at the moment the field locks.
    */
   const POT = {
     tokenMint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
@@ -288,7 +290,36 @@ describe("a pot league too small for a consolation bracket", () => {
     feeRecipient: "6dNUCTMTgoHhbfgDzKtiPvBpJ2LzMwGqBpKmUDgQtNMK",
   } as unknown as LeagueRules["pot"];
 
-  it("crowns a champion and still never completes", async () => {
+  it("settles a six-member league on the default payout", async () => {
+    const base0 = buildNflPprRules({ seasonYear: 2026, draft: DRAFT });
+    const fx0 = await setup(
+      {
+        pot: { ...POT, payout: NFL_DEFAULT_PAYOUT } as LeagueRules["pot"],
+        league: { ...base0.league, maxBots: 0 },
+      },
+      6,
+    );
+
+    await advancePlayoffs(fx0.client, fx0.leagueId);
+    await score(fx0, 15, fx0.teams[4]!, 120_000, 100_000);
+    await score(fx0, 15, fx0.teams[1]!, 120_000, 100_000);
+    await advancePlayoffs(fx0.client, fx0.leagueId);
+    await score(fx0, 16, fx0.teams[0]!, 130_000, 100_000);
+    await score(fx0, 16, fx0.teams[2]!, 130_000, 100_000);
+    await advancePlayoffs(fx0.client, fx0.leagueId);
+    await score(fx0, 17, fx0.teams[0]!, 140_000, 120_000);
+
+    const settled = await championship(fx0.client, fx0.leagueId);
+
+    // Every paid prize has a holder, so the pot can settle. Under the old
+    // five-way split this stayed false forever.
+    expect(settled.champion).toBe(fx0.teams[0]);
+    expect(settled.runnerUp).toBe(fx0.teams[2]);
+    expect(settled.regularSeason).toBe(fx0.teams[0]);
+    expect(settled.complete).toBe(true);
+  });
+
+  it("still cannot settle a custom payout naming a prize the field cannot award", async () => {
     const base = buildNflPprRules({ seasonYear: 2026, draft: DRAFT });
     // No bots where there is money: a bot has no wallet and paid no buy-in.
     const fx = await setup({ pot: POT, league: { ...base.league, maxBots: 0 } }, 6);

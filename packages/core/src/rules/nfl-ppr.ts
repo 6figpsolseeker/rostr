@@ -145,13 +145,47 @@ export const NFL_DEFAULT_SETTLEMENT: SettlementRules = {
   payingWeeks: [14, 17],
 };
 
-/** 60 / 15 / 10 / 10 / 5 — champion always holds the largest single share. */
+/**
+ * The default split: champion, runner-up, best regular-season record.
+ *
+ * **Every prize here is decidable in a league of any size**, and that is the
+ * constraint that chose it rather than taste. The payout is frozen and signed
+ * before anyone joins, but the bracket's shape is not known until the field
+ * locks — so a prize whose existence depends on how many people turn up cannot
+ * safely sit in a frozen payout.
+ *
+ * Consolation and third place are exactly that. A consolation bracket needs at
+ * least two teams left over, so it does not exist below eight members with the
+ * default six playoff places; a third-place game needs two semifinalists, so it
+ * does not exist below four. Paying either meant `championship().complete` could
+ * never become true for a small league — the pot simply never settled, and the
+ * rules being frozen meant it could not be corrected afterwards.
+ *
+ * The consolation *bracket* is still played (`schedule.consolationBracket`), so
+ * eliminated teams still have fixtures and a reason to set a lineup. It just
+ * does not carry a share.
+ */
 export const NFL_DEFAULT_PAYOUT: PotRules["payout"] = [
-  { prize: "CHAMPION", basisPoints: 6000 },
-  { prize: "RUNNER_UP", basisPoints: 1500 },
+  { prize: "CHAMPION", basisPoints: 7000 },
+  { prize: "RUNNER_UP", basisPoints: 2000 },
   { prize: "REGULAR_SEASON", basisPoints: 1000 },
-  { prize: "CONSOLATION", basisPoints: 1000 },
-  { prize: "THIRD_PLACE", basisPoints: 500 },
+];
+
+/**
+ * One winner, the whole pot.
+ *
+ * An option, not the default, and the trade-off is real: `docs/DECISIONS.md`
+ * notes that under winner-take-all a 2–9 team in Week 11 is mathematically
+ * eliminated and has nothing left to play for. The autofill keeps their lineup
+ * legal and their results still move other people's seeds, so the cost is
+ * engagement rather than correctness — but a commissioner choosing this should
+ * know they are choosing it.
+ *
+ * Structurally it is the safest payout there is: the champion is decidable in
+ * any league with two members.
+ */
+export const NFL_WINNER_TAKE_ALL_PAYOUT: PotRules["payout"] = [
+  { prize: "CHAMPION", basisPoints: 10_000 },
 ];
 
 /**
@@ -190,7 +224,7 @@ export function buildNflPprRules(overrides: NflPprOverrides): LeagueRules {
   const pot = overrides.pot ?? null;
 
   return structuredClone({
-    schemaVersion: 4,
+    schemaVersion: 5,
     sportKey: "nfl",
     seasonYear: overrides.seasonYear,
     scoring: NFL_PPR_SCORING,
