@@ -288,6 +288,12 @@ export async function drawDraftOrder(
  * checks the result against the stored positions, and — if the beacon is a real
  * one — confirms the recorded slot really is the first block at or after the
  * scheduled time.
+ *
+ * **A problem means the draw was checked and failed. An unreachable node throws
+ * instead**, the same as an unreachable database does two lines below. The two
+ * must not be collapsed: this function's output is an accusation, and a public
+ * one at that, so "the RPC 429'd" must never be rendered as "slot 12345 is not
+ * the first block at or after the scheduled time".
  */
 export async function verifyDraftOrder(
   db: SqlClient,

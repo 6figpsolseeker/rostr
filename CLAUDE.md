@@ -311,6 +311,40 @@ skipped slots. Roughly twenty RPC calls; a linear walk would be millions. **Veri
 of an old draw needs an archival RPC node** — public nodes prune, and a pruned range
 looks the same as a stalled chain.
 
+**A failed lookup is not a skipped slot, and conflating them moved the draw** (issue
+#20). `rpc()` used to collapse a transport error, an HTTP 429/500, and a JSON-RPC error
+body into one code, and `blockTime` read all three as "this slot was skipped" — so one
+transient fault on the boundary slot silently settled the search one block late. The
+draw is written once, the trigger freezes it, and `verify()` then reports the league's
+own recorded order as wrong forever. `blockTime` now returns `null` **only** for a
+recognised "no block there" answer — a JSON-RPC `-32007`/`-32009`, a `null` result
+that is actually **present** in the body, or a message saying _skipped_ **on a code in
+the same -3200x family** — and throws on everything else. Both narrowings are load-bearing
+and were found by review, not design: an absent `result` and `result: null` both read as
+`undefined`, so collapsing them let a bare `{"jsonrpc":"2.0","id":1}` from a proxy pass
+as a gap; and an ungated message check reads `{code: -32603, message: "…was skipped by
+the proxy"}` as a gap too. **Fail closed:** an
+unrecognised error is a failure, not a gap. That direction is deliberate, because
+refusing costs a retry (the block is fetched outside the transaction, so a throw writes
+nothing, and the answer is deterministic once the block exists) while guessing costs the
+league its verifiability. The exact wire format for a skipped slot has **not** been
+checked against a live node — see the comment on `SKIPPED_SLOT_CODES`, which says so.
+
+`verify()` throws for the same reason instead of answering `false`. Its `false` is
+published as "this league's order was rigged", and a 429 during an audit must not be
+able to say that.
+
+Each RPC call gets **three attempts** with a 200ms doubling backoff, on 429, on 5xx, and
+on a _transient JSON-RPC error body_ — `-32004`/`-32014` (a load-balanced backend a few
+slots behind the one `getSlot` answered from) or a provider that delivers a rate limit as
+HTTP 200 with the limit in the body. That last shape is not a thrown error, so it
+originally bypassed the retry loop entirely — the retry never fired for the case it was
+added for. ~30 unpaced sequential calls at a free public endpoint will meet a rate limit
+eventually, and now that a rate limit fails the draw rather than being swallowed, one in
+thirty would send the commissioner back to the button. Pacing was rejected: it slows
+every draw to absorb a burst three attempts already handles, and each call is an
+idempotent read of immutable history.
+
 `FixedBeacon` is test-only. It makes the seed predictable, which is the entire thing the
 real one exists to prevent.
 
