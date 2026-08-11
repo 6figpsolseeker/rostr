@@ -3,23 +3,18 @@ import { beforeAll, describe, expect, it } from "vitest";
 import {
   clusterOf,
   depositIx,
-  escrowProgram,
   hexToBytes,
   initializeLeagueIx,
   joinLeagueIx,
   payoutArray,
+  refundStakeIx,
   verifyLeagueAnchor,
   verifyOnChainDeposit,
   verifyOnChainRefund,
 } from "@rostr/escrow";
 import { createLeague, createUser, recordChainAnchor, seedSport } from "@rostr/db";
 import { createTestDatabase, type PGliteClient } from "@rostr/db/testing";
-import {
-  buildNflPprRules,
-  NFL,
-  NFL_DEFAULT_FEE_BPS,
-  NFL_DEFAULT_PAYOUT,
-} from "@rostr/core";
+import { buildNflPprRules, NFL, NFL_DEFAULT_FEE_BPS, NFL_DEFAULT_PAYOUT } from "@rostr/core";
 import {
   createPotMint,
   fundedMember,
@@ -45,9 +40,13 @@ async function sendMemberTx(
   let lastErr: unknown;
   for (let attempt = 0; attempt < 5; attempt++) {
     try {
-      const sig = await provider.sendAndConfirm(new anchor.web3.Transaction().add(ix), [signer], {
-        commitment: "confirmed",
-      });
+      const sig = await provider.sendAndConfirm(
+        new anchor.web3.Transaction().add(ix),
+        [signer],
+        {
+          commitment: "confirmed",
+        },
+      );
       return sig;
     } catch (err) {
       lastErr = err;
@@ -114,7 +113,11 @@ async function createPotLeague(name: string, refundUnlockAt: number) {
   };
 }
 
-async function anchorLeague(leagueId: string, rulesHash: string, rules: ReturnType<typeof buildNflPprRules>) {
+async function anchorLeague(
+  leagueId: string,
+  rulesHash: string,
+  rules: ReturnType<typeof buildNflPprRules>,
+) {
   const pot = rules.pot;
   if (!pot) throw new Error("expected a pot league");
   const ix = await initializeLeagueIx(program, {
@@ -140,11 +143,17 @@ describe("deposit and refund are wired (issue #27)", () => {
     // future, and the on-chain refund_stake execution is already covered by the
     // program's own pot.test.ts. This test proves the deposit wiring and the
     // verify helpers.
-    const { league, rules } = await createPotLeague("stake", Math.floor(Date.now() / 1000) + 365 * 24 * 3600);
+    const { league, rules } = await createPotLeague(
+      "stake",
+      Math.floor(Date.now() / 1000) + 365 * 24 * 3600,
+    );
     const sig = await anchorLeague(league.id, league.rulesHash, rules);
     const verdict = await verifyLeagueAnchor(program, league.id, league.rulesHash);
     expect(verdict.ok).toBe(true);
-    await recordChainAnchor(db, league.id, { signature: sig, cluster: clusterOf(provider.connection) });
+    await recordChainAnchor(db, league.id, {
+      signature: sig,
+      cluster: clusterOf(provider.connection),
+    });
 
     // One funded member: SOL + buy-in tokens, and joined on-chain.
     const member = await fundedMember(provider, mint, BUY_IN);
@@ -170,7 +179,11 @@ describe("deposit and refund are wired (issue #27)", () => {
     });
     await sendMemberTx(provider, depIx, member.keypair);
 
-    const depositVerdict = await verifyOnChainDeposit(program, league.id, member.keypair.publicKey);
+    const depositVerdict = await verifyOnChainDeposit(
+      program,
+      league.id,
+      member.keypair.publicKey,
+    );
     expect(depositVerdict.ok).toBe(true);
     expect(depositVerdict.deposited).toBe(BigInt(BUY_IN));
 
@@ -187,13 +200,98 @@ describe("deposit and refund are wired (issue #27)", () => {
   });
 
   it("deposit is refused for a member who never joined on-chain", async () => {
-    const { league, rules } = await createPotLeague("nojoin", Math.floor(Date.now() / 1000) + 365 * 24 * 3600);
+    const { league, rules } = await createPotLeague(
+      "nojoin",
+      Math.floor(Date.now() / 1000) + 365 * 24 * 3600,
+    );
     const sig = await anchorLeague(league.id, league.rulesHash, rules);
-    await recordChainAnchor(db, league.id, { signature: sig, cluster: clusterOf(provider.connection) });
+    await recordChainAnchor(db, league.id, {
+      signature: sig,
+      cluster: clusterOf(provider.connection),
+    });
 
     const stakeKeypair = anchor.web3.Keypair.fromSeed(new Uint8Array(32).fill(42));
     const verdict = await verifyOnChainDeposit(program, league.id, stakeKeypair.publicKey);
     expect(verdict.ok).toBe(false);
     if (!verdict.ok) expect(verdict.reason).toBe("NOT_JOINED");
+  });
+});
+
+/**
+ * The state a **completed** refund leaves behind.
+ *
+ * `stake.test.ts` originally exercised `verifyOnChainRefund` only for a stranger
+ * (`NOT_JOINED`) — the one path that was already correct — while the verifier
+ * was inverted for every path that mattered: `refund_stake` sets `refunded` and
+ * keeps `deposited` as history, so a genuine refund landed in exactly the state
+ * it rejected. Green tests, no refund recordable, and any staked member markable
+ * as refunded.
+ *
+ * `packages/escrow/src/membership.test.ts` pins the four states as unit tests
+ * that run everywhere. This is the other half: proof that a real refund on a
+ * real validator actually produces the state those units describe, so the two
+ * cannot agree with each other while both being wrong about the program.
+ *
+ * A three-second timelock and a real wait, following `pot.test.ts`: the
+ * validator's clock follows real time, and warping to a convenient slot would
+ * test the warp.
+ */
+describe("a completed refund verifies as a refund", () => {
+  it("reports ok once the stake is actually back out", async () => {
+    const { league, rules } = await createPotLeague(
+      "refundverify",
+      Math.floor(Date.now() / 1000) + 3,
+    );
+    const sig = await anchorLeague(league.id, league.rulesHash, rules);
+    await recordChainAnchor(db, league.id, {
+      signature: sig,
+      cluster: clusterOf(provider.connection),
+    });
+
+    const member = await fundedMember(provider, mint, BUY_IN);
+    const joinIx = await joinLeagueIx(program, {
+      leagueId: league.id,
+      rulesHash: hexToBytes(league.rulesHash),
+      member: member.keypair.publicKey,
+    });
+    await sendMemberTx(provider, joinIx, member.keypair);
+
+    const depIx = await depositIx(program, {
+      leagueId: league.id,
+      mint,
+      member: member.keypair.publicKey,
+    });
+    await sendMemberTx(provider, depIx, member.keypair);
+
+    // Staked, not yet refunded. Deposit says yes, refund says not-yet — and
+    // getting this pair the wrong way round was the whole bug.
+    const staked = await verifyOnChainDeposit(program, league.id, member.keypair.publicKey);
+    expect(staked.ok).toBe(true);
+    const notYet = await verifyOnChainRefund(program, league.id, member.keypair.publicKey);
+    expect(notYet.ok).toBe(false);
+    if (!notYet.ok) expect(notYet.reason).toBe("NOT_REFUNDED");
+
+    await sleep(5000);
+
+    const refIx = await refundStakeIx(program, {
+      leagueId: league.id,
+      mint,
+      member: member.keypair.publicKey,
+    });
+    await sendMemberTx(provider, refIx, member.keypair);
+
+    // And now they swap. `deposited` is unchanged on-chain — it is history —
+    // which is exactly why the deposit verifier must consult `refunded` too.
+    const refunded = await verifyOnChainRefund(program, league.id, member.keypair.publicKey);
+    expect(refunded.ok).toBe(true);
+    if (refunded.ok) expect(refunded.refunded).toBe(BigInt(BUY_IN));
+
+    const noLongerStaked = await verifyOnChainDeposit(
+      program,
+      league.id,
+      member.keypair.publicKey,
+    );
+    expect(noLongerStaked.ok).toBe(false);
+    if (!noLongerStaked.ok) expect(noLongerStaked.reason).toBe("ALREADY_REFUNDED");
   });
 });

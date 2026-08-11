@@ -60,9 +60,13 @@ export function DepositPanel({
     setDone(null);
 
     try {
-      const provider = new AnchorProvider(connection, { publicKey, signTransaction } as unknown as Wallet, {
-        commitment: "confirmed",
-      });
+      const provider = new AnchorProvider(
+        connection,
+        { publicKey, signTransaction } as unknown as Wallet,
+        {
+          commitment: "confirmed",
+        },
+      );
       const program = escrowProgram(provider);
 
       const ix = await depositIx(program, {
@@ -77,7 +81,10 @@ export function DepositPanel({
       const response = await fetch(`/api/leagues/${leagueId}/deposit`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ walletAddress: publicKey.toBase58(), signature }),
+        // No wallet address: the server reads it from this member’s own
+        // consent row. A client that could name a wallet could name
+        // somebody else’s.
+        body: JSON.stringify({ signature }),
       });
 
       if (!response.ok) {
@@ -100,9 +107,13 @@ export function DepositPanel({
     setDone(null);
 
     try {
-      const provider = new AnchorProvider(connection, { publicKey, signTransaction } as unknown as Wallet, {
-        commitment: "confirmed",
-      });
+      const provider = new AnchorProvider(
+        connection,
+        { publicKey, signTransaction } as unknown as Wallet,
+        {
+          commitment: "confirmed",
+        },
+      );
       const program = escrowProgram(provider);
 
       const ix = await refundStakeIx(program, {
@@ -117,7 +128,10 @@ export function DepositPanel({
       const response = await fetch(`/api/leagues/${leagueId}/refund`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ walletAddress: publicKey.toBase58(), signature }),
+        // No wallet address: the server reads it from this member’s own
+        // consent row. A client that could name a wallet could name
+        // somebody else’s.
+        body: JSON.stringify({ signature }),
       });
 
       if (!response.ok) {
@@ -137,8 +151,8 @@ export function DepositPanel({
     <section className="space-y-4 rounded border border-white/10 p-6">
       <h2 className="text-lg font-medium">Your stake</h2>
       <p className="text-sm text-white/60">
-        Staking moves the buy-in from your wallet into the league vault. Refund is open once
-        the timelock passes — and is unconditional, so your stake can never be stuck.
+        Staking moves the buy-in from your wallet into the league vault. Refund is open once the
+        timelock passes — and is unconditional, so your stake can never be stuck.
       </p>
 
       {!connected ? (

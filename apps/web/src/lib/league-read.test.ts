@@ -41,6 +41,11 @@ const GATES = [
   /leagueReadAccess\(/,
   /if \(!\w+\.myTeamId\)/,
   /if \(!\w+\.isCommissioner\)/,
+  // Derive-then-refuse: the money routes get the caller's wallet from their own
+  // membership row and 403 when there isn't one. The call and the refusal are
+  // matched together on purpose — `memberWallet(` alone would pass a route that
+  // asked and then ignored the answer, which is the same hole `myTeamId` had.
+  /memberWallet\([^)]*\);\s*if \(!\w+\)/,
 ];
 
 /**

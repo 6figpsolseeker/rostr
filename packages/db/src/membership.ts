@@ -426,6 +426,38 @@ export interface OnChainStake {
 }
 
 /**
+ * The wallet this user joined this league with, or `null` if they are not a
+ * member of it.
+ *
+ * **Exists so no route has to take a wallet address from a request.** Validating
+ * a supplied address against the user's linked wallets would also work, but this
+ * is stronger and simpler: there is exactly one wallet a member consented with,
+ * `league_memberships` already records it next to the signature over the rules
+ * hash, and a caller with no way to name a wallet has no way to name someone
+ * else's.
+ *
+ * The deposit and refund routes took `walletAddress` from the body with no
+ * ownership check at all — the same defect as the original on-chain join route,
+ * and the half that made a broken refund verifier into "any signed-in account
+ * can mark any staked member as refunded".
+ */
+export async function memberWallet(
+  db: SqlClient,
+  leagueId: string,
+  userId: string,
+): Promise<string | null> {
+  const [row] = await db.query<{ address: string }>(
+    `SELECT w.address
+       FROM league_memberships m
+       JOIN wallets w ON w.id = m.wallet_id
+      WHERE m.league_id = $1 AND m.user_id = $2`,
+    [leagueId, userId],
+  );
+
+  return row?.address ?? null;
+}
+
+/**
  * Record that a member has staked into a league on-chain.
  *
  * The member signs `deposit` from their own wallet — no key of ours is
