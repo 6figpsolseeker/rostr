@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { leagueReadAccess } from "@/lib/visibility";
 import { getLeagueRules, loadWeekResults, playoffState } from "@rostr/db";
 import type { BracketGame, BracketRound } from "@rostr/core";
 import { db } from "@/lib/db";
@@ -25,6 +26,11 @@ export default async function BracketPage({ params }: { params: Promise<{ id: st
     [id],
   );
   if (!league) notFound();
+
+  // A private league reports nothing about how it is going to a non-member.
+  // `notFound` rather than a notice: a "this league is private" page confirms
+  // the league exists, which is the fact an unguessable id is protecting.
+  if (!(await leagueReadAccess(id)).ok) notFound();
 
   const stored = await getLeagueRules(client, id);
   if (!stored) notFound();
