@@ -355,6 +355,12 @@ The database decides instead — `SELECT ... FOR UPDATE` on the draft row is the
 and `PRIMARY KEY (draft_id, pick_number)` plus `UNIQUE (draft_id, player_id)` are the
 backstop if anything ever writes outside that lock. Both are tested.
 
+**Serialising is not the same as being right**, and issue #22 was the cost of assuming it
+is. The lock decides who writes first; it cannot make a decision taken before the lock true
+afterwards, and two callers who both read "pick 15 is open" are queued and then _both_
+write — legal rows, different pick numbers, different players, so no constraint fires. What
+catches it is re-reading the decision inside the lock. See "The draft room".
+
 A pick writes the `draft_picks` row, the `roster_entries` row, and the queue cleanup in
 **one transaction**. A pick recorded without a roster entry leaves a team owning a player
 nothing else in the system can see.
@@ -427,15 +433,57 @@ The board is fetched **once** and availability computed client-side by subtracti
 players. A thousand players is ~80 KB and only changes when the stats sync runs; shipping
 it on every 3-second poll would be silly.
 
-**`catchUpExpiredPicks()` runs on every read of the draft.** That is how clocks expire —
-there is no scheduled worker yet. It is deterministic and idempotent, so it does not
-matter who triggers it.
+**`catchUpExpiredPicks()` runs on every read of the draft**, as well as on the cron tick.
+That is how clocks expire. It is safe to run from anywhere, any number of times at once —
+but **it is not safe because the picks are deterministic**, and that is what the comments
+here used to claim (issue #22).
+
+Every caller decides "pick N is overdue" from a read taken _before_ the lock. `FOR UPDATE`
+then queues them and each writes in turn, so N stale callers made N _consecutive_ picks:
+pick N legitimately, then N+1 and N+2 for managers who had just been handed a full ninety
+seconds. Nothing catches that afterwards — the rows are different pick numbers and
+different players, so the primary key and the unique index are both satisfied, there is no
+un-pick, and `createDraftRecord` refuses a redraft. Anyone who knew a league id could
+amplify it, because the read route needs no session.
+
+**So `recordPick` re-checks the decision inside the lock: the expected pick number _and_
+the deadline.** Two guards, and neither replaces the other — the pick number catches a
+snapshot that predates somebody else's pick, the deadline catches a pause-and-resume,
+where the pick on the clock is unchanged and the timer is new.
+
+**Losing that race is a no-op, not a throw.** `catchUpExpiredPicks` returns how many picks
+it made itself. The draft read route catches only `DraftContextError`, so an error there is a
+500 in a polling tab at the exact instant the draft advances.
 
 Each auto-pick is stamped **at the deadline it missed, not at `now`**, and that is
 load-bearing. Stamping `now` restarts the next manager's clock from whenever somebody
 happened to open the page: an hour of nobody watching would cost exactly one pick and
 silently extend every clock after it. Advancing deadline by deadline keeps the draft on
 real time. Tested.
+
+**And a manual pick that arrives after its own deadline is refused** (`CLOCK_EXPIRED`,
+409), not accepted and stamped `now`. It used to be accepted: `makePick` checks the turn
+and not the clock, so five managers each a minute late pushed the draft 300 seconds behind
+the schedule it published, one overrun at a time, added to a baseline that never
+re-anchors. That is precisely the drift the deadline-stamped auto-pick exists to prevent,
+and it is not less drift for having a human behind it. The room disables the Draft button
+when the countdown reads 0:00 — `DraftRoom` owns the deadline for that reason, so the
+countdown and the button share one deadline. They run on separate timers so they can
+differ for up to 250ms, but not about _which_ instant is the deadline. The button is a
+courtesy and the server is the rule.
+
+**That gate is measured against the server's clock, which the draft payload carries as
+`now`.** Measuring it against `Date.now()` reads correctly on a correct machine and locks
+a wrong one out of the entire draft: a browser more than one pick clock fast computes
+every deadline as already passed, disables its own Draft button on every poll, and
+auto-picks every round. Only the _elapsed_-time half of the local clock is used, for the
+timeout, and that stays accurate however wrong the absolute time is. A UI that refuses a
+pick the server would have accepted is worse than the drift this gate exists to prevent.
+
+**Open, and an owner's call, not a bug:** in a 24-hour slow draft a pick a minute late is
+refused for a drift of one minute in twenty-four hours. Defensible and harsh. A grace
+period in SLOW mode would be a reasonable alternative and was deliberately _not_ invented
+here.
 
 **`/api/cron/draft-tick` is what makes clocks real.** Before it existed, expiry happened
 only when somebody _read_ a draft, so a draft nobody had open did not advance and a
@@ -445,7 +493,9 @@ least as often as the shortest pick clock** — a minute, given the 90-second mi
 
 Set `CRON_SECRET` to stop it being hammered. It is not a security boundary in the usual
 sense: the endpoint only does what the clock already permits, so an unauthorised call
-cannot produce a wrong pick. The guard is about database load.
+cannot produce a wrong pick. The guard is about database load. **That holds because of the
+two guards above** — before them, hammering it at a real expiry produced extra picks, and
+the public read route did the same work anyway, so the secret was never what prevented it.
 
 It also purges expired sessions and idle rate-limit buckets, because those need a
 scheduler and nothing else did.

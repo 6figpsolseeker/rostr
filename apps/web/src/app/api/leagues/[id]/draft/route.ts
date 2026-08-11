@@ -25,15 +25,28 @@ function nextTeamOnClock(
  * The live draft state.
  *
  * **Advances the clock as a side effect.** Expiry has to happen somewhere, and
- * there is no scheduled worker yet — so any read of the draft first auto-picks
- * anything already overdue. The auto-pick is deterministic and idempotent, so it
- * does not matter who triggers it or how often.
+ * `/api/cron/draft-tick` only fires once a minute — so any read of the draft
+ * first auto-picks anything already overdue.
  *
- * The limitation is real and worth stating: **if nobody looks at a draft, its
- * clock does not advance.** For a slow draft with a 24-hour timer that is
- * harmless; for a fast one, the room is open and being polled. It should still
- * become a scheduled job calling `draftsWithExpiredPicks()` before the season —
- * a draft that stalls because everyone closed the tab is a bad night.
+ * **This route needs no session, and every open tab polls it at one second while
+ * its manager is on the clock or on deck.** So the catch-up runs from many
+ * callers at once, none of them coordinated, at the exact instant a deadline
+ * passes. That is safe because `recordPick` re-checks the pick number and the
+ * deadline inside its lock and records nothing if either moved — it is not safe
+ * merely because the picks are deterministic. See `catchUpExpiredPicks`.
+ *
+ * **It must also stay a no-op rather than a throw when it loses that race**,
+ * which is what `catchUpExpiredPicks` promises. The catch below handles
+ * `DraftContextError` and rethrows everything else, so anything else surfaces as
+ * a 500 in a polling tab at the moment the draft advances — the worst possible
+ * moment for the room to go blank. That includes the race where the winner made
+ * the *final* pick and completed the draft, which is why `recordPick` answers a
+ * named caller with `null` rather than `NOT_IN_PROGRESS`.
+ *
+ * The limitation is real and worth stating: **between cron ticks, a draft nobody
+ * is looking at does not advance.** For a slow draft with a 24-hour timer that
+ * is irrelevant; for a fast one, a minute is the worst case and the room is open
+ * and polling anyway.
  */
 export async function GET(
   _request: Request,
@@ -83,6 +96,11 @@ export async function GET(
         : null;
 
     return NextResponse.json({
+      // The server clock, so the room can measure the pick clock without
+      // trusting the browser's absolute time. A machine whose clock is more
+      // than one pick ahead would otherwise compute every deadline as already
+      // passed and be locked out of manually picking for the whole draft.
+      now: new Date().toISOString(),
       draft: {
         status: draft.status,
         rounds: draft.rounds,
