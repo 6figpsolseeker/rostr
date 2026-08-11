@@ -304,9 +304,12 @@ function validatePot(rules: LeagueRules, out: string[]): void {
   if (!champion) {
     out.push("payout must include a CHAMPION share");
   } else {
-    const largest = Math.max(...pot.payout.map((s) => s.basisPoints));
-    if (champion.basisPoints < largest) {
-      out.push("CHAMPION must hold the largest single payout share");
+    // **Strictly** largest, matching the escrow program. A tie passed here and
+    // then failed on-chain with ChampionNotLargest — after the rules were frozen,
+    // so the league could never be anchored and never be corrected.
+    const others = pot.payout.filter((s) => s.prize !== "CHAMPION");
+    if (others.some((s) => s.basisPoints >= champion.basisPoints)) {
+      out.push("CHAMPION must hold the largest single payout share, strictly");
     }
   }
 

@@ -97,6 +97,22 @@ export async function POST(request: Request): Promise<NextResponse> {
     );
   }
 
+  // An unrecognised shape is refused rather than quietly treated as the split.
+  // The whole creation promise is that the previewed hash is the frozen hash, so
+  // a client sending a shape this server does not know about must fail loudly —
+  // otherwise the two disagree with nothing to show for it.
+  if (
+    body.pot &&
+    body.pot.payout !== undefined &&
+    body.pot.payout !== "SPLIT" &&
+    body.pot.payout !== "WINNER_TAKE_ALL"
+  ) {
+    return NextResponse.json(
+      { error: `Unknown payout shape: ${String(body.pot.payout)}` },
+      { status: 400 },
+    );
+  }
+
   const pot: PotRules | null = body.pot
     ? {
         tokenMint: body.pot.tokenMint,

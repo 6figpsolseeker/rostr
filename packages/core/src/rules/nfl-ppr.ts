@@ -233,7 +233,7 @@ export function buildNflPprRules(overrides: NflPprOverrides): LeagueRules {
       ...NFL_DEFAULT_LEAGUE,
       ...overrides.league,
       // Money and bots do not mix, and the override cannot argue. A bot has no
-      // wallet, so a bot champion would leave 60% of the pot with no recipient —
+      // wallet, so a bot champion would leave the largest share with no recipient —
       // and `validateLeagueRules` refuses the combination anyway, so allowing it
       // through here would only produce a league that fails to create.
       ...(pot ? { maxBots: 0 } : {}),

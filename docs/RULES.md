@@ -442,7 +442,7 @@ Optional per league. When enabled:
 
   The floor is there because a pot has fixed costs a stake does not scale with: every
   deposit and refund is a transaction, the vault and each membership cost rent, and
-  settlement pays five prizes. Below a few dollars, moving the money costs more than the
+  settlement pays every prize in the split. Below a few dollars, moving the money costs more than the
   money. A pot smaller than that is a free league with extra steps, and free leagues have
   their own path.
 

@@ -100,7 +100,7 @@ Anchor — on Windows, via WSL. Setup commands are in [`CLAUDE.md`](CLAUDE.md).
   Week 18 is excluded — NFL starters rest once seeding is settled.
 - **Head-to-head** weekly matchups. Schedule luck is retained deliberately.
 - **Rolling waiver priority.** Win a claim, go to the back of the order.
-- **Consolation bracket pays out**, so eliminated teams still have something to play for.
+- **Consolation bracket is played**, so eliminated teams still have something to play for.
   This is the anti-abandonment mechanism — punishment doesn't work on someone already
   guaranteed nothing.
 

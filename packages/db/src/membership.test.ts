@@ -339,7 +339,7 @@ describe("bots", () => {
    *
    * The pot fixture above cannot hold one at all: `buildNflPprRules` forces
    * `maxBots` to zero whenever there is money, because a bot has no wallet and a
-   * bot champion would leave 60% of the pot with no recipient.
+   * bot champion would leave the largest share with no recipient.
    */
   async function freeLeague(humans = 1): Promise<Fixture> {
     db = await createTestDatabase();

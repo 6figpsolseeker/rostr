@@ -668,11 +668,18 @@ cannot, which is a deliberate reversal of what `bracket.ts` used to claim. The q
 matters more than the crash: **four teams never threw**, it just played a bracket nobody
 agreed to, with seed 1 idle twice and one game all postseason.
 
-Still open, and not this fix: a pot league with **6 or 7 members can never settle**.
-`consolationField` is `standings.slice(playoffTeams)`, so at the default `playoffTeams: 6`
-the consolation field is 0 or 1, `bracketFor` returns null, `consolationWinner` stays null
-— and since CONSOLATION is a paid prize, `championship().complete` can never be true.
-Validation only checks `playoffTeams > maxTeams`, and rules are frozen at creation.
+**Fixed since, in schema 5: a payout may only name prizes the field is certain to be able
+to award.** A pot league with 6 or 7 members could never settle — `consolationField` is
+`standings.slice(playoffTeams)`, so at the default `playoffTeams: 6` the consolation field
+is 0 or 1, `bracketFor` returns null, and since CONSOLATION was a paid prize
+`championship().complete` could never be true. Both built-in payouts (70/20/10 and
+winner-take-all) now name only champion, runner-up and best record, all decidable at any
+size. The consolation bracket and the third-place game are still _played_.
+
+**The residual is a custom payout.** `validateLeagueRules` cannot catch it — nobody has
+joined at creation, so the field size is unknown. The first moment it is known is
+`drawDraftOrder`, which selects the teams and locks the field in one transaction, and it is
+the last moment a refund is still clean. A guard there is the outstanding piece.
 
 ### Trades
 
@@ -931,7 +938,7 @@ USDC is a legacy mint. Milestone E's roster NFTs are Token-2022 and unrelated to
 pot — only this program, only through these instructions.
 
 `payout_bps` is positional, indexed by the `prize` module. **That order is
-`NFL_DEFAULT_PAYOUT` in `rules/nfl-ppr.ts`, not the declaration order of the `PrizeKey`
+`PRIZE_ORDER` in `packages/escrow/src/instructions.ts`, not the declaration order of the `PrizeKey`
 union** — the two differ, and a client serialising from the wrong one reshuffles the split
 without any error.
 
@@ -1018,7 +1025,7 @@ cross-checks — rather than from Anchor's resolver. One source of truth, and it
 tested one.
 
 **`payoutArray()` is the only place the payout order is converted.** `PRIZE_ORDER` here
-matches the program's `prize` module, which is `NFL_DEFAULT_PAYOUT` order and **not** the
+matches the program's `prize` module, and is **not** the
 declaration order of `PrizeKey` in `@rostr/core`. Serialising from the wrong one reshuffles
 the split with no error anywhere. The test passes the shares deliberately shuffled, because
 in declaration order the bug is invisible.

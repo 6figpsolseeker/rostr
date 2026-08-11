@@ -478,7 +478,7 @@ describe("playoff and consolation fields", () => {
   });
 
   it("puts everyone else in the consolation bracket", () => {
-    // The consolation bracket pays out, so who lands in it matters. It is the
+    // The consolation bracket is played, so who lands in it matters. It is the
     // anti-abandonment mechanism, not a nicety.
     const field = consolationField(standings, NFL_DEFAULT_SCHEDULE.playoffTeams);
 
