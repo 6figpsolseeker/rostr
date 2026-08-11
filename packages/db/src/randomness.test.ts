@@ -26,18 +26,38 @@ interface Counter {
   calls: number;
 }
 
-function chainFetch(counter: Counter, options: { tip?: number } = {}): typeof globalThis.fetch {
+const reply = (result: unknown) =>
+  new Response(JSON.stringify({ jsonrpc: "2.0", id: 1, result }), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
+
+/** A well-formed JSON-RPC error body — HTTP 200, as a real node sends it. */
+const rpcError = (error: { code?: number; message: string }) =>
+  new Response(JSON.stringify({ jsonrpc: "2.0", id: 1, error }), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
+
+interface ChainOptions {
+  tip?: number;
+  /**
+   * A fault injected into `getBlockTime` only.
+   *
+   * Return a `Response` to send it in place of the chain's answer, throw to
+   * simulate a transport failure, or return `undefined` to let the call through.
+   * `getBlockTime` is the method that matters because it is the only one routed
+   * through the skipped-slot path.
+   */
+  blockTimeFault?: (slot: number) => Response | undefined;
+}
+
+function chainFetch(counter: Counter, options: ChainOptions = {}): typeof globalThis.fetch {
   const tip = options.tip ?? TIP;
 
   return (async (_url: string, init?: RequestInit) => {
     counter.calls++;
     const body = JSON.parse(String(init?.body)) as { method: string; params: unknown[] };
-
-    const reply = (result: unknown) =>
-      new Response(JSON.stringify({ jsonrpc: "2.0", id: 1, result }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
 
     switch (body.method) {
       case "getSlot":
@@ -45,27 +65,18 @@ function chainFetch(counter: Counter, options: { tip?: number } = {}): typeof gl
 
       case "getBlockTime": {
         const slot = body.params[0] as number;
+        const fault = options.blockTimeFault?.(slot);
+        if (fault) return fault;
+
         if (slot > tip || slot < 0 || isSkipped(slot)) {
-          return new Response(
-            JSON.stringify({
-              jsonrpc: "2.0",
-              id: 1,
-              error: { code: -32009, message: "Slot was skipped" },
-            }),
-            { status: 200, headers: { "Content-Type": "application/json" } },
-          );
+          return rpcError({ code: -32009, message: `Slot ${slot} was skipped` });
         }
         return reply(timeOf(slot));
       }
 
       case "getBlock": {
         const slot = body.params[0] as number;
-        if (isSkipped(slot)) {
-          return new Response(
-            JSON.stringify({ jsonrpc: "2.0", id: 1, error: { message: "Slot was skipped" } }),
-            { status: 200, headers: { "Content-Type": "application/json" } },
-          );
-        }
+        if (isSkipped(slot)) return rpcError({ message: "Slot was skipped" });
         return reply({ blockhash: `hash-for-slot-${slot}`, blockTime: timeOf(slot) });
       }
 
@@ -75,10 +86,15 @@ function chainFetch(counter: Counter, options: { tip?: number } = {}): typeof gl
   }) as unknown as typeof globalThis.fetch;
 }
 
-const beaconFor = (counter: Counter, options: { tip?: number } = {}) =>
+const beaconFor = (counter: Counter, options: ChainOptions & { attempts?: number } = {}) =>
   new SolanaBeacon({
     endpoint: "https://example.invalid",
     fetchImpl: chainFetch(counter, options),
+    // Backoff is real wall-clock time and nothing here measures it; the number
+    // of round trips is what these tests assert on.
+    sleepImpl: () => Promise.resolve(),
+    // Left unset unless a test pins it, so the production default is what runs.
+    ...(options.attempts === undefined ? {} : { attempts: options.attempts }),
   });
 
 describe("SolanaBeacon.firstBlockAtOrAfter", () => {
@@ -217,17 +233,326 @@ describe("SolanaBeacon.verify", () => {
   });
 });
 
-describe("SolanaBeacon transport", () => {
-  it("surfaces an RPC error rather than guessing", async () => {
-    const failing = (async () =>
-      new Response("upstream exploded", { status: 502 })) as unknown as typeof globalThis.fetch;
+/**
+ * A failed lookup is not a skipped slot.
+ *
+ * These all aim at one slot — the boundary, the block the rule actually names —
+ * because that is the slot where the difference shows. A fault anywhere else is
+ * absorbed by the search; a fault there decides which block the league drafts
+ * from. And the answer is written once, frozen by migration 0010's trigger, and
+ * checked forever after by `verify()`, so a draw moved by one block is not a bad
+ * afternoon, it is a league whose order can never be verified again.
+ *
+ * The rule for every case below: a slot the chain skipped is tolerated, and
+ * anything we cannot tell apart from a working node saying "no block here" is
+ * refused. Refusing costs a retry — `drawDraftOrder` fetches the block outside
+ * its transaction, so a throw writes nothing, and the answer is deterministic
+ * once the block exists.
+ */
+describe("SolanaBeacon: a failed lookup is not a skipped slot", () => {
+  const TARGET_SECONDS = GENESIS + 200_000;
+  const TARGET = new Date(TARGET_SECONDS * 1000);
+  const BOUNDARY = firstBlockAtOrAfter(TARGET_SECONDS);
 
-    const beacon = new SolanaBeacon({
-      endpoint: "https://example.invalid",
-      fetchImpl: failing,
+  /** Where the search lands if `BOUNDARY` is treated as a slot with no block. */
+  const nextVisible = (slot: number): number => {
+    let next = slot + 1;
+    while (isSkipped(next)) next++;
+    return next;
+  };
+
+  it("refuses when the transport fails on the boundary slot", async () => {
+    // The regression this file exists for. Swallowed, this returns
+    // `nextVisible(BOUNDARY)` — a real block, at or after the target, wrong.
+    const counter = { calls: 0 };
+    const beacon = beaconFor(counter, {
+      blockTimeFault: (slot) => {
+        if (slot === BOUNDARY) throw new TypeError("fetch failed");
+        return undefined;
+      },
     });
 
-    await expect(beacon.firstBlockAtOrAfter(new Date())).rejects.toBeInstanceOf(BeaconError);
+    await expect(beacon.firstBlockAtOrAfter(TARGET)).rejects.toMatchObject({
+      name: "BeaconError",
+      code: "RPC_FAILED",
+    });
+  });
+
+  it("refuses when the node rate-limits the boundary slot", async () => {
+    const counter = { calls: 0 };
+    const beacon = beaconFor(counter, {
+      blockTimeFault: (slot) =>
+        slot === BOUNDARY ? new Response("slow down", { status: 429 }) : undefined,
+    });
+
+    await expect(beacon.firstBlockAtOrAfter(TARGET)).rejects.toBeInstanceOf(BeaconError);
+  });
+
+  it("refuses when the node 500s on the boundary slot", async () => {
+    const counter = { calls: 0 };
+    const beacon = beaconFor(counter, {
+      blockTimeFault: (slot) =>
+        slot === BOUNDARY ? new Response("upstream exploded", { status: 502 }) : undefined,
+    });
+
+    await expect(beacon.firstBlockAtOrAfter(TARGET)).rejects.toBeInstanceOf(BeaconError);
+  });
+
+  it("refuses a JSON-RPC error it does not recognise, rather than reading it as a gap", async () => {
+    // Fail closed. An unknown error code says nothing about whether the chain
+    // skipped that slot, and guessing "skipped" is the guess that moves the draw.
+    const counter = { calls: 0 };
+    const beacon = beaconFor(counter, {
+      blockTimeFault: (slot) =>
+        slot === BOUNDARY ? rpcError({ code: -32602, message: "Invalid params" }) : undefined,
+    });
+
+    await expect(beacon.firstBlockAtOrAfter(TARGET)).rejects.toMatchObject({
+      code: "RPC_FAILED",
+    });
+  });
+
+  it("refuses a 200 carrying neither a result nor an error", async () => {
+    // `payload.result` is `undefined` both when the key is absent and when it is
+    // present and null, and the second means "no block there". Collapsing them
+    // let a bare envelope from a proxy read as a skipped slot — the original
+    // defect, surviving the first fix.
+    const counter = { calls: 0 };
+    const beacon = beaconFor(counter, {
+      blockTimeFault: (slot) =>
+        slot === BOUNDARY
+          ? new Response(JSON.stringify({ jsonrpc: "2.0", id: 1 }), {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            })
+          : undefined,
+    });
+
+    await expect(beacon.firstBlockAtOrAfter(TARGET)).rejects.toMatchObject({
+      code: "RPC_FAILED",
+    });
+  });
+
+  it("still reads an explicit null result as a skipped slot", async () => {
+    // The control for the test above: `result: null` present is the node
+    // answering "nothing there", and must keep working.
+    const counter = { calls: 0 };
+    const beacon = beaconFor(counter, {
+      blockTimeFault: (slot) => (slot === BOUNDARY ? reply(null) : undefined),
+    });
+
+    expect((await beacon.firstBlockAtOrAfter(TARGET)).slot).toBe(nextVisible(BOUNDARY));
+  });
+
+  it("refuses an internal error whose message merely contains the word skipped", async () => {
+    // The loose message branch is the one hedge against an unverified wire
+    // format, and unguarded it is fail-open: this shape is a real one, and
+    // reading it as a gap moves the draw and freezes it.
+    const counter = { calls: 0 };
+    const beacon = beaconFor(counter, {
+      blockTimeFault: (slot) =>
+        slot === BOUNDARY
+          ? rpcError({
+              code: -32603,
+              message: "Internal error: request was skipped by the proxy",
+            })
+          : undefined,
+    });
+
+    await expect(beacon.firstBlockAtOrAfter(TARGET)).rejects.toMatchObject({
+      code: "RPC_FAILED",
+    });
+  });
+
+  it("still accepts a skip reported with no code at all", async () => {
+    // The control for the gate: the hedge has to keep working where the code is
+    // absent, which is the case it exists for.
+    const counter = { calls: 0 };
+    const beacon = beaconFor(counter, {
+      blockTimeFault: (slot) =>
+        slot === BOUNDARY ? rpcError({ message: `Slot ${slot} was skipped` }) : undefined,
+    });
+
+    expect((await beacon.firstBlockAtOrAfter(TARGET)).slot).toBe(nextVisible(BOUNDARY));
+  });
+
+  it("refuses a body that is not JSON, however healthy the status", async () => {
+    // A captive portal or proxy answering 200 with HTML.
+    const counter = { calls: 0 };
+    const beacon = beaconFor(counter, {
+      blockTimeFault: (slot) =>
+        slot === BOUNDARY
+          ? new Response("<html>hello</html>", {
+              status: 200,
+              headers: { "Content-Type": "text/html" },
+            })
+          : undefined,
+    });
+
+    await expect(beacon.firstBlockAtOrAfter(TARGET)).rejects.toBeInstanceOf(BeaconError);
+  });
+
+  it("still tolerates a slot the chain really skipped", async () => {
+    // The other half, and the reason this cannot simply throw on everything:
+    // Solana reports a skipped slot as a JSON-RPC *error*, so a search that
+    // treated every error as a failure would never finish on the real chain.
+    const counter = { calls: 0 };
+    const beacon = beaconFor(counter, {
+      blockTimeFault: (slot) =>
+        slot === BOUNDARY
+          ? rpcError({ code: -32007, message: `Slot ${slot} was skipped, or missing` })
+          : undefined,
+    });
+
+    expect((await beacon.firstBlockAtOrAfter(TARGET)).slot).toBe(nextVisible(BOUNDARY));
+  });
+
+  it("tolerates a node that reports a skipped slot as a null result", async () => {
+    // Unverified against a live node, which is why both shapes are accepted:
+    // some nodes are documented as answering `null` rather than erroring, and a
+    // draw that refused on the normal case would be worse than the bug.
+    const counter = { calls: 0 };
+    const beacon = beaconFor(counter, {
+      blockTimeFault: (slot) => (slot === BOUNDARY ? reply(null) : undefined),
+    });
+
+    expect((await beacon.firstBlockAtOrAfter(TARGET)).slot).toBe(nextVisible(BOUNDARY));
+  });
+
+  it("verify throws on an unreachable node rather than calling the draw wrong", async () => {
+    // `false` from verify is published as "this league's order was rigged".
+    // A 429 during an audit must not be able to say that.
+    const counter = { calls: 0 };
+    const beacon = beaconFor(counter, {
+      blockTimeFault: (slot) =>
+        slot === BOUNDARY ? new Response("slow down", { status: 429 }) : undefined,
+    });
+
+    await expect(beacon.verify(BOUNDARY, TARGET)).rejects.toBeInstanceOf(BeaconError);
+  });
+
+  it("verify still answers false for a slot that holds no block", async () => {
+    const counter = { calls: 0 };
+    const beacon = beaconFor(counter, {
+      blockTimeFault: (slot) => (slot === BOUNDARY ? reply(null) : undefined),
+    });
+
+    expect(await beacon.verify(BOUNDARY, TARGET)).toBe(false);
+  });
+});
+
+describe("SolanaBeacon retries", () => {
+  const TARGET_SECONDS = GENESIS + 200_000;
+  const TARGET = new Date(TARGET_SECONDS * 1000);
+  const BOUNDARY = firstBlockAtOrAfter(TARGET_SECONDS);
+
+  it("rides out a rate limit delivered as a 200 with the limit in the body", async () => {
+    // Several providers answer this way. It is not a `BeaconError`, so it used
+    // to bypass the retry loop entirely — the retry never fired for the exact
+    // case it was added for.
+    const oneBodyRateLimit = () => {
+      let spent = false;
+      return (slot: number): Response | undefined => {
+        if (slot !== BOUNDARY || spent) return undefined;
+        spent = true;
+        return rpcError({ code: 429, message: "Too many requests" });
+      };
+    };
+
+    await expect(
+      beaconFor({ calls: 0 }, { attempts: 1, blockTimeFault: oneBodyRateLimit() }) //
+        .firstBlockAtOrAfter(TARGET),
+    ).rejects.toBeInstanceOf(BeaconError);
+
+    expect(
+      (
+        await beaconFor({ calls: 0 }, { blockTimeFault: oneBodyRateLimit() }) //
+          .firstBlockAtOrAfter(TARGET)
+      ).slot,
+    ).toBe(BOUNDARY);
+  });
+
+  it("rides out a backend that has not caught up to the tip", async () => {
+    // Public endpoints are load-balanced: getSlot can answer from one node and
+    // getBlockTime from another a few slots behind, which reports -32004. That
+    // lands on the first getBlockTime of every draw, so without a retry it
+    // would fail draws outright.
+    const oneLaggingBackend = () => {
+      let spent = false;
+      return (slot: number): Response | undefined => {
+        if (slot !== BOUNDARY || spent) return undefined;
+        spent = true;
+        return rpcError({ code: -32004, message: `Block not available for slot ${slot}` });
+      };
+    };
+
+    await expect(
+      beaconFor({ calls: 0 }, { attempts: 1, blockTimeFault: oneLaggingBackend() }) //
+        .firstBlockAtOrAfter(TARGET),
+    ).rejects.toBeInstanceOf(BeaconError);
+
+    expect(
+      (
+        await beaconFor({ calls: 0 }, { blockTimeFault: oneLaggingBackend() }) //
+          .firstBlockAtOrAfter(TARGET)
+      ).slot,
+    ).toBe(BOUNDARY);
+  });
+
+  it("rides out a single rate limit rather than failing the draw", async () => {
+    // ~30 unpaced sequential calls at a public endpoint; one 429 in thirty is
+    // ordinary, and now that a 429 fails the draw instead of being silently
+    // read as a gap, it would otherwise send the commissioner back to the
+    // button. Every call here is an idempotent read of immutable history.
+    const oneRateLimit = () => {
+      let spent = false;
+      return (slot: number): Response | undefined => {
+        if (slot !== BOUNDARY || spent) return undefined;
+        spent = true;
+        return new Response("slow down", { status: 429 });
+      };
+    };
+
+    // Without the retry the identical fault fails the draw, which is what makes
+    // this a retry test rather than a coincidence.
+    await expect(
+      beaconFor(
+        { calls: 0 },
+        { attempts: 1, blockTimeFault: oneRateLimit() },
+      ).firstBlockAtOrAfter(TARGET),
+    ).rejects.toBeInstanceOf(BeaconError);
+
+    const block = await beaconFor({ calls: 0 }, { blockTimeFault: oneRateLimit() }) //
+      .firstBlockAtOrAfter(TARGET);
+
+    expect(block.slot).toBe(BOUNDARY);
+  });
+
+  it("does not retry a request the node called malformed", async () => {
+    // A 400 is not going to become a 200. Repeating it just makes the
+    // commissioner wait longer for the same answer.
+    const counter = { calls: 0 };
+    const beacon = beaconFor(counter, {
+      blockTimeFault: () => new Response("bad request", { status: 400 }),
+    });
+
+    await expect(beacon.firstBlockAtOrAfter(TARGET)).rejects.toBeInstanceOf(BeaconError);
+
+    // One `getSlot`, one `getBlockTime`, and no second go at it.
+    expect(counter.calls).toBe(2);
+  });
+
+  it("gives up after a bounded number of attempts", async () => {
+    const counter = { calls: 0 };
+    const beacon = beaconFor(counter, {
+      attempts: 4,
+      blockTimeFault: () => new Response("slow down", { status: 429 }),
+    });
+
+    await expect(beacon.firstBlockAtOrAfter(TARGET)).rejects.toBeInstanceOf(BeaconError);
+
+    // One `getSlot`, then four attempts at the first `getBlockTime`.
+    expect(counter.calls).toBe(5);
   });
 });
 
