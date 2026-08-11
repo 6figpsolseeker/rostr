@@ -8,6 +8,14 @@
 
 export { ESCROW_IDL, type EscrowIdl } from "./idl.js";
 export {
+  GENESIS_HASHES,
+  clusterFromGenesisHash,
+  clusterMismatch,
+  parseCluster,
+  resolveCluster,
+  type Cluster,
+} from "./cluster.js";
+export {
   anchorTermMismatches,
   bytesToHex,
   clusterOf,

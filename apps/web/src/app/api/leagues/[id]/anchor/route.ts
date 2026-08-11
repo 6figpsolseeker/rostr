@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import {
   anchorTermMismatches,
-  clusterOf,
   expectedTermsFromRules,
   verifyLeagueAnchor,
 } from "@rostr/escrow";
@@ -9,6 +8,7 @@ import { getChainState, getLeagueRules, recordChainAnchor } from "@rostr/db";
 import { db } from "@/lib/db";
 import { draftContext, DraftContextError } from "@/lib/draft-context";
 import { EscrowConfigError, readOnlyEscrow } from "@/lib/escrow";
+import { assertRpcCluster, ClusterConfigError } from "@/lib/cluster";
 
 /**
  * Recording that a league's rules are anchored on-chain.
@@ -67,6 +67,19 @@ export async function POST(
     }
 
     const { connection, program } = readOnlyEscrow();
+
+    // Before reading a single account, confirm we are reading the right chain.
+    //
+    // This is first, not just before the write, because every check below is
+    // taken against whatever `connection` is talking to: `verifyLeagueAnchor`
+    // reading the wrong cluster answers `NOT_FOUND` for a league that is
+    // correctly anchored, and the route documents `NOT_FOUND` as "retry". The
+    // commissioner would retry forever against a chain their wallet never
+    // touched.
+    //
+    // It also decides the value recorded, so there is no path by which an
+    // unverified cluster reaches the write-once column.
+    const cluster = await assertRpcCluster(connection);
 
     /**
      * What the chain says, checked against what members signed.
@@ -182,11 +195,6 @@ export async function POST(
       );
     }
 
-    // The cluster is read off the endpoint we just queried, not accepted from
-    // the caller. The PDA is identical on every chain, so without it a devnet
-    // anchor is indistinguishable from a mainnet one.
-    const cluster = clusterOf(connection);
-
     await recordChainAnchor(client, id, { signature, cluster });
 
     return NextResponse.json({
@@ -200,7 +208,9 @@ export async function POST(
     if (error instanceof DraftContextError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
-    if (error instanceof EscrowConfigError) {
+    if (error instanceof EscrowConfigError || error instanceof ClusterConfigError) {
+      // 503, not 500: the deployment is misconfigured, the request was sound,
+      // and nothing was written. A retry after the config is fixed succeeds.
       return NextResponse.json({ error: error.message }, { status: 503 });
     }
     throw error;
