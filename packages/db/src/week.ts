@@ -24,6 +24,16 @@
  * So `resolveLeagueWeek` updates points every time it runs and sets
  * `finalized_at` only once the wait has elapsed. A finalised week is never
  * rescored.
+ *
+ * ## The wait is bounded, because a game may never be played
+ *
+ * `docs/RULES.md` §10 answers the postponed game in advance — "affected players
+ * score 0 for that week, the matchup stands" — and the window above is the
+ * "scoring window" that rule is written against. So once it has elapsed the week
+ * finalises whether or not every game reached `FINAL`, and
+ * {@link ResolveWeekOutcome.finalizedWithUnfinishedGames} says so. Waiting past
+ * it instead would hold the week forever on one abandoned game, which in weeks 14
+ * and 17 means nobody is ever paid.
  */
 
 import { generateSchedule, indexScoringRules, resolveWeek, winnerOf } from "@rostr/core";
@@ -119,6 +129,17 @@ export interface ResolveWeekOutcome {
   readonly finalized: boolean;
   /** Why it was not finalised, when it was not. */
   readonly holdReason?: string;
+  /**
+   * Set when the week finalised on `RULES.md` §10's postponement fallback —
+   * the scoring window elapsed with games still not marked `FINAL`.
+   *
+   * Reported rather than inferred. A week settled on complete data and a week
+   * settled because the clock ran out are different facts about the same
+   * `finalized: true`, and only one of them is worth an operator's attention:
+   * the games that never landed are now permanently scored as they stand,
+   * because a finalised week is never rescored.
+   */
+  readonly finalizedWithUnfinishedGames?: string;
   readonly results: readonly MatchupResult[];
 }
 
@@ -170,7 +191,8 @@ export async function resolveLeagueWeek(
     stored.rules.roster,
   );
 
-  const hold = await finalizationHold(db, stored.rules, week, now);
+  const decision = await finalizationHold(db, stored.rules, week, now);
+  const finalized = decision.hold === null;
 
   await withTransaction(db, async (tx) => {
     for (const result of results) {
@@ -187,7 +209,7 @@ export async function resolveLeagueWeek(
           week,
           result.homeMilliPoints,
           result.awayMilliPoints,
-          hold === null,
+          finalized,
           now.toISOString(),
           result.homeTeamId,
           result.awayTeamId,
@@ -199,8 +221,9 @@ export async function resolveLeagueWeek(
   return {
     week,
     matchups: results.length,
-    finalized: hold === null,
-    ...(hold === null ? {} : { holdReason: hold }),
+    finalized,
+    ...(decision.hold === null ? {} : { holdReason: decision.hold }),
+    ...(decision.fallback ? { finalizedWithUnfinishedGames: decision.fallback } : {}),
     results,
   };
 }
@@ -233,12 +256,17 @@ export async function resolveLeagueWeek(
  * a later week than the main one, so a week can be finalised holding only
  * consolation fixtures and then receive playoff fixtures on a later advance.
  *
- * **It is bounded.** A league with a long tail of never-finalisable weeks — a
- * postponed game, a feed that never marked a game final — would otherwise re-run
- * the full lineup-and-scoring work for every one of them on every pass. The cap
- * takes the most recent, because those are the ones with money and an audience
- * attached, and the caller is told what was left behind rather than being left to
- * infer it from silence.
+ * **It is bounded.** A league with a long tail of weeks that will not finalise —
+ * a week whose games were never ingested at all, or one that throws every pass —
+ * would otherwise re-run the full lineup-and-scoring work for every one of them
+ * on every pass. The cap takes the most recent, because those are the ones with
+ * money and an audience attached, and the caller is told what was left behind
+ * rather than being left to infer it from silence.
+ *
+ * (A postponed game no longer belongs on that list: `finalizationHold` finalises
+ * past the scoring window rather than waiting for a `FINAL` that never comes.
+ * The cap still earns its keep for the cases above, and for a week whose window
+ * simply has not closed yet.)
  */
 export const SWEEP_LIMIT = 4;
 
@@ -304,18 +332,79 @@ export async function resolveLeagueWeeksThrough(
   return { outcomes, failures, deferred };
 }
 
+/** What {@link finalizationHold} decided, and why. */
+interface FinalizationDecision {
+  /** Why the week may not be finalised yet, or `null` if it may. */
+  readonly hold: string | null;
+  /** Set only when it may *despite* games that never reached `FINAL`. */
+  readonly fallback?: string;
+}
+
 /**
- * Why a week may not be finalised yet, or `null` if it may.
+ * Whether a week may be finalised.
  *
- * Two conditions, both necessary: every game must be final, and the correction
- * window must have elapsed since the last kickoff.
+ * Two conditions, and **only one of them is unconditional**: the correction
+ * window must have elapsed since the week's last kickoff. Every game being
+ * `FINAL` holds the week *inside* that window and stops holding it outside,
+ * because a game that is never played never becomes `FINAL` and the wait would
+ * otherwise have no end.
+ *
+ * ## Why the clock outranks the games
+ *
+ * `docs/RULES.md` §10 answers this contingency in advance, as it has to — the
+ * rules are frozen at league creation and cannot be patched in December:
+ *
+ * > An NFL game is cancelled or postponed beyond the scoring window →
+ * > **affected players score 0 for that week. The matchup stands.**
+ *
+ * "The scoring window" is the window this function already computes:
+ * {@link finalizationHours} from the last kickoff, 48h normally and 168h for the
+ * weeks that pay. Reading the rule against any other clock would mean inventing
+ * a second deadline, and it would have to live in the rule set to be verifiable
+ * — which would move the canonical encoding and break every anchored league's
+ * `rules_hash`. So the rule is implemented against the window it names.
+ *
+ * **"Affected players score 0" needs no code here.** A player whose game was
+ * never ingested has no row in `stat_lines_current`, `loadWeekStats` returns no
+ * entry for him, and `scoreTeamLineup` scores an absent stat line as zero
+ * (`packages/core/src/season/results.ts` — "absent, empty and zero are three
+ * different things"). He is already scoring 0; the only thing standing between
+ * that and a settled week was this hold. And "the matchup stands" is what
+ * *not* intervening gets you: no row is voided, no opponent is credited.
+ *
+ * Stats that *did* arrive before a game was abandoned are kept, which the rule
+ * does not speak to either way — see the note in the outcome type and the report
+ * on this change. `stat_lines` is append-only precisely so a settled week stays
+ * auditable, and deleting a partial line would be a larger intervention with no
+ * rule behind it.
+ *
+ * ## What it costs
+ *
+ * A feed that stalls for a full 48 hours finalises the week on whatever stats
+ * arrived, and a finalised week is never rescored — so a late stat line is a
+ * correction that missed its window, exactly like one arriving at T+49h with
+ * every game final. That is the same trade the window already makes, and it is
+ * strictly better than the alternative: holding past the window means the week
+ * never finalises at all, the bracket never advances (it reads finalised results
+ * only), and weeks 14 and 17 never settle. One game's stats against the season's
+ * payouts.
+ *
+ * Two things bound the risk. It is proportionate — 168h, not 48h, in the weeks
+ * that pay, and a game unmarked for seven days is a real abandonment rather than
+ * a slow ingest. And it is visible: the caller is told, rather than left to infer
+ * a clean finalisation from the absence of a hold.
+ *
+ * The residual is a provider that keeps a postponed game in the same week and
+ * moves its kickoff into the future: `last_kickoff` follows it and the window
+ * moves with it. That is right when the game really is played later that week,
+ * and it is the one case where the wait can still exceed the nominal window.
  */
 async function finalizationHold(
   db: SqlClient,
   rules: LeagueRules,
   week: number,
   now: Date,
-): Promise<string | null> {
+): Promise<FinalizationDecision> {
   const rows = await db.query<{ total: number; finished: number; last_kickoff: string | null }>(
     `SELECT count(*)::int AS total,
             count(*) FILTER (WHERE g.status = 'FINAL')::int AS finished,
@@ -328,27 +417,49 @@ async function finalizationHold(
 
   const row = rows[0];
   const total = Number(row?.total ?? 0);
-  if (total === 0) return "no games are scheduled for this week yet";
+  // No games at all is not the postponement case and gets no fallback. There is
+  // no kickoff to run a window from, and a week nobody has ingested would settle
+  // every matchup 0–0 rather than zeroing the players of one abandoned game.
+  if (total === 0) return { hold: "no games are scheduled for this week yet" };
+
+  // `games.kickoff_at` is NOT NULL, so this cannot fire while `total > 0`. It
+  // stays because the clock below is now the only thing that ends the wait, and
+  // a missing clock must hold rather than finalise by default.
+  if (!row?.last_kickoff) return { hold: "no kickoff times are known" };
 
   const finished = Number(row?.finished ?? 0);
-  if (finished < total) return `${total - finished} of ${total} games are still in progress`;
-
-  if (!row?.last_kickoff) return "no kickoff times are known";
-
   const hours = finalizationHours(rules, week);
   const clearsAt = new Date(new Date(row.last_kickoff).getTime() + hours * 3600 * 1000);
 
   if (now < clearsAt) {
+    // Inside the window an unplayed game is the more useful thing to say: it is
+    // the condition an operator can still act on, and the window is running
+    // anyway.
+    if (finished < total) {
+      return { hold: `${total - finished} of ${total} games are still in progress` };
+    }
+
     const paying = rules.settlement.payingWeeks.includes(week);
-    return (
-      `waiting until ${clearsAt.toISOString()} — ${hours}h after the last kickoff` +
-      (paying
-        ? ", because this week pays out and NFL stat corrections arrive for up to seven days"
-        : "")
-    );
+    return {
+      hold:
+        `waiting until ${clearsAt.toISOString()} — ${hours}h after the last kickoff` +
+        (paying
+          ? ", because this week pays out and NFL stat corrections arrive for up to seven days"
+          : ""),
+    };
   }
 
-  return null;
+  if (finished < total) {
+    return {
+      hold: null,
+      fallback:
+        `finalised ${hours}h after the last kickoff with ${total - finished} of ${total} ` +
+        `games not marked FINAL — docs/RULES.md §10: affected players score 0 for the ` +
+        `week and the matchup stands`,
+    };
+  }
+
+  return { hold: null };
 }
 
 /**

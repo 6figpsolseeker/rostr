@@ -147,6 +147,24 @@ const finishGames = (fx: Fixture) =>
     WEEK,
   ]);
 
+/**
+ * Add one more game to a week, at the same kickoff, with a status of its own.
+ *
+ * The fixture ships a single week-1 game, which cannot express "one of them
+ * never happened" — the case `docs/RULES.md` §10 is written for.
+ */
+async function addGame(fx: Fixture, ref: string, status: string, week = WEEK): Promise<void> {
+  const [sport] = await fx.client.query<{ id: string }>(
+    "SELECT id FROM sports WHERE key = $1",
+    [NFL.key],
+  );
+  await fx.client.query(
+    `INSERT INTO games (sport_id, external_ref, season, week, home_team_ref, away_team_ref, kickoff_at, status)
+     VALUES ($1, $2, $3, $4, 'BUF', 'CIN', $5, $6)`,
+    [sport!.id, ref, SEASON, week, KICKOFF, status],
+  );
+}
+
 async function schedule(fx: Fixture): Promise<void> {
   await persistSchedule(fx.client, fx.leagueId, generateSchedule(fx.teamIds, 14, "seed"));
 }
@@ -437,11 +455,14 @@ describe("resolveLeagueWeeksThrough", () => {
 });
 
 describe("finalisation", () => {
-  it("holds while games are still in progress", async () => {
+  it("holds while games are still in progress and the window is running", async () => {
+    // Inside the window, an unplayed game is the reason worth reporting — it is
+    // the one an operator can still act on. Outside it the clock wins; see the
+    // postponement tests below.
     const fx = await setup();
     await schedule(fx);
 
-    const outcome = await resolveLeagueWeek(fx.client, fx.leagueId, WEEK, AFTER_STANDARD);
+    const outcome = await resolveLeagueWeek(fx.client, fx.leagueId, WEEK, DURING);
 
     expect(outcome.finalized).toBe(false);
     expect(outcome.holdReason).toMatch(/still in progress/);
@@ -536,6 +557,150 @@ describe("finalisation", () => {
 
     const late = await resolveLeagueWeek(fx.client, fx.leagueId, 14, AFTER_PAYING);
     expect(late.finalized).toBe(true);
+  });
+});
+
+describe("a game that never finishes — docs/RULES.md §10", () => {
+  const finalizedAt = async (fx: Fixture, week = WEEK): Promise<string | null> => {
+    const [row] = await fx.client.query<{ finalized_at: string | null }>(
+      "SELECT finalized_at FROM matchups WHERE league_id = $1 AND week = $2 LIMIT 1",
+      [fx.leagueId, week],
+    );
+    return row?.finalized_at ?? null;
+  };
+
+  it("finalises once the scoring window has passed, unplayed game and all", async () => {
+    // The failure this exists to stop. A postponed game never reaches FINAL, so
+    // a hold keyed on "every game is FINAL" alone is a hold with no end: the
+    // week never finalises, the bracket never advances, and in weeks 14 and 17
+    // nobody is ever paid. Before this change the assertion below was
+    // `finalized: false` with "1 of 2 games are still in progress", at any
+    // instant however far in the future.
+    const fx = await setup();
+    await schedule(fx);
+    await finishGames(fx);
+    await addGame(fx, "g1-postponed", "POSTPONED");
+
+    const outcome = await resolveLeagueWeek(fx.client, fx.leagueId, WEEK, AFTER_STANDARD);
+
+    expect(outcome.finalized).toBe(true);
+    expect(outcome.holdReason).toBeUndefined();
+    expect(await finalizedAt(fx)).not.toBeNull();
+  });
+
+  it("says it finalised on the fallback rather than on complete data", async () => {
+    // `finalized: true` alone cannot distinguish a settled week from one the
+    // clock ran out on, and only the second is worth an operator's attention:
+    // the missing game's players are now permanently scored at zero, because a
+    // finalised week is never rescored.
+    const fx = await setup();
+    await schedule(fx);
+    await finishGames(fx);
+    await addGame(fx, "g1-postponed", "POSTPONED");
+
+    const outcome = await resolveLeagueWeek(fx.client, fx.leagueId, WEEK, AFTER_STANDARD);
+
+    expect(outcome.finalizedWithUnfinishedGames).toMatch(/1 of 2/);
+    expect(outcome.finalizedWithUnfinishedGames).toMatch(/RULES\.md §10/);
+  });
+
+  it("reports nothing extra when the week finalised on complete data", async () => {
+    const fx = await setup();
+    await schedule(fx);
+    await finishGames(fx);
+
+    const outcome = await resolveLeagueWeek(fx.client, fx.leagueId, WEEK, AFTER_STANDARD);
+
+    expect(outcome.finalized).toBe(true);
+    expect(outcome.finalizedWithUnfinishedGames).toBeUndefined();
+  });
+
+  it("scores the missing game's players zero and lets the matchup stand", async () => {
+    // "Affected players score 0" needs no code of its own: a player with no stat
+    // line already scores zero (`results.ts` — absent, empty and zero are three
+    // different things). What §10 needed was for the week to stop waiting. This
+    // asserts the whole rule: qb-0 played and counts, qb-1 did not and scores
+    // nothing, and both matchups are written and final rather than voided.
+    const fx = await setup();
+    await schedule(fx);
+    await score(fx, "qb-0", 300); // 12 points
+    await finishGames(fx);
+    await addGame(fx, "g1-postponed", "POSTPONED");
+
+    const outcome = await resolveLeagueWeek(fx.client, fx.leagueId, WEEK, AFTER_STANDARD);
+
+    const pointsFor = (teamId: string): number => {
+      const matchup = outcome.results.find((r) =>
+        [r.homeTeamId, r.awayTeamId].includes(teamId),
+      )!;
+      return matchup.homeTeamId === teamId ? matchup.homeMilliPoints : matchup.awayMilliPoints;
+    };
+
+    expect(pointsFor(fx.teamIds[0]!)).toBe(12_000);
+    expect(pointsFor(fx.teamIds[1]!)).toBe(0);
+    expect(outcome.matchups).toBe(2);
+
+    const rows = await fx.client.query<{ finalized_at: string | null }>(
+      "SELECT finalized_at FROM matchups WHERE league_id = $1 AND week = $2",
+      [fx.leagueId, WEEK],
+    );
+    expect(rows).toHaveLength(2);
+    expect(rows.every((row) => row.finalized_at !== null)).toBe(true);
+  });
+
+  it("still holds inside the window, so a slow ingest gets its full 48 hours", async () => {
+    // The fallback is a deadline, not a shortcut. Everything the feed has until
+    // the window closes still lands in the score.
+    const fx = await setup();
+    await schedule(fx);
+    await finishGames(fx);
+    await addGame(fx, "g1-postponed", "POSTPONED");
+
+    const outcome = await resolveLeagueWeek(fx.client, fx.leagueId, WEEK, DURING);
+
+    expect(outcome.finalized).toBe(false);
+    expect(outcome.holdReason).toMatch(/1 of 2 games are still in progress/);
+    expect(outcome.finalizedWithUnfinishedGames).toBeUndefined();
+    expect(await finalizedAt(fx)).toBeNull();
+  });
+
+  it("gives a paying week the full 168 hours before falling back", async () => {
+    // The deadline is the week's own scoring window, so the weeks that pay wait
+    // seven days rather than two — and a game still unmarked after seven days is
+    // an abandoned game rather than a slow feed. Week 14 pays in the default
+    // rules; `finalizationHours` is asserted separately above.
+    const fx = await setup();
+    await schedule(fx);
+    await addGame(fx, "g14", "FINAL", 14);
+    await addGame(fx, "g14-postponed", "POSTPONED", 14);
+
+    // 49h is past the standard window and nowhere near the paying one, so the
+    // paying week is still held by the unplayed game.
+    const early = await resolveLeagueWeek(fx.client, fx.leagueId, 14, AFTER_STANDARD);
+    expect(early.finalized).toBe(false);
+    expect(early.holdReason).toMatch(/1 of 2 games are still in progress/);
+    expect(await finalizedAt(fx, 14)).toBeNull();
+
+    // 169h is past it, so the regular-season prize can be settled rather than
+    // waiting forever on a game that will never be played.
+    const late = await resolveLeagueWeek(fx.client, fx.leagueId, 14, AFTER_PAYING);
+    expect(late.finalized).toBe(true);
+    expect(late.finalizedWithUnfinishedGames).toMatch(/168h after the last kickoff/);
+    expect(await finalizedAt(fx, 14)).not.toBeNull();
+  });
+
+  it("does not finalise a week whose games were never ingested at all", async () => {
+    // §10 zeroes the players of a cancelled *game*. A week with no games is not
+    // that case: there is no kickoff to run a window from, and finalising would
+    // settle every matchup 0–0 rather than only the affected players. It waits.
+    const fx = await setup();
+    await schedule(fx);
+    await fx.client.query("DELETE FROM games WHERE season = $1 AND week = $2", [SEASON, WEEK]);
+
+    const outcome = await resolveLeagueWeek(fx.client, fx.leagueId, WEEK, AFTER_PAYING);
+
+    expect(outcome.finalized).toBe(false);
+    expect(outcome.holdReason).toMatch(/no games are scheduled/);
   });
 });
 

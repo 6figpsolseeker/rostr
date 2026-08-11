@@ -14,9 +14,15 @@ import { db } from "@/lib/db";
  * Score every active league's current week.
  *
  * Safe to run often — that is how live scores stay current. Each run rewrites
- * points from the latest stat revisions and finalises only once the week's games
- * are all final *and* the correction window has elapsed. A finalised week is
- * skipped, not rescored.
+ * points from the latest stat revisions and finalises once the correction window
+ * has elapsed, which inside that window also requires every game to be final. A
+ * finalised week is skipped, not rescored.
+ *
+ * Past the window a week finalises whether or not every game reached `FINAL` —
+ * `docs/RULES.md` §10, the postponed game — and says so in
+ * `finalizedWithUnfinishedGames`. That field is the only signal that a week
+ * settled on the fallback rather than on complete data, so surface it rather
+ * than collapsing it into `finalized: true`.
  *
  * Hourly is plenty on a normal day; during Sunday games something closer to
  * every ten minutes makes the numbers feel live. `apps/web/vercel.json`
@@ -69,7 +75,13 @@ export async function GET(request: Request): Promise<NextResponse> {
   const scored: {
     leagueId: string;
     name: string;
-    weeks?: { week: number; matchups: number; finalized: boolean; holdReason?: string }[];
+    weeks?: {
+      week: number;
+      matchups: number;
+      finalized: boolean;
+      holdReason?: string;
+      finalizedWithUnfinishedGames?: string;
+    }[];
     failedWeeks?: readonly { readonly week: number; readonly reason: string }[];
     deferredWeeks?: readonly number[];
     bracketGames?: number;
@@ -146,6 +158,9 @@ export async function GET(request: Request): Promise<NextResponse> {
           matchups: o.matchups,
           finalized: o.finalized,
           ...(o.holdReason ? { holdReason: o.holdReason } : {}),
+          ...(o.finalizedWithUnfinishedGames
+            ? { finalizedWithUnfinishedGames: o.finalizedWithUnfinishedGames }
+            : {}),
         })),
         ...(sweep.failures.length > 0 ? { failedWeeks: sweep.failures } : {}),
         ...(sweep.deferred.length > 0 ? { deferredWeeks: sweep.deferred } : {}),
