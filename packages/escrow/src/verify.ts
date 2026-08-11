@@ -300,18 +300,34 @@ export function anchorTermMismatches(
 }
 
 /**
- * Which cluster a connection is talking to, as `leagues.chain_cluster` records
- * it.
+ * Which cluster an endpoint's *shape* suggests — a convenience for tests, and
+ * **not** the authority.
  *
- * The PDA is byte-identical on every cluster, so "the account exists" is not an
- * answer on its own — a devnet anchor is not an anchor for a mainnet stake.
- * Derived from the endpoint rather than trusted from a caller, because the point
- * of this module is not taking the client's word for anything.
+ * Use `resolveCluster` for anything that writes `leagues.chain_cluster` or
+ * decides whether a signature counts. It asks the node for its genesis hash,
+ * which is the chain's own identity; this only reads the URL, which is a label
+ * somebody typed.
+ *
+ * **It no longer falls back to `mainnet-beta`, and that fallback was the bug.**
+ * Any real deployment points at a private RPC, because the public nodes are
+ * rate-limited and the order draw alone makes ~30 sequential calls — so a
+ * perfectly ordinary devnet endpoint like `https://rostr.rpcpool.com/<key>`
+ * matched none of the branches above and was recorded as mainnet. `0014` makes
+ * that column write-once, `joinLeague` gates on it, and there is no correcting
+ * row to write: a devnet league would have passed a mainnet join check forever.
+ *
+ * Guessing wrong here is unrecoverable and guessing right saves a caller one
+ * line of configuration, so it throws.
  */
 export function clusterOf(connection: Connection): string {
   const endpoint = connection.rpcEndpoint;
   if (endpoint.includes("devnet")) return "devnet";
   if (endpoint.includes("testnet")) return "testnet";
+  if (endpoint.includes("mainnet")) return "mainnet-beta";
   if (endpoint.includes("localhost") || endpoint.includes("127.0.0.1")) return "localnet";
-  return "mainnet-beta";
+
+  throw new Error(
+    `Cannot tell which cluster ${endpoint} is, and guessing would be recorded ` +
+      `permanently. Set SOLANA_CLUSTER, or use resolveCluster() to ask the node.`,
+  );
 }

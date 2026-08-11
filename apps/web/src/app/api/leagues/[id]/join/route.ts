@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getJoinMessage, JoinError, joinLeague } from "@rostr/db";
 import { db } from "@/lib/db";
 import { currentUser } from "@/lib/session";
+import { ClusterConfigError, declaredCluster } from "@/lib/cluster";
 
 /**
  * The message to sign.
@@ -87,12 +88,20 @@ export async function POST(
       // The cluster this deployment considers real. Without it a league
       // anchored on devnet would satisfy a mainnet join, since the PDA is the
       // same everywhere.
-      ...(process.env["SOLANA_CLUSTER"]
-        ? { requireCluster: process.env["SOLANA_CLUSTER"] }
-        : {}),
+      //
+      // **No longer a conditional spread.** An unset `SOLANA_CLUSTER` did not
+      // relax this check, it deleted it — and the deployment guaranteed to have
+      // it unset is the one nobody configured, which is exactly the one that
+      // needs it. `declaredCluster` refuses in production rather than assuming.
+      requireCluster: declaredCluster(),
     });
     return NextResponse.json(result, { status: 201 });
   } catch (error) {
+    if (error instanceof ClusterConfigError) {
+      // 503 and not 500: nothing about the request was wrong, and no member
+      // should be admitted to a league whose chain this deployment cannot name.
+      return NextResponse.json({ error: error.message }, { status: 503 });
+    }
     if (error instanceof JoinError) {
       return NextResponse.json(
         { error: error.message, code: error.code },

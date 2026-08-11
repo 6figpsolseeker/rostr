@@ -57,11 +57,18 @@ Fund this address, which is the deploy keypair on the main PC:
 AoF2r5NttSS9A8DtzzTyB1nHxSX9PDMa7txowGvHqWn7
 ```
 
-Then `anchor deploy --provider.cluster devnet`, and point **both**
-`SOLANA_RPC_URL` and `NEXT_PUBLIC_SOLANA_RPC_URL` at devnet. They must agree — the
-browser anchors against one and the server verifies against the other, and the PDA is
-identical on every cluster, so a mismatch looks like a league that will not verify
-rather than like a misconfiguration.
+Then `anchor deploy --provider.cluster devnet`, and set **`SOLANA_CLUSTER=devnet`** and
+**`NEXT_PUBLIC_SOLANA_CLUSTER=devnet`**. Those are the declarations; the two RPC URLs are
+optional and are checked against them.
+
+They must agree — the browser anchors against one endpoint and the server verifies
+against the other, and the PDA is identical on every cluster, so a mismatch looks like a
+league that will not verify rather than like a misconfiguration. **The agreement is now
+enforced rather than requested**: the server asks its RPC for a genesis hash before
+recording anything, and the browser shows a "wrong network" banner when its endpoint
+disagrees with the build. `SOLANA_CLUSTER` is **required in production** — unset, it used
+to mean "do not check the cluster", so the deployment nobody had configured was the one
+with no check.
 
 Devnet SOL is free and worth nothing; this is a rate limit, not a cost.
 

@@ -223,18 +223,17 @@ several of these PRs ship a comment asserting a guarantee the code does not prov
 repo treats comments as specification, so a false comment is a defect in its own right —
 review them as such, and fix the comment before arguing about the code.
 
-**Two program-level problems surfaced that no PR fixes**, both needing Rust and a decision
-before Aug 22:
+**Two program-level problems surfaced that no PR fixes.** One is **fixed**; the other
+still needs Rust and a decision before Aug 22:
 
 - **Seat-squatting (issue #18).** `join_league` is permissionless and there is no eviction
   instruction, so throwaway keypairs can fill a league's seats for a fraction of a SOL and
   permanently block every real member's deposit. Found independently by Squid and by an
   adversarial review of #29. It predates everything here; wiring the app to `join_league` is
   what makes it reachable.
-- **The browser defaults to mainnet.** `WalletProviders.tsx` falls back to
-  `clusterApiUrl("mainnet-beta")` when `NEXT_PUBLIC_SOLANA_RPC_URL` is unset, while the
-  server verifies with `SOLANA_RPC_URL` and the db join gates on `SOLANA_CLUSTER`. Three
-  independent sources of "which chain", no cross-check, and the most dangerous default.
+- **The browser defaulted to mainnet — FIXED**, see "One declaration of which chain"
+  below. Three independent sources of "which chain", no cross-check, and the most
+  dangerous default sitting on the one that signs.
 
 **Next, in order:**
 
@@ -919,6 +918,78 @@ the final pick moves it to IN_SEASON. Nothing else moved state before, so a draf
 stayed FORMING forever — still accepting members, and invisible to every job that works on
 live leagues. The enum is FORMING / DRAFTING / IN_SEASON / PLAYOFFS / SETTLED / DISSOLVED;
 an invented value is not a no-op, Postgres fails the cast and the query errors.
+
+### One declaration of which chain, and everything checked against it
+
+`packages/escrow/src/cluster.ts`, `apps/web/src/lib/cluster.ts`.
+
+**The PDA is byte-identical on every cluster.** A league anchored on devnet and the same
+league anchored on mainnet derive the same address from the same UUID, so "the account
+exists" answers nothing — the only thing separating them is which endpoint you happened
+to ask. `leagues.chain_cluster` records the answer and migration `0014` makes it
+**write-once by trigger**, so a wrong value is permanent and `joinLeague` gates on it.
+
+There were **three independent sources** of that answer and no comparison between any
+two:
+
+| Where               | Variable                     | If unset            |
+| ------------------- | ---------------------------- | ------------------- |
+| Browser — _signs_   | `NEXT_PUBLIC_SOLANA_RPC_URL` | **mainnet-beta**    |
+| Server — _verifies_ | `SOLANA_RPC_URL`             | throws              |
+| Join gate           | `SOLANA_CLUSTER`             | **no check at all** |
+
+The dangerous default was on the one that signs. A commissioner with it unset sent
+`initialize_league` to **mainnet** while the server read devnet, found nothing, and
+returned `NOT_FOUND` — which the route documents as "retry". Retrying cannot work; the
+account is real, it cost mainnet rent, and with no `close` instruction that league can
+never be anchored there again, only recreated under a new id. Worse downstream: `deposit`
+is permissionless once a league exists, so a member could put real USDC into a vault this
+deployment never looks at.
+
+**`SOLANA_CLUSTER` is now the declaration**, required in production and `devnet` in
+development — the same shape as `cronForbidden`, and for the same reason. Devnet is the
+fallback that fails _visibly_: nothing verifies, nobody loses anything, and the missing
+config surfaces in minutes. Defaulting to devnet in _production_ would be its own quiet
+disaster, hence the refusal there.
+
+**The RPC is verified by genesis hash, not by reading its URL.** `resolveCluster` asks the
+node which chain it is. Every real deployment points at a private RPC — the public nodes
+are rate-limited and the order draw alone makes ~30 sequential calls — and a private
+endpoint's hostname says nothing about what is behind it. The constants in
+`GENESIS_HASHES` were **verified against the live public endpoints on 2026-08-11**, not
+recalled; they are genesis blocks, so a change would mean the chain was reset.
+
+**An unrecognised genesis hash resolves to `localnet`, never to a public cluster.** That
+is the fail-safe direction and it only works because callers _compare_ the result against
+the declaration rather than trusting it: declare mainnet, get a fork or a local validator,
+get `localnet`, mismatch, refuse.
+
+**`clusterOf` no longer falls back to `mainnet-beta`** — it throws. That fallback was the
+bug in its purest form: an ordinary devnet endpoint like `https://rostr.rpcpool.com/<key>`
+matched none of its substring branches and was recorded as mainnet, permanently, in the
+column the join gate reads. It survives as an endpoint-_shape_ helper for the program
+tests. Anything writing `chain_cluster` uses `resolveCluster`.
+
+**The cluster is asserted before the anchor route reads a single account**, not just
+before it writes. Every check in that route is taken against whatever `connection` is
+talking to, so a wrong cluster makes `verifyLeagueAnchor` answer `NOT_FOUND` for a league
+that is correctly anchored — and the route calls `NOT_FOUND` a retry. Its return value is
+what gets recorded, so there is no second path by which an unverified cluster reaches the
+write-once column.
+
+**The join route's cluster check is no longer a conditional spread.** An unset
+`SOLANA_CLUSTER` did not relax it, it deleted it, and the deployment guaranteed to have it
+unset is the one nobody configured.
+
+**The browser cross-checks itself at runtime.** `ClusterBanner` asks its endpoint for a
+genesis hash and warns when it disagrees with the build's `NEXT_PUBLIC_SOLANA_CLUSTER` —
+the only place the browser's chain is a fact rather than a convention, and the browser is
+where the signing happens. A banner rather than a block, because the adapter belongs to
+the extension and the server already refuses; a failed lookup says nothing, because
+claiming a mismatch on a network blip trains people to dismiss the real one. The
+comparison lives in `clusterMismatch` in `@rostr/escrow` rather than in the component,
+since `apps/web` cannot test React and a mapping inside a component is verified only by
+being run in production.
 
 ### A private league is now actually private
 
