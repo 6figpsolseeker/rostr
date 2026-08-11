@@ -27,22 +27,34 @@ import {
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /**
- * Send a member-signed transaction, retrying on the intermittent
- * "Blockhash not found" the WSL embedded validator throws when block production
- * lags the blockhash lookup. The send is idempotent at the account level
- * (the program rejects a second deposit, etc.), so a retry is safe.
+ * Send a transaction, retrying on the intermittent "Blockhash not found" an
+ * embedded validator throws when block production lags the blockhash lookup.
+ *
+ * **Every send in this file goes through here**, and that was the fix for a real
+ * CI failure rather than a tidy-up. It began as `sendMemberTx`, wrapping only
+ * the member-signed instructions, while `anchorLeague` called
+ * `provider.sendAndConfirm` directly — and `anchor test` on CI failed on exactly
+ * that call. The flake was known, the remedy was written, and it was applied to
+ * some of the sends and not others, so the suite stayed red-by-luck on the one
+ * that was missed.
+ *
+ * The retry is safe because each send is idempotent at the account level: the
+ * program refuses a second `initialize_league`, a second `join_league`, a second
+ * `deposit`, and a second `refund_stake`. A retry either lands the transaction
+ * that was lost or fails on a program error that is not a blockhash problem, and
+ * only the blockhash case is retried.
  */
-async function sendMemberTx(
+async function sendTx(
   provider: anchor.AnchorProvider,
   ix: anchor.web3.TransactionInstruction,
-  signer: anchor.web3.Keypair,
+  signers: anchor.web3.Keypair[],
 ): Promise<string> {
   let lastErr: unknown;
   for (let attempt = 0; attempt < 5; attempt++) {
     try {
       const sig = await provider.sendAndConfirm(
         new anchor.web3.Transaction().add(ix),
-        [signer],
+        signers,
         {
           commitment: "confirmed",
         },
@@ -132,9 +144,7 @@ async function anchorLeague(
     maxTeams: rules.league.maxTeams,
     payer: provider.wallet.publicKey,
   });
-  return provider.sendAndConfirm(new anchor.web3.Transaction().add(ix), [], {
-    commitment: "confirmed",
-  });
+  return sendTx(provider, ix, []);
 }
 
 describe("deposit and refund are wired (issue #27)", () => {
@@ -162,7 +172,7 @@ describe("deposit and refund are wired (issue #27)", () => {
       rulesHash: hexToBytes(league.rulesHash),
       member: member.keypair.publicKey,
     });
-    await sendMemberTx(provider, joinIx, member.keypair);
+    await sendTx(provider, joinIx, [member.keypair]);
 
     const leaguePk = anchor.web3.PublicKey.findProgramAddressSync(
       [Buffer.from("league"), Buffer.from(league.id.replace(/-/g, ""), "hex")],
@@ -177,7 +187,7 @@ describe("deposit and refund are wired (issue #27)", () => {
       mint,
       member: member.keypair.publicKey,
     });
-    await sendMemberTx(provider, depIx, member.keypair);
+    await sendTx(provider, depIx, [member.keypair]);
 
     const depositVerdict = await verifyOnChainDeposit(
       program,
@@ -254,14 +264,14 @@ describe("a completed refund verifies as a refund", () => {
       rulesHash: hexToBytes(league.rulesHash),
       member: member.keypair.publicKey,
     });
-    await sendMemberTx(provider, joinIx, member.keypair);
+    await sendTx(provider, joinIx, [member.keypair]);
 
     const depIx = await depositIx(program, {
       leagueId: league.id,
       mint,
       member: member.keypair.publicKey,
     });
-    await sendMemberTx(provider, depIx, member.keypair);
+    await sendTx(provider, depIx, [member.keypair]);
 
     // Staked, not yet refunded. Deposit says yes, refund says not-yet — and
     // getting this pair the wrong way round was the whole bug.
@@ -278,7 +288,7 @@ describe("a completed refund verifies as a refund", () => {
       mint,
       member: member.keypair.publicKey,
     });
-    await sendMemberTx(provider, refIx, member.keypair);
+    await sendTx(provider, refIx, [member.keypair]);
 
     // And now they swap. `deposited` is unchanged on-chain — it is history —
     // which is exactly why the deposit verifier must consult `refunded` too.
