@@ -312,6 +312,34 @@ describe("joinLeague", () => {
     ).rejects.toSatisfy((e: unknown) => e instanceof JoinError && e.code === "LEAGUE_FULL");
   });
 
+  it("says LEAGUE_FULL when the slot index refuses, not just when the count does", async () => {
+    // The count and the insert are not atomic against each other, so two people
+    // clicking Join on the last seat both read the same `taken` and both derive
+    // the same slot. `UNIQUE (league_id, slot)` refuses the loser — correctly,
+    // and previously as an unhandled 500, because the route maps only `JoinError`.
+    //
+    // The race cannot be staged on single-connection PGlite. One team present
+    // makes `taken` 1, so the join derives slot 2 — occupying exactly that slot
+    // puts the insert in the state the loser of a real race reaches.
+    const fx = await setup();
+    const m = await member(fx, 1, "a@example.com");
+
+    await fx.client.query(
+      "INSERT INTO teams (league_id, owner_id, is_bot, name, slot) VALUES ($1, NULL, true, $2, 2)",
+      [fx.leagueId, "Squatter"],
+    );
+
+    await expect(
+      joinLeague(fx.client, {
+        leagueId: fx.leagueId,
+        userId: m.userId,
+        walletAddress: m.address,
+        signature: signJoin(fx, m.address, m.secret),
+        teamName: "A",
+      }),
+    ).rejects.toSatisfy((e: unknown) => e instanceof JoinError && e.code === "LEAGUE_FULL");
+  });
+
   it("records the signature as a permanent proof of consent", async () => {
     const fx = await setup();
     const m = await member(fx, 1, "a@example.com");

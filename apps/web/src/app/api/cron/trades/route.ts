@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { leaguesWithDueTrades, resolveDueTrades, TradeError } from "@rostr/db";
 import { db } from "@/lib/db";
+import { cronForbidden } from "@/lib/cron";
 
 /**
  * Settle every trade whose veto window has closed.
@@ -15,16 +16,8 @@ import { db } from "@/lib/db";
  * `ACCEPTED` state, so it is never settled twice.
  */
 export async function GET(request: Request): Promise<NextResponse> {
-  const secret = process.env["CRON_SECRET"];
-  if (secret) {
-    const provided =
-      request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ??
-      new URL(request.url).searchParams.get("secret");
-
-    if (provided !== secret) {
-      return NextResponse.json({ error: "Not authorised" }, { status: 401 });
-    }
-  }
+  const forbidden = cronForbidden(request);
+  if (forbidden) return forbidden;
 
   const client = db();
   const now = new Date();

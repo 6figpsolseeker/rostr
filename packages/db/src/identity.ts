@@ -9,6 +9,7 @@
 import { randomBytes } from "node:crypto";
 import { isValidWalletAddress, sha256Hex } from "@rostr/core";
 import type { SqlClient } from "./client.js";
+import { isUniqueViolation } from "./pg-errors.js";
 
 export class IdentityError extends Error {
   constructor(
@@ -238,12 +239,25 @@ export async function linkWallet(
   );
   const isFirst = Number(count?.n ?? 0) === 0;
 
-  const [row] = await db.query<{ id: string; address: string; is_primary: boolean }>(
-    `INSERT INTO wallets (user_id, address, is_primary)
-     VALUES ($1, $2, $3)
-     RETURNING id, address, is_primary`,
-    [userId, address, isFirst],
-  );
+  // The claimed-check above ran on its own, outside any transaction, so two tabs
+  // linking the same address can both pass it. `UNIQUE (chain, address)` refuses
+  // the loser — which is the right outcome and the wrong error, because the
+  // reason is the one this function already has a name for.
+  let row: { id: string; address: string; is_primary: boolean } | undefined;
+  try {
+    [row] = await db.query<{ id: string; address: string; is_primary: boolean }>(
+      `INSERT INTO wallets (user_id, address, is_primary)
+       VALUES ($1, $2, $3)
+       RETURNING id, address, is_primary`,
+      [userId, address, isFirst],
+    );
+  } catch (error) {
+    if (isUniqueViolation(error)) {
+      throw new IdentityError("Wallet is already linked to another account", "WALLET_TAKEN");
+    }
+    throw error;
+  }
+
   return { id: row!.id, address: row!.address, isPrimary: row!.is_primary };
 }
 
