@@ -81,6 +81,34 @@ describe("scorePlayer — linear rules", () => {
       ScoringError,
     );
   });
+
+  it("rejects a non-integer rate in the rule itself", () => {
+    // The other half of the same guard, and the one that was missing: a whole
+    // stat value times a fractional rate is still a float in a total that
+    // decides a matchup. Rates are milli-points — 0.04 points per yard is 40.
+    //
+    // Constructed by hand. `buildNflPprRules` hardcodes `NFL_PPR_SCORING` and
+    // `NflPprOverrides` has no `scoring` field, so nothing shipping today can
+    // hand the engine a rule set like this; `validateLeagueRules` now refuses it
+    // as well. This is the engine refusing to be the place it goes unnoticed.
+    const fractional = indexScoringRules([
+      { statKey: "pass_yd", kind: "LINEAR", milliPointsPerUnit: 0.04 },
+    ]);
+    expect(() => scorePlayer([{ statKey: "pass_yd", value: 25 }], fractional)).toThrow(
+      ScoringError,
+    );
+  });
+
+  it("does not check a rate for a stat the player did not record", () => {
+    // Matching how the stat-value check behaves: rules are consulted per stat
+    // present, so a rule nobody triggered is nobody's problem. Otherwise adding
+    // this guard would have turned an unused bad rule into a scoring outage.
+    const fractional = indexScoringRules([
+      { statKey: "pass_yd", kind: "LINEAR", milliPointsPerUnit: 0.04 },
+      { statKey: "rec", kind: "LINEAR", milliPointsPerUnit: 1000 },
+    ]);
+    expect(scorePlayer([{ statKey: "rec", value: 5 }], fractional)).toBe(5000);
+  });
 });
 
 describe("scorePlayer — tiered rules", () => {
@@ -117,6 +145,30 @@ describe("scorePlayer — tiered rules", () => {
     // A negative points-allowed means the feed is broken. Scoring 0 would bury
     // that; throwing surfaces it.
     expect(() => tier(-1)).toThrow(ScoringError);
+  });
+
+  it("rejects a fractional award from the tier that matched", () => {
+    // Hand-built: the shipped ladder is `NFL_PPR_SCORING`'s and there is no
+    // override that could reach it. A tier's award goes straight into a team
+    // total, so it gets the same treatment as a stat value and a linear rate.
+    const fractional = indexScoringRules([
+      {
+        statKey: "def_pts_allowed",
+        kind: "TIERED",
+        tiers: [
+          { min: 0, max: 0, milliPoints: 10.5 },
+          { min: 1, max: null, milliPoints: 0 },
+        ],
+      },
+    ]);
+
+    expect(() => scorePlayer([{ statKey: "def_pts_allowed", value: 0 }], fractional)).toThrow(
+      ScoringError,
+    );
+
+    // Only the tier that matched is checked — the same rule as above, so a bad
+    // tier nobody landed in cannot take a week down.
+    expect(scorePlayer([{ statKey: "def_pts_allowed", value: 24 }], fractional)).toBe(0);
   });
 
   it("does not score a tiered stat that is absent", () => {

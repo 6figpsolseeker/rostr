@@ -43,12 +43,28 @@ function applyTiered(rule: Extract<ScoringRule, { kind: "TIERED" }>, value: numb
   for (const tier of rule.tiers) {
     const withinLower = value >= tier.min;
     const withinUpper = tier.max === null || value <= tier.max;
-    if (withinLower && withinUpper) return tier.milliPoints;
+    if (withinLower && withinUpper) {
+      // Same defensiveness as the stat value below, for the same reason: this
+      // number is added straight into a total that decides a matchup, and a
+      // fraction anywhere in that accumulation is the one thing milli-points
+      // exist to prevent.
+      if (!Number.isSafeInteger(tier.milliPoints)) {
+        throw new ScoringError(
+          `Tier in "${rule.statKey}" covering value ${value} awards ` +
+            `${tier.milliPoints} milli-points, which is not a whole number.`,
+        );
+      }
+      return tier.milliPoints;
+    }
   }
 
-  // Validation guarantees contiguous tiers ending unbounded, so the only way
-  // here is a value below the first tier's minimum — a negative points-allowed,
-  // say. Silently scoring zero would hide a broken feed.
+  // No tier matched. For a rule set that passed `validateLeagueRules` the
+  // ladder is contiguous, ends unbounded, and covers zero — so this is a value
+  // below a floor that is itself at or below zero. That is either a broken feed
+  // or a ladder whose floor validation had no way to judge: it can assert that
+  // zero is covered, because zero is what "nothing happened" reads as for any
+  // stat, but it knows nothing about how far *negative* a given stat can go.
+  // Silently scoring zero would hide both.
   throw new ScoringError(
     `No tier in "${rule.statKey}" covers value ${value}. ` +
       `Tiers start at ${rule.tiers[0]?.min ?? "?"}.`,
@@ -83,6 +99,14 @@ export function scorePlayer(
       throw new ScoringError(
         `Stat "${stat.statKey}" has non-integer value ${stat.value}. ` +
           `Stat values are whole units; fractional scoring lives in the rule.`,
+      );
+    }
+
+    if (rule.kind === "LINEAR" && !Number.isSafeInteger(rule.milliPointsPerUnit)) {
+      throw new ScoringError(
+        `Scoring rule "${stat.statKey}" awards ${rule.milliPointsPerUnit} milli-points ` +
+          `per unit, which is not a whole number. Rates are milli-points: ` +
+          `0.04 points per unit is 40, not 0.04.`,
       );
     }
 
