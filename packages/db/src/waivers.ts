@@ -41,6 +41,7 @@ import {
 import type { DraftablePlayer, LeagueRules, WaiverClaim } from "@rostr/core";
 import type { SqlClient } from "./client.js";
 import { getLeagueRules } from "./leagues.js";
+import { isUniqueViolation } from "./pg-errors.js";
 import { loadDraftBoard } from "./sync.js";
 import { lockedByTrade } from "./trades.js";
 import { withTransaction } from "./transaction.js";
@@ -127,10 +128,12 @@ export async function availabilityOf(
   const stored = await getLeagueRules(db, leagueId);
   if (!stored) throw new WaiverError("League has no rules", "LEAGUE_NOT_FOUND");
 
+  // Keyed on exactly what `roster_entries_one_owner_per_league` is keyed on, so
+  // the answer this gives and the answer the index enforces cannot be derived
+  // from different notions of "in this league".
   const [rostered] = await db.query<{ id: string }>(
     `SELECT r.id FROM roster_entries r
-       JOIN teams t ON t.id = r.team_id
-      WHERE t.league_id = $1 AND r.player_id = $2 AND r.released_at IS NULL`,
+      WHERE r.league_id = $1 AND r.player_id = $2 AND r.released_at IS NULL`,
     [leagueId, playerId],
   );
   if (rostered) return "ROSTERED";
@@ -294,18 +297,48 @@ export async function addFreeAgent(db: SqlClient, input: AddInput): Promise<void
   const stored = await getLeagueRules(db, input.leagueId);
   if (!stored) throw new WaiverError("League has no rules", "LEAGUE_NOT_FOUND");
 
-  const availability = await availabilityOf(db, input.leagueId, input.addPlayerId, input.now);
-  if (availability === "ROSTERED") {
-    throw new WaiverError("Somebody already has that player", "PLAYER_TAKEN");
-  }
-  if (availability === "ON_WAIVERS") {
-    throw new WaiverError(
-      "That player is on waivers. Put in a claim instead — he is awarded by priority, not by who is fastest.",
-      "NOT_A_FREE_AGENT",
-    );
-  }
-
   await withTransaction(db, async (tx) => {
+    // A shared lock on the league, held for the whole add.
+    //
+    // It does not exclude other adds — `FOR SHARE` does not conflict with itself,
+    // and Wednesday morning is precisely when a league is all adding at once.
+    // What it excludes is `processWaivers`, which takes `FOR UPDATE` on the same
+    // row because it resolves against a league-wide snapshot of every roster.
+    // An add landing mid-run makes that snapshot stale.
+    //
+    // **This is defence in depth, not the thing that makes the run safe.** The
+    // window it closes is the sub-millisecond one *during* a run; the window
+    // that actually matters is the hour between a player clearing waivers and
+    // the next cron, when he reads as a free agent with a claim still
+    // outstanding against him. `processWaivers` closes that itself by dropping
+    // claims for players already held, which it must do whether or not this
+    // lock exists.
+    //
+    // Adds racing *each other* are arbitrated below, by the index, not by a lock.
+    await tx.query("SELECT id FROM leagues WHERE id = $1 FOR SHARE", [input.leagueId]);
+
+    // Inside the transaction, not before it. Read on `db` and written on `tx`,
+    // this answered a question about a moment that had already passed by the time
+    // the insert ran: two managers adding the same free agent both saw
+    // FREE_AGENT, both inserted, and one player ended the week on two rosters —
+    // started, scored twice, and unrecoverable once the week finalised.
+    //
+    // Moving it in narrows the window; it does not close it, because in READ
+    // COMMITTED a concurrent inserter can still commit between this SELECT and
+    // the INSERT below. The index is what closes it. This check survives because
+    // it is the only thing that can tell FREE_AGENT from ON_WAIVERS, and those
+    // need different answers.
+    const availability = await availabilityOf(tx, input.leagueId, input.addPlayerId, input.now);
+    if (availability === "ROSTERED") {
+      throw new WaiverError("Somebody already has that player", "PLAYER_TAKEN");
+    }
+    if (availability === "ON_WAIVERS") {
+      throw new WaiverError(
+        "That player is on waivers. Put in a claim instead — he is awarded by priority, not by who is fastest.",
+        "NOT_A_FREE_AGENT",
+      );
+    }
+
     if (input.dropPlayerId) {
       // Inside the same transaction, so a full roster never briefly holds one
       // player too many and never briefly holds one too few.
@@ -331,11 +364,30 @@ export async function addFreeAgent(db: SqlClient, input: AddInput): Promise<void
       throw new WaiverError("This roster is full — drop someone first", "ROSTER_FULL");
     }
 
-    await tx.query(
-      `INSERT INTO roster_entries (team_id, player_id, acquired_via, acquired_at)
-       VALUES ($1, $2, 'FREE_AGENT', $3)`,
-      [input.teamId, input.addPlayerId, input.now.toISOString()],
-    );
+    // The arbitration, and the only part of it that holds under concurrency.
+    // `roster_entries_one_owner_per_league` (migration `0022`) is unique on
+    // (league, player) among unreleased rows, so of two simultaneous adds the
+    // loser blocks on the index entry until the winner commits and then fails —
+    // which is the same fact the check above reports, arriving later.
+    //
+    // Wrapped around this one statement rather than the transaction, so a unique
+    // violation from anywhere else could not be relabelled as contention.
+    //
+    // Two unique indexes exist on this table — the primary key and the
+    // one-owner-per-league index. The key is `gen_random_uuid()`, so in practice
+    // only the second is reachable here; the constraint name is not matched,
+    // which means a *future* unique index on this table would be silently
+    // reported as `PLAYER_TAKEN`. If one is ever added, narrow this.
+    try {
+      await tx.query(
+        `INSERT INTO roster_entries (team_id, player_id, acquired_via, acquired_at)
+         VALUES ($1, $2, 'FREE_AGENT', $3)`,
+        [input.teamId, input.addPlayerId, input.now.toISOString()],
+      );
+    } catch (cause) {
+      if (!isUniqueViolation(cause)) throw cause;
+      throw new WaiverError("Somebody already has that player", "PLAYER_TAKEN");
+    }
 
     await tx.query("DELETE FROM waiver_wire WHERE league_id = $1 AND player_id = $2", [
       input.leagueId,
@@ -490,6 +542,12 @@ export interface WaiverRunOutcome {
  * and writes its outputs. Everything happens in one transaction, so a run either
  * lands whole or not at all — a half-applied waiver run would leave rosters that
  * no rule produced.
+ *
+ * **The inputs are read inside that transaction too.** They were not, and the gap
+ * was the whole bug: every roster in the league was read on `db`, resolved
+ * against, and written on `tx` — so anything that changed a roster in between
+ * (another run of this function, a free-agent add) was invisible to a decision
+ * that had already been made. Two overlapping runs each awarded the same player.
  */
 export async function processWaivers(
   db: SqlClient,
@@ -499,18 +557,9 @@ export async function processWaivers(
   const stored = await getLeagueRules(db, leagueId);
   if (!stored) throw new WaiverError("League has no rules", "LEAGUE_NOT_FOUND");
 
-  const claims = await db.query<{
-    id: string;
-    team_id: string;
-    add_player_id: string;
-    drop_player_id: string | null;
-  }>(
-    `SELECT id, team_id, add_player_id, drop_player_id
-       FROM waiver_claims WHERE league_id = $1 AND state = 'PENDING'`,
-    [leagueId],
-  );
-
-  const priority = await loadWaiverPriority(db, leagueId);
+  // Reference data, not league state: the same rows for every league and every
+  // run, and nothing a concurrent writer can move underneath us. Loaded before
+  // the transaction so the league lock is held for as little time as possible.
   const board = await loadDraftBoard(db, stored.rules.sportKey, stored.rules.seasonYear);
   const pool = new Map<string, DraftablePlayer>(
     board.map((entry) => [
@@ -518,37 +567,95 @@ export async function processWaivers(
       { playerId: entry.playerId, positions: entry.positions, rank: entry.rank },
     ]),
   );
+  const shape = buildRosterShape(stored.rules.roster, NFL);
 
-  const rosterRows = await db.query<{ team_id: string; player_id: string }>(
-    `SELECT r.team_id, r.player_id FROM roster_entries r
-       JOIN teams t ON t.id = r.team_id
-      WHERE t.league_id = $1 AND r.released_at IS NULL`,
-    [leagueId],
-  );
+  const run = await withTransaction(db, async (tx) => {
+    // One waiver run per league at a time. The cron is hourly and idempotent by
+    // intent, but a slow run and a retry can overlap, and two runs resolving
+    // against the same pre-run rosters both award the same player to different
+    // teams. `addFreeAgent` takes `FOR SHARE` on this row, so an add cannot land
+    // between the read below and the writes either.
+    await tx.query("SELECT id FROM leagues WHERE id = $1 FOR UPDATE", [leagueId]);
 
-  const rosters = new Map<string, DraftablePlayer[]>(priority.map((teamId) => [teamId, []]));
-  for (const row of rosterRows) {
-    const player = pool.get(row.player_id);
-    if (player) rosters.get(row.team_id)?.push(player);
-  }
+    const claims = await tx.query<{
+      id: string;
+      team_id: string;
+      add_player_id: string;
+      drop_player_id: string | null;
+    }>(
+      `SELECT id, team_id, add_player_id, drop_player_id
+         FROM waiver_claims WHERE league_id = $1 AND state = 'PENDING'`,
+      [leagueId],
+    );
 
-  const resolution = resolveWaiverClaims({
-    claims: claims.map((row): WaiverClaim => ({
-      claimId: row.id,
-      teamId: row.team_id,
-      addPlayerId: row.add_player_id,
-      dropPlayerId: row.drop_player_id,
-    })),
-    priority,
-    rosters,
-    pool,
-    shape: buildRosterShape(stored.rules.roster, NFL),
-  });
+    const priority = await loadWaiverPriority(tx, leagueId);
 
-  let awarded = 0;
-  let failed = 0;
+    const rosterRows = await tx.query<{ team_id: string; player_id: string }>(
+      `SELECT r.team_id, r.player_id FROM roster_entries r
+        WHERE r.league_id = $1 AND r.released_at IS NULL`,
+      [leagueId],
+    );
 
-  await withTransaction(db, async (tx) => {
+    const rosters = new Map<string, DraftablePlayer[]>(priority.map((teamId) => [teamId, []]));
+    for (const row of rosterRows) {
+      const player = pool.get(row.player_id);
+      if (player) rosters.get(row.team_id)?.push(player);
+    }
+
+    /**
+     * Players somebody in this league already holds.
+     *
+     * `resolveWaiverClaims` does not consult rosters for ownership — it checks
+     * the pool, what this run has already awarded, and the claiming team's own
+     * shape. So a claim for a player another team picked up *since the claim was
+     * filed* is awarded, and the insert then violates
+     * `roster_entries_one_owner_per_league`.
+     *
+     * That window is not narrow. `clears_at` is a processing instant and the
+     * cron is hourly, so every Wednesday there is a stretch in which a player
+     * with an outstanding claim reads as a free agent and can simply be added.
+     * Nothing cancels the claim when that happens.
+     *
+     * Before the league-scoped index, both writes landed and two teams held him.
+     * After it, the run would abort — and because the claim stays PENDING and
+     * the roster is unchanged, **every later run would abort identically**,
+     * wedging the league's waivers permanently rather than for an hour. Filtering
+     * here is what makes the no-catch policy below honest, and it gives the
+     * manager the true answer: the claim failed because somebody else has him.
+     */
+    const alreadyHeld = new Set(rosterRows.map((row) => row.player_id));
+
+    const resolution = resolveWaiverClaims({
+      claims: claims
+        .filter((row) => !alreadyHeld.has(row.add_player_id))
+        .map((row): WaiverClaim => ({
+          claimId: row.id,
+          teamId: row.team_id,
+          addPlayerId: row.add_player_id,
+          dropPlayerId: row.drop_player_id,
+        })),
+      priority,
+      rosters,
+      pool,
+      shape,
+    });
+
+    let awarded = 0;
+    let failed = 0;
+
+    // Filtered out above, so they never reach `outcomes` — and a claim left
+    // PENDING is retried every hour forever, which is the wedge this is here to
+    // avoid. It really did fail, and for a reason worth telling the manager.
+    for (const row of claims) {
+      if (!alreadyHeld.has(row.add_player_id)) continue;
+
+      await tx.query(
+        "UPDATE waiver_claims SET state = 'FAILED', processed_at = $2 WHERE id = $1",
+        [row.id, now.toISOString()],
+      );
+      failed++;
+    }
+
     for (const outcome of resolution.outcomes) {
       const claim = claims.find((row) => row.id === outcome.claimId)!;
 
@@ -569,6 +676,18 @@ export async function processWaivers(
         );
       }
 
+      // No `try` around this one, unlike `addFreeAgent`. There, a unique
+      // violation is an ordinary outcome to report to one manager; here it would
+      // mean the locked, in-transaction snapshot above was still wrong, and the
+      // honest answer is to roll the whole run back rather than quietly drop a
+      // claim from a resolution that is meant to be replayable.
+      //
+      // That is only defensible because claims for players already held are
+      // dropped before resolving. Without that filter the case is not
+      // exceptional at all — it is every Wednesday — and rolling back would
+      // leave the claim PENDING and the roster unchanged, so the next run would
+      // fail identically. A league whose waivers never process again is a far
+      // worse answer than a dropped claim.
       await tx.query(
         `INSERT INTO roster_entries (team_id, player_id, acquired_via, acquired_at)
          VALUES ($1, $2, 'WAIVER', $3)`,
@@ -596,7 +715,11 @@ export async function processWaivers(
         teamId,
       ]);
     }
+
+    return { awarded, failed, claims, priorityAfter: resolution.priorityAfter };
   });
+
+  const { awarded, failed, claims } = run;
 
   // Players nobody claimed become free agents once their wire time passes.
   // Removing the row is what makes them free — absent means available.
@@ -619,7 +742,7 @@ export async function processWaivers(
     leagueId,
     awarded,
     failed,
-    priorityAfter: resolution.priorityAfter,
+    priorityAfter: run.priorityAfter,
     cleared: cleared.length,
   };
 }

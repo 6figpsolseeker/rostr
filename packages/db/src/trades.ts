@@ -673,13 +673,15 @@ async function resolveTrade(
       // **Nothing is created that was not destroyed.** The insert used to be
       // unconditional, so if the release matched no row — the player having left
       // that roster since the trade was accepted — a second copy of him appeared
-      // on the receiver, owned by two teams at once. The `(team_id, player_id)`
-      // unique index cannot catch it, being per-team.
+      // on the receiver, owned by two teams at once. `0005`'s per-team unique
+      // index could not catch it; `roster_entries_one_owner_per_league`
+      // (migration `0022`) now does, but as a 23505 rather than as an answer.
       //
       // This is the last line of defence rather than the first, and it is the one
       // that holds regardless of how he left: accepted twice, dropped through a
       // path that did not consult the freeze, or claimed off waivers. Upstream
-      // checks each close one route; this closes the outcome.
+      // checks each close one route; this closes the outcome — and it is still
+      // the only one of them that can say *which* asset is missing.
       if (released.length === 0) {
         throw new TradeError(
           `${asset.player_id} is no longer on team ${asset.from_team_id}'s roster, ` +

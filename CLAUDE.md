@@ -714,9 +714,11 @@ so no test in this repo can catch that — it has to be got right by reading.
 recorded as EXPIRED). This is the last line of defence and the only one that does not depend
 on knowing _how_ the player left: accepted twice, dropped through a path that skipped the
 freeze, or claimed off waivers. Upstream checks each close one route; this closes the
-outcome. The `(team_id, player_id)` unique index cannot — it is per-team, so the same player
-on two different teams satisfies it. Without it a manager accepts a trade and cuts the
-player they promised, and execution finds a hole where a roster spot used to be.
+outcome. Without it a manager accepts a trade and cuts the player they promised, and
+execution finds a hole where a roster spot used to be. `0005`'s `(team_id, player_id)` index
+could not catch that at all — it was per-team, so the same player on two different teams
+satisfied it; migration `0022` replaced it with `(league_id, player_id)`, which can, but only
+as a constraint violation. `ASSET_GONE` is still the one that says _which_ asset is gone.
 
 **Execution releases and re-adds roster rows rather than repointing them.**
 `roster_entries` is append-only with `released_at` precisely so any past week's roster is
