@@ -1170,10 +1170,18 @@ another migration. Editing an already-applied file makes the runner refuse to st
 legal encoding of a rule set. Its SHA-256 goes on-chain and members sign it when they
 join. If encoding drifts, every league created before the drift stops verifying.
 
-There is a **golden fixture test** pinning
-`2e9ec043556179b82993a9febb768c9cea715bf5529b7df205d2c9503b9bc1b8`. If it fails, do
-**not** update the constant to make it pass — find what changed the encoding. CI checks it
-on Node 22 and 24 for exactly this reason.
+There is a **golden fixture test** pinning the hash, at the bottom of
+`packages/core/src/rules/rules.test.ts`. If it fails, do **not** update the constant to
+make it pass — find what changed the encoding. CI checks it on Node 22 and 24 for exactly
+that reason.
+
+**The constant is deliberately not repeated here.** It was, and it went stale: this file
+named a hash from schemaVersion 1 while the test had moved through 2, 3, 4 and 5. A
+pinned value copied into two places is a value that will disagree with itself, and the
+disagreement is worse than useless — it makes a correct encoding look drifted. The test
+carries the constant and a dated changelog of every legitimate move, each recording why
+the schema changed and that no leagues existed at the time. That log is the thing to read
+before touching it.
 
 **2. No floating point, anywhere near money or scoring.** Scoring is integer
 **milli-points** (1 point = 1000). Percentages are **basis points** (100% = 10000).
