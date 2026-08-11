@@ -495,13 +495,32 @@ opponent a free win — so the autolineup fills every gap before a week is score
 the pure arithmetic is "Resolving a week" further down.
 
 **Scoring and finalising are separate decisions.** Points are rewritten on every run so a
-manager can watch their week; `finalized_at` is set only once every game is `FINAL` **and**
-the correction window has elapsed. A finalised week is never rescored — in a paying week it
-has already decided money, and a silently changed result afterwards is exactly what the
-window exists to prevent.
+manager can watch their week; `finalized_at` is set once the correction window has elapsed,
+and, _within_ that window, only when every game is `FINAL`. A finalised week is never
+rescored — in a paying week it has already decided money, and a silently changed result
+afterwards is exactly what the window exists to prevent.
 
 The window comes from the rules: 48 hours normally, **168 for weeks 14 and 17**, because
 official NFL stat corrections arrive for up to seven days.
+
+**The window is a ceiling on the wait, not only a floor.** "Every game is `FINAL`" cannot be
+a standing precondition, because a postponed or abandoned game never becomes `FINAL` — one
+of them would hold a week open forever, and weeks 14 and 17 would never settle. `RULES.md`
+§10 answers that in advance ("affected players score 0 for that week; the matchup stands"),
+and the scoring window it names is the one `finalizationHours` already computes, so the
+fallback needs no new rule field and cannot move the golden hash.
+
+**"Affected players score 0" needed no code.** A player whose game was never ingested has no
+stat line, and `results.ts` already scores an absent line as zero. Letting the week finalise
+_was_ the whole implementation — everything else in that sentence was already true.
+
+A week that settles this way says so, in `finalizedWithUnfinishedGames` on
+`ResolveWeekOutcome`, which `/api/cron/score-week` surfaces. **Do not collapse it into
+`finalized: true`.** Settling on complete data and settling because the clock ran out are
+different facts, and only the second is worth waking someone for: those games are now scored
+as they stand, permanently, because a finalised week is never rescored. The cost when the
+feed was merely slow is one game's stats — the same trade the correction window already
+makes against a stat line arriving at T+49h.
 
 Scores read `stat_lines_current`, so a correction that arrived as a new revision is used
 and the superseded one is not. There is a test for that specifically.
