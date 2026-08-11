@@ -76,6 +76,18 @@ const BEACON = new FixedBeacon([
 const DRAW_TIME = new Date(SCHEDULED.getTime() + 5_000);
 
 /**
+ * The instant pick `n` of a draft started at `SCHEDULED` runs out of clock.
+ *
+ * An auto-pick is legal only at or after its own deadline — `recordPick` refuses
+ * one whose clock is still running, because a caller asking for it is working
+ * from a snapshot another writer has already moved past. So a fixture that plays
+ * a draft out through the auto path has to walk the clock the way a real draft
+ * does: pick `n` is stamped at its deadline, and pick `n + 1`'s clock starts
+ * there.
+ */
+const deadlineOf = (n: number): Date => new Date(SCHEDULED.getTime() + n * 90_000);
+
+/**
  * A pool deep enough that every team can fill a legal lineup, in a realistic
  * cadence rather than blocks by position — a pool that lists sixty running backs
  * first makes "best available" look like "take every running back".
@@ -488,7 +500,7 @@ describe("recordPick", () => {
       source: "MANUAL",
       draftComplete: false,
     });
-    expect(result.nextTeamId).toBe(fx.order[1]);
+    expect(result!.nextTeamId).toBe(fx.order[1]);
   });
 
   it("puts the player on the roster in the same transaction", async () => {
@@ -580,7 +592,7 @@ describe("recordPick", () => {
       leagueId: fx.leagueId,
       pool: fx.pool,
       shape: SHAPE,
-      now: SCHEDULED,
+      now: deadlineOf(1),
     });
 
     expect(result).toMatchObject({ playerId: wanted, source: "QUEUE" });
@@ -597,7 +609,7 @@ describe("recordPick", () => {
       leagueId: fx.leagueId,
       pool: fx.pool,
       shape: SHAPE,
-      now: SCHEDULED,
+      now: deadlineOf(1),
     });
 
     expect(await getQueue(fx.client, fx.order[1]!)).toEqual([]);
@@ -610,11 +622,11 @@ describe("recordPick", () => {
       leagueId: fx.leagueId,
       pool: fx.pool,
       shape: SHAPE,
-      now: SCHEDULED,
+      now: deadlineOf(1),
     });
 
-    expect(result.source).not.toBe("MANUAL");
-    expect(result.source).not.toBe("QUEUE");
+    expect(result!.source).not.toBe("MANUAL");
+    expect(result!.source).not.toBe("QUEUE");
   });
 
   it("starts the season when the draft completes", async () => {
@@ -627,7 +639,7 @@ describe("recordPick", () => {
         leagueId: fx.leagueId,
         pool: fx.pool,
         shape: SHAPE,
-        now: SCHEDULED,
+        now: deadlineOf(i + 1),
       });
     }
 
@@ -676,7 +688,7 @@ describe("recordPick", () => {
         leagueId: fx.leagueId,
         pool: fx.pool,
         shape: SHAPE,
-        now: SCHEDULED,
+        now: deadlineOf(i + 1),
       });
     }
 
@@ -696,7 +708,7 @@ describe("recordPick", () => {
         leagueId: fx.leagueId,
         pool: fx.pool,
         shape: SHAPE,
-        now: SCHEDULED,
+        now: deadlineOf(i + 1),
       });
     }
 
@@ -728,7 +740,7 @@ describe("recordPick", () => {
         leagueId: fx.leagueId,
         pool: fx.pool,
         shape: SHAPE,
-        now: SCHEDULED,
+        now: deadlineOf(i + 1),
       });
     }
 
@@ -829,9 +841,14 @@ describe("clocks", () => {
         leagueId: fx.leagueId,
         pool: fx.pool,
         shape: SHAPE,
-        now: SCHEDULED,
+        now: deadlineOf(i + 1),
       });
     }
+
+    // Assert the draft really did complete before asserting the refusal — with
+    // the clock walked forward per pick, a fixture that quietly recorded nothing
+    // would otherwise still see `startDraft` throw, for the wrong reason.
+    expect((await loadDraft(fx.client, fx.leagueId))?.status).toBe("COMPLETE");
 
     await expect(startDraft(fx.client, fx.leagueId, SCHEDULED)).rejects.toBeInstanceOf(
       DraftPersistenceError,
@@ -1063,6 +1080,211 @@ describe("concurrency guards", () => {
       "SELECT count(*)::int AS count FROM roster_entries",
     );
     expect(after[0]?.count).toBe(before[0]?.count);
+  });
+});
+
+/**
+ * Issue #22. The lock decides who writes first; it cannot make a decision taken
+ * *before* the lock true afterwards. Both guards are checked inside it.
+ *
+ * PGlite is one connection, so a genuine two-writer race cannot run here — and
+ * attempting one produces a different failure entirely (nested BEGIN, unique
+ * violation, everything rolled back). What is testable, and what actually
+ * matters, is that a stale decision is refused. These drive that directly.
+ */
+describe("a decision made before the lock is re-checked inside it", () => {
+  async function running(): Promise<{ fx: Fixture; order: readonly string[] }> {
+    const fx = await setup();
+    const order = await scheduled(fx);
+    await startDraft(fx.client, fx.leagueId, SCHEDULED);
+    return { fx, order };
+  }
+
+  const EXPIRED = new Date(SCHEDULED.getTime() + 91_000);
+
+  it("records nothing when the pick it meant has already been made", async () => {
+    // Caller A committed pick 1 while caller B was between its read and its
+    // lock. B's snapshot says "pick 1 expired"; acting on it would take pick 2
+    // from a manager whose ninety seconds just started.
+    const { fx, order } = await running();
+
+    await recordPick(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: order[0]!,
+      playerId: anyAvailable(fx, new Set()),
+      pool: fx.pool,
+      shape: SHAPE,
+      now: SCHEDULED,
+    });
+
+    const stale = await recordPick(fx.client, {
+      leagueId: fx.leagueId,
+      expectedPickNumber: 1,
+      pool: fx.pool,
+      shape: SHAPE,
+      now: EXPIRED,
+    });
+
+    expect(stale).toBeNull();
+    expect(draftProgress((await loadDraft(fx.client, fx.leagueId))!).picksMade).toBe(1);
+  });
+
+  it("records nothing when the pick number is right but the clock is not", async () => {
+    // The subtle half, and why the pick number alone is not enough: a pause and
+    // resume keeps the same pick on the clock and starts a fresh timer, so a
+    // stale "it expired" passes a pick-number check and would auto-pick a
+    // manager who has just been handed their full ninety seconds.
+    const { fx } = await running();
+
+    const notExpired = await recordPick(fx.client, {
+      leagueId: fx.leagueId,
+      expectedPickNumber: 1,
+      pool: fx.pool,
+      shape: SHAPE,
+      now: new Date(SCHEDULED.getTime() + 1_000),
+    });
+
+    expect(notExpired).toBeNull();
+    expect(draftProgress((await loadDraft(fx.client, fx.leagueId))!).picksMade).toBe(0);
+  });
+
+  it("still auto-picks when the decision is genuinely current", async () => {
+    // The control. Both guards must let a real expiry through, or the clock
+    // never advances at all.
+    const { fx } = await running();
+
+    const made = await recordPick(fx.client, {
+      leagueId: fx.leagueId,
+      expectedPickNumber: 1,
+      pool: fx.pool,
+      shape: SHAPE,
+      now: EXPIRED,
+    });
+
+    expect(made).not.toBeNull();
+    expect(made?.pickNumber).toBe(1);
+  });
+
+  it("refuses a manual pick whose own clock has run out", async () => {
+    // Accepting it stamps `clock_started_at = now`, so the overrun is added to a
+    // baseline that never re-anchors and every later clock stretches — the exact
+    // drift the deadline-stamped auto-pick exists to prevent.
+    const { fx, order } = await running();
+
+    await expect(
+      recordPick(fx.client, {
+        leagueId: fx.leagueId,
+        teamId: order[0]!,
+        playerId: anyAvailable(fx, new Set()),
+        pool: fx.pool,
+        shape: SHAPE,
+        now: new Date(SCHEDULED.getTime() + 300_000),
+      }),
+    ).rejects.toMatchObject({ code: "CLOCK_EXPIRED" });
+
+    expect(draftProgress((await loadDraft(fx.client, fx.leagueId))!).picksMade).toBe(0);
+  });
+
+  it("records nothing when the winner's pick completed the draft", async () => {
+    // The status check runs before both guards, so a lost race to a winner who
+    // *finished* the draft used to throw NOT_IN_PROGRESS — and the read route
+    // has no catch for it, so every polling tab would 500 at the exact instant a
+    // draft ends. A named caller losing a race is a no-op however it lost.
+    const fx = await setup(2);
+    const order = await scheduled(fx);
+    await startDraft(fx.client, fx.leagueId, SCHEDULED);
+
+    const total = totalPicks(order.length, 14);
+    await catchUpExpiredPicks(fx.client, {
+      leagueId: fx.leagueId,
+      pool: fx.pool,
+      shape: SHAPE,
+      now: deadlineOf(total),
+      maxPicks: total,
+    });
+
+    const [row] = await fx.client.query<{ status: string }>(
+      "SELECT status FROM drafts WHERE league_id = $1",
+      [fx.leagueId],
+    );
+    expect(row?.status).toBe("COMPLETE");
+
+    await expect(
+      recordPick(fx.client, {
+        leagueId: fx.leagueId,
+        expectedPickNumber: total,
+        pool: fx.pool,
+        shape: SHAPE,
+        now: deadlineOf(total),
+      }),
+    ).resolves.toBeNull();
+  });
+
+  it("records nothing when a commissioner paused between the read and the lock", async () => {
+    const { fx } = await running();
+    await pauseDraft(fx.client, fx.leagueId);
+
+    await expect(
+      recordPick(fx.client, {
+        leagueId: fx.leagueId,
+        expectedPickNumber: 1,
+        pool: fx.pool,
+        shape: SHAPE,
+        now: EXPIRED,
+      }),
+    ).resolves.toBeNull();
+  });
+
+  it("still tells a manual picker the draft is not running", async () => {
+    // The manual path names no expected pick, so it keeps throwing — somebody
+    // clicking on a paused draft wants to be told, not silently ignored.
+    const { fx, order } = await running();
+    await pauseDraft(fx.client, fx.leagueId);
+
+    await expect(
+      recordPick(fx.client, {
+        leagueId: fx.leagueId,
+        teamId: order[0]!,
+        playerId: anyAvailable(fx, new Set()),
+        pool: fx.pool,
+        shape: SHAPE,
+        now: SCHEDULED,
+      }),
+    ).rejects.toMatchObject({ code: "NOT_IN_PROGRESS" });
+  });
+
+  it("leaves the clock where the schedule says after a late pick is refused", async () => {
+    // The point of refusing: the next manager's clock still runs from the missed
+    // deadline, not from whenever the late click happened to land.
+    const { fx, order } = await running();
+
+    await recordPick(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: order[0]!,
+      playerId: anyAvailable(fx, new Set()),
+      pool: fx.pool,
+      shape: SHAPE,
+      // Genuinely late — 300s into a 90s clock. With `SCHEDULED` here the pick
+      // is on time, the refusal never fires, and this asserts nothing.
+      now: new Date(SCHEDULED.getTime() + 300_000),
+    }).catch(() => undefined);
+
+    await catchUpExpiredPicks(fx.client, {
+      leagueId: fx.leagueId,
+      pool: fx.pool,
+      shape: SHAPE,
+      now: new Date(SCHEDULED.getTime() + 300_000),
+    });
+
+    const [row] = await fx.client.query<{ clock_started_at: string }>(
+      "SELECT clock_started_at FROM drafts WHERE league_id = $1",
+      [fx.leagueId],
+    );
+
+    // Every stamp is a multiple of the pick clock from the scheduled start —
+    // never an arbitrary instant somebody happened to click at.
+    const offset = (new Date(row!.clock_started_at).getTime() - SCHEDULED.getTime()) / 1000;
+    expect(offset % 90).toBe(0);
   });
 });
 

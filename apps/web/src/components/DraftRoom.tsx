@@ -115,6 +115,8 @@ function pollInterval(data: DraftResponse | undefined): number {
 }
 
 interface DraftResponse {
+  /** The server clock when this payload was built. See `serverNow` below. */
+  now?: string;
   draft: DraftState | null;
   teams: Team[];
   me: { teamId: string | null; isCommissioner: boolean; queue: string[] };
@@ -192,6 +194,62 @@ export function DraftRoom({ leagueId, leagueName }: { leagueId: string; leagueNa
   const onTheClock = draft?.currentTeamId ?? null;
   const isMyTurn = myTeamId !== null && onTheClock === myTeamId;
 
+  /**
+   * When the pick on the clock expires, in milliseconds.
+   *
+   * Computed here rather than in `ClockBar` because two things need it and they
+   * must not be able to disagree: the countdown, and whether the Draft button
+   * still does anything.
+   */
+  /**
+   * The server clock, as of the last poll.
+   *
+   * The pick clock is the server's, so whether it has run out is the server's
+   * question and must not be asked of the browser's. A machine an hour fast
+   * would otherwise read every deadline as passed and disable its own Draft
+   * button for the entire draft, auto-picking every round.
+   *
+   * Falls back to the local clock only if the field is missing, which means an
+   * older server — the previous behaviour, no worse.
+   */
+  const serverNow = data?.now ? new Date(data.now).getTime() : Date.now();
+
+  const deadline =
+    draft?.clockStartedAt !== null && draft?.clockStartedAt !== undefined
+      ? new Date(draft.clockStartedAt).getTime() + draft.pickSeconds * 1000
+      : null;
+
+  /**
+   * Whether the countdown has reached zero.
+   *
+   * A single timer fired *at* the deadline, not a tick — the button only has to
+   * change once, and re-rendering the whole board four times a second to find
+   * that out would be silly.
+   *
+   * The server refuses a late pick outright (`CLOCK_EXPIRED`), so without this
+   * the button stays live after the clock reads 0:00 and an ordinary manager
+   * clicking a moment late gets a 409 instead of a disabled button. This does
+   * not decide anything — the server does — it stops the room offering an action
+   * it knows will be refused.
+   */
+  const [clockExpired, setClockExpired] = useState(false);
+  useEffect(() => {
+    if (deadline === null) {
+      setClockExpired(false);
+      return;
+    }
+    // Measured against the *server* clock carried in the payload, not the
+    // browser's. Only the elapsed-time half of the local clock is used — for
+    // the timeout below — and that stays accurate however wrong the absolute
+    // time is. A skewed machine must not be locked out of its own picks.
+    const untilDeadline = deadline - serverNow;
+    setClockExpired(untilDeadline <= 0);
+    if (untilDeadline <= 0) return;
+
+    const timer = setTimeout(() => setClockExpired(true), untilDeadline);
+    return () => clearTimeout(timer);
+  }, [deadline, serverNow]);
+
   const post = useCallback(
     async (path: string, body?: unknown, method = "POST"): Promise<void> => {
       setBusy(true);
@@ -236,6 +294,7 @@ export function DraftRoom({ leagueId, leagueName }: { leagueId: string; leagueNa
     <div className="space-y-6">
       <ClockBar
         draft={draft}
+        deadline={deadline}
         teams={teams}
         isMyTurn={isMyTurn}
         isCommissioner={data.me.isCommissioner}
@@ -287,7 +346,7 @@ export function DraftRoom({ leagueId, leagueName }: { leagueId: string; leagueNa
                 <PlayerList
                   players={group.players}
                   queue={queue}
-                  canPick={isMyTurn && draft.status === "IN_PROGRESS"}
+                  canPick={isMyTurn && draft.status === "IN_PROGRESS" && !clockExpired}
                   busy={busy}
                   onPick={(playerId) => void post("/pick", { playerId })}
                   onQueue={(playerId) =>
@@ -335,6 +394,7 @@ export function DraftRoom({ leagueId, leagueName }: { leagueId: string; leagueNa
 
 function ClockBar({
   draft,
+  deadline,
   teams,
   isMyTurn,
   isCommissioner,
@@ -342,16 +402,14 @@ function ClockBar({
   onStart,
 }: {
   draft: DraftState;
+  /** Milliseconds, or `null` when no clock is running. Owned by `DraftRoom`. */
+  deadline: number | null;
   teams: Map<string, Team>;
   isMyTurn: boolean;
   isCommissioner: boolean;
   busy: boolean;
   onStart: () => void;
 }) {
-  const deadline = draft.clockStartedAt
-    ? new Date(draft.clockStartedAt).getTime() + draft.pickSeconds * 1000
-    : null;
-
   // Ticks locally between polls so the countdown is smooth. The server decides
   // expiry; this is only the display.
   const [now, setNow] = useState(() => Date.now());
@@ -426,6 +484,15 @@ function ClockBar({
           {isMyTurn ? "You are on the clock" : `${team?.name ?? "…"} is on the clock`}
           {team?.isBot && <span className="ml-2 text-xs text-white/40">bot</span>}
         </p>
+        {remaining === 0 && (
+          // Says what is about to happen rather than leaving a dead button and a
+          // 0:00 with no explanation. The pick is the auto-pick's from the
+          // deadline onwards, and the server refuses a late manual one.
+          <p className="text-xs text-white/40">
+            {isMyTurn ? "Your time is up — " : "Time is up — "}
+            the auto-pick takes this one, stamped at the deadline it missed.
+          </p>
+        )}
       </div>
 
       {remaining !== null && (

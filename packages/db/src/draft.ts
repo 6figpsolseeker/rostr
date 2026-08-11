@@ -21,10 +21,20 @@
  *
  * Belt and braces on purpose. The draft is the origin of every roster in the
  * league, and a duplicated player is not something you can fix afterwards.
+ *
+ * **Serialising is not the same as being right, and that distinction is the
+ * whole of `recordPick`'s two guards.** The lock decides who writes first; it
+ * cannot make a decision taken before the lock true afterwards. Two callers who
+ * both read "pick 15 expired" are queued by the lock and then *both* write —
+ * the second one taking pick 16 from a manager who has a full clock in hand.
+ * Neither the primary key nor the unique index catches that: the picks are
+ * different pick numbers and different players, so both are perfectly legal
+ * rows. Only re-reading the decision inside the lock catches it.
  */
 
 import {
   createDraft,
+  currentPickNumber,
   currentTeam,
   generateDraftOrder,
   isComplete,
@@ -65,7 +75,8 @@ export class DraftPersistenceError extends Error {
       | "RULES_MISSING"
       | "NOT_IN_PROGRESS"
       | "ALREADY_STARTED"
-      | "PICK_RACE_LOST",
+      | "PICK_RACE_LOST"
+      | "CLOCK_EXPIRED",
   ) {
     super(message);
     this.name = "DraftPersistenceError";
@@ -506,6 +517,23 @@ export interface RecordPickInput {
   readonly teamId?: string;
   /** Omit for an auto-pick. */
   readonly playerId?: string;
+  /**
+   * The pick number the caller believes is on the clock.
+   *
+   * Everything a caller works out — that a clock had expired, whose turn it was
+   * — it works out from a snapshot read *before* the lock below is taken. Naming
+   * the pick is how the caller says which pick that snapshot was about, so this
+   * transaction can check the belief against the row it is holding rather than
+   * acting on a claim about the past. If the pick has already been made, nothing
+   * is recorded and the answer is `null`.
+   *
+   * Optional because a manual pick already names the picking team and the engine
+   * checks the rotation. **Nothing enforces that an auto-pick supplies it** —
+   * one that does not still gets the deadline guard, which is the half that
+   * protects a manager's clock; the pick number is what makes a lost race a
+   * silent no-op instead of a stolen pick. `catchUpExpiredPicks` supplies it.
+   */
+  readonly expectedPickNumber?: number;
   readonly pool: ReadonlyMap<string, DraftablePlayer>;
   readonly shape: RosterShape;
   readonly now: Date;
@@ -524,13 +552,35 @@ export interface RecordedPick {
 
 /**
  * Record one pick — manual if `teamId` and `playerId` are given, automatic
- * otherwise.
+ * otherwise. `null` means the pick the caller meant had already been made.
  *
  * Both paths run through the same engine and the same write. An auto-pick that
  * took a different code path from a manual one would eventually diverge, and the
  * divergence would read to a manager as "the bot outdrafted me while I slept".
+ *
+ * **The clock decides which of the two paths is legal, and exactly one of them
+ * is legal at any instant.** Before the deadline the pick belongs to its manager
+ * and only a manual pick may take it; at the deadline it passes to the
+ * auto-pick, stamped at the deadline it missed, and a manual pick is too late.
+ * Both halves of that are enforced here, inside the lock, because both were
+ * decided outside it:
+ *
+ *   * A manual pick that arrives late is **refused** (`CLOCK_EXPIRED`) rather
+ *     than accepted and stamped `now`. Accepting it restarts the next manager's
+ *     clock from whenever the late click landed, so one overrun is added to a
+ *     baseline that never re-anchors and every clock after it silently
+ *     stretches. That is the exact drift the deadline-stamped auto-pick exists
+ *     to prevent, and it does not stop being drift because a human caused it.
+ *   * An auto-pick whose clock has *not* expired records nothing. Its caller
+ *     decided "overdue" against a snapshot; if another writer has since made
+ *     that pick, the manager now on the clock has a full timer and taking their
+ *     pick is unrecoverable — there is no un-pick, and `createDraftRecord`
+ *     refuses a redraft.
  */
-export async function recordPick(db: SqlClient, input: RecordPickInput): Promise<RecordedPick> {
+export async function recordPick(
+  db: SqlClient,
+  input: RecordPickInput,
+): Promise<RecordedPick | null> {
   return withTransaction(db, async (tx) => {
     // Serialises every pick in this draft. Held until the transaction ends.
     const [locked] = await tx.query<DraftRow>(
@@ -539,10 +589,57 @@ export async function recordPick(db: SqlClient, input: RecordPickInput): Promise
     );
     if (!locked) throw new DraftPersistenceError("League has no draft", "DRAFT_NOT_FOUND");
     if (locked.status !== "IN_PROGRESS") {
+      // A caller that named a pick decided outside this lock, so a draft that is
+      // no longer running means it lost the race rather than that anything is
+      // wrong: the winner's final pick completed the draft, or a commissioner
+      // paused between the read and here. That is the same lost race the two
+      // guards below treat as a no-op, and it has to answer the same way —
+      // throwing would 500 every polling tab at the exact instant a draft
+      // finishes, because the read route has no catch for it.
+      //
+      // A manual pick names no expected pick, so it still throws and still
+      // surfaces as a 409. Somebody clicking on a paused draft wants to be told.
+      if (input.expectedPickNumber !== undefined) return null;
+
       throw new DraftPersistenceError(`Draft is ${locked.status}`, "NOT_IN_PROGRESS");
     }
 
     const record = await hydrate(tx, locked);
+
+    // ---- The two guards. Both live here, and neither replaces the other. ----
+    //
+    // Nothing extra is read for them: the row was locked above and hydrated on
+    // the line before, so `pickSeconds`, `scheduledAt` and the picks made so far
+    // are already in hand.
+    //
+    // The pick number catches a caller whose snapshot predates a pick somebody
+    // else committed. The deadline catches a caller whose pick number is still
+    // right but whose *clock* is not — a draft paused and resumed keeps the same
+    // pick on the clock and starts a fresh timer, so a stale "it expired" from
+    // before the pause would otherwise pass a pick-number check and auto-pick a
+    // manager who has just been handed their full ninety seconds.
+    if (
+      input.expectedPickNumber !== undefined &&
+      input.expectedPickNumber !== currentPickNumber(record.state)
+    ) {
+      return null;
+    }
+
+    const manual = input.teamId !== undefined && input.playerId !== undefined;
+    const expired = isCurrentPickExpired(record, input.now);
+
+    if (manual && expired) {
+      // `expired` is only true with a clock running, so there is a deadline to
+      // name. Told to the manager rather than "too late", because the number is
+      // the whole answer: it says how late, and it is the instant the auto-pick
+      // will be stamped at.
+      const deadline = new Date(record.clockStartedAt!.getTime() + record.pickSeconds * 1000);
+      throw new DraftPersistenceError(
+        `This pick's clock ran out at ${deadline.toISOString()}; it belongs to the auto-pick now`,
+        "CLOCK_EXPIRED",
+      );
+    }
+    if (!manual && !expired) return null;
 
     const queues =
       input.teamId && input.playerId ? undefined : await loadQueues(tx, input.leagueId);
@@ -688,15 +785,35 @@ export interface CatchUpInput {
 /**
  * Auto-pick everything the clock has already passed.
  *
- * Expiry has to happen somewhere. There is no scheduled worker yet, so this runs
- * whenever anyone reads the draft — the auto-pick is deterministic and
- * idempotent, so it does not matter who triggers it or how often.
+ * Expiry has to happen somewhere. `/api/cron/draft-tick` is the scheduled half,
+ * but this also runs on every read of the draft, so "whoever triggers it" is a
+ * large and uncoordinated set: the cron every minute, and every open tab, at one
+ * second apiece while its manager is on the clock or on deck. The read route
+ * needs no session, so an anonymous caller who knows the league id is in that
+ * set too.
  *
- * **The limitation is real: a draft nobody is looking at does not advance.** For
- * a 24-hour slow draft that is harmless, and a live room is being polled. It
- * should still become a scheduled job over `draftsWithExpiredPicks()` before the
- * season — a draft that stalls because everyone closed the tab is a bad night,
- * and "you had to keep the page open" is not a rule anyone agreed to.
+ * **Safe to run concurrently, and that safety is bought, not free.** The read at
+ * the top of each iteration happens outside the lock the write then takes, so by
+ * the time the write holds the row its decision may be several picks out of
+ * date. Nothing here can prevent that; what prevents the damage is that
+ * `recordPick` re-checks both halves of the decision — the pick number and the
+ * deadline — inside the lock and records nothing if either has moved. Without
+ * that, N callers all seeing pick N expire would make N *consecutive* picks:
+ * pick N legitimately, then picks N+1 and N+2 for managers whose full clock had
+ * just started, unrecoverably, since there is no un-pick and no redraft.
+ *
+ * **Losing that race is a no-op, not an error.** This returns the number of
+ * picks it made itself and throws nothing when another writer got there first —
+ * the draft read route calls it with no try/catch, so a throw would turn every
+ * polling tab into a 500 at the exact instant a draft advances.
+ *
+ * What it makes is still a function of the stored state and the clock alone, so
+ * the picks are the same whoever calls and however often — the count differs
+ * only in that it counts this caller's own work.
+ *
+ * **The old limitation stands for the read path: a draft nobody is looking at
+ * does not advance until the cron fires.** That is why the cron must fire at
+ * least as often as the shortest pick clock.
  */
 export async function catchUpExpiredPicks(db: SqlClient, input: CatchUpInput): Promise<number> {
   const limit = input.maxPicks ?? 200;
@@ -715,14 +832,27 @@ export async function catchUpExpiredPicks(db: SqlClient, input: CatchUpInput): P
     // extended by however long the room sat empty. Advancing deadline by
     // deadline keeps the draft on real time, so the picks that expired are the
     // picks that expire.
+    //
+    // It is also what makes the deadline guard below self-checking: `now` is the
+    // deadline of the pick this iteration means, so once that pick lands the
+    // next clock runs from it and the same instant is no longer expiry.
     const deadline = new Date(draft.clockStartedAt.getTime() + draft.pickSeconds * 1000);
 
-    await recordPick(db, {
+    const recorded = await recordPick(db, {
       leagueId: input.leagueId,
+      expectedPickNumber: currentPickNumber(draft.state),
       pool: input.pool,
       shape: input.shape,
       now: deadline,
     });
+
+    // Somebody else made this pick between the read above and the lock inside.
+    // Nothing to do and nothing wrong: the pick this iteration came to make has
+    // been made, by a caller running this same loop. Stopping rather than
+    // re-reading keeps a lost race read-only — the winner is still inside its
+    // own loop working through the rest of the backlog, and the next tick or
+    // poll takes anything it does not.
+    if (!recorded) break;
     made++;
   }
 

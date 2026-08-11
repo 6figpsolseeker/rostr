@@ -20,7 +20,12 @@ import { draftBoard } from "@/lib/draft-context";
  *
  * Idempotent and deterministic: it makes exactly the picks the clock says are
  * overdue, stamped at the deadlines they missed. Running it twice, or alongside
- * somebody loading the room, changes nothing.
+ * somebody loading the room, changes nothing — because `recordPick` re-checks
+ * the pick number and the deadline inside its lock, so a tick that overlaps a
+ * page load records nothing rather than taking the next manager's pick. It is
+ * not idempotent by virtue of the picks being deterministic; it is idempotent
+ * because a caller that loses the race writes nothing. See
+ * `catchUpExpiredPicks`.
  *
  * Wire it to a scheduler that fires **at least as often as the shortest pick
  * clock** — a minute is right, given the 90-second minimum. On Vercel that is
@@ -30,6 +35,13 @@ export async function GET(request: Request): Promise<NextResponse> {
   // Not a security boundary in the usual sense — this endpoint only does what
   // the clock already permits, so an unauthorised call cannot make a wrong pick.
   // It guards against someone hammering it for the database load.
+  //
+  // That first sentence is only true because of the guards inside `recordPick`.
+  // Hammering an unguarded catch-up at the instant of a real expiry is how you
+  // turn one legitimate auto-pick into several, and the draft read route is
+  // public and does the same work, so the secret was never what stood between an
+  // attacker and that. If you are tempted to remove those guards, this comment
+  // becomes a lie first.
   const secret = process.env["CRON_SECRET"];
   if (secret) {
     const provided =
