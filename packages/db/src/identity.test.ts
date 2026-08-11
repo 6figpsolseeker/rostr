@@ -183,4 +183,27 @@ describe("linkWallet", () => {
       (e: unknown) => e instanceof IdentityError && e.code === "INVALID_WALLET",
     );
   });
+
+  it("says WALLET_TAKEN when the unique index refuses, not just when the check does", async () => {
+    // The claimed-check runs on its own, outside any transaction, so two tabs
+    // linking one address can both pass it. The index then refuses the loser —
+    // the right outcome reported as an unhandled 500, because the caller only
+    // maps `IdentityError`.
+    //
+    // The race cannot be staged on single-connection PGlite, so the row is
+    // inserted directly: the check does not see it in the shape it looks for,
+    // and the statement below is the one that has to answer.
+    const client = await fresh();
+    const alice = await createUser(client, "a@example.com", "Alice");
+    const bob = await createUser(client, "b@example.com", "Bob");
+
+    await client.query(
+      "INSERT INTO wallets (user_id, address, is_primary) VALUES ($1, $2, true)",
+      [alice.id, address(1)],
+    );
+
+    await expect(linkWallet(client, bob.id, address(1))).rejects.toSatisfy(
+      (e: unknown) => e instanceof IdentityError && e.code === "WALLET_TAKEN",
+    );
+  });
 });

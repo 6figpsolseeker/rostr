@@ -11,6 +11,7 @@
 import { buildJoinMessage, isValidWalletAddress, verifyJoinSignature } from "@rostr/core";
 import type { SqlClient } from "./client.js";
 import { getChainState, getLeagueRules } from "./leagues.js";
+import { isUniqueViolation } from "./pg-errors.js";
 import { withTransaction } from "./transaction.js";
 
 export interface JoinLeagueInput {
@@ -196,12 +197,30 @@ export async function joinLeague(db: SqlClient, input: JoinLeagueInput): Promise
     const taken = Number(count?.taken ?? 0);
     if (taken >= maxTeams) throw new JoinError("League is full", "LEAGUE_FULL");
 
-    const [team] = await tx.query<{ id: string; slot: number }>(
-      `INSERT INTO teams (league_id, owner_id, is_bot, name, slot)
-       VALUES ($1, $2, false, $3, $4)
-       RETURNING id, slot`,
-      [league.id, input.userId, input.teamName, taken + 1],
-    );
+    // Two people clicking Join on the last seat both read the same `taken` and
+    // both compute the same slot, so `UNIQUE (league_id, slot)` arbitrates and
+    // the loser is refused. That is why the count above cannot admit an extra
+    // member even without a lock — the collision is on the value derived from
+    // the stale read, not on the read itself.
+    //
+    // Translated rather than left to escape: losing that race means the league
+    // filled up, which is `LEAGUE_FULL` and a 409, not a 500. The wrap is around
+    // this one statement so no other uniqueness in the transaction can be
+    // relabelled as a full league.
+    let team: { id: string; slot: number } | undefined;
+    try {
+      [team] = await tx.query<{ id: string; slot: number }>(
+        `INSERT INTO teams (league_id, owner_id, is_bot, name, slot)
+         VALUES ($1, $2, false, $3, $4)
+         RETURNING id, slot`,
+        [league.id, input.userId, input.teamName, taken + 1],
+      );
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        throw new JoinError("League is full", "LEAGUE_FULL");
+      }
+      throw error;
+    }
 
     const [membership] = await tx.query<{ id: string }>(
       `INSERT INTO league_memberships (league_id, user_id, team_id, wallet_id, rules_hash, signature)

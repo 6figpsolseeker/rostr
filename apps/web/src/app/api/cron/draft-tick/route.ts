@@ -8,6 +8,7 @@ import {
   purgeIdleRateLimits,
 } from "@rostr/db";
 import { db } from "@/lib/db";
+import { cronForbidden } from "@/lib/cron";
 import { draftBoard } from "@/lib/draft-context";
 
 /**
@@ -42,16 +43,8 @@ export async function GET(request: Request): Promise<NextResponse> {
   // public and does the same work, so the secret was never what stood between an
   // attacker and that. If you are tempted to remove those guards, this comment
   // becomes a lie first.
-  const secret = process.env["CRON_SECRET"];
-  if (secret) {
-    const provided =
-      request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ??
-      new URL(request.url).searchParams.get("secret");
-
-    if (provided !== secret) {
-      return NextResponse.json({ error: "Not authorised" }, { status: 401 });
-    }
-  }
+  const forbidden = cronForbidden(request);
+  if (forbidden) return forbidden;
 
   const client = db();
   const now = new Date();
