@@ -4,6 +4,7 @@ import {
   NFL,
   NFL_DEFAULT_FEE_BPS,
   NFL_DEFAULT_PAYOUT,
+  NFL_WINNER_TAKE_ALL_PAYOUT,
   validateLeagueRules,
 } from "@rostr/core";
 import type { PotRules } from "@rostr/core";
@@ -50,6 +51,8 @@ interface CreateBody {
     tokenMint: string;
     buyInBaseUnits: string;
     refundUnlockAt: number;
+    /** Which prize shape. Anything else, including absent, is the split. */
+    payout?: "SPLIT" | "WINNER_TAKE_ALL";
   } | null;
 }
 
@@ -98,7 +101,13 @@ export async function POST(request: Request): Promise<NextResponse> {
     ? {
         tokenMint: body.pot.tokenMint,
         buyInBaseUnits: body.pot.buyInBaseUnits,
-        payout: NFL_DEFAULT_PAYOUT,
+        // The commissioner picks the shape of the prize at creation, and it is
+        // frozen with everything else. Both presets are decidable in a league of
+        // any size, which the old five-way split was not — see NFL_DEFAULT_PAYOUT.
+        payout:
+          body.pot.payout === "WINNER_TAKE_ALL"
+            ? NFL_WINNER_TAKE_ALL_PAYOUT
+            : NFL_DEFAULT_PAYOUT,
         refundUnlockAt: body.pot.refundUnlockAt,
         feeBps: feeRecipient ? NFL_DEFAULT_FEE_BPS : 0,
         feeRecipient,

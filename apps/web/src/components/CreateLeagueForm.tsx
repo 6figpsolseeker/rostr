@@ -9,6 +9,7 @@ import {
   MIN_BUY_IN_BASE_UNITS,
   NFL_DEFAULT_FEE_BPS,
   NFL_DEFAULT_PAYOUT,
+  NFL_WINNER_TAKE_ALL_PAYOUT,
 } from "@rostr/core";
 import type { LeagueRules, PotRules } from "@rostr/core";
 import { RulesView } from "@/components/RulesView";
@@ -85,6 +86,7 @@ export function CreateLeagueForm() {
   const [tradeDeadlineWeek, setTradeDeadlineWeek] = useState(11);
   const [withPot, setWithPot] = useState(false);
   const [buyIn, setBuyIn] = useState("25");
+  const [payoutShape, setPayoutShape] = useState<"SPLIT" | "WINNER_TAKE_ALL">("SPLIT");
   const [refundUnlock, setRefundUnlock] = useState(DEFAULT_REFUND_UNLOCK);
 
   const [submitting, setSubmitting] = useState(false);
@@ -111,7 +113,8 @@ export function CreateLeagueForm() {
       // USDC has six decimals. A decimal string, because this is a u64 on chain
       // and JavaScript numbers stop being exact well before a u64 does.
       buyInBaseUnits: String(Math.round(amount * 1_000_000)),
-      payout: NFL_DEFAULT_PAYOUT,
+      payout:
+        payoutShape === "WINNER_TAKE_ALL" ? NFL_WINNER_TAKE_ALL_PAYOUT : NFL_DEFAULT_PAYOUT,
       refundUnlockAt: localToUnix(refundUnlock),
       // The fee has to appear in the preview because the preview is the whole
       // promise: what is rendered here is what gets hashed and frozen. A pot
@@ -125,7 +128,7 @@ export function CreateLeagueForm() {
       feeBps: FEE_RECIPIENT ? NFL_DEFAULT_FEE_BPS : 0,
       feeRecipient: FEE_RECIPIENT,
     };
-  }, [withPot, buyIn, refundUnlock]);
+  }, [withPot, buyIn, refundUnlock, payoutShape]);
 
   const preview: LeagueRules | null = useMemo(() => {
     const scheduledAt = localToUnix(draftAt);
@@ -166,6 +169,7 @@ export function CreateLeagueForm() {
                 tokenMint: pot.tokenMint,
                 buyInBaseUnits: pot.buyInBaseUnits,
                 refundUnlockAt: pot.refundUnlockAt,
+                payout: payoutShape,
               }
             : null,
         }),
@@ -337,6 +341,47 @@ export function CreateLeagueForm() {
                   single league can lose while the escrow is unaudited, not a price.
                 </span>
               </label>
+
+              {/*
+                Two shapes, both decidable in a league of any size. The old
+                five-way split paid a consolation winner and a third place, and
+                neither exists in a small league — which meant the pot could
+                never settle. See `NFL_DEFAULT_PAYOUT`.
+              */}
+              <fieldset className="block text-sm">
+                <legend className="mb-1 block text-white/60">Prize</legend>
+                <div className="flex flex-col gap-2">
+                  {(
+                    [
+                      [
+                        "SPLIT",
+                        "Split three ways",
+                        "70% champion, 20% runner-up, 10% best record",
+                      ],
+                      ["WINNER_TAKE_ALL", "Winner takes all", "100% to the champion"],
+                    ] as const
+                  ).map(([value, title, detail]) => (
+                    <label key={value} className="flex items-start gap-2">
+                      <input
+                        type="radio"
+                        name="payoutShape"
+                        value={value}
+                        checked={payoutShape === value}
+                        onChange={() => setPayoutShape(value)}
+                        className="mt-1"
+                      />
+                      <span>
+                        <span className="block">{title}</span>
+                        <span className="block text-xs text-white/40">{detail}</span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+                <span className="mt-1 block text-xs text-white/40">
+                  Frozen with the rest of the rules. Everyone who joins signs this split, and
+                  nobody — including you — can change it afterwards.
+                </span>
+              </fieldset>
 
               <label className="block text-sm">
                 <span className="mb-1 block text-white/60">Refund unlock</span>
