@@ -155,7 +155,7 @@ a playoff dispute.
   option, not a default. Worth adding if leagues ask.
 - **Auction and linear drafts.** Sleeper supports both. Snake only for v1.
 
-### Consolation bracket pays out
+### Consolation bracket is played, but no longer paid
 
 Not a nicety — **it is what keeps a losing team playing.**
 
@@ -169,8 +169,23 @@ stake from anyone who stopped showing up. That rule is gone (below), so this now
 the whole job — which is the better arrangement anyway: giving someone a reason to play
 beats punishing them for not.
 
-Payout is 60/15/10/10/5 — champion, runner-up, regular-season record, consolation winner,
-third place. The champion must always hold the largest single share.
+**Superseded 2026-08-10.** The reasoning above still stands, and the bracket is still
+played for exactly that reason — but it no longer carries a share, because it could not
+safely carry one.
+
+A consolation bracket needs at least two teams left over, so it does not exist below
+eight members at six playoff places; a third-place game needs two semifinalists, so it
+does not exist below four. The payout is frozen and signed before anyone joins, while
+the bracket's shape is not known until the field locks. Paying a prize the field may
+turn out to be too small to award meant `championship().complete` could never become
+true — the pot never settled, and frozen rules meant it could not be corrected.
+
+So the payout is now built only from prizes decidable at any size: **70/20/10** on
+champion, runner-up and best regular-season record, or **winner-take-all**, chosen by
+the commissioner at creation. The champion still holds the largest single share.
+
+Winner-take-all is offered despite the argument above, as an option a commissioner
+picks deliberately rather than a default anyone lands on.
 
 ### Abandonment removed; the autofill does the job instead
 
@@ -550,7 +565,7 @@ offered to them. That specific worry was already handled — `RULES.md` §6 has 
 bots neither vote nor trade, so a bot cannot be offered one. What the review found instead
 was worse and unhandled:
 
-**A bot can win.** The champion takes 60% of the pot. A bot has no wallet and paid no
+**A bot can win.** The champion takes the largest share of the pot. A bot has no wallet and paid no
 buy-in, so a bot champion leaves that share with no recipient — on-chain, where there is
 nobody to appeal to. Two smaller versions of the same thing: bots occupy playoff places
 without staking, and a bot's roster decays (no waivers, no trades, no injury reactions)

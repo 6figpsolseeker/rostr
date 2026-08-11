@@ -228,7 +228,7 @@ export async function joinLeague(db: SqlClient, input: JoinLeagueInput): Promise
  * Three refusals, all from the league's own frozen rules:
  *
  *   * **Not in a pot league.** `maxBots` is zero whenever there is money. A bot
- *     has no wallet, so a bot champion would leave 60% of the pot with no
+ *     has no wallet, so a bot champion would leave the largest share with no
  *     recipient — on-chain, where there is nobody to appeal to.
  *   * **One at most.** A bot exists to fix an odd count. More is a different
  *     game.

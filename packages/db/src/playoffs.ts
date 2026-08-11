@@ -196,21 +196,29 @@ async function bracketFor(
           ? rules.schedule.byeSeeds
           : byesFor(field.length),
       results,
-      // Third place is a prize, so it exists only where one is paid. The
-      // consolation bracket pays its winner and nobody else.
-      thirdPlace: phase === "PLAYOFF" && paysThirdPlace(rules),
+      // The third-place game is played in the main bracket whether or not it
+      // pays, and never in the consolation bracket.
+      thirdPlace: phase === "PLAYOFF" && playsThirdPlace(rules),
     }),
   };
 }
 
-function paysThirdPlace(rules: LeagueRules): boolean {
-  // A free league has no payout to read, and playing a game for a prize that
-  // does not exist is still the right answer: it is the difference between
-  // finishing third and finishing fourth, and people care about that.
-  if (!rules.pot) return true;
-  return rules.pot.payout.some(
-    (share) => share.prize === "THIRD_PLACE" && share.basisPoints > 0,
-  );
+/**
+ * Whether the beaten semifinalists play for third place.
+ *
+ * **Always, paid or not.** A free league has no payout to read and plays it
+ * anyway, because it is the difference between finishing third and finishing
+ * fourth and people care about that. The same argument holds for a pot league
+ * whose payout does not name a third-place share, which is now the default —
+ * it would be odd for adding money to a league to remove one of its games.
+ *
+ * This used to key off the payout, which meant the change to a three-way split
+ * silently stopped pot leagues playing the game at all. That is the same
+ * distinction the consolation bracket already draws: the bracket is played,
+ * the payout decides whether winning it pays.
+ */
+function playsThirdPlace(_rules: LeagueRules): boolean {
+  return true;
 }
 
 function byesFor(field: number): number {
@@ -349,7 +357,8 @@ export async function enterPlayoffs(db: SqlClient, leagueId: string): Promise<bo
 /**
  * Who won what, once everything is played.
  *
- * The five prizes `docs/RULES.md` §7 names, or `null` for any not yet decided.
+ * Every prize `docs/RULES.md` §7 can name, or `null` for any not decided —
+ * including the two no built-in payout pays, since a custom one may.
  * This is what settlement reads — and it reads it from the scores, which is why
  * there is no way to write it.
  */

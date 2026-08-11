@@ -209,8 +209,8 @@ export default async function BracketPage({ params }: { params: Promise<{ id: st
             Consolation
           </h2>
           <p className="text-xs text-white/40">
-            It pays a real share of the pot. An eliminated team still has something to play for,
-            which is the whole reason it exists.
+            It is played but unpaid. An eliminated team still has something to play for, which
+            is the whole reason it exists.
           </p>
           {state.consolation.bracket.rounds.map((round) => (
             <Round key={round.round} round={round} />

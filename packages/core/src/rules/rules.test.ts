@@ -7,6 +7,7 @@ import {
   NFL_DEFAULT_FEE_BPS,
   NFL_DEFAULT_PAYOUT,
   NFL_PPR_SCORING,
+  NFL_WINNER_TAKE_ALL_PAYOUT,
 } from "./nfl-ppr.js";
 import type { LeagueRules, PotRules } from "./types.js";
 import { validateLeagueRules } from "./validate.js";
@@ -230,6 +231,29 @@ describe("validateLeagueRules", () => {
     );
   });
 
+  it("rejects a payout where the champion merely ties for largest", () => {
+    // The escrow requires the champion to be *strictly* largest. This used to
+    // pass here and fail on-chain with ChampionNotLargest — after the rules were
+    // frozen, so the league could never be anchored and never be corrected.
+    const tied = mutate((d) => {
+      const payout = d.pot!.payout as { prize: string; basisPoints: number }[];
+      payout.find((p) => p.prize === "CHAMPION")!.basisPoints = 5000;
+      payout.find((p) => p.prize === "RUNNER_UP")!.basisPoints = 5000;
+      payout.find((p) => p.prize === "REGULAR_SEASON")!.basisPoints = 0;
+    });
+
+    expect(validateLeagueRules(tied, NFL)).toContainEqual(
+      expect.stringContaining("CHAMPION must hold the largest"),
+    );
+  });
+
+  it("accepts winner-take-all, where the champion is the only share", () => {
+    const wta = mutate((d) => {
+      (d.pot as { payout: unknown }).payout = NFL_WINNER_TAKE_ALL_PAYOUT;
+    });
+
+    expect(validateLeagueRules(wta, NFL)).toEqual([]);
+  });
   it("rejects a paying finalisation window shorter than the stat-correction window", () => {
     const bad = mutate((d) => {
       (d.settlement as { payingFinalizationHours: number }).payingFinalizationHours = 48;

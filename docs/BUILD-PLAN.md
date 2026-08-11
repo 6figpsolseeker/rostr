@@ -166,7 +166,7 @@ Calendar-driven, not sequence-driven. Written alongside A and B.
 | D3  | `feat(program): join with rules-hash acceptance`             | Consent provable on-chain                              |
 | D4  | `feat(program): deposit to vault, single SPL token`          | Mixed tokens rejected at the type level                |
 | D5  | `feat(program): unconditional timelock refund`               | **Funds can never be stuck. Ship first.**              |
-| D6  | `feat(program): payout by frozen split`                      | 60/15/10/10/5 enforced by the program                  |
+| D6  | `feat(program): payout by frozen split`                      | The frozen split enforced by the program               |
 | D8  | `test(program): adversarial suite`                           | Double-deposit, early-withdraw, wrong-signer, overflow |
 | D9  | `chore: upgrade authority → multisig, documented`            | Disclosed in README                                    |
 | D10 | `chore: submit for audit`                                    | **Must happen in week one**                            |
@@ -216,7 +216,7 @@ a broken season with beautiful tokens, and this is the most technically involved
 | G6  | `feat(oracle): 48h / 7-day finalisation windows`   | Paying weeks wait out stat corrections  |
 | G7  | `feat(settle): post finalised scores on-chain`     | Scores signed and stored                |
 | G8  | `feat(settle): derive champion from bracket`       | No human declares a winner              |
-| G9  | `feat(settle): execute payouts`                    | All five prizes distributed correctly   |
+| G9  | `feat(settle): execute payouts`                    | Every paid prize distributed correctly  |
 | G10 | `chore: burn upgrade authority`                    | Before Week 14 pays out                 |
 
 ---

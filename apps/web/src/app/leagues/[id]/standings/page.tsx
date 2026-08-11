@@ -122,8 +122,8 @@ export default async function StandingsPage({ params }: { params: Promise<{ id: 
       <Table rows={consolationField(standings, playoffTeams)} caption="Consolation bracket" />
 
       <p className="text-xs text-white/30">
-        The consolation bracket pays a real share of the pot. Missing the playoffs is not the
-        end of the season.
+        The consolation bracket is still played. Missing the playoffs is not the end of the
+        season.
       </p>
     </div>
   );

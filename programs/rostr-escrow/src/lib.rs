@@ -44,9 +44,12 @@ pub const BASIS_POINTS_TOTAL: u16 = 10_000;
 ///
 /// The array is positional rather than keyed because storing five string keys
 /// on-chain would cost bytes to express something both sides already agree on.
-/// **This order is `NFL_DEFAULT_PAYOUT` in `packages/core/src/rules/nfl-ppr.ts`,
-/// not the declaration order of the `PrizeKey` union** — those two differ, and
-/// the client must serialise from this order or the split silently reshuffles.
+/// **The client must serialise from PRIZE_ORDER in packages/escrow/src/
+/// instructions.ts, which mirrors this module.** Not from the declaration order
+/// of the `PrizeKey` union, and not from whichever prizes a payout happens to
+/// name — a built-in payout may name only three, and the two it omits are sent
+/// as zero in their own slots. Serialising from anything else reshuffles the
+/// split with no error anywhere.
 pub mod prize {
     pub const CHAMPION: usize = 0;
     pub const RUNNER_UP: usize = 1;
@@ -68,7 +71,8 @@ pub const MAX_BUY_IN_BASE_UNITS: u64 = 50_000_000;
 ///
 /// A floor exists because a pot has fixed costs that a stake does not scale
 /// with. Every member's deposit and refund is a transaction, the vault and each
-/// membership account cost rent, and settlement pays out five prizes — at a
+/// membership account cost rent, and settlement pays out every prize in the
+/// frozen split — at a
 /// one-cent buy-in the fees to move the money exceed the money. A pot that small
 /// is also indistinguishable from a free league, which has its own instruction
 /// and needs none of this machinery.

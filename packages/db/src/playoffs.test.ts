@@ -624,3 +624,39 @@ describe("league state", () => {
     expect(await enterPlayoffs(fx.client, fx.leagueId)).toBe(false);
   });
 });
+
+describe("the third-place game is played whether or not it pays", () => {
+  it("lays a third-place game for a pot league whose payout does not name one", async () => {
+    // Adding money to a league must not remove one of its games. The default
+    // payout stopped naming THIRD_PLACE in schema 5, and the flag that decides
+    // whether the game exists used to read the payout — so pot leagues silently
+    // stopped playing it. Free leagues always played it, for the reason that
+    // applies equally here: third and fourth are different things to finish.
+    const base = buildNflPprRules({ seasonYear: 2026, draft: DRAFT });
+    const fx = await setup(
+      {
+        pot: {
+          tokenMint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          buyInBaseUnits: "25000000",
+          payout: NFL_DEFAULT_PAYOUT,
+          refundUnlockAt: 1_773_000_000,
+          feeBps: 100,
+          feeRecipient: "6dNUCTMTgoHhbfgDzKtiPvBpJ2LzMwGqBpKmUDgQtNMK",
+        } as unknown as LeagueRules["pot"],
+        league: { ...base.league, maxBots: 0 },
+      },
+      8,
+    );
+
+    await advancePlayoffs(fx.client, fx.leagueId);
+    await score(fx, 15, fx.teams[4]!, 120_000, 100_000);
+    await score(fx, 15, fx.teams[6]!, 90_000, 130_000);
+    await advancePlayoffs(fx.client, fx.leagueId);
+    await score(fx, 16, fx.teams[0]!, 130_000, 100_000);
+    await score(fx, 16, fx.teams[2]!, 100_000, 130_000);
+    await advancePlayoffs(fx.client, fx.leagueId);
+
+    const state = await playoffState(fx.client, fx.leagueId);
+    expect(state.playoffs?.bracket.thirdPlaceGame).not.toBeNull();
+  });
+});
