@@ -920,6 +920,49 @@ stayed FORMING forever — still accepting members, and invisible to every job t
 live leagues. The enum is FORMING / DRAFTING / IN_SEASON / PLAYOFFS / SETTLED / DISSOLVED;
 an invented value is not a no-op, Postgres fails the cast and the query errors.
 
+### A private league is now actually private
+
+`apps/web/src/lib/visibility.ts` and `league-read.ts`.
+
+`league.visibility` sits in the **frozen, hashed, member-signed** rule set and until
+2026-08-11 was **read back nowhere** — written to the `leagues` row at creation and never
+consulted again; every other occurrence in the repo was a test. That is the same defect
+`botsAllowed` was removed for: a guarantee members signed that did nothing. A rule set
+saying PRIVATE while the standings, the draft board and every team's bench were readable
+by anyone holding a URL was making a promise the code did not keep — and the URL is not a
+secret, it is in browser history, in screenshots, and in whatever chat the invite was
+pasted into.
+
+**Read from the frozen rules, not `leagues.visibility`.** The column is a denormalised
+copy written at creation. Members signed the document, so the document decides, and a
+future bug in that write cannot quietly open a private league. There is a test that
+rewrites the column and asserts the answer does not move.
+
+**404, never 403.** A 403 confirms the league exists, which is the one fact an unguessable
+id protects. Pages call `notFound()` for the same reason — a "this league is private"
+screen is a disclosure.
+
+**Both layers are gated, and only doing one would have been cosmetic.** The `standings`,
+`matchup` and `bracket` **pages query the database directly** while their components fetch
+the API, so gating routes alone leaves the server-rendered half wide open, and gating pages
+alone leaves the API open to anyone with `curl`.
+
+**Two files stay open on purpose** and are named in `league-read.test.ts` with reasons:
+`/leagues/[id]` and `api/leagues/[id]/join`. `RULES.md` requires the full rule set to be
+shown before anyone joins, and an invitee is by definition not yet a member — gating the
+entrance would make "shown before you join" unsatisfiable for exactly the private leagues
+invite links exist for. What is gated is everything reporting how the league is _going_.
+
+**PUBLIC leagues are not gated at all.** `/api/leagues` already publishes their ids, and
+being findable is what public means.
+
+`league-read.test.ts` sweeps every file under `api/leagues/[id]/` and `leagues/[id]/` and
+fails a new one that gates nothing. It went unenforced for months not because anyone
+decided reads were open but because nothing was obliged to ask. **Its `GATES` match the
+refusal, not the identifier** — three routes mention `context.myTeamId` only to label the
+response, and matching the bare name certified them as gated when they were not, which is
+the exact shape of bug the file is named after.
+
 ### The scoreboard
 
 `packages/db/src/matchup.ts`, `/api/leagues/[id]/matchup`, `Scoreboard.tsx` on

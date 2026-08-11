@@ -20,6 +20,7 @@ export default defineConfig({
       // exist to remove, reappearing only for the subpaths.
       { find: "@rostr/db/postgres", replacement: pkgFile("db", "postgres.ts") },
       { find: "@rostr/db/migrate", replacement: pkgFile("db", "migrate.ts") },
+      { find: "@rostr/db/testing", replacement: pkgFile("db", "testing.ts") },
 
       { find: "@rostr/core", replacement: src("core") },
       { find: "@rostr/db", replacement: src("db") },

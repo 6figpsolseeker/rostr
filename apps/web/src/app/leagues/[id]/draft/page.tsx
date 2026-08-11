@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { leagueReadAccess } from "@/lib/visibility";
 import { DraftRoom } from "@/components/DraftRoom";
 import { db } from "@/lib/db";
 
@@ -10,6 +11,11 @@ export default async function DraftPage({ params }: { params: Promise<{ id: stri
     [id],
   );
   if (!league) notFound();
+
+  // A private league reports nothing about how it is going to a non-member.
+  // `notFound` rather than a notice: a "this league is private" page confirms
+  // the league exists, which is the fact an unguessable id is protecting.
+  if (!(await leagueReadAccess(id)).ok) notFound();
 
   return (
     <div className="space-y-6">

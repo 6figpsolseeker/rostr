@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { leagueReadAccess } from "@/lib/visibility";
 import { LineupEditor } from "@/components/LineupEditor";
 import { db } from "@/lib/db";
 import { currentUser } from "@/lib/session";
@@ -18,6 +19,11 @@ export default async function LineupPage({
     [id],
   );
   if (!league) notFound();
+
+  // A private league reports nothing about how it is going to a non-member.
+  // `notFound` rather than a notice: a "this league is private" page confirms
+  // the league exists, which is the fact an unguessable id is protecting.
+  if (!(await leagueReadAccess(id)).ok) notFound();
 
   const user = await currentUser();
   const parsed = Number.parseInt(week ?? "1", 10);

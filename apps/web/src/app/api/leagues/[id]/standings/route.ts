@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { computeStandings, consolationField, playoffField } from "@rostr/core";
 import { loadWeekResults } from "@rostr/db";
 import { db } from "@/lib/db";
+import { leagueReadForbidden } from "@/lib/league-read";
 import { draftContext, DraftContextError } from "@/lib/draft-context";
 
 /**
@@ -16,6 +17,10 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ): Promise<NextResponse> {
   const { id } = await params;
+
+  // `visibility` is a frozen, member-signed rule. See `lib/visibility.ts`.
+  const forbidden = await leagueReadForbidden(id);
+  if (forbidden) return forbidden;
 
   try {
     const context = await draftContext(id);

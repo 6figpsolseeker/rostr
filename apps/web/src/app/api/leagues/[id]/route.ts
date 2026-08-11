@@ -1,12 +1,17 @@
 import { NextResponse } from "next/server";
 import { getLeagueRules } from "@rostr/db";
 import { db } from "@/lib/db";
+import { leagueReadForbidden } from "@/lib/league-read";
 
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<NextResponse> {
   const { id } = await params;
+
+  // `visibility` is a frozen, member-signed rule. See `lib/visibility.ts`.
+  const forbidden = await leagueReadForbidden(id);
+  if (forbidden) return forbidden;
   const client = db();
 
   const [league] = await client.query<{
