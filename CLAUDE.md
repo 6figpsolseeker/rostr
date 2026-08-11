@@ -217,24 +217,24 @@ the playoff work, #36 in trades). Squid's diagnoses have been right every time s
 has _not_ been checked is whether each proposed **fix** is correct — that is a separate
 question from whether the bug is real, and it is the one still open.
 
-**vip-ultr (Ammar).** Three PRs, one closed. His diagnoses are also correct — `join_league`
-genuinely was never invoked — but the implementations have needed substantial work.
+**vip-ultr (Ammar).** Three PRs. **Two are now merged**, each as a follow-up built on his
+commit rather than a replacement, so his authorship is in `main`. His diagnoses have been
+right every time — `join_league` genuinely was never invoked, and deposit/refund genuinely
+had no callers — but the implementations needed substantial work, and in both cases the
+defect was in a _verifier_ rather than in the wiring.
 
-- **#29 — closed**, superseded by #39, which builds on his commit. Reviewed by three agents
+- **#29 — closed**, superseded by #39 and then #63, **merged 2026-08-11**. Reviewed by three agents
   under separate mandates (security / state-machine / conformance). Four defects, all
   confirmed by reading the code: the route took `walletAddress` from the request body with
   no ownership check; a comment claimed a Postgres membership check that was actually a
   `getLeagueRules` call; `verifyOnChainJoin` compared a key against a PDA derived from that
   same key, so `MEMBER_MISMATCH` could never fire while its docstring claimed the opposite;
   and the retry re-sent an `init` instruction that cannot succeed twice.
-- **#30 — open, do not merge as-is.** `verifyOnChainRefund` is **inverted**: the program sets
-  `refunded = true` and keeps `deposited` as history, so a genuine refund lands in exactly
-  the state the verifier rejects. It returns `ok` only for members who have _not_ refunded.
-  Both routes also take the wallet from the body, same as #29. Composed: any signed-in
-  account can mark any staked member as refunded, and no real refund can ever be recorded.
-  No Rust changed, so the on-chain guarantee is intact — this is funds _accounting_, not
-  funds loss.
-- **#31 — open, effectively unreviewed.** It adds `settle_authority` to the `League` account
+- **#30 — closed**, superseded by #62, **merged 2026-08-11**. `verifyOnChainRefund` was
+  **inverted** and `verifyOnChainDeposit` never consulted `refunded` at all. See "Deposit and
+  refund: `deposited > 0` is not currently staked" below for the four `Membership` states and
+  why reading one field could never have been enough.
+- **#31 — still open, still effectively unreviewed**, and the only one of his three left. It adds `settle_authority` to the `League` account
   and an instruction where that authority posts the winners. Before anything else, weigh
   that against `CLAUDE.md`'s "immutability is by omission… the account has **no authority
   field**" and `DECISIONS.md`'s "Settlement is derived, not declared". The author is upfront
@@ -260,21 +260,36 @@ still needs Rust and a decision before Aug 22:
 
 **Next, in order:**
 
-0. **The PR queue above.** Squid's four fix live bugs; #39 needs `anchor test` before it can
-   merge. This outranks new features.
+0. **The PR queue above.** Squid's four still fix live bugs and outrank new features.
+   Ammar's are done except #31.
+
+   **`anchor test` is not a reason to defer a PR.** `.github/workflows/anchor.yml` runs it
+   on CI for anything touching `programs/**`, `Anchor.toml`, `Cargo.*` or
+   `vitest.program.config.ts` — it installs Solana and Anchor, builds, deploys to a
+   validator, runs the program suite, and checks the IDL and program id. Only running it
+   _locally_ needs the main PC. This file said otherwise for days and it cost real time:
+   #39 sat open waiting for a machine when opening a PR would have answered it in four
+   minutes. **CI earned that keep on 2026-08-11** — it caught a genuine failure in
+   `stake.test.ts` that no TypeScript check could have.
 
 1. **Click through create → anchor → join in a browser.** Everything either side of the
    wallet popup is covered by an automated test; the popup itself is not, and cannot be
    from here. This is the one step that needs a human with Phantom.
 
-2. **D6–D10** — the rest of the escrow. **This is main-PC work**; the secondary machine has
-   no Rust toolchain. Note that **D6 is not a small job**: "payout by the frozen split"
+2. **D6–D10** — the rest of the escrow. **Writing Rust needs the main PC** (no toolchain on
+   the secondary machine), but _verifying_ it does not: CI builds and tests the program on
+   every PR, so an iteration loop of push-and-read-CI works from anywhere, at roughly four
+   minutes a turn. Note that **D6 is not a small job**: "payout by the frozen split"
    needs to know who won, and `RULES.md` § 7 says nobody declares a winner — the contract
    derives it from posted scores. That makes D6 depend on G4–G8 (dual-source oracle, scores
    on-chain), which the build plan schedules for Dec–Jan. Do not start D6 expecting an
    afternoon.
-3. **Pot leagues still cannot take money in the app**, and must not, until 1 lands and D6
-   can pay it back out.
+3. **Pot leagues can now technically take money, and the reason not to is a decision
+   rather than a missing part.** Anchor → join → deposit → timelock refund all work end to
+   end and are exercised against a validator on every CI run (#62, #63). What is still
+   absent is the _payout_ (#28, D6), so money can go in and come back out through the
+   unconditional refund, but it cannot be distributed. Nothing in the code stops a pot
+   league opening; this is item 1 plus an owner call.
 4. **Settlement**, which is where the season ends up. `championship()` now derives all
    five prize-holders from the scores; nothing pays them out yet, and that is D6 — see
    above for why it is not an afternoon.
@@ -1045,6 +1060,32 @@ stayed FORMING forever — still accepting members, and invisible to every job t
 live leagues. The enum is FORMING / DRAFTING / IN_SEASON / PLAYOFFS / SETTLED / DISSOLVED;
 an invented value is not a no-op, Postgres fails the cast and the query errors.
 
+### The on-chain join, and what it unblocked
+
+`apps/web/src/app/api/leagues/[id]/join-onchain/route.ts`, migration `0024`.
+
+The app recorded a membership in Postgres and **never invoked `join_league`**, so the
+on-chain `Membership` PDA was never created — which made `deposit` and `refund_stake`
+unreachable no matter how well they were wired. Fixed 2026-08-11 (#63, on Ammar's #29).
+
+**The wallet is derived from the caller's own `league_memberships` row**, never taken from
+the request — `memberWallet`. That is the same helper the deposit and refund routes use,
+and collapsing two independently-written copies of it into one was most of the work of
+landing this. Its docstring carries the ordering guarantee: **no on-chain record without a
+consent record behind it.**
+
+**Two cluster questions, both asked.** `assertRpcCluster` confirms the endpoint really is
+the chain this deployment declares; the route then confirms _that_ chain is where this
+league was anchored. A correctly configured server reading the right chain can still be
+looking at a league anchored elsewhere, and the PDA is byte-identical everywhere, so the
+row would look right.
+
+**The record upserts and is deliberately not write-once**, unlike the chain anchor in
+`0014`. There is exactly one anchoring transaction per league; here a re-post after a lost
+response is the ordinary case and has to succeed. What makes that safe is authorisation
+rather than immutability — the caller can only ever write the wallet their own consent row
+names. Do not add an immutability trigger without first giving the retry somewhere to go.
+
 ### Deposit and refund: `deposited > 0` is not "currently staked"
 
 `packages/escrow/src/verify.ts`, the two money routes, migration `0023`.
@@ -1635,7 +1676,10 @@ like code errors rather than a missing install.
 
 **This repo was started on a secondary Windows PC.** Tooling installed there: Node
 v24.19.0, pnpm 11.20.0, gh 2.97.0, git. No Rust, no Solana CLI, no Anchor — so **nothing
-under `programs/` can be built or tested there**. `pnpm test`, `typecheck`, `lint` and the
+under `programs/` can be built or tested there _locally_**. It can still be changed there
+and verified on CI: `.github/workflows/anchor.yml` runs the full `anchor test` on every PR
+touching `programs/**`. Push and read the job. That is slower than a local run and much
+faster than waiting for the other machine. `pnpm test`, `typecheck`, `lint` and the
 whole TypeScript side work fine, including `@rostr/escrow`, because the IDL is committed.
 `anchor test` and `pnpm idl:sync` are main-PC only.
 
