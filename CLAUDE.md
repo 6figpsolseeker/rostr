@@ -1382,6 +1382,51 @@ count. **Every extra condition is a new way for money to become permanently stuc
 is the one failure this program exists to make impossible. This is why BUILD-PLAN says
 ship it first. Do not add a condition to it.
 
+**Which makes `refundUnlockAt` the only thing protecting the pot, so it has a floor.**
+Because the refund is unconditional once it opens, a date set before the season ends is not
+a smaller version of the same design — it is a different one. Refunding decrements
+`total_deposited` but touches neither `member_count` nor the `Membership`, so a losing
+manager who withdrew in week 6 would keep their roster, their standings place and their
+claim on the pot, and play out the season with nothing at risk. Until 2026-08-11 the only
+checks were `> 0` off-chain and `> now` on-chain: a commissioner could have set it to next
+Tuesday.
+
+`validateLeagueRules` now refuses a league whose refund opens before
+`earliestRefundUnlock(...)` — the draft, plus the last scheduled week, plus the paying
+correction window, plus **sixty days**. Every term is already in the frozen rules, so this
+adds no field and **does not move the golden hash**.
+
+**The check is at creation, never at refund**, and that distinction is the whole design.
+A creation-time rule can only refuse to _make_ a league; a rule on `refund_stake` could
+trap money in one that already exists.
+
+**Sixty days, not thirty.** The floor is measured from the draft because that is the only
+real timestamp the rules carry, and the rules do not record the gap between the draft and
+kickoff — eighteen days in 2026 — so the estimate lands early. Worked through: a 10-day
+buffer puts the floor at Jan 5, _before_ the Jan 10 settlement, which is actively broken;
+30 days gives a fortnight of real margin; 60 gives about six weeks. The sizing follows from
+the failure modes being asymmetric — too late is members waiting longer for money they will
+certainly get back, too early is the pot being taken by whoever transacts first, in a
+program with no authority field and nothing to claw it back with. An uncertain estimate
+rounds toward the side where being wrong is merely annoying.
+
+**It also separates payout from refund without either instruction knowing about the
+other.** D6 will draw on the same vault, and the grace window is the gap between "winners
+can be paid" and "the escape hatch opens" — so the two cannot both be legal at once. If
+settlement misses that window, refunds open and everyone recovers their stake, which is the
+correct failure and not a bug.
+
+`CreateLeagueForm` seeds its refund field from the **same function**, so the form cannot
+suggest a date the server will refuse. It used to hardcode `2027-03-01` under a comment
+reading "two weeks after the championship" — wrong by six weeks, and a constant sitting
+next to a draft date the commissioner can move.
+
+**Still open, and a separate decision:** `RULES.md` promises auto-dissolve for a league
+that never fills, and dissolve by unanimous consent. **Neither exists** — the program has
+exactly five instructions and none of them is one. The timelock is silently doing that job,
+which for a league that never drafted means waiting months for money that was never at
+stake.
+
 **`deposit` takes no amount argument.** It moves `league.buy_in` and nothing else, so
 "everyone stakes the identical amount" is structural rather than a check that could be
 reordered around. A member who wants to overpay has no instruction that permits it.

@@ -443,6 +443,58 @@ describe("validateLeagueRules", () => {
     );
   });
 
+  it("rejects a refund unlock before the pot could have settled", () => {
+    // The escape hatch opening mid-season is not a smaller version of it
+    // opening late — it lets a losing manager take their stake back and keep
+    // playing for a pot they no longer stand behind, because refunding does not
+    // remove them from the league.
+    const bad = mutate((d) => {
+      (d.pot as { refundUnlockAt: number }).refundUnlockAt = d.draft.scheduledAt + 30 * 86_400;
+    });
+    expect(validateLeagueRules(bad, NFL)).toContainEqual(expect.stringContaining("too early"));
+  });
+
+  it("says how many days short the refund unlock is", () => {
+    // A creator cannot fix a date they would have to compute themselves, and the
+    // rules are frozen the moment they are written — so the message carries the
+    // shortfall and the earliest legal value rather than only refusing.
+    const bad = mutate((d) => {
+      (d.pot as { refundUnlockAt: number }).refundUnlockAt = 1;
+    });
+    const problems = validateLeagueRules(bad, NFL);
+    expect(problems).toContainEqual(expect.stringMatching(/\d+ days too early/));
+    expect(problems).toContainEqual(expect.stringContaining("earliest permitted value"));
+  });
+
+  it("accepts a refund unlock later than the floor", () => {
+    // A floor, not a prescription. Ten years out is legal, if strange.
+    const late = mutate((d) => {
+      (d.pot as { refundUnlockAt: number }).refundUnlockAt =
+        d.draft.scheduledAt + 3650 * 86_400;
+    });
+    expect(validateLeagueRules(late, NFL)).toEqual([]);
+  });
+
+  it("moves the floor with the league's own schedule", () => {
+    // Derived, not a constant. A league whose playoffs run to week 20 must hold
+    // its refund shut three weeks longer than one ending at 17 — and the
+    // fixture's date, legal by six days at week 17, stops being legal.
+    const longer = mutate((d) => {
+      (d.schedule as { regularSeasonWeeks: number }).regularSeasonWeeks = 17;
+      (d.schedule as { playoffWeeks: number[] }).playoffWeeks = [18, 19, 20];
+    });
+    expect(validateLeagueRules(longer, NFL)).toContainEqual(
+      expect.stringContaining("too early"),
+    );
+  });
+
+  it("does not constrain a free league, which has no pot to protect", () => {
+    const free = mutate((d) => {
+      (d as { pot: unknown }).pot = null;
+    });
+    expect(validateLeagueRules(free, NFL)).toEqual([]);
+  });
+
   it("rejects a non-deterministic final tiebreaker", () => {
     const bad = mutate((d) => {
       (d.schedule as { tiebreakers: string[] }).tiebreakers = ["WIN_PCT", "POINTS_FOR"];

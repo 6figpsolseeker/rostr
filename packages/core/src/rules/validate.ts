@@ -26,6 +26,42 @@ const SLOW_PICK_SECONDS = [3600, 14_400, 28_800, 86_400];
 /** The NFL issues official stat corrections for up to seven days. */
 const MIN_PAYING_FINALIZATION_HOURS = 168;
 
+/**
+ * How long after the last prize could possibly be settled the timelock refund
+ * must stay shut.
+ *
+ * `refund_stake` is unconditional after `refundUnlockAt` — by design, because it
+ * is the escape hatch for every failure the program cannot anticipate, and every
+ * condition added to it is a new way for money to become permanently stuck. That
+ * makes the *date* the only thing standing between the pot and a member who has
+ * lost. Set it before the season ends and a losing manager withdraws in week 6
+ * and plays on with nothing at risk: refunding decrements `total_deposited` but
+ * does not touch `member_count` or the membership, so they keep their roster,
+ * their standings place, and their claim on the pot.
+ *
+ * ## Why sixty days rather than a fortnight
+ *
+ * The floor below is computed from the draft, because that is the only real
+ * timestamp the rules carry — and **the rules do not record the gap between the
+ * draft and the first game**. For 2026 that gap is eighteen days (draft Aug 22,
+ * kickoff Sep 9), so the estimate lands about a fortnight *early*. This buffer
+ * absorbs that as well as leaving the payout room to run.
+ *
+ * The two ways of being wrong are not symmetric, which is what decides the size:
+ *
+ * - **Too late** — in the rare case settlement is broken, members wait longer
+ *   for money they will certainly get back. An inconvenience.
+ * - **Too early** — the escape hatch opens while the pot is still owed to the
+ *   winners, and whoever transacts first takes it. Unrecoverable, in a program
+ *   with no authority field and no way to claw anything back.
+ *
+ * One is annoying and one is theft, so an uncertain estimate rounds toward the
+ * annoying side.
+ *
+ * A commissioner may always choose a **later** date; this is a floor.
+ */
+const MIN_REFUND_GRACE_SECONDS = 60 * 24 * 60 * 60;
+
 function validateScoring(rules: LeagueRules, sport: SportDef, out: string[]): void {
   const known = statKeysByKey(sport);
   const seen = new Set<string>();
@@ -314,6 +350,71 @@ function validateTrades(rules: LeagueRules, out: string[]): void {
   }
 }
 
+/**
+ * The earliest instant a league's timelock refund may open.
+ *
+ * Every term comes from the frozen rules, so this needs no calendar, no provider
+ * and no new field — which matters, because adding a field would move the golden
+ * hash and break the `rules_hash` of every league already anchored.
+ *
+ * ```
+ *   draft.scheduledAt
+ * + (regularSeasonWeeks + playoffWeeks.length) weeks
+ * + payingFinalizationHours          the correction window on the last prize
+ * + MIN_REFUND_GRACE_SECONDS
+ * ```
+ *
+ * **It is an approximation, and knowingly a conservative one.** The rules do not
+ * record when the season starts, only when the draft is, so the weeks are
+ * counted from a point some way before kickoff and the estimate lands early. See
+ * `MIN_REFUND_GRACE_SECONDS` for why the buffer is sized to swallow that.
+ *
+ * The last playoff week is used rather than `regularSeasonWeeks + playoffWeeks
+ * .length` being assumed contiguous — a league may define playoff weeks that do
+ * not immediately follow the regular season, and counting the array's length
+ * would then finish early.
+ */
+export function earliestRefundUnlock(input: {
+  readonly draftScheduledAt: number;
+  readonly regularSeasonWeeks: number;
+  readonly playoffWeeks: readonly number[];
+  readonly payingFinalizationHours: number;
+}): number {
+  // `Math.max` over both, because either could be the later one: a league with
+  // no playoff weeks at all finishes at the end of its regular season.
+  const lastWeek = Math.max(input.regularSeasonWeeks, ...input.playoffWeeks, 0);
+
+  return (
+    input.draftScheduledAt +
+    lastWeek * 7 * 24 * 60 * 60 +
+    input.payingFinalizationHours * 60 * 60 +
+    MIN_REFUND_GRACE_SECONDS
+  );
+}
+
+function refundUnlockFloor(rules: LeagueRules): number {
+  return earliestRefundUnlock({
+    draftScheduledAt: rules.draft.scheduledAt,
+    regularSeasonWeeks: rules.schedule.regularSeasonWeeks,
+    playoffWeeks: rules.schedule.playoffWeeks,
+    payingFinalizationHours: rules.settlement.payingFinalizationHours,
+  });
+}
+
+function validateRefundUnlock(rules: LeagueRules, refundUnlockAt: number, out: string[]): void {
+  const floor = refundUnlockFloor(rules);
+  if (refundUnlockAt >= floor) return;
+
+  const short = Math.ceil((floor - refundUnlockAt) / (24 * 60 * 60));
+
+  out.push(
+    `pot.refundUnlockAt is ${short} day${short === 1 ? "" : "s"} too early: the timelock ` +
+      `refund is unconditional once it opens, so a date before the last prize has settled ` +
+      `lets a losing member withdraw and keep playing for a pot they no longer stand behind. ` +
+      `The earliest permitted value is ${floor}.`,
+  );
+}
+
 function validatePot(rules: LeagueRules, out: string[]): void {
   const pot = rules.pot;
   if (pot === null) return;
@@ -339,7 +440,11 @@ function validatePot(rules: LeagueRules, out: string[]): void {
     }
   }
   if (pot.tokenMint.length === 0) out.push("pot requires a token mint");
-  if (pot.refundUnlockAt <= 0) out.push("pot requires a refund unlock time");
+  if (pot.refundUnlockAt <= 0) {
+    out.push("pot requires a refund unlock time");
+  } else {
+    validateRefundUnlock(rules, pot.refundUnlockAt, out);
+  }
 
   // A fee is permitted to be zero — a league that pays us nothing is a valid
   // league — but never negative, never fractional, and never unbounded.

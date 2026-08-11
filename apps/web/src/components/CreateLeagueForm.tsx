@@ -4,11 +4,14 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   buildNflPprRules,
+  earliestRefundUnlock,
   hashLeagueRules,
   MAX_BUY_IN_BASE_UNITS,
   MIN_BUY_IN_BASE_UNITS,
   NFL_DEFAULT_FEE_BPS,
   NFL_DEFAULT_PAYOUT,
+  NFL_DEFAULT_SCHEDULE,
+  NFL_DEFAULT_SETTLEMENT,
   NFL_WINNER_TAKE_ALL_PAYOUT,
 } from "@rostr/core";
 import type { LeagueRules, PotRules } from "@rostr/core";
@@ -68,11 +71,49 @@ const MAX_BUY_IN_USDC = MAX_BUY_IN_BASE_UNITS / 1_000_000;
  */
 const TRADE_DEADLINE_WEEKS = [8, 9, 10, 11, 12, 13, 14];
 
-/** Two weeks after the championship, so a stuck league can always be unwound. */
-const DEFAULT_REFUND_UNLOCK = "2027-03-01T00:00";
+/** The Aug 22 deadline: leagues must be draftable by then. */
+const DEFAULT_DRAFT_AT = "2026-08-22T14:00";
 
 function localToUnix(value: string): number {
   return Math.floor(new Date(value).getTime() / 1000);
+}
+
+function unixToLocalInput(seconds: number): string {
+  const d = new Date(seconds * 1000);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return (
+    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` +
+    `T${pad(d.getHours())}:${pad(d.getMinutes())}`
+  );
+}
+
+/**
+ * The earliest date `validateLeagueRules` will accept, for this draft date.
+ *
+ * **Derived, not typed out.** It was `"2027-03-01T00:00"` with a comment saying
+ * "two weeks after the championship" — which was wrong by six weeks, and worse,
+ * it was a constant sitting next to a draft date the commissioner can move. Push
+ * the draft back a fortnight and a hardcoded refund date silently becomes
+ * illegal, and the creator gets a validation error about a field they never
+ * touched.
+ *
+ * Calling the same function the validator calls means the form cannot suggest a
+ * date the server will refuse. The floor already carries sixty days of grace, so
+ * offering it directly is safe rather than borderline — and a commissioner who
+ * wants later can pick later.
+ */
+function defaultRefundUnlock(draftAt: string): string {
+  const scheduledAt = localToUnix(draftAt);
+  if (!Number.isFinite(scheduledAt)) return "";
+
+  return unixToLocalInput(
+    earliestRefundUnlock({
+      draftScheduledAt: scheduledAt,
+      regularSeasonWeeks: NFL_DEFAULT_SCHEDULE.regularSeasonWeeks,
+      playoffWeeks: NFL_DEFAULT_SCHEDULE.playoffWeeks,
+      payingFinalizationHours: NFL_DEFAULT_SETTLEMENT.payingFinalizationHours,
+    }),
+  );
 }
 
 export function CreateLeagueForm() {
@@ -80,20 +121,29 @@ export function CreateLeagueForm() {
 
   const [name, setName] = useState("");
   const [visibility, setVisibility] = useState<"PRIVATE" | "PUBLIC">("PRIVATE");
-  const [draftAt, setDraftAt] = useState("2026-08-22T14:00");
+  const [draftAt, setDraftAt] = useState(DEFAULT_DRAFT_AT);
   const [mode, setMode] = useState<"FAST" | "SLOW">("SLOW");
   const [pickSeconds, setPickSeconds] = useState(14_400);
   const [tradeDeadlineWeek, setTradeDeadlineWeek] = useState(11);
   const [withPot, setWithPot] = useState(false);
   const [buyIn, setBuyIn] = useState("25");
   const [payoutShape, setPayoutShape] = useState<"SPLIT" | "WINNER_TAKE_ALL">("SPLIT");
-  const [refundUnlock, setRefundUnlock] = useState(DEFAULT_REFUND_UNLOCK);
+  // Seeded from the draft date, and follows it until the commissioner sets one
+  // themselves. Moving the draft back a fortnight would otherwise leave a refund
+  // date the server refuses, and the error would name a field they never touched.
+  const [refundUnlock, setRefundUnlock] = useState(() => defaultRefundUnlock(DEFAULT_DRAFT_AT));
+  const [refundTouched, setRefundTouched] = useState(false);
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [problems, setProblems] = useState<readonly string[]>([]);
 
   const clocks = mode === "FAST" ? FAST_CLOCKS : SLOW_CLOCKS;
+
+  function changeDraftAt(next: string): void {
+    setDraftAt(next);
+    if (!refundTouched) setRefundUnlock(defaultRefundUnlock(next));
+  }
 
   function switchMode(next: "FAST" | "SLOW"): void {
     setMode(next);
@@ -233,7 +283,7 @@ export function CreateLeagueForm() {
             type="datetime-local"
             required
             value={draftAt}
-            onChange={(e) => setDraftAt(e.target.value)}
+            onChange={(e) => changeDraftAt(e.target.value)}
             className="rounded border border-white/15 bg-transparent px-3 py-2"
           />
           <span className="mt-1 block text-xs text-white/40">
@@ -388,7 +438,10 @@ export function CreateLeagueForm() {
                 <input
                   type="datetime-local"
                   value={refundUnlock}
-                  onChange={(e) => setRefundUnlock(e.target.value)}
+                  onChange={(e) => {
+                    setRefundTouched(true);
+                    setRefundUnlock(e.target.value);
+                  }}
                   className="rounded border border-white/15 bg-transparent px-3 py-2"
                 />
                 <span className="mt-1 block text-xs text-white/40">
