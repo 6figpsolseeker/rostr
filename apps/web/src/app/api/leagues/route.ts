@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import {
   buildNflPprRules,
+  CanonicalEncodingError,
   NFL,
   NFL_DEFAULT_FEE_BPS,
   NFL_DEFAULT_PAYOUT,
@@ -191,6 +192,21 @@ export async function POST(request: Request): Promise<NextResponse> {
     if (error instanceof LeagueValidationError) {
       return NextResponse.json(
         { error: error.message, problems: error.problems },
+        { status: 400 },
+      );
+    }
+    // The encoder is the last word on what may be frozen, and it is stricter
+    // than validation: `canonicalize` rejects every non-integer, while
+    // `validateLeagueRules` integer-checks the scoring numbers and not much
+    // else. This is reachable from here today — `seasonYear`, `draftAt`,
+    // `tradeDeadlineWeek` and `pot.refundUnlockAt` all come off the request as
+    // numbers and none is integer-checked, so `{ "seasonYear": 2026.5 }` used
+    // to escape as an unhandled 500. It is a client error and gets the same
+    // 400-with-problems shape as any other bad rule set. Nothing is written:
+    // `createLeague` encodes before it opens its transaction.
+    if (error instanceof CanonicalEncodingError) {
+      return NextResponse.json(
+        { error: "Those rules cannot be frozen", problems: [error.message] },
         { status: 400 },
       );
     }

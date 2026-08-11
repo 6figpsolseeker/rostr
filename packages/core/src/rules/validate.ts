@@ -15,6 +15,7 @@ import {
   BASIS_POINTS_TOTAL,
   MAX_BUY_IN_BASE_UNITS,
   MAX_FEE_BPS,
+  MILLI_POINTS_PER_POINT,
   MIN_BUY_IN_BASE_UNITS,
 } from "./types.js";
 import type { LeagueRules, ScoringRule } from "./types.js";
@@ -48,16 +49,86 @@ function validateScoring(rules: LeagueRules, sport: SportDef, out: string[]): vo
       continue;
     }
 
-    if (rule.kind === "TIERED") validateTiers(rule, out);
+    if (rule.kind === "TIERED") {
+      validateTiers(rule, out);
+    } else if (!Number.isSafeInteger(rule.milliPointsPerUnit)) {
+      // Milli-points are the smallest unit there is: 0.04 points per passing
+      // yard is 40, not 0.04. A fractional multiplier is the float this whole
+      // representation exists to keep out, and `canonicalize` refuses to encode
+      // one — so without this check league creation fails at the encoder, after
+      // validation has already said the rules are fine.
+      out.push(
+        `scoring rule "${rule.statKey}" awards ${rule.milliPointsPerUnit} milli-points ` +
+          `per unit, which is not a whole number — scoring is integer milli-points ` +
+          `(1 point = ${String(MILLI_POINTS_PER_POINT)})`,
+      );
+    }
   }
 }
 
 function validateTiers(rule: Extract<ScoringRule, { kind: "TIERED" }>, out: string[]): void {
   const { statKey, tiers } = rule;
+  const before = out.length;
 
   if (tiers.length === 0) {
     out.push(`tiered rule "${statKey}" has no tiers`);
     return;
+  }
+
+  // Every number in a tier is frozen into the canonical document, which admits
+  // safe integers only. Swept before the structural checks below because those
+  // return on their first finding, and a fractional bound would usually surface
+  // there as a confusing "gap or overlap" instead of as itself.
+  for (const [i, tier] of tiers.entries()) {
+    for (const [field, value] of [
+      ["min", tier.min],
+      ["max", tier.max],
+      ["milliPoints", tier.milliPoints],
+    ] as const) {
+      if (value !== null && !Number.isSafeInteger(value)) {
+        out.push(`tiered rule "${statKey}" tier ${i} has a non-integer ${field}: ${value}`);
+      }
+    }
+  }
+
+  // Stop here if a bound is not a number we can reason about. Everything below
+  // does arithmetic on these — the floor comparison and the contiguity walk —
+  // and arithmetic on a garbage bound produces a confidently wrong instruction:
+  // a fractional max of 6.5 otherwise also reports "expected min 7.5, got 7",
+  // telling the creator to start a tier at 7.5, which is itself illegal.
+  if (out.length > before) return;
+
+  // The ladder has to cover what the feed can actually emit, and the engine
+  // throws — deliberately — on a value no tier covers. The floor is the half
+  // nothing else checks: the loop below seeds itself from `tiers[0].min`, so a
+  // ladder starting anywhere at all is contiguous with itself and hashes
+  // cleanly, and the first uncovered reading then kills scoring for the whole
+  // league-week, every cron pass, uncorrectably, because rules are frozen.
+  //
+  // Zero is the one value we can assert without knowing the stat: it is what
+  // "nothing happened" reads as, and a provider emits it as a fact rather than
+  // as an absence. **This says nothing about negatives.** A ladder over a stat
+  // whose feed can go below zero is still able to fall off its own bottom, and
+  // no check here can see that — `StatKeyDef` carries no domain. See the note in
+  // `applyTiered`.
+  //
+  // It also refuses a ladder over a stat whose feed reports "none" as an
+  // absence rather than a zero — longest-field-goal, say, which would naturally
+  // start at 20. That is a false positive, and it is the accepted cost: it is
+  // visible at creation and fixed by prepending one tier, while the case it
+  // catches is invisible until the first shutout and then uncorrectable.
+  //
+  // Taken from the lowest bound anywhere in the ladder rather than `tiers[0]`'s.
+  // On an out-of-order ladder those differ, and blaming `tiers[0]` would say "a
+  // value of 0 falls below every tier" about a ladder where a later tier covers
+  // it — true verdict, false reason. The ordering check below rejects it either
+  // way; this just declines to be wrong on the way there.
+  const floor = Math.min(...tiers.map((tier) => tier.min));
+  if (floor > 0) {
+    out.push(
+      `tiered rule "${statKey}" starts at ${floor}, so a value of 0 falls below every ` +
+        `tier and scoring throws rather than scoring it`,
+    );
   }
 
   let expectedMin: number | null = tiers[0]?.min ?? 0;
@@ -371,10 +442,45 @@ function validateLeagueSize(rules: LeagueRules, out: string[]): void {
 }
 
 /**
+ * Every numeric field a request can set, checked as a whole number.
+ *
+ * These four arrive from the creation route's body and reach the encoder with
+ * no other check. `canonicalize` refuses a non-integer, so a fractional one
+ * cannot be frozen — but it surfaces as an encoder error naming a JSON path
+ * rather than as a problem the creator can read, and the empty-array contract
+ * above would have been a lie for that rule set.
+ *
+ * **The `typeof` half is the one that matters.** The encoder checks that a
+ * *number* is a safe integer; it does not check that a number is a number. A
+ * `seasonYear` of `"2026"` — or of `[1, 2]` — validated clean and hashed
+ * clean, freezing a league permanently around a value of the wrong type. Rules
+ * are immutable, so there is no correcting that afterwards.
+ */
+function validateNumericFields(rules: LeagueRules, out: string[]): void {
+  const fields: readonly (readonly [string, unknown])[] = [
+    ["seasonYear", rules.seasonYear],
+    ["draft.scheduledAt", rules.draft.scheduledAt],
+    ["trades.deadlineWeek", rules.trades.deadlineWeek],
+    ...(rules.pot ? ([["pot.refundUnlockAt", rules.pot.refundUnlockAt]] as const) : []),
+  ];
+
+  for (const [name, value] of fields) {
+    if (typeof value !== "number" || !Number.isSafeInteger(value)) {
+      out.push(`${name} must be a whole number, got ${JSON.stringify(value)}`);
+    }
+  }
+}
+
+/**
  * Validate a rule set against its sport.
  *
- * @returns every problem found; an empty array means the rules are coherent and
- * safe to freeze.
+ * @returns every problem found. An empty array means **nothing checked here is
+ * wrong** — which is not the same as "safe to freeze", and the difference has
+ * bitten already. `canonicalize` remains the final authority on what can be
+ * encoded: it rejects any non-integer, and `createLeague` encodes before it
+ * opens its transaction, so a rule set that gets past here and fails there
+ * still cannot reach storage. It surfaces as a `CanonicalEncodingError`, which
+ * the creation route catches.
  */
 export function validateLeagueRules(rules: LeagueRules, sport: SportDef): string[] {
   const out: string[] = [];
@@ -386,6 +492,7 @@ export function validateLeagueRules(rules: LeagueRules, sport: SportDef): string
     return out;
   }
 
+  validateNumericFields(rules, out);
   validateScoring(rules, sport, out);
   validateRoster(rules, sport, out);
   validateLeagueSize(rules, out);

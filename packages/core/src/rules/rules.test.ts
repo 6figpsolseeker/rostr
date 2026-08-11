@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { CanonicalEncodingError } from "../canonical.js";
+import { indexScoringRules, scorePlayer, ScoringError } from "../scoring/engine.js";
 import { NFL } from "../sports/nfl.js";
 import { validateSport } from "../sports/types.js";
 import { encodeLeagueRules, hashLeagueRules, verifyLeagueRulesHash } from "./hash.js";
@@ -157,6 +159,184 @@ describe("validateLeagueRules", () => {
     expect(validateLeagueRules(bad, NFL)).toContainEqual(
       expect.stringContaining("unbounded tier"),
     );
+  });
+
+  // ---------------------------------------------------------------------------
+  // Scoring numbers: integers, and a ladder that covers what a feed can emit.
+  //
+  // **No shipped path can produce any of the rule sets below.** `NflPprOverrides`
+  // has no `scoring` field and `buildNflPprRules` hardcodes `NFL_PPR_SCORING`, so
+  // every one of them is built here by hand, out of a clone of the fixture. These
+  // checks are defence for a custom-scoring feature that does not exist yet, and
+  // for anything that assembles a `LeagueRules` directly rather than through the
+  // builder — which is every test in this repo, and `@rostr/db`'s `createLeague`,
+  // whose `rules` argument is just a value.
+  // ---------------------------------------------------------------------------
+
+  /** Replace the points-allowed ladder, by hand. Nothing in the app does this. */
+  const withTiers = (tiers: { min: number; max: number | null; milliPoints: number }[]) =>
+    mutate((d) => {
+      const rule = d.scoring.find((r) => r.statKey === "def_pts_allowed");
+      if (rule?.kind === "TIERED") (rule as { tiers: unknown }).tiers = tiers;
+    });
+
+  it("rejects a fractional milli-points-per-unit", () => {
+    // 0.04 points per passing yard is 40 milli-points, not 0.04. Written the
+    // wrong way it is a float in the frozen rules, which is what milli-points
+    // exist to prevent — and `canonicalize` refuses to encode it, so before this
+    // check league creation failed at the encoder with validation having just
+    // said the rules were fine.
+    const bad = mutate((d) => {
+      const rule = d.scoring.find((r) => r.statKey === "pass_yd");
+      if (rule?.kind === "LINEAR")
+        (rule as { milliPointsPerUnit: number }).milliPointsPerUnit = 0.04;
+    });
+    expect(validateLeagueRules(bad, NFL)).toContainEqual(
+      expect.stringContaining("not a whole number"),
+    );
+    expect(() => encodeLeagueRules(bad)).toThrow(CanonicalEncodingError);
+  });
+
+  it("rejects a fractional tier award", () => {
+    const bad = withTiers([
+      { min: 0, max: 0, milliPoints: 10.5 },
+      { min: 1, max: null, milliPoints: 0 },
+    ]);
+    expect(validateLeagueRules(bad, NFL)).toContainEqual(
+      expect.stringContaining("non-integer milliPoints"),
+    );
+  });
+
+  it("rejects a fractional tier bound as itself, not as a gap", () => {
+    // The structural walk does arithmetic on the bounds, so left to run it
+    // would also report "expected min 7.5, got 7" — advice to start a tier at
+    // 7.5, which is itself illegal. The name of this test is the assertion:
+    // the creator is told the one true thing, not that plus a confident lie.
+    const bad = withTiers([
+      { min: 0, max: 6.5, milliPoints: 7000 },
+      { min: 7, max: null, milliPoints: 0 },
+    ]);
+    const problems = validateLeagueRules(bad, NFL);
+
+    expect(problems).toContainEqual(expect.stringContaining("non-integer max"));
+    expect(problems).not.toContainEqual(expect.stringContaining("gap or overlap"));
+  });
+
+  it("blames the ladder's real floor, not whichever tier is written first", () => {
+    // An out-of-order ladder is rejected either way, by the ordering check. But
+    // reporting "a value of 0 falls below every tier" about a ladder whose
+    // second tier covers 0 would be a true verdict reached by a false claim.
+    const bad = withTiers([
+      { min: 7, max: null, milliPoints: 0 },
+      { min: 0, max: 6, milliPoints: 7000 },
+    ]);
+    const problems = validateLeagueRules(bad, NFL);
+
+    expect(problems).not.toContainEqual(
+      expect.stringContaining("a value of 0 falls below every tier"),
+    );
+    expect(problems.length).toBeGreaterThan(0);
+  });
+
+  it("rejects a ladder whose floor sits above zero", () => {
+    // The one with teeth. A ladder starting at 1 is contiguous with itself and
+    // hashes cleanly, because the contiguity loop seeds `expectedMin` from
+    // `tiers[0].min` — so nothing anywhere constrained the floor. A shutout is
+    // then a value no tier covers, and a shutout is real: the Tank01 adapter
+    // emits `def_pts_allowed: 0` deliberately, as a fact rather than an absence.
+    const bad = withTiers([
+      { min: 1, max: 6, milliPoints: 7000 },
+      { min: 7, max: null, milliPoints: 0 },
+    ]);
+
+    expect(validateLeagueRules(bad, NFL)).toContainEqual(
+      expect.stringContaining("a value of 0 falls below every tier"),
+    );
+
+    // And this is what such a league would have done on the first shutout of the
+    // season, having been frozen and therefore being uncorrectable: not a wrong
+    // score, a throw — which takes down every other matchup in that league-week
+    // too, since `resolveWeek` scores all teams before it resolves any.
+    expect(() =>
+      scorePlayer([{ statKey: "def_pts_allowed", value: 0 }], indexScoringRules(bad.scoring)),
+    ).toThrow(ScoringError);
+  });
+
+  it("accepts a ladder whose floor is negative", () => {
+    // The rule is "covers zero", not "starts at zero". A tiered stat may
+    // legitimately run negative — nothing in `@rostr/core` knows what a stat can
+    // emit, and `StatKeyDef` carries no domain — so a floor below zero is not
+    // ours to refuse. It is also not ours to vouch for: this ladder still throws
+    // at -21, and no check in this file can see that.
+    const ok = withTiers([
+      { min: -20, max: 0, milliPoints: 10_000 },
+      { min: 1, max: null, milliPoints: 0 },
+    ]);
+    expect(validateLeagueRules(ok, NFL)).toEqual([]);
+  });
+
+  /**
+   * The four numeric fields a request can actually set.
+   *
+   * Unlike the scoring cases above, these **are** reachable — `seasonYear`,
+   * `draftAt`, `tradeDeadlineWeek` and the pot's `refundUnlockAt` all come
+   * straight from `POST /api/leagues`. Before this they reached the encoder
+   * unchecked: a fractional one became an unhandled 500 rather than a problem
+   * the creator could read, and a *wrongly typed* one was not caught at all.
+   */
+  describe("numeric fields from the request", () => {
+    it("rejects a fractional value with a named problem", () => {
+      const bad = mutate((d) => {
+        (d as { seasonYear: number }).seasonYear = 2026.5;
+      });
+      expect(validateLeagueRules(bad, NFL)).toContainEqual(
+        expect.stringContaining("seasonYear must be a whole number"),
+      );
+    });
+
+    it("rejects a value of the wrong type, which the encoder does not", () => {
+      // The one that mattered. `canonicalize` checks that a *number* is a safe
+      // integer; it does not check that a number is a number. A `seasonYear` of
+      // "2026" — or of [1, 2] — validated clean and hashed clean, freezing a
+      // league permanently around a value of the wrong type, with no way back.
+      for (const wrong of ["2026", [1, 2], null] as const) {
+        const bad = mutate((d) => {
+          (d as { seasonYear: unknown }).seasonYear = wrong;
+        });
+
+        expect(validateLeagueRules(bad, NFL)).toContainEqual(
+          expect.stringContaining("seasonYear must be a whole number"),
+        );
+      }
+    });
+
+    it("covers the draft, trade and pot fields too", () => {
+      for (const [path, mutation] of [
+        [
+          "draft.scheduledAt",
+          (d: LeagueRules) => ((d.draft as { scheduledAt: number }).scheduledAt = 1.5),
+        ],
+        [
+          "trades.deadlineWeek",
+          (d: LeagueRules) => ((d.trades as { deadlineWeek: number }).deadlineWeek = 11.5),
+        ],
+        [
+          "pot.refundUnlockAt",
+          (d: LeagueRules) => ((d.pot as { refundUnlockAt: number }).refundUnlockAt = 1.5),
+        ],
+      ] as const) {
+        expect(validateLeagueRules(mutate(mutation), NFL)).toContainEqual(
+          expect.stringContaining(`${path} must be a whole number`),
+        );
+      }
+    });
+
+    it("says nothing about a free league's absent pot", () => {
+      const free = mutate((d) => {
+        (d as { pot: unknown }).pot = null;
+      });
+      expect(validateLeagueRules(free, NFL)).toEqual([]);
+    });
   });
 
   it("rejects a pick clock below 90 seconds", () => {
