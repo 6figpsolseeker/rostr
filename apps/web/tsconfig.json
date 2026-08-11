@@ -15,7 +15,18 @@
     "incremental": true,
     "skipLibCheck": true,
     "plugins": [{ "name": "next" }],
-    "paths": { "@/*": ["./src/*"] }
+    "paths": {
+      "@/*": ["./src/*"],
+
+      // Test fixtures, and deliberately NOT an entry in `@rostr/db`'s exports
+      // map: adding one there would advertise PGlite and fake leagues as public
+      // API of a package the production app depends on. The program suite
+      // reaches it the same way, through an alias in its vitest config, so this
+      // mirrors `vitest.config.ts` rather than inventing a second arrangement.
+      // Type-level only — a production import would resolve here and then fail
+      // at runtime, which is the direction that fails loudly.
+      "@rostr/db/testing": ["../../packages/db/src/testing.ts"]
+    }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
   "exclude": ["node_modules"]
