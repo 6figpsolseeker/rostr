@@ -381,15 +381,21 @@ export async function readMembership(
 export type DepositVerdict =
   | { readonly ok: true; readonly deposited: bigint }
   | { readonly ok: false; readonly reason: "NOT_JOINED" }
-  | { readonly ok: false; readonly reason: "ALREADY_DEPOSITED" };
+  | { readonly ok: false; readonly reason: "NOT_DEPOSITED" }
+  | { readonly ok: false; readonly reason: "ALREADY_REFUNDED" };
 
 /**
- * Confirm a member has staked into a league on-chain.
+ * Confirm a member's stake is **in the vault right now**.
  *
- * Reads the `Membership` account back: it must exist (the on-chain join
- * happened) and `deposited` must be greater than zero. The server does not take
- * the client's word for a stake — the vault balance is the source of truth, and
- * the program enforces that the transferred amount equals `league.buy_in`.
+ * ## `deposited > 0` is not "currently staked"
+ *
+ * `refund_stake` sets `refunded = true` and **leaves `deposited` alone** — its
+ * own comment calls it "the historical record". So a member who staked and then
+ * withdrew after the timelock still reads `deposited > 0`, and a check on that
+ * field alone records a live deposit for money that has left the vault.
+ *
+ * Both conditions are load-bearing and neither implies the other. See
+ * `membership.test.ts` for the four reachable states written out.
  */
 export async function verifyOnChainDeposit(
   program: Program<RostrEscrow>,
@@ -398,23 +404,45 @@ export async function verifyOnChainDeposit(
 ): Promise<DepositVerdict> {
   const membership = await readMembership(program, leagueId, member);
   if (!membership) return { ok: false, reason: "NOT_JOINED" };
-  if (membership.deposited === 0n) return { ok: false, reason: "ALREADY_DEPOSITED" };
+
+  // `NOT_DEPOSITED`, not `ALREADY_DEPOSITED`. Zero means the money is not in,
+  // and telling somebody their buy-in is paid when it is not is the one thing a
+  // money screen must never do.
+  if (membership.deposited === 0n) return { ok: false, reason: "NOT_DEPOSITED" };
+  if (membership.refunded) return { ok: false, reason: "ALREADY_REFUNDED" };
 
   return { ok: true, deposited: membership.deposited };
 }
 
 export type RefundVerdict =
-  | { readonly ok: true; readonly deposited: bigint }
+  | { readonly ok: true; readonly refunded: bigint }
   | { readonly ok: false; readonly reason: "NOT_JOINED" }
   | { readonly ok: false; readonly reason: "NOTHING_DEPOSITED" }
-  | { readonly ok: false; readonly reason: "ALREADY_REFUNDED" };
+  | { readonly ok: false; readonly reason: "NOT_REFUNDED" };
 
 /**
- * Confirm a member has withdrawn their stake on-chain.
+ * Confirm a member **has** withdrawn their stake on-chain.
  *
- * The refund instruction is unconditional after the timelock, so the only
- * server-side facts worth recording are that the member had staked and that the
- * refund completed. Reads the `Membership` account back and checks `refunded`.
+ * ## This was inverted, and the inversion is worth spelling out
+ *
+ * `refund_stake` sets `refunded = true` and keeps `deposited` as history, so the
+ * state a genuine refund leaves behind is `deposited > 0 && refunded`. That was
+ * exactly the state this function rejected, as `ALREADY_REFUNDED` — so **no real
+ * refund could ever be recorded** — while it answered `ok` for a member who had
+ * staked and *not* refunded, whose money was still in the vault.
+ *
+ * Composed with a `walletAddress` taken from the request body, that second half
+ * let any signed-in account mark any staked member as refunded. Both halves are
+ * fixed; the wallet is now proved to belong to the session.
+ *
+ * The on-chain guarantee was never in question — no Rust was involved, and
+ * `refund_stake` still needs the member's own signature. This is the *accounting*
+ * disagreeing with the chain, which is its own kind of serious in a league where
+ * the record is what people read.
+ *
+ * `refunded` rather than `deposited` on the success case, because the number
+ * being reported is now an amount that came *back out*, and a caller storing it
+ * under the wrong name is how this class of bug starts.
  */
 export async function verifyOnChainRefund(
   program: Program<RostrEscrow>,
@@ -424,7 +452,7 @@ export async function verifyOnChainRefund(
   const membership = await readMembership(program, leagueId, member);
   if (!membership) return { ok: false, reason: "NOT_JOINED" };
   if (membership.deposited === 0n) return { ok: false, reason: "NOTHING_DEPOSITED" };
-  if (membership.refunded) return { ok: false, reason: "ALREADY_REFUNDED" };
+  if (!membership.refunded) return { ok: false, reason: "NOT_REFUNDED" };
 
-  return { ok: true, deposited: membership.deposited };
+  return { ok: true, refunded: membership.deposited };
 }

@@ -218,6 +218,7 @@ export {
   getOnChainRefund,
   JoinError,
   joinLeague,
+  memberWallet,
   recordOnChainDeposit,
   recordOnChainRefund,
   removeBot,

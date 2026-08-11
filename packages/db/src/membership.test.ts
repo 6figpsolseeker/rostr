@@ -18,6 +18,7 @@ import {
   getOnChainRefund,
   JoinError,
   joinLeague,
+  memberWallet,
   recordOnChainDeposit,
   recordOnChainRefund,
   removeBot,
@@ -677,7 +678,14 @@ describe("on-chain stake records (issue #27)", () => {
 
     expect(await getOnChainDeposit(fx.client, fx.leagueId, m.address)).toBeNull();
 
-    await recordOnChainDeposit(fx.client, fx.leagueId, m.address, "50000000", "4".repeat(88), "localnet");
+    await recordOnChainDeposit(
+      fx.client,
+      fx.leagueId,
+      m.address,
+      "50000000",
+      "4".repeat(88),
+      "localnet",
+    );
 
     const recorded = await getOnChainDeposit(fx.client, fx.leagueId, m.address);
     expect(recorded).not.toBeNull();
@@ -690,7 +698,14 @@ describe("on-chain stake records (issue #27)", () => {
     const fx = await setup();
     const m = await member(fx, 1, "a@example.com");
 
-    await recordOnChainDeposit(fx.client, fx.leagueId, m.address, "50000000", "4".repeat(88), "localnet");
+    await recordOnChainDeposit(
+      fx.client,
+      fx.leagueId,
+      m.address,
+      "50000000",
+      "4".repeat(88),
+      "localnet",
+    );
     await recordOnChainRefund(fx.client, fx.leagueId, m.address, "7".repeat(88), "localnet");
 
     const recorded = await getOnChainRefund(fx.client, fx.leagueId, m.address);
@@ -705,8 +720,22 @@ describe("on-chain stake records (issue #27)", () => {
     const fx = await setup();
     const m = await member(fx, 1, "a@example.com");
 
-    await recordOnChainDeposit(fx.client, fx.leagueId, m.address, "50000000", "4".repeat(88), "localnet");
-    await recordOnChainDeposit(fx.client, fx.leagueId, m.address, "50000000", "9".repeat(88), "devnet");
+    await recordOnChainDeposit(
+      fx.client,
+      fx.leagueId,
+      m.address,
+      "50000000",
+      "4".repeat(88),
+      "localnet",
+    );
+    await recordOnChainDeposit(
+      fx.client,
+      fx.leagueId,
+      m.address,
+      "50000000",
+      "9".repeat(88),
+      "devnet",
+    );
 
     const [rows] = await fx.client.query<{ n: number }>(
       "SELECT count(*)::int AS n FROM league_onchain_stakes WHERE league_id = $1 AND wallet_address = $2",
@@ -716,5 +745,65 @@ describe("on-chain stake records (issue #27)", () => {
     const recorded = await getOnChainDeposit(fx.client, fx.leagueId, m.address);
     expect(recorded?.depositedSignature).toBe("9".repeat(88));
     expect(recorded?.depositedCluster).toBe("devnet");
+  });
+});
+
+describe("memberWallet", () => {
+  /**
+   * The ownership half of the deposit and refund routes.
+   *
+   * They took `walletAddress` from the request body with no check that it
+   * belonged to the caller. Composed with a refund verifier that was inverted,
+   * that let any signed-in account mark any staked member as refunded — so this
+   * is not a hardening nicety, it is one of the two halves of that bug.
+   *
+   * Deriving beats validating: there is exactly one wallet a member consented
+   * with, `league_memberships` already records it beside their signature over
+   * the rules hash, and a caller with no way to *name* a wallet has no way to
+   * name somebody else's.
+   */
+  it("returns the wallet a member joined with", async () => {
+    const fx = await setup();
+    const m = await member(fx, 1, "a@example.com");
+
+    await joinLeague(fx.client, {
+      leagueId: fx.leagueId,
+      userId: m.userId,
+      walletAddress: m.address,
+      signature: signJoin(fx, m.address, m.secret),
+      teamName: "A",
+    });
+
+    expect(await memberWallet(fx.client, fx.leagueId, m.userId)).toBe(m.address);
+  });
+
+  it("returns null for a signed-in stranger", async () => {
+    // Having an account is not membership. This is what turns into a 403
+    // instead of the route happily operating on whatever address it was handed.
+    const fx = await setup();
+    const outsider = await member(fx, 2, "b@example.com");
+
+    expect(await memberWallet(fx.client, fx.leagueId, outsider.userId)).toBeNull();
+  });
+
+  it("never returns one member's wallet for another member", async () => {
+    // The attack in one line: two real members of the same league, and asking
+    // for one must not answer with the other's, whatever the caller sends.
+    const fx = await setup();
+    const a = await member(fx, 1, "a@example.com");
+    const b = await member(fx, 2, "b@example.com");
+
+    for (const m of [a, b]) {
+      await joinLeague(fx.client, {
+        leagueId: fx.leagueId,
+        userId: m.userId,
+        walletAddress: m.address,
+        signature: signJoin(fx, m.address, m.secret),
+        teamName: m.address.slice(0, 6),
+      });
+    }
+
+    expect(await memberWallet(fx.client, fx.leagueId, a.userId)).toBe(a.address);
+    expect(await memberWallet(fx.client, fx.leagueId, b.userId)).toBe(b.address);
   });
 });

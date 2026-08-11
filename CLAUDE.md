@@ -919,6 +919,53 @@ stayed FORMING forever — still accepting members, and invisible to every job t
 live leagues. The enum is FORMING / DRAFTING / IN_SEASON / PLAYOFFS / SETTLED / DISSOLVED;
 an invented value is not a no-op, Postgres fails the cast and the query errors.
 
+### Deposit and refund: `deposited > 0` is not "currently staked"
+
+`packages/escrow/src/verify.ts`, the two money routes, migration `0023`.
+
+**`refund_stake` sets `refunded = true` and leaves `deposited` alone.** Its own comment
+calls it "the historical record". So the reachable `Membership` states are:
+
+| `deposited` | `refunded` | means                                      |
+| ----------- | ---------- | ------------------------------------------ |
+| 0           | false      | joined, has not staked                     |
+| > 0         | false      | staked, money is in the vault              |
+| > 0         | **true**   | staked and withdrawn after the timelock    |
+| 0           | true       | unreachable — refund requires `amount > 0` |
+
+Reading `deposited > 0` as "currently staked" is the trap, and **both** verifiers fell
+into it in opposite directions:
+
+- `verifyOnChainRefund` was **inverted**. A genuine refund lands in row three, which it
+  rejected as `ALREADY_REFUNDED` — so **no real refund could ever be recorded** — while it
+  answered `ok` for row two, a member whose money was still in the vault.
+- `verifyOnChainDeposit` never consulted `refunded` at all, so row three read as a live
+  deposit; and its failure code for row one was `ALREADY_DEPOSITED`, which told a member
+  who had not paid that they had.
+
+**Composed with `walletAddress` taken from the request body**, the refund inversion let any
+signed-in account mark any staked member as refunded. The on-chain guarantee was never in
+question — no Rust was involved and `refund_stake` still needs the member's own signature.
+This was the _accounting_ disagreeing with the chain, which in a league where the record is
+what people read is its own kind of serious.
+
+**The wallet is derived, never accepted** — `memberWallet` reads this user's own
+`league_memberships` row, the one carrying their signature over the rules hash. Deriving
+beats validating a supplied address: a caller with no way to _name_ a wallet has no way to
+name somebody else's.
+
+**The whole path is inert until on-chain join ships, structurally.** The program's
+`deposit` requires a `Membership` account and only `join_league` creates one, so
+`verifyOnChainDeposit` answers `NOT_JOINED` for everyone until the app invokes it. That is
+a property of the program, not a flag somebody has to remember to unset — which is the
+right way for "pot leagues cannot take money yet" to be true.
+
+**The original program test only exercised `NOT_JOINED`** — the one refund path that was
+already correct — which is how an inverted verifier shipped green. `membership.test.ts`
+now pins all four states as units that run with no toolchain, and `stake.test.ts` proves a
+real refund on a real validator produces the state those units describe, so the two cannot
+agree with each other while both being wrong about the program.
+
 ### One declaration of which chain, and everything checked against it
 
 `packages/escrow/src/cluster.ts`, `apps/web/src/lib/cluster.ts`.
