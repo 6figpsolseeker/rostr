@@ -46,20 +46,11 @@ import {
 import { deriveOrderSeed } from "@rostr/core";
 import type { DraftablePlayer, DraftPick, DraftState, RosterShape } from "@rostr/core";
 import type { SqlClient } from "./client.js";
+import { isUniqueViolation } from "./pg-errors.js";
 import type { RandomnessBeacon } from "./randomness.js";
 import { withTransaction } from "./transaction.js";
 import { seedWaiverPriority } from "./waivers.js";
 import { generateSeasonSchedule } from "./week.js";
-
-/** Postgres `unique_violation`. */
-function isUniqueViolation(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    (error as { code?: unknown }).code === "23505"
-  );
-}
 
 export class DraftPersistenceError extends Error {
   constructor(

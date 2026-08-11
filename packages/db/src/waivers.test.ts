@@ -533,3 +533,214 @@ describe("availablePlayers", () => {
     expect(available.filter((p) => p.availability === "FREE_AGENT")).toHaveLength(3);
   });
 });
+
+// ---------------------------------------------------------------------------
+// One owner per league
+// ---------------------------------------------------------------------------
+
+/**
+ * Migration `0022`, correcting the comment `0005` shipped.
+ *
+ * **These tests do not attempt to reproduce the race.** PGlite is a single
+ * connection, so the interleaving that produced the bug cannot happen here and a
+ * test claiming to show it would be theatre. What is testable — and what the
+ * application code now leans on — is that the constraint exists and refuses, so
+ * that is asserted directly, at the table, with no application code in the way.
+ */
+describe("one owner per league", () => {
+  /** Insert a roster row with no application code in between. */
+  function put(fx: Fixture, teamId: string, playerId: string): Promise<unknown[]> {
+    return fx.client.query(
+      `INSERT INTO roster_entries (team_id, player_id, acquired_via, acquired_at)
+       VALUES ($1, $2, 'FREE_AGENT', $3)`,
+      [teamId, playerId, MONDAY.toISOString()],
+    );
+  }
+
+  it("refuses the same player active on two teams in one league", async () => {
+    // The finding. `0005` claimed this and enforced only the per-team case, so
+    // two managers could hold one player and both start him in the same week.
+    const fx = await setup();
+
+    await expect(put(fx, fx.teams[1]!, fx.players.get("held")!)).rejects.toMatchObject({
+      code: "23505",
+    });
+
+    const owners = await fx.client.query<{ team_id: string }>(
+      `SELECT team_id FROM roster_entries
+        WHERE league_id = $1 AND player_id = $2 AND released_at IS NULL`,
+      [fx.leagueId, fx.players.get("held")!],
+    );
+    expect(owners).toHaveLength(1);
+  });
+
+  it("still refuses the same player twice on one team", async () => {
+    // The guarantee the dropped `roster_entries_one_owner` index did provide.
+    // (league, player) subsumes (team, player) because a team is in one league,
+    // but subsumption is worth a test rather than an argument.
+    const fx = await setup();
+
+    await expect(put(fx, fx.teams[0]!, fx.players.get("held")!)).rejects.toMatchObject({
+      code: "23505",
+    });
+  });
+
+  it("does not reach across leagues", async () => {
+    // League-scoped, not global. Two leagues drafting the same real footballer
+    // is the normal case, and a constraint that stopped it would be a worse bug
+    // than the one it fixed.
+    const fx = await setup();
+
+    const other = await createLeague(fx.client, NFL, {
+      name: "Other League",
+      commissionerId: (await createUser(fx.client, "other@example.com", "Other")).id,
+      rules: fx.rules,
+    });
+    const otherTeam = await addTestTeam(fx.client, other.id, "Elsewhere");
+
+    await expect(put(fx, otherTeam.teamId, fx.players.get("held")!)).resolves.toBeDefined();
+  });
+
+  it("lets a released player be picked up again", async () => {
+    // The index is partial on `released_at IS NULL`, so history does not block a
+    // re-add — which matters because this table is append-only and a player can
+    // legitimately be dropped and re-signed several times in a season.
+    const fx = await setup();
+    await dropPlayer(fx.client, fx.leagueId, fx.teams[0]!, fx.players.get("fresh")!, MONDAY);
+
+    await expect(put(fx, fx.teams[2]!, fx.players.get("fresh")!)).resolves.toBeDefined();
+
+    // Joined through `teams` rather than reading `roster_entries.league_id`, so
+    // this one assertion holds on the schema either side of migration `0022` —
+    // it is a control, not a demonstration.
+    const rows = await fx.client.query<{ released_at: string | null }>(
+      `SELECT r.released_at FROM roster_entries r
+         JOIN teams t ON t.id = r.team_id
+        WHERE t.league_id = $1 AND r.player_id = $2`,
+      [fx.leagueId, fx.players.get("fresh")!],
+    );
+    expect(rows).toHaveLength(2);
+    expect(rows.filter((r) => r.released_at === null)).toHaveLength(1);
+  });
+
+  it("derives league_id from the team rather than trusting the writer", async () => {
+    // The denormalisation only works if it cannot disagree with `teams`. A
+    // writer's value is overwritten, not checked, so there is no second opinion
+    // to reconcile — and no writer has to remember the column.
+    const fx = await setup();
+    const other = await createLeague(fx.client, NFL, {
+      name: "Wrong League",
+      commissionerId: (await createUser(fx.client, "wrong@example.com", "Wrong")).id,
+      rules: fx.rules,
+    });
+
+    await fx.client.query(
+      `INSERT INTO roster_entries (team_id, player_id, league_id, acquired_via, acquired_at)
+       VALUES ($1, $2, $3, 'FREE_AGENT', $4)`,
+      [fx.teams[1]!, fx.players.get("target")!, other.id, MONDAY.toISOString()],
+    );
+
+    const [row] = await fx.client.query<{ league_id: string }>(
+      "SELECT league_id FROM roster_entries WHERE player_id = $1",
+      [fx.players.get("target")!],
+    );
+    expect(row?.league_id).toBe(fx.leagueId);
+  });
+
+  it("fails a claim for a player somebody already holds, rather than wedging", async () => {
+    // This state arises routinely, and that is the whole point of the test.
+    // `clears_at` is a processing instant and the cron is hourly, so a player who
+    // has cleared can be plainly added while a claim for him is still outstanding
+    // — no race required, just an ordinary Wednesday.
+    //
+    // `resolveWaiverClaims` does not consult other teams' rosters, so it would
+    // award that claim; the insert then violates the one-owner index; and with no
+    // catch the run rolls back with the claim still PENDING and the roster
+    // unchanged — so **every later run fails identically, forever**, taking every
+    // unrelated claim in the league with it. Turning a silent corruption into a
+    // permanent league-wide outage is not a fix.
+    const fx = await setup();
+    const playerId = fx.players.get("held")!;
+    await dropPlayer(fx.client, fx.leagueId, fx.teams[0]!, playerId, MONDAY);
+    await submitClaim(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: fx.teams[3]!,
+      addPlayerId: playerId,
+      now: MONDAY,
+    });
+
+    // Somebody else ends up holding him before the run.
+    await put(fx, fx.teams[2]!, playerId);
+
+    const wednesday = new Date(MONDAY.getTime() + 2 * DAY);
+    const run = await processWaivers(fx.client, fx.leagueId, wednesday);
+
+    expect(run.awarded).toBe(0);
+    expect(run.failed).toBe(1);
+
+    const owners = await fx.client.query<{ team_id: string }>(
+      `SELECT team_id FROM roster_entries
+        WHERE league_id = $1 AND player_id = $2 AND released_at IS NULL`,
+      [fx.leagueId, playerId],
+    );
+    expect(owners.map((row) => row.team_id)).toEqual([fx.teams[2]]);
+
+    // Resolved, not left for the next run to trip over again.
+    const [claim] = await fx.client.query<{ state: string }>(
+      "SELECT state FROM waiver_claims WHERE league_id = $1 AND add_player_id = $2",
+      [fx.leagueId, playerId],
+    );
+    expect(claim?.state).toBe("FAILED");
+  });
+
+  it("does not take unrelated claims down with a stale one", async () => {
+    // The cost of the old behaviour was never one claim. A rollback discarded
+    // the whole resolution, so a manager whose claim had nothing to do with the
+    // contested player also got nothing, every hour, indefinitely.
+    const fx = await setup();
+    const contested = fx.players.get("held")!;
+    const unrelated = fx.players.get("target")!;
+
+    // Both have to reach waivers to be claimable at all — a free agent is added,
+    // not claimed. Held since well before the drop, so neither takes the
+    // short-tenure route straight back to free agency.
+    await fx.client.query(
+      `INSERT INTO roster_entries (team_id, player_id, acquired_via, acquired_at)
+       VALUES ($1, $2, 'DRAFT', $3)`,
+      [fx.teams[1], unrelated, new Date(MONDAY.getTime() - 7 * DAY).toISOString()],
+    );
+
+    await dropPlayer(fx.client, fx.leagueId, fx.teams[0]!, contested, MONDAY);
+    await dropPlayer(fx.client, fx.leagueId, fx.teams[1]!, unrelated, MONDAY);
+
+    await submitClaim(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: fx.teams[3]!,
+      addPlayerId: contested,
+      now: MONDAY,
+    });
+    await submitClaim(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: fx.teams[1]!,
+      addPlayerId: unrelated,
+      now: MONDAY,
+    });
+
+    await put(fx, fx.teams[2]!, contested);
+
+    const run = await processWaivers(
+      fx.client,
+      fx.leagueId,
+      new Date(MONDAY.getTime() + 2 * DAY),
+    );
+
+    expect(run.awarded).toBe(1);
+
+    const [owner] = await fx.client.query<{ team_id: string }>(
+      `SELECT team_id FROM roster_entries
+        WHERE league_id = $1 AND player_id = $2 AND released_at IS NULL`,
+      [fx.leagueId, unrelated],
+    );
+    expect(owner?.team_id).toBe(fx.teams[1]);
+  });
+});

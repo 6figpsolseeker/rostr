@@ -95,7 +95,8 @@ silently change — which is precisely the thing immutability is meant to preven
 ```
 teams             id, league_id, owner_id (nullable), is_bot, name,
                   draft_position, waiver_priority, strikes, abandoned_at
-roster_entries    id, team_id, player_id, acquired_via, acquired_at, released_at
+roster_entries    id, team_id, league_id, player_id, acquired_via, acquired_at,
+                  released_at
 lineups           id, team_id, week, slot_type_id, player_id, locked_at
 ```
 
@@ -105,6 +106,13 @@ an owner, not a separate entity. Keeps every join, standing, and matchup query u
 `roster_entries` is append-only with `released_at`, so full roster history is
 reconstructible for any week. `lineups` records what was actually started, never derived
 after the fact — a settled week must be provable.
+
+`roster_entries.league_id` is the team's own league, **derived by trigger and never
+supplied by a writer**. It is denormalised for one reason: a partial unique index cannot
+join, so the only way to enforce "one active owner per league" — the rule `0005` claimed
+and did not enforce — is to put the league on the row. The composite foreign key
+`(team_id, league_id) -> teams (id, league_id)` is what stops the copy drifting from the
+original. See migration `0022`.
 
 ### Play
 
