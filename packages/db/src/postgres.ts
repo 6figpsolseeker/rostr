@@ -29,7 +29,17 @@ export class PostgresClient implements SqlClient {
    *
    * Required for anything transactional: a pool hands each query to an
    * arbitrary connection, so a BEGIN and the work that follows could land on
-   * different ones. `withTransaction` must be given one of these, not the pool.
+   * different ones. It is also required for session state — a `SET`, or a
+   * session advisory lock — which is meaningless if the next statement is
+   * served by a different session.
+   *
+   * Within this package `withTransaction` and `migrate` each check one out
+   * rather than being given the pool, and they hold it for different spans —
+   * which is why `migrate` does not simply use `withTransaction`. A transaction
+   * lasts one callback; a migration run lasts a lock plus a transaction per
+   * file, and a lock is worthless on a connection that is handed back between
+   * statements. Routes that need a transaction across several calls check out
+   * directly too.
    */
   async connect(): Promise<{ client: SqlClient; release: () => void }> {
     const connection = await this.pool.connect();
@@ -92,6 +102,11 @@ export function createPostgresClient(connectionString: string): PostgresClient {
       // usefully, and while it runs it holds a pooled connection and any locks
       // it took. Bounding it server-side is the only thing that helps once a
       // query is already stuck.
+      //
+      // Migrations are the exception and lift it per transaction (`migrate.ts`),
+      // because `db:migrate` runs on this same pool: a `CREATE INDEX` on a
+      // populated table runs for minutes and would otherwise be cancelled here,
+      // leaving a migration that can never succeed.
       statement_timeout: 30_000,
 
       // The failure this actually guards against: a transaction that opened,

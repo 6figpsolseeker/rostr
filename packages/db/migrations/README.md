@@ -76,6 +76,33 @@ SELECT version, name FROM schema_migrations ORDER BY version;
 against `ls packages/db/migrations`. Same version, different `name` is a
 collision. Then follow case 2 or 3 above.
 
+### "Another migration run holds the lock on this database"
+
+Two runs at once — a deploy and a hand-run, two machines, or a re-triggered CI
+job. The runner takes a **session advisory lock** for the whole of its run and a
+second run finds it taken and stops immediately rather than waiting.
+
+Nothing is wrong and nothing is half-done. Wait for the other run and re-run:
+applied migrations are skipped, so the second run costs one round trip if the
+first one did everything.
+
+It refuses rather than queueing on purpose. Waiting is how a deploy hangs, and
+under the pool's `statement_timeout` the wait would be cut off anyway by an error
+naming the timeout instead of the real cause.
+
+**The lock only works on a session-mode connection.** `DATABASE_URL` must be the
+Supabase _session_ pooler, as `.env.example` says. The transaction pooler returns
+your connection to its own pool between transactions, so a session lock guards
+nothing and is stranded on a backend you no longer hold.
+
+The failure is in two parts and only the second is visible. The first run appears
+to succeed, unguarded. The unlock then lands on a different backend, where
+`pg_advisory_unlock` returns false with a WARNING rather than an error — so the
+lock is never released. **Every later run refuses, blaming a concurrent run that
+does not exist**, and the advice in the section above ("wait for it and re-run")
+never comes true. If migrations start refusing on a database that has no other
+deploy touching it, check the port before anything else.
+
 ## `db:status` and `db:migrate` can disagree
 
 `db:status` lists a migration as `PENDING` if its version is absent from
@@ -96,3 +123,15 @@ row locks, `FOR UPDATE`, `ON CONFLICT` racing an insert — cannot be reproduced
 the test suite. Two real bugs have reached production code through that gap. If a
 migration's correctness rests on locking behaviour, say so in its header and
 verify it against a real Postgres before relying on it.
+
+The **runner's** own connection behaviour is the one thing that gap has been
+closed for, in `migrate.pool.test.ts`. It drives the real `pg-pool` with a stub
+`Client` (`pg` accepts one through `options.Client`), so which connection each
+statement lands on is decided by real pool code with no database underneath. That
+technique covers dispatch and ordering only — it says nothing about whether a
+transaction actually commits, which still needs PGlite or a real server.
+
+Two things the runner does are therefore still unverified here and want a real
+Postgres before anyone leans on them: that `SET LOCAL statement_timeout = 0` lets
+a long `CREATE INDEX` run to completion, and that two separate processes racing
+for the advisory lock resolve the way one process asking twice does.
