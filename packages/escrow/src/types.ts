@@ -688,6 +688,11 @@ export type RostrEscrow = {
       "code": 6022,
       "name": "mathOverflow",
       "msg": "Arithmetic overflow"
+    },
+    {
+      "code": 6023,
+      "name": "refundUnlockTooFar",
+      "msg": "Refund unlock time is too far in the future"
     }
   ],
   "types": [

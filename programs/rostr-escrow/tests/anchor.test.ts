@@ -29,7 +29,7 @@ import {
   NFL_DEFAULT_FEE_BPS,
   NFL_DEFAULT_PAYOUT,
 } from "@rostr/core";
-import { createPotMint, getProgram, getProvider } from "./helpers";
+import { createPotMint, getProgram, getProvider, refundUnlockFor } from "./helpers";
 
 /**
  * Create → anchor → join, across both halves at once.
@@ -59,7 +59,7 @@ const DRAFT = {
   type: "SNAKE",
   mode: "SLOW",
   pickSeconds: 14_400,
-  scheduledAt: 1_756_400_000,
+  scheduledAt: Math.floor(Date.now() / 1000) + 30 * 24 * 3600,
 } as const;
 
 beforeAll(async () => {
@@ -91,7 +91,7 @@ async function createPotLeague(name: string) {
       // program that had quietly become a fixed price.
       buyInBaseUnits: "23500000",
       payout: NFL_DEFAULT_PAYOUT,
-      refundUnlockAt: Math.floor(Date.now() / 1000) + 365 * 24 * 3600,
+      refundUnlockAt: refundUnlockFor(DRAFT.scheduledAt),
       feeBps: NFL_DEFAULT_FEE_BPS,
       feeRecipient: anchor.web3.Keypair.generate().publicKey.toBase58(),
     },
@@ -275,7 +275,10 @@ describe("create -> anchor -> join", () => {
       rulesHash: hexToBytes(league.rulesHash), // the honest hash
       mint,
       buyInBaseUnits: "50000000", // rules say 23500000
-      refundUnlockAt: "9223372036854775807", // funds frozen forever
+      // Was i64::MAX ("funds frozen forever") until the program grew a ceiling.
+      // A year past what the rules say still diverges, which is what this test
+      // is for, and is a value initialize_league will now actually accept.
+      refundUnlockAt: String(refundUnlockFor(DRAFT.scheduledAt) + 365 * 24 * 3600),
       payoutBps: payoutArray(pot.payout),
       feeBps: pot.feeBps,
       feeRecipient: new anchor.web3.PublicKey(pot.feeRecipient),
@@ -291,10 +294,11 @@ describe("create -> anchor -> join", () => {
     expect(verdict.ok).toBe(true);
 
     if (verdict.ok) {
-      // Decoding i64::MAX must not throw. Reading it as a JS number did, on
-      // this input specifically, which turned the worst case into a 500.
-      expect(verdict.league.refundUnlockAt).toBe("9223372036854775807");
-
+      // The i64::MAX decoding guard that used to live here is gone with the
+      // hostile value: the program refuses that input now, so no account can
+      // hold it and the path is unreachable end to end. It is still covered as
+      // a unit in packages/escrow/src/verify.test.ts, which feeds the string
+      // straight to anchorTermMismatches and needs no validator.
       const mismatches = anchorTermMismatches(verdict.league, expectedTermsFromRules(rules));
       expect(mismatches.some((m) => /buyIn/.test(m))).toBe(true);
       expect(mismatches.some((m) => /refundUnlockAt/.test(m))).toBe(true);

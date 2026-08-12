@@ -13,6 +13,17 @@ import { createDraftRecord, createLeague, LeagueValidationError, seedSport } fro
 import { db } from "@/lib/db";
 import { currentUser } from "@/lib/session";
 
+/**
+ * How far ahead a draft may be scheduled.
+ *
+ * 300 days rather than a round year, so the resulting maximum stays provably
+ * below the program own horizon: the refund ceiling is at most draft + 365
+ * days, and the program refuses anything past now + 730 days at
+ * initialize_league. 300 + 365 = 665 leaves 65 days of margin, and a rejection
+ * on-chain cannot be retried.
+ */
+const MAX_DRAFT_LEAD_MS = 300 * 24 * 60 * 60 * 1000;
+
 export async function GET(): Promise<NextResponse> {
   const rows = await db().query<{
     id: string;
@@ -77,6 +88,36 @@ export async function POST(request: Request): Promise<NextResponse> {
   if (body.draftAt * 1000 <= Date.now()) {
     return NextResponse.json(
       { error: "The draft must be scheduled in the future" },
+      { status: 400 },
+    );
+  }
+
+  // And not arbitrarily far into it, which is load-bearing rather than tidy.
+  //
+  // `pot.refundUnlockAt`'s ceiling is measured from the draft, so an unbounded
+  // draft date carries the ceiling with it: a draft in 2100 puts the whole legal
+  // refund window in 2100, and a rule set naming a date inside it validates
+  // clean. Members would join and stake now against an escape hatch that opens
+  // in seventy years.
+  //
+  // Without this the only thing catching that league is the program's own
+  // horizon at `initialize_league` — which refuses it, but *fatally*: the rules
+  // are already frozen and the PDA derives from the league's UUID, so it can
+  // never be anchored and therefore never joined, only recreated under a new id.
+  // This turns an unrecoverable failure at anchor time into a 400 before
+  // anything is written.
+  //
+  // Here rather than in `validateDraft` for the same reason the past check is:
+  // it depends on the clock, and re-validating a stored rule set must not become
+  // non-deterministic.
+  if (body.draftAt * 1000 > Date.now() + MAX_DRAFT_LEAD_MS) {
+    return NextResponse.json(
+      {
+        error:
+          "The draft must be scheduled within a year: a league's refund unlock is bounded " +
+          "relative to its draft, so a draft far in the future would let the pot be locked " +
+          "for just as long.",
+      },
       { status: 400 },
     );
   }

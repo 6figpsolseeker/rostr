@@ -237,6 +237,37 @@ describe("initialize_league", () => {
     );
   });
 
+  it("rejects i64::MAX, which used to be accepted", async () => {
+    // The freeze this ceiling exists for, and the exact value `anchor.test.ts`
+    // used to send and expect to succeed. `refund_stake` is the only way tokens
+    // leave the vault and there is no setter, so a date 292 billion years out is
+    // not a long timelock — it is a permanent one.
+    //
+    // Also the `saturating_add` guard: `now + MAX_REFUND_UNLOCK_HORIZON_SECONDS`
+    // must fail this comparison rather than overflow-panic on a hostile input.
+    await expectError(
+      initialize(validArgs({ refundUnlockAt: new anchor.BN("9223372036854775807") })),
+      "RefundUnlockTooFar",
+    );
+  });
+
+  it("rejects a refund unlock past the two-year horizon, and accepts one inside it", async () => {
+    // The pair proves it is a horizon rather than a special case for i64::MAX.
+    //
+    // Margins in days, never hours: a local validator can run over an hour
+    // behind wall clock (see CLAUDE.md), which has already broken seven timelock
+    // tests once. A boundary written as ±1h would be flaky for reasons that have
+    // nothing to do with this check.
+    const now = Math.floor(Date.now() / 1000);
+
+    await expectError(
+      initialize(validArgs({ refundUnlockAt: new anchor.BN(now + 800 * 24 * 3600) })),
+      "RefundUnlockTooFar",
+    );
+
+    await initialize(validArgs({ refundUnlockAt: new anchor.BN(now + 700 * 24 * 3600) }));
+  });
+
   it("rejects a mint that is not six decimals", async () => {
     // Nine decimals is SOL's convention. Accepting it would make the $50 cap
     // mean 0.05 SOL instead — the same constant, a different amount of money.

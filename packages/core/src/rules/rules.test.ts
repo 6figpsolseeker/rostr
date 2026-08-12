@@ -12,7 +12,7 @@ import {
   NFL_WINNER_TAKE_ALL_PAYOUT,
 } from "./nfl-ppr.js";
 import type { LeagueRules, PotRules } from "./types.js";
-import { validateLeagueRules } from "./validate.js";
+import { earliestRefundUnlock, latestRefundUnlock, validateLeagueRules } from "./validate.js";
 
 /**
  * A fully-specified rule set with every free variable pinned. Its hash is a
@@ -466,13 +466,101 @@ describe("validateLeagueRules", () => {
     expect(problems).toContainEqual(expect.stringContaining("earliest permitted value"));
   });
 
-  it("accepts a refund unlock later than the floor", () => {
-    // A floor, not a prescription. Ten years out is legal, if strange.
+  it("accepts a refund unlock later than the floor, within the window", () => {
+    // A floor, not a prescription — a commissioner may want room past the
+    // earliest legal date. 216 days from the draft is ~30 past the floor and
+    // well inside the 90-day window.
     const late = mutate((d) => {
+      (d.pot as { refundUnlockAt: number }).refundUnlockAt = d.draft.scheduledAt + 216 * 86_400;
+    });
+    expect(validateLeagueRules(late, NFL)).toEqual([]);
+  });
+
+  it("rejects a refund unlock far beyond the window", () => {
+    // This exact case used to be asserted as *legal*, by a test of mine, under
+    // the comment "Ten years out is legal, if strange." It is the attack. The
+    // timelock refund is the only way tokens leave the vault, so a date a decade
+    // out is not a long lock but a permanent freeze — and it anchors cleanly,
+    // because the chain and the signed document agree about it.
+    const frozen = mutate((d) => {
       (d.pot as { refundUnlockAt: number }).refundUnlockAt =
         d.draft.scheduledAt + 3650 * 86_400;
     });
-    expect(validateLeagueRules(late, NFL)).toEqual([]);
+    expect(validateLeagueRules(frozen, NFL)).toContainEqual(
+      expect.stringContaining("too late"),
+    );
+  });
+
+  it("says how many days too late, and the latest permitted value", () => {
+    // Same reasoning as the floor's message: a creator cannot act on a bound
+    // they would have to compute themselves, and the rules freeze on write.
+    const frozen = mutate((d) => {
+      (d.pot as { refundUnlockAt: number }).refundUnlockAt = 4_102_444_800; // 2100-01-01
+    });
+    const problems = validateLeagueRules(frozen, NFL);
+    expect(problems).toContainEqual(expect.stringMatching(/\d+ days too late/));
+    expect(problems).toContainEqual(expect.stringContaining("latest permitted value"));
+  });
+
+  it("treats both bounds as inclusive, and never reports both at once", () => {
+    // The floor is `>=` and the ceiling `<=`, so the boundary values are legal
+    // and there is no one-second no-man's-land between them. Reporting both
+    // would be self-contradictory advice to a creator.
+    const at = (pick: (floor: number, ceiling: number) => number) =>
+      mutate((d) => {
+        const input = {
+          draftScheduledAt: d.draft.scheduledAt,
+          regularSeasonWeeks: d.schedule.regularSeasonWeeks,
+          playoffWeeks: d.schedule.playoffWeeks,
+          payingFinalizationHours: d.settlement.payingFinalizationHours,
+        };
+        (d.pot as { refundUnlockAt: number }).refundUnlockAt = pick(
+          earliestRefundUnlock(input),
+          latestRefundUnlock(input),
+        );
+      });
+
+    expect(
+      validateLeagueRules(
+        at((floor) => floor),
+        NFL,
+      ),
+    ).toEqual([]);
+    expect(
+      validateLeagueRules(
+        at((_, ceiling) => ceiling),
+        NFL,
+      ),
+    ).toEqual([]);
+    expect(
+      validateLeagueRules(
+        at((floor) => floor - 1),
+        NFL,
+      ),
+    ).toContainEqual(expect.stringContaining("too early"));
+
+    const over = validateLeagueRules(
+      at((_, ceiling) => ceiling + 1),
+      NFL,
+    );
+    expect(over).toContainEqual(expect.stringContaining("too late"));
+    expect(over.filter((p) => /too early/.test(p))).toEqual([]);
+  });
+
+  it("cannot have its ceiling inflated by the schedule", () => {
+    // Why the ceiling is capped against the draft rather than derived only from
+    // the floor. Nothing bounds week numbers above, so a floor-relative ceiling
+    // would stretch to 2043 for this rule set and the bound would mean nothing.
+    // The cap holds it at draft + 365 days regardless, and the honest answer is
+    // that the schedule is the problem rather than the date.
+    const inflated = mutate((d) => {
+      (d.schedule as { playoffWeeks: number[] }).playoffWeeks = [15, 16, 900];
+      (d.pot as { refundUnlockAt: number }).refundUnlockAt =
+        d.draft.scheduledAt + 3000 * 86_400;
+    });
+    expect(validateLeagueRules(inflated, NFL)).toContainEqual(
+      expect.stringContaining("no legal value exists"),
+    );
   });
 
   it("moves the floor with the league's own schedule", () => {
