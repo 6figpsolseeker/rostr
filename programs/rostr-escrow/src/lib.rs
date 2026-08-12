@@ -308,17 +308,19 @@ pub mod rostr_escrow {
         );
 
         let league = &mut ctx.accounts.league;
-        require!(
-            league.member_count < league.max_teams,
-            EscrowError::LeagueFull
-        );
-        // Saturating is wrong here and checked is right: at the cap this is
-        // unreachable, and if it ever were reachable, silently staying at the
-        // maximum would admit an extra member.
-        league.member_count = league
-            .member_count
-            .checked_add(1)
-            .ok_or(EscrowError::MathOverflow)?;
+
+        // **There is deliberately no seat check here.** See `League::max_teams`.
+        //
+        // Saturating, where this used to be checked. The old comment argued that
+        // checked was right because "at the cap this is unreachable, and if it
+        // ever were reachable, silently staying at the maximum would admit an
+        // extra member" — sound reasoning that depended entirely on the cap
+        // above it. Without the cap it inverts: `member_count` is a `u8`, so
+        // `checked_add` starts failing at 255 and 255 throwaway accounts —
+        // roughly a quarter of a SOL — would brick the league exactly as the
+        // seat cap did. Saturating cannot admit an extra member because it no
+        // longer decides admission.
+        league.member_count = league.member_count.saturating_add(1);
 
         let membership = &mut ctx.accounts.membership;
         membership.league = league.key();
@@ -477,7 +479,36 @@ pub struct League {
     /// False for a league that plays for nothing: no vault, no deposits, but its
     /// rules hash is anchored here exactly like a pot league's.
     pub has_pot: bool,
+    /// The league's declared size, **published and not enforced**.
+    ///
+    /// It is part of the terms `anchorTermMismatches` compares against the signed
+    /// rules, so a creator still cannot anchor a size nobody agreed to. What it
+    /// no longer does is refuse a `join_league`.
+    ///
+    /// That check was removed because it guarded a guest list it cannot read.
+    /// Being *in a league* is a Postgres fact — a team, a roster, a draft slot —
+    /// and this program has no view of it; a `Membership` here means "this wallet
+    /// has a stake", which is a different thing. So the check could only ever
+    /// hand seats out first-come to anyone on the internet, while the real roster
+    /// was decided somewhere it could not see. `joinLeague` in `@rostr/db`
+    /// enforces the size against the actual roster, and always did.
+    ///
+    /// Meanwhile it cost about **0.011 SOL to brick a twelve-seat league
+    /// permanently** (issue #18): claim every seat with throwaway keypairs, and
+    /// since no instruction closes a `Membership` or decrements `member_count`,
+    /// the seats never come back. Not even `refund_stake` releases one. The only
+    /// remedy was recreating the league under a new UUID.
+    ///
+    /// **Do not restore the check.** An eviction instruction was considered and
+    /// is weaker: it can only clear seats that were never funded, so an attacker
+    /// who deposits still blocks the league and merely pays for the privilege
+    /// with money they get back at the timelock.
     pub max_teams: u8,
+    /// How many stakes have ever been opened. **Descriptive, not a limit.**
+    ///
+    /// Saturates at 255 rather than erroring — see `join_league`. Nothing reads
+    /// it to make a decision, so a count that stops climbing is a wrong number
+    /// on a dashboard rather than a wrong outcome.
     pub member_count: u8,
     /// Running total of live deposits, in base units. Decreases on refund, so
     /// it tracks what the vault actually holds rather than what it ever held.
@@ -694,6 +725,11 @@ pub enum EscrowError {
     RefundUnlockNotInFuture,
     #[msg("Accepted rules hash does not match the league's")]
     RulesHashMismatch,
+    /// **No longer raised.** Kept because error codes are positional: deleting a
+    /// variant renumbers every one below it, which silently changes what a
+    /// deployed client reports for four other failures, and it would move the
+    /// committed IDL that `idl:check` compares. Seat limits are enforced in
+    /// Postgres — see `League::max_teams`.
     #[msg("The league already has its full complement of teams")]
     LeagueFull,
     #[msg("This member has already staked their buy-in")]
