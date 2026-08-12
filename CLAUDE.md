@@ -1482,6 +1482,29 @@ USDC is a legacy mint. Milestone E's roster NFTs are Token-2022 and unrelated to
 **The vault's authority is the league PDA**, so no key held by any person can move the
 pot — only this program, only through these instructions.
 
+**`max_teams` is published, not enforced, and D6 must be built knowing that.** The
+`member_count < max_teams` gate was removed from `join_league` on 2026-08-11 (issue #18):
+it guarded a guest list the program cannot read. Being _in a league_ is a Postgres fact — a
+team, a roster, a draft slot — while a `Membership` here means only "this wallet has a
+stake". So the check handed seats out first-come to anyone on the internet while the real
+roster was decided elsewhere, and since nothing closes a `Membership` or decrements
+`member_count` — not even `refund_stake` — claiming all twelve for about **0.011 SOL**
+bricked a league permanently. `joinLeague` enforces the size against the actual roster, and
+always did.
+
+**The consequence for settlement: pay the known member set, never a percentage of the vault
+balance.** Anyone may now open a `Membership` and deposit into any league they can name.
+That is self-harm rather than leverage — they cannot win and their stake is locked until
+`refundUnlockAt` — but it means `total_deposited` is not the pot. Paying `bps × vault`
+would hand a stranger's money to the winners and leave the vault short when that stranger
+refunds. Settlement takes the members it is paying as input and computes from
+`real_members × buy_in`. This is the better shape regardless: a payout derived from a
+mutable balance is one deposit away from being wrong.
+
+**An eviction instruction was considered and rejected** as weaker, not simpler: it can only
+clear seats that were never funded, so an attacker who deposits still blocks the league and
+merely pays for the privilege with money the timelock returns.
+
 `payout_bps` is positional, indexed by the `prize` module. **That order is
 `PRIZE_ORDER` in `packages/escrow/src/instructions.ts`, not the declaration order of the `PrizeKey`
 union** — the two differ, and a client serialising from the wrong one reshuffles the split

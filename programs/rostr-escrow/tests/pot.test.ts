@@ -159,7 +159,16 @@ describe("join_league", () => {
     await expect(join(league, member, args.rulesHash)).rejects.toThrow();
   });
 
-  it("refuses members beyond the league's size", async () => {
+  it("seats past the declared size rather than refusing, and that is the fix for #18", async () => {
+    // This asserted `LeagueFull` until 2026-08-11. The check it tested guarded a
+    // guest list the program cannot read: being *in a league* is a Postgres fact
+    // and a `Membership` here only means "this wallet has a stake", so seats went
+    // first-come to anyone on the internet while the real roster was decided
+    // elsewhere. At roughly 0.011 SOL for twelve, and with no instruction that
+    // closes a `Membership` or decrements `member_count`, claiming them all
+    // bricked a league permanently.
+    //
+    // Size is enforced in `joinLeague` against the actual roster, and always was.
     const args = validArgs({ maxTeams: 2 });
     const league = await initialize(args);
 
@@ -168,8 +177,20 @@ describe("join_league", () => {
     }
 
     const extra = await fundedMember(provider, mint, BUY_IN);
-    await expectError(join(league, extra, args.rulesHash), "LeagueFull");
+    await join(league, extra, args.rulesHash);
+
+    const account = await program.account.league.fetch(league);
+    expect(account.memberCount).toBe(3);
+    // Still published, still compared against the signed rules by
+    // `anchorTermMismatches`. Disclosure, not a gate.
+    expect(account.maxTeams).toBe(2);
   });
+
+  // NOT TESTED, deliberately: that `member_count` saturates at 255 instead of
+  // erroring. Reaching it needs 255 real transactions against a validator, which
+  // is minutes of CI for one assertion — and `checked_add` there would be the
+  // same denial vector the seat cap was, so the reasoning is recorded in
+  // `join_league` where the one line lives rather than pretended at here.
 });
 
 describe("deposit", () => {
