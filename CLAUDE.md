@@ -1075,6 +1075,32 @@ schemaVersion 2 → 3.
 describes a league that cannot exist. The helper produces the same rows a real join
 produces, minus the signature.
 
+### Joining and staking are one approval
+
+`JoinPanel.onchainJoin` puts `join_league` and `deposit` in a **single transaction**.
+
+They used to be two, in two different components, so a pot league asked a new member for
+**four wallet approvals**: prove the wallet, sign the rules, take the seat, pay. Four is
+where somebody says "I'll do it later" and doesn't, and each one of those is a league that
+does not fill. Nothing was wrong with either transaction; the count was the problem.
+
+**An atomic failure is the good outcome here.** If the member cannot cover the buy-in, the
+join rolls back with it rather than leaving a seat claimed and unpaid. That only became
+safe once #18 removed the on-chain seat cap — before it, an unfunded seat was a permanently
+denied one, so grabbing a seat early had value. Now it has none. The two changes compose,
+and the UI says so plainly, because an all-or-nothing transaction otherwise reads as a
+failure rather than as the safe result.
+
+**Three states, not two.** The retry reads the `Membership` account itself rather than
+merely checking that it exists, which was sufficient while the halves were separate and is
+not now: no account (send both), `deposited == 0` (send the stake alone — an interrupted
+member, or one who joined before batching existed), funded (send nothing, recover the
+signature, re-POST). Reading the second as the third would tell a member they had paid when
+they had not.
+
+`DepositPanel` keeps its stake button for exactly that middle state, and says so rather
+than presenting itself as the normal path.
+
 ### Joining requires the anchor
 
 `joinLeague` refuses an unanchored league. Joining signs the rules hash, and the point of

@@ -126,6 +126,8 @@ export default async function LeaguePage({ params }: { params: Promise<{ id: str
         linkedWallets={wallets.map((wallet) => wallet.address)}
         anchored={chain?.anchoredAt !== null && chain?.anchoredAt !== undefined}
         isCommissioner={user !== null && commissioner?.commissioner_id === user.id}
+        hasPot={stored.rules.pot !== null}
+        tokenMint={stored.rules.pot?.tokenMint ?? null}
         resumable={resumable}
       />
 

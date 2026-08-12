@@ -165,6 +165,10 @@ export function DepositPanel({
         Staking moves the buy-in from your wallet into the league vault. Refund is open once the
         timelock passes — and is unconditional, so your stake can never be stuck.
       </p>
+      <p className="text-xs text-white/40">
+        Joining normally stakes for you in the same approval. This is here for a stake that was
+        interrupted, or one from before that was true.
+      </p>
 
       {!connected ? (
         <WalletMultiButton />
