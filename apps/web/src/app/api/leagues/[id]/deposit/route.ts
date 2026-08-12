@@ -11,6 +11,7 @@ import { db } from "@/lib/db";
 import { currentUser } from "@/lib/session";
 import { assertRpcCluster, ClusterConfigError } from "@/lib/cluster";
 import { EscrowConfigError, readOnlyEscrow } from "@/lib/escrow";
+import { depositsOpen } from "@/lib/pot";
 
 /**
  * Recording that a member has staked into a league on-chain.
@@ -29,13 +30,35 @@ import { EscrowConfigError, readOnlyEscrow } from "@/lib/escrow";
  * **The wallet is derived from this user's own membership row**, never taken
  * from the request. See `memberWallet`.
  *
- * ## This route is inert until on-chain join ships, structurally
+ * ## This route was inert until on-chain join shipped. It is not any more
  *
- * The program's `deposit` requires a `Membership` account, which only
- * `join_league` creates. Until the app invokes that, `verifyOnChainDeposit`
- * answers `NOT_JOINED` for everyone and nothing can be recorded here. That is a
- * property of the program rather than a flag somebody has to remember to unset,
- * which is the right way for "pot leagues cannot take money yet" to be true.
+ * It used to say, here, that the path was inert **structurally**: `deposit`
+ * needs a `Membership` account, only `join_league` creates one, and the app did
+ * not invoke `join_league` — so `verifyOnChainDeposit` answered `NOT_JOINED` for
+ * everyone and nothing could be recorded. That was true, and it stopped being
+ * true when `JoinPanel` began sending `join_league`. The sentence outlived the
+ * property it described.
+ *
+ * What replaces it is `potDepositGate` (`@rostr/escrow`), read through
+ * `depositsOpen()`, and it is applied where a deposit is **invited** — the stake
+ * button — not here.
+ *
+ * ## Why this route does not refuse when that gate is closed
+ *
+ * Deliberate, and the opposite of the obvious move.
+ *
+ * By the time anything reaches this handler the tokens have already moved: the
+ * browser builds `deposit`, signs it, and sends it to the chain itself, and only
+ * then reports it. Refusing to record does not empty a vault. It produces a
+ * member whose money is in escrow and a database that has never heard of it —
+ * so nobody can tell them when their timelock opens, and the record disagrees
+ * with the chain, which is its own kind of serious in a project whose whole
+ * claim is that the two agree.
+ *
+ * Recording a deposit we would rather not have taken is strictly better than not
+ * knowing about it. So this route's job is to record the truth and say what is
+ * true: `settlementPending` tells the member the program cannot pay out yet, and
+ * the refund unlock is the date that matters to them.
  */
 export async function POST(
   request: Request,
@@ -126,6 +149,12 @@ export async function POST(
       baseUnits: verdict.deposited.toString(),
       cluster,
       signature,
+      // Recorded, and said out loud: this stake is in a vault the program has no
+      // instruction to pay out, so the timelock refund is the only way it moves
+      // until D6 ships. A member who got here past a closed gate is owed that
+      // sentence rather than a bare success.
+      settlementPending: !depositsOpen(),
+      refundUnlockAt: stored.rules.pot.refundUnlockAt,
     });
   } catch (error) {
     if (error instanceof EscrowConfigError || error instanceof ClusterConfigError) {
