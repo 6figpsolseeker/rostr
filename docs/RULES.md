@@ -297,10 +297,18 @@ Applied in order for seeding:
 2. **Points For**
 3. Head-to-head record — _skipped unless the tied teams played an equal number of times_
 4. Points Against
-5. Lowest team ID
+5. Lowest team ID — your team's unique identifier, the same one §4's draft-order
+   recipe shuffles. It is assigned at random when you join. It is **not** the order
+   people joined in.
 
 Step 5 is deterministic on purpose. No coin flips: the contract must be able to settle
 without randomness when money is at stake.
+
+It is also arbitrary on purpose. By the time it is consulted, the four criteria above
+have said the teams are indistinguishable, so there is nothing left to measure — only a
+tie to break in a way nobody can steer and anybody can check. Seniority was rejected for
+that reason: ranking on join order would give whoever created the league the last word on
+every tie it reaches, for as long as the league exists.
 
 **Championship tie:** if both finalists score exactly equal totals in Week 17, the
 higher seed wins.

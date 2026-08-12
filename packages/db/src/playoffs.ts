@@ -135,6 +135,10 @@ async function seedOrder(
   rules: LeagueRules,
   finalizedOnly = false,
 ) {
+  // `ORDER BY slot` is for stable row order and nothing else. `computeStandings`
+  // does not depend on the order it is given, and the `LOWEST_TEAM_ID` backstop
+  // sorts `id`, not `slot` — see the branch in `standings.ts`, and migration
+  // `0025` for why `0005` says otherwise.
   const teams = await db.query<{ id: string }>(
     "SELECT id FROM teams WHERE league_id = $1 ORDER BY slot",
     [leagueId],

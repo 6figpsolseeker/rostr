@@ -391,6 +391,25 @@ describe("computeStandings", () => {
     expect(standings.map((row) => row.seed)).toEqual([1, 2, 3, 4]);
   });
 
+  it("breaks the last tie on the team id, never on the order teams joined", () => {
+    // The pin against "making the code match the comment". Callers select
+    // `ORDER BY slot`, so the array arrives in join order — and the backstop
+    // must ignore that and sort the ids. `0005_teams_and_play.sql:11-13` claims
+    // the opposite; migration `0025` is the correction, and this is the test
+    // that makes acting on the wrong one fail loudly rather than quietly
+    // reseeding every league in favour of whoever joined first.
+    const joinOrder = [
+      "ffffffff-0000-4000-8000-000000000001", // joined first, highest id
+      "88888888-0000-4000-8000-000000000002",
+      "00000000-0000-4000-8000-000000000003", // joined last, lowest id
+    ];
+
+    const standings = computeStandings(joinOrder, [], DEFAULT_TIEBREAKERS);
+
+    expect(standings.map((row) => row.teamId)).toEqual([...joinOrder].reverse());
+    expect(standings[0]?.teamId).toBe("00000000-0000-4000-8000-000000000003");
+  });
+
   it("does not depend on the order teams were passed in", () => {
     // A seed that moved with database row order would be indefensible.
     const results = [
