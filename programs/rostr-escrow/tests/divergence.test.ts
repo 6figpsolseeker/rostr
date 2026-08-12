@@ -27,7 +27,13 @@ import {
   NFL_DEFAULT_FEE_BPS,
   NFL_DEFAULT_PAYOUT,
 } from "@rostr/core";
-import { createPotMint, getProgram, getProvider, membershipPda } from "./helpers";
+import {
+  createPotMint,
+  getProgram,
+  getProvider,
+  membershipPda,
+  refundUnlockFor,
+} from "./helpers";
 
 /**
  * Proof that issue #26 is fixed: the on-chain join now has a real caller.
@@ -49,7 +55,7 @@ const DRAFT = {
   type: "SNAKE",
   mode: "SLOW",
   pickSeconds: 14_400,
-  scheduledAt: 1_756_400_000,
+  scheduledAt: Math.floor(Date.now() / 1000) + 30 * 24 * 3600,
 } as const;
 
 beforeAll(async () => {
@@ -69,7 +75,7 @@ async function createPotLeague(name: string) {
       tokenMint: mint.toBase58(),
       buyInBaseUnits: "23500000",
       payout: NFL_DEFAULT_PAYOUT,
-      refundUnlockAt: Math.floor(Date.now() / 1000) + 365 * 24 * 3600,
+      refundUnlockAt: refundUnlockFor(DRAFT.scheduledAt),
       feeBps: NFL_DEFAULT_FEE_BPS,
       feeRecipient: anchor.web3.Keypair.generate().publicKey.toBase58(),
     },

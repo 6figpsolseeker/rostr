@@ -8,6 +8,11 @@ import {
   mintTo,
 } from "@solana/spl-token";
 import { expect } from "vitest";
+import {
+  earliestRefundUnlock,
+  NFL_DEFAULT_SCHEDULE,
+  NFL_DEFAULT_SETTLEMENT,
+} from "@rostr/core";
 
 /**
  * Shared setup for the program tests.
@@ -193,3 +198,27 @@ export const expectError = async (promise: Promise<unknown>, code: string): Prom
     `expected AnchorError ${code}`,
   );
 };
+
+/**
+ * A refund unlock that is legal for a league drafting at `draftScheduledAt`.
+ *
+ * `validateLeagueRules` now bounds this field on both sides, so a fixture cannot
+ * pick a date freely. It must sit at or above `earliestRefundUnlock` and at or
+ * below `latestRefundUnlock`, and the window is 90 days wide — so this takes the
+ * floor and adds a day.
+ *
+ * **Derived from the draft, never from `Date.now()` independently.** These
+ * fixtures used to pin `scheduledAt` to a fixed August 2025 timestamp while
+ * computing the refund date from the wall clock, which meant the gap between
+ * them widened every day and the pair was going to fall out of the legal window
+ * on its own — with or without the ceiling that exposed it. A fixed date beside
+ * a live clock is the same shape the create form was fixed for.
+ */
+export const refundUnlockFor = (draftScheduledAt: number): number =>
+  earliestRefundUnlock({
+    draftScheduledAt,
+    regularSeasonWeeks: NFL_DEFAULT_SCHEDULE.regularSeasonWeeks,
+    playoffWeeks: NFL_DEFAULT_SCHEDULE.playoffWeeks,
+    payingFinalizationHours: NFL_DEFAULT_SETTLEMENT.payingFinalizationHours,
+  }) +
+  24 * 3600;

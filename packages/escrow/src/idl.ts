@@ -702,6 +702,11 @@ export const ESCROW_IDL: EscrowIdl = {
       "code": 6022,
       "name": "MathOverflow",
       "msg": "Arithmetic overflow"
+    },
+    {
+      "code": 6023,
+      "name": "RefundUnlockTooFar",
+      "msg": "Refund unlock time is too far in the future"
     }
   ],
   "types": [

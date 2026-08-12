@@ -110,6 +110,15 @@ pub const MAX_FEE_BPS: u16 = 500;
 /// Smallest league that can meaningfully play.
 pub const MIN_TEAMS: u8 = 2;
 
+/// Furthest into the future a refund unlock may be set, measured from the moment
+/// the league account is created. Two years.
+///
+/// A backstop rather than the real bound — see the comment at its use in
+/// `initialize_league`. It is the smallest horizon that cannot falsely reject a
+/// league the off-chain validator would permit, which is the property that
+/// matters here, because a refusal at this point cannot be retried.
+pub const MAX_REFUND_UNLOCK_HORIZON_SECONDS: i64 = 730 * 24 * 60 * 60;
+
 #[program]
 pub mod rostr_escrow {
     use super::*;
@@ -187,6 +196,40 @@ pub mod rostr_escrow {
         require!(
             args.refund_unlock_at > now,
             EscrowError::RefundUnlockNotInFuture
+        );
+
+        // And a ceiling, because a date decades out is not a longer timelock —
+        // it is a permanent freeze. `refund_stake` is the only instruction that
+        // moves tokens out of the vault, there is no settlement instruction yet,
+        // and there is no setter or authority that could release them sooner.
+        //
+        // This cannot be the league's own settlement date. The program has no
+        // schedule — `rules_hash` is 32 opaque bytes to it — and any schedule
+        // passed in as an argument would be chosen by the same caller as the
+        // date, so the check would compare an attacker's input against their own
+        // input and read as a guarantee while being none. The clock is the only
+        // input here that the caller does not supply.
+        //
+        // `now` at initialisation is a sound lower bound on the first possible
+        // deposit, since `deposit` has no time condition and this account must
+        // exist before one can happen — so this bounds how long any stake can be
+        // locked without the program knowing anything about a season.
+        //
+        // **Deliberately loose, and do not tighten it.** The precise bound lives
+        // off-chain in `validatePot`, where the season is known. A false refusal
+        // here is unrecoverable: the args come from a rule set that is already
+        // frozen, so the league cannot be retried with a corrected value, and
+        // the PDA derives from its UUID — it could only be recreated under a new
+        // id. `MAX_DRAFT_LEAD_MS` in the create route keeps the off-chain
+        // maximum at draft + 365d with a draft at most 300d out, so 665 days is
+        // the most a legitimate league can ask for and this leaves 65 days spare.
+        //
+        // `saturating_add` rather than `+`: overflow here is unreachable in
+        // practice, and a panic is a worse answer to a hostile argument than a
+        // comparison that simply fails. With saturation `i64::MAX` still fails.
+        require!(
+            args.refund_unlock_at <= now.saturating_add(MAX_REFUND_UNLOCK_HORIZON_SECONDS),
+            EscrowError::RefundUnlockTooFar
         );
 
         let league = &mut ctx.accounts.league;
@@ -679,4 +722,13 @@ pub enum EscrowError {
     LeagueHasNoPot,
     #[msg("Arithmetic overflow")]
     MathOverflow,
+    // Appended last on purpose. Error codes are positional, so inserting a
+    // variant renumbers every one below it and silently changes what a deployed
+    // client reports for unrelated failures.
+    //
+    // `//` and not `///`: doc comments on error variants are compiled into the
+    // IDL, which `idl:check` compares byte for byte, and this machine has no
+    // Rust toolchain to regenerate it with.
+    #[msg("Refund unlock time is too far in the future")]
+    RefundUnlockTooFar,
 }

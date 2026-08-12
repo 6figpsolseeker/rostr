@@ -63,7 +63,11 @@ export {
 } from "./rules/nfl-ppr.js";
 
 export { encodeLeagueRules, hashLeagueRules, verifyLeagueRulesHash } from "./rules/hash.js";
-export { earliestRefundUnlock, validateLeagueRules } from "./rules/validate.js";
+export {
+  earliestRefundUnlock,
+  latestRefundUnlock,
+  validateLeagueRules,
+} from "./rules/validate.js";
 
 export {
   buildJoinMessage,

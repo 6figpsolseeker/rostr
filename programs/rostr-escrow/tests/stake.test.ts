@@ -20,6 +20,7 @@ import {
   fundedMember,
   getProvider,
   getProgram,
+  refundUnlockFor,
   tokenBalance,
   vaultPda,
 } from "./helpers";
@@ -92,7 +93,7 @@ const DRAFT = {
   type: "SNAKE",
   mode: "SLOW",
   pickSeconds: 14_400,
-  scheduledAt: 1_756_400_000,
+  scheduledAt: Math.floor(Date.now() / 1000) + 30 * 24 * 3600,
 } as const;
 
 const BUY_IN = 23_500_000;
@@ -105,11 +106,15 @@ beforeAll(async () => {
   await seedSport(db, NFL);
 });
 
-async function createPotLeague(name: string, refundUnlockAt: number) {
+async function createPotLeague(
+  name: string,
+  refundUnlockAt: number,
+  scheduledAt: number = DRAFT.scheduledAt,
+) {
   const commissioner = await createUser(db, `${name}@example.com`, "Commish");
   const rules = buildNflPprRules({
     seasonYear: 2026,
-    draft: DRAFT,
+    draft: { ...DRAFT, scheduledAt },
     pot: {
       tokenMint: mint.toBase58(),
       buyInBaseUnits: String(BUY_IN),
@@ -155,7 +160,7 @@ describe("deposit and refund are wired (issue #27)", () => {
     // verify helpers.
     const { league, rules } = await createPotLeague(
       "stake",
-      Math.floor(Date.now() / 1000) + 365 * 24 * 3600,
+      refundUnlockFor(DRAFT.scheduledAt),
     );
     const sig = await anchorLeague(league.id, league.rulesHash, rules);
     const verdict = await verifyLeagueAnchor(program, league.id, league.rulesHash);
@@ -212,7 +217,7 @@ describe("deposit and refund are wired (issue #27)", () => {
   it("deposit is refused for a member who never joined on-chain", async () => {
     const { league, rules } = await createPotLeague(
       "nojoin",
-      Math.floor(Date.now() / 1000) + 365 * 24 * 3600,
+      refundUnlockFor(DRAFT.scheduledAt),
     );
     const sig = await anchorLeague(league.id, league.rulesHash, rules);
     await recordChainAnchor(db, league.id, {
@@ -248,9 +253,14 @@ describe("deposit and refund are wired (issue #27)", () => {
  */
 describe("a completed refund verifies as a refund", () => {
   it("reports ok once the stake is actually back out", async () => {
+    // A draft in the past, so a three-second unlock is inside the legal window
+    // rather than hundreds of days below the floor. The validator does not
+    // require a future draft — that check lives in the create route, because it
+    // is clock-dependent and re-validating stored rules must stay deterministic.
     const { league, rules } = await createPotLeague(
       "refundverify",
       Math.floor(Date.now() / 1000) + 3,
+      Math.floor(Date.now() / 1000) - 220 * 24 * 3600,
     );
     const sig = await anchorLeague(league.id, league.rulesHash, rules);
     await recordChainAnchor(db, league.id, {

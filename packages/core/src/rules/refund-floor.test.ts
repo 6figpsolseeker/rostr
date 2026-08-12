@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { earliestRefundUnlock } from "./validate.js";
+import { earliestRefundUnlock, latestRefundUnlock } from "./validate.js";
 import { NFL_DEFAULT_SCHEDULE, NFL_DEFAULT_SETTLEMENT } from "./nfl-ppr.js";
 
 /**
@@ -14,6 +14,14 @@ import { NFL_DEFAULT_SCHEDULE, NFL_DEFAULT_SETTLEMENT } from "./nfl-ppr.js";
 
 const nfl = (draftScheduledAt: number) =>
   earliestRefundUnlock({
+    draftScheduledAt,
+    regularSeasonWeeks: NFL_DEFAULT_SCHEDULE.regularSeasonWeeks,
+    playoffWeeks: NFL_DEFAULT_SCHEDULE.playoffWeeks,
+    payingFinalizationHours: NFL_DEFAULT_SETTLEMENT.payingFinalizationHours,
+  });
+
+const nflCeiling = (draftScheduledAt: number) =>
+  latestRefundUnlock({
     draftScheduledAt,
     regularSeasonWeeks: NFL_DEFAULT_SCHEDULE.regularSeasonWeeks,
     playoffWeeks: NFL_DEFAULT_SCHEDULE.playoffWeeks,
@@ -87,5 +95,71 @@ describe("earliestRefundUnlock", () => {
 
     expect(Number.isFinite(floor)).toBe(true);
     expect(floor).toBe(14 * 7 * 86_400 + 168 * 3600 + 60 * 86_400);
+  });
+});
+
+describe("latestRefundUnlock", () => {
+  /**
+   * The ceiling. Two bounds, smaller wins — see `latestRefundUnlock` for why the
+   * draft-anchored cap has to be there at all.
+   */
+  it("gives a 90-day window above the floor for a real season", () => {
+    const draft = at("2026-08-22T14:00:00Z");
+    const floor = nfl(draft);
+    const ceiling = nflCeiling(draft);
+
+    expect(day(ceiling)).toBe("2027-05-25");
+    expect((ceiling - floor) / 86_400).toBe(90);
+  });
+
+  it("is capped against the draft, so the schedule cannot inflate it", () => {
+    // The whole reason the cap exists. Nothing bounds week numbers above, so a
+    // ceiling derived only from the floor would sit in 2043 for this input.
+    const draft = at("2026-08-22T14:00:00Z");
+    const inflated = latestRefundUnlock({
+      draftScheduledAt: draft,
+      regularSeasonWeeks: 14,
+      playoffWeeks: [15, 16, 900],
+      payingFinalizationHours: 168,
+    });
+
+    expect(inflated).toBe(draft + 365 * 86_400);
+    expect(day(inflated)).toBe("2027-08-22");
+  });
+
+  it("is capped against the draft when the correction window is inflated too", () => {
+    // The second unbounded input, which is easy to miss: `validateSettlement`
+    // bounds `payingFinalizationHours` only from below.
+    const draft = at("2026-08-22T14:00:00Z");
+    const inflated = latestRefundUnlock({
+      draftScheduledAt: draft,
+      regularSeasonWeeks: 14,
+      playoffWeeks: [15, 16, 17],
+      payingFinalizationHours: 200_000,
+    });
+
+    expect(inflated).toBe(draft + 365 * 86_400);
+  });
+
+  it("moves with the draft", () => {
+    const early = nflCeiling(at("2026-07-01T09:00:00Z"));
+    const late = nflCeiling(at("2026-09-05T14:00:00Z"));
+
+    expect(late - early).toBe(at("2026-09-05T14:00:00Z") - at("2026-07-01T09:00:00Z"));
+  });
+
+  it("leaves a usable window for every schedule a real league could have", () => {
+    // The unsatisfiable case fires at a last week of 43+. The real NFL tops out
+    // at 22, so there is no schedule between "plausible" and "refused".
+    for (const lastWeek of [17, 18, 22, 30]) {
+      const draft = at("2026-08-22T14:00:00Z");
+      const input = {
+        draftScheduledAt: draft,
+        regularSeasonWeeks: lastWeek - 3,
+        playoffWeeks: [lastWeek - 2, lastWeek - 1, lastWeek],
+        payingFinalizationHours: 168,
+      };
+      expect(latestRefundUnlock(input)).toBeGreaterThan(earliestRefundUnlock(input));
+    }
   });
 });

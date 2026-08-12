@@ -62,6 +62,38 @@ const MIN_PAYING_FINALIZATION_HOURS = 168;
  */
 const MIN_REFUND_GRACE_SECONDS = 60 * 24 * 60 * 60;
 
+/**
+ * How much later than the floor a commissioner may set the refund, ordinarily.
+ *
+ * The floor already sits sixty days past a deliberately conservative settlement
+ * estimate, so this is discretion on top of slack. Ninety days covers a
+ * commissioner who wants room and refuses nothing a real league would pick — for
+ * the default NFL schedule the legal window is ninety days wide.
+ *
+ * **The asymmetry that sized the floor runs the other way here**, which is why
+ * this can be tight where `MIN_REFUND_GRACE_SECONDS` had to be generous. Too
+ * early is theft; too late is a freeze. But a ceiling set too *tight* costs only
+ * a 400 at creation, before anything is frozen and before any money exists — the
+ * creator picks another date. Nothing on this side is unrecoverable, so the
+ * estimate rounds toward the strict end rather than the loose one.
+ */
+const MAX_REFUND_DISCRETION_SECONDS = 90 * 24 * 60 * 60;
+
+/**
+ * The furthest past its own draft a league's refund may ever open.
+ *
+ * This is the bound that cannot be inflated — see `latestRefundUnlock` for why
+ * the floor-relative one can be. A year past the draft, the season is long
+ * finished and the next season's leagues are forming; anything still locked then
+ * is visibly wrong.
+ *
+ * The unsatisfiable case — a schedule so long that the floor passes this — fires
+ * at a last week of 43 or beyond, against a real NFL calendar that tops out at
+ * 22. There is no schedule between "real" and "refused"; the gap is twenty-one
+ * weeks wide.
+ */
+const MAX_REFUND_HORIZON_SECONDS = 365 * 24 * 60 * 60;
+
 function validateScoring(rules: LeagueRules, sport: SportDef, out: string[]): void {
   const known = statKeysByKey(sport);
   const seen = new Set<string>();
@@ -401,18 +433,111 @@ function refundUnlockFloor(rules: LeagueRules): number {
   });
 }
 
+/**
+ * The latest instant a league's timelock refund may open.
+ *
+ * **Two bounds, and the smaller wins.** They do different jobs:
+ *
+ * - `floor + MAX_REFUND_DISCRETION_SECONDS` is the ordinary one. Ninety days of
+ *   discretion above a floor that already carries sixty days of grace past
+ *   settlement is more than any honest commissioner needs.
+ * - `draft.scheduledAt + MAX_REFUND_HORIZON_SECONDS` is what makes the first one
+ *   mean anything. **The floor is derived from attacker-writable inputs that
+ *   nothing bounds above** — `validateSchedule` bounds week numbers only by
+ *   `> 0` and ascending, and `validateSettlement` bounds
+ *   `payingFinalizationHours` only from below. So `playoffWeeks: [15, 16, 900]`
+ *   validates today and drags a floor-relative ceiling to 2043;
+ *   `payingFinalizationHours: 200_000` drags it to 2048 with an ordinary
+ *   seventeen-week schedule. A ceiling built only on the floor stretches to fit
+ *   whatever the commissioner invents, which moves the hole rather than closing
+ *   it.
+ *
+ * `draft.scheduledAt` is the one term in the floor's formula the other levers
+ * cannot inflate, which is why the cap hangs off it. It is also the right clock
+ * on its own terms: the floor answers "has the money been distributed yet",
+ * necessarily schedule-relative, while the ceiling answers "how long may a
+ * member's capital be trapped" — and that starts when the money goes in, around
+ * the draft, not at settlement.
+ *
+ * Read it and you can see the maximum lock-up without reading any other
+ * function. That locality is the property a floor-relative ceiling gives up.
+ */
+export function latestRefundUnlock(input: {
+  readonly draftScheduledAt: number;
+  readonly regularSeasonWeeks: number;
+  readonly playoffWeeks: readonly number[];
+  readonly payingFinalizationHours: number;
+}): number {
+  return Math.min(
+    earliestRefundUnlock(input) + MAX_REFUND_DISCRETION_SECONDS,
+    input.draftScheduledAt + MAX_REFUND_HORIZON_SECONDS,
+  );
+}
+
+function refundUnlockCeiling(rules: LeagueRules): number {
+  return latestRefundUnlock({
+    draftScheduledAt: rules.draft.scheduledAt,
+    regularSeasonWeeks: rules.schedule.regularSeasonWeeks,
+    playoffWeeks: rules.schedule.playoffWeeks,
+    payingFinalizationHours: rules.settlement.payingFinalizationHours,
+  });
+}
+
 function validateRefundUnlock(rules: LeagueRules, refundUnlockAt: number, out: string[]): void {
   const floor = refundUnlockFloor(rules);
-  if (refundUnlockAt >= floor) return;
+  const ceiling = refundUnlockCeiling(rules);
 
-  const short = Math.ceil((floor - refundUnlockAt) / (24 * 60 * 60));
+  // `pot.refundUnlockAt <= 0` is *false* for a string — `"abc" <= 0` is `false`
+  // — so a non-number reaches here, and `earliestRefundUnlock` then concatenates
+  // rather than adds: a string `scheduledAt` yields a "floor" of 1.7e30. One
+  // garbage comparison was survivable; two that can disagree with each other are
+  // not. `validateNumericFields` has already reported the real problem, so
+  // returning silently loses nothing.
+  if (
+    typeof refundUnlockAt !== "number" ||
+    !Number.isFinite(floor) ||
+    !Number.isFinite(ceiling)
+  ) {
+    return;
+  }
 
-  out.push(
-    `pot.refundUnlockAt is ${short} day${short === 1 ? "" : "s"} too early: the timelock ` +
-      `refund is unconditional once it opens, so a date before the last prize has settled ` +
-      `lets a losing member withdraw and keep playing for a pot they no longer stand behind. ` +
-      `The earliest permitted value is ${floor}.`,
-  );
+  const days = (seconds: number): number => Math.ceil(seconds / (24 * 60 * 60));
+
+  // Checked first, and returns, so the "too early" message below can never name
+  // a floor that is itself illegal. Reachable because nothing caps week numbers
+  // or `payingFinalizationHours` — a schedule long enough closes the window
+  // entirely, and the honest answer is that the schedule is the problem rather
+  // than the date.
+  if (floor > ceiling) {
+    out.push(
+      `this league's schedule settles ${days(floor - ceiling)} days beyond the latest ` +
+        `permitted refund unlock (${ceiling}), so no legal value exists — shorten the ` +
+        `regular season, the playoff weeks, or payingFinalizationHours`,
+    );
+    return;
+  }
+
+  if (refundUnlockAt < floor) {
+    const short = days(floor - refundUnlockAt);
+    out.push(
+      `pot.refundUnlockAt is ${short} day${short === 1 ? "" : "s"} too early: the timelock ` +
+        `refund is unconditional once it opens, so a date before the last prize has settled ` +
+        `lets a losing member withdraw and keep playing for a pot they no longer stand behind. ` +
+        `The earliest permitted value is ${floor}.`,
+    );
+    return;
+  }
+
+  if (refundUnlockAt > ceiling) {
+    const over = days(refundUnlockAt - ceiling);
+    out.push(
+      `pot.refundUnlockAt is ${over} day${over === 1 ? "" : "s"} too late: the timelock ` +
+        `refund is the only way tokens leave the vault — there is no settlement instruction ` +
+        `yet, no setter and no authority — so a date long past the season freezes every ` +
+        `member's buy-in with nothing able to release it. ` +
+        `The latest permitted value is ${ceiling}.`,
+    );
+  }
 }
 
 function validatePot(rules: LeagueRules, out: string[]): void {
