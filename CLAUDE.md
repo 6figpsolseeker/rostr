@@ -174,9 +174,18 @@ moment it does.
   only when a fee is actually charged: fee-free leagues legitimately carry an empty one.
 
   `expectedTermsFromRules` and `anchorTermMismatches` live in `@rostr/escrow`, not in the
-  route, because `apps/web` has no test project — a mapping inline in a route is verified
-  only by being run in production, and both defects found in review were in the mapping
-  rather than the comparison.
+  route, because **`apps/web` cannot test React** — a mapping inline in a component is
+  verified only by being run in production, and both defects found in review were in the
+  mapping rather than the comparison.
+
+  **Corrected 2026-08-12: `apps/web` does have a test project**, and this sentence used to
+  say it did not. The root `vitest.config.ts` collects `apps/web/src/**/*.test.ts` (so
+  `pnpm test` runs them) and `vitest.web.config.ts` runs them alone as `pnpm test:web`.
+  Five files live there today. What is still true is the narrower claim: both configs are
+  node-environment and the glob is `.ts`, with no jsdom and no testing-library, so a
+  **component** cannot be rendered in a test. Server-side helpers under
+  `apps/web/src/lib/` are testable and should be tested — `lib/cluster.test.ts` and
+  `lib/pot.test.ts` are the pattern, using `vi.stubEnv` and needing no database.
 
   Verified end to end against a real validator, not reasoned about — see
   `programs/rostr-escrow/tests/anchor.test.ts` below.
@@ -308,12 +317,18 @@ still needs Rust and a decision before Aug 22:
    derives it from posted scores. That makes D6 depend on G4–G8 (dual-source oracle, scores
    on-chain), which the build plan schedules for Dec–Jan. Do not start D6 expecting an
    afternoon.
-3. **Pot leagues can now technically take money, and the reason not to is a decision
-   rather than a missing part.** Anchor → join → deposit → timelock refund all work end to
-   end and are exercised against a validator on every CI run (#62, #63). What is still
-   absent is the _payout_ (#28, D6), so money can go in and come back out through the
-   unconditional refund, but it cannot be distributed. Nothing in the code stops a pot
-   league opening; this is item 1 plus an owner call.
+3. **Pot leagues must not take money on mainnet** until D6 can pay it back out — and that
+   is now enforced rather than remembered. Anchor → join → deposit → timelock refund all
+   work end to end and are exercised against a validator on every CI run (#62, #63), so
+   the structural barrier is gone: money can go in and come back out through the
+   unconditional refund, but it cannot be _distributed_. What closes the gap is
+   `potDepositGate`, which shuts the stake button on mainnet until the committed IDL
+   carries a settlement instruction. See "Deposit and refund" below.
+
+   The missing piece is the payout (#28, D6). PR #31 offered one and was closed on
+   2026-08-14 — see the review above; the short version is that it declared a winner,
+   which `RULES.md` §7 forbids, and its authority field was never actually enforced.
+
 4. **Settlement**, which is where the season ends up. `championship()` now derives all
    five prize-holders from the scores; nothing pays them out yet, and that is D6 — see
    above for why it is not an afternoon.
@@ -1145,11 +1160,39 @@ what people read is its own kind of serious.
 beats validating a supplied address: a caller with no way to _name_ a wallet has no way to
 name somebody else's.
 
-**The whole path is inert until on-chain join ships, structurally.** The program's
-`deposit` requires a `Membership` account and only `join_league` creates one, so
-`verifyOnChainDeposit` answers `NOT_JOINED` for everyone until the app invokes it. That is
-a property of the program, not a flag somebody has to remember to unset — which is the
-right way for "pot leagues cannot take money yet" to be true.
+**That path was inert until on-chain join shipped, and it is not any more.** The
+guarantee used to be structural: `deposit` requires a `Membership` account, only
+`join_league` creates one, and the app did not invoke `join_league` — so
+`verifyOnChainDeposit` answered `NOT_JOINED` for everyone and nobody had to remember
+anything. `JoinPanel` now sends `join_league`, and the property went with it. The
+paragraph that used to sit here outlived what it described, which is the exact defect
+class this file warns about two sections up.
+
+**What replaces it is `potDepositGate`** (`packages/escrow/src/settlement.ts`), read
+through `depositsOpen()` in `apps/web/src/lib/pot.ts`:
+
+```
+open  =  settlementShipped(ESCROW_IDL)  ||  cluster !== "mainnet-beta"
+```
+
+The committed IDL is what answers "can this program pay a pot out". It is in the tree,
+`pnpm idl:check` fails in the Anchor job when it drifts from the Rust, and a tripwire test
+pins the five instruction names — so the commit that ships D6 opens the gate **in the same
+commit**, and is forced to visit the file that decides it. No date, no environment
+variable, nothing to unset.
+
+Two things it is not. It is a **client-side** rule: `deposit` is permissionless on-chain,
+so a member who has joined can build the instruction themselves and nothing in TypeScript
+stops them. It is weaker than what it replaces, and the comment there says so rather than
+reprising the sentence it retired. And it is **not** applied in the deposit route — see
+that file for why refusing to record a deposit the chain has already accepted produces
+amnesia rather than an emptier vault.
+
+**Off mainnet the gate is open**, deliberately: the funding path has to be exercisable end
+to end, which is what Aug 22's "fundable" asks for and what `stake.test.ts` already proves
+against a real validator. What closes is a **mainnet** buy-in during the window where the
+only exit is the timelock — and the create form's default `refundUnlockAt` is
+**2027-03-01**, so that window is about seven months long.
 
 **The original program test only exercised `NOT_JOINED`** — the one refund path that was
 already correct — which is how an inverted verifier shipped green. `membership.test.ts`

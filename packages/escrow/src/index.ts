@@ -37,6 +37,14 @@ export {
   type RulesLikeTerms,
 } from "./verify.js";
 export {
+  SETTLEMENT_PREFIXES,
+  instructionNames,
+  potDepositGate,
+  settlementShipped,
+  type DepositGate,
+  type IdlShape,
+} from "./settlement.js";
+export {
   PRIZE_ORDER,
   depositIx,
   escrowProgram,

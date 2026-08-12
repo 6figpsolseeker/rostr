@@ -12,6 +12,7 @@ import { AnchorPanel } from "@/components/AnchorPanel";
 import { DepositPanel } from "@/components/DepositPanel";
 import { db } from "@/lib/db";
 import { currentUser } from "@/lib/session";
+import { depositsOpen } from "@/lib/pot";
 
 export default async function LeaguePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -163,11 +164,22 @@ export default async function LeaguePage({ params }: { params: Promise<{ id: str
         </p>
       )}
 
-      {stored.rules.pot && (
+      {/*
+        Members only — `memberWallet` is the same derivation `/api/leagues/[id]/
+        deposit` enforces server-side, so the screen and the server give one
+        answer. A stranger was previously shown a Stake button on a league they
+        had not joined.
+
+        Deliberately **not** conditioned on `depositsOpen()`. The panel holds the
+        only refund control in the app, and a member who has already staked must
+        be able to reach it whether or not new deposits are open. The gate is
+        passed down and applied to the stake button alone.
+      */}
+      {stored.rules.pot && myWallet !== null && (
         <DepositPanel
           leagueId={league.id}
           tokenMint={stored.rules.pot.tokenMint}
-          hasPot={stored.rules.pot !== null}
+          depositsOpen={depositsOpen()}
           refundUnlockAt={stored.rules.pot.refundUnlockAt}
         />
       )}

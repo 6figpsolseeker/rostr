@@ -23,14 +23,22 @@ import { AnchorProvider, type Wallet } from "@coral-xyz/anchor";
 export function DepositPanel({
   leagueId,
   tokenMint,
-  hasPot,
+  depositsOpen,
   refundUnlockAt,
 }: {
   leagueId: string;
   /** The pot token mint (USDC). Required for a deposit. */
   tokenMint: string | null;
-  /** Whether this league has a pot to stake into. */
-  hasPot: boolean;
+  /**
+   * Whether this deployment should invite a buy-in — `depositsOpen()` in
+   * `lib/pot.ts`, resolved on the server.
+   *
+   * **It gates the stake button and nothing else.** Refund is deliberately
+   * untouched: a member who has already staked must be able to get their money
+   * out whatever this says, and hiding the panel to hide the stake control
+   * would take the only refund UI in the app with it.
+   */
+  depositsOpen: boolean;
   /** Unix seconds after which a refund is permitted. */
   refundUnlockAt: number | null;
 }) {
@@ -41,7 +49,10 @@ export function DepositPanel({
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<"deposit" | "refund" | null>(null);
 
-  if (!hasPot || !tokenMint) {
+  // Only `tokenMint`. This early return sits above **both** buttons, so every
+  // condition added here hides the refund control too. `depositsOpen` therefore
+  // does not belong in it — see the stake button below.
+  if (!tokenMint) {
     return (
       <section className="rounded border border-white/10 p-6">
         <p className="text-sm text-white/60">
@@ -159,18 +170,32 @@ export function DepositPanel({
         <WalletMultiButton />
       ) : (
         <div className="flex flex-wrap gap-3">
-          <button
-            type="button"
-            onClick={() => void stake()}
-            disabled={busy !== null || done === "deposit"}
-            className="rounded bg-[--color-turf] px-4 py-2 text-sm font-medium text-black disabled:opacity-50"
-          >
-            {busy === "deposit"
-              ? "Waiting for the chain…"
-              : done === "deposit"
-                ? "Staked"
-                : "Stake buy-in"}
-          </button>
+          {/*
+            No button at all when deposits are closed, rather than a disabled
+            one. A disabled button reads as "try again in a moment", and the
+            honest answer is "not until the program can pay it back out" — which
+            is a different sentence and a different wait.
+          */}
+          {depositsOpen ? (
+            <button
+              type="button"
+              onClick={() => void stake()}
+              disabled={busy !== null || done === "deposit"}
+              className="rounded bg-[--color-turf] px-4 py-2 text-sm font-medium text-black disabled:opacity-50"
+            >
+              {busy === "deposit"
+                ? "Waiting for the chain…"
+                : done === "deposit"
+                  ? "Staked"
+                  : "Stake buy-in"}
+            </button>
+          ) : (
+            <p className="text-sm text-white/60">
+              Staking is not open yet. The escrow program has no payout instruction, so a buy-in
+              taken now could only come back out through the timelock refund — and this app will
+              not take money for prizes it cannot award.
+            </p>
+          )}
 
           <button
             type="button"
