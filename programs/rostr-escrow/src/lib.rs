@@ -479,36 +479,48 @@ pub struct League {
     /// False for a league that plays for nothing: no vault, no deposits, but its
     /// rules hash is anchored here exactly like a pot league's.
     pub has_pot: bool,
-    /// The league's declared size, **published and not enforced**.
-    ///
-    /// It is part of the terms `anchorTermMismatches` compares against the signed
-    /// rules, so a creator still cannot anchor a size nobody agreed to. What it
-    /// no longer does is refuse a `join_league`.
-    ///
-    /// That check was removed because it guarded a guest list it cannot read.
-    /// Being *in a league* is a Postgres fact — a team, a roster, a draft slot —
-    /// and this program has no view of it; a `Membership` here means "this wallet
-    /// has a stake", which is a different thing. So the check could only ever
-    /// hand seats out first-come to anyone on the internet, while the real roster
-    /// was decided somewhere it could not see. `joinLeague` in `@rostr/db`
-    /// enforces the size against the actual roster, and always did.
-    ///
-    /// Meanwhile it cost about **0.011 SOL to brick a twelve-seat league
-    /// permanently** (issue #18): claim every seat with throwaway keypairs, and
-    /// since no instruction closes a `Membership` or decrements `member_count`,
-    /// the seats never come back. Not even `refund_stake` releases one. The only
-    /// remedy was recreating the league under a new UUID.
-    ///
-    /// **Do not restore the check.** An eviction instruction was considered and
-    /// is weaker: it can only clear seats that were never funded, so an attacker
-    /// who deposits still blocks the league and merely pays for the privilege
-    /// with money they get back at the timelock.
+    // ---------------------------------------------------------------------
+    // `//` and not `///` from here down, deliberately.
+    //
+    // Anchor compiles a `///` doc comment on a field into the IDL, so writing
+    // one is editing build output that `pnpm idl:check` compares byte for byte
+    // — and regenerating it needs `anchor build`, which needs a Rust toolchain.
+    // Documenting a field from a machine without one turns CI red for a reason
+    // that looks nothing like documentation. It cost a round trip here.
+    //
+    // Short `///` docs elsewhere in this struct predate that and are already in
+    // the committed IDL; leave them. New long-form rationale goes in `//`.
+    // ---------------------------------------------------------------------
+    // The league's declared size, **published and not enforced**.
+    //
+    // It is part of the terms `anchorTermMismatches` compares against the signed
+    // rules, so a creator still cannot anchor a size nobody agreed to. What it
+    // no longer does is refuse a `join_league`.
+    //
+    // That check was removed because it guarded a guest list it cannot read.
+    // Being *in a league* is a Postgres fact — a team, a roster, a draft slot —
+    // and this program has no view of it; a `Membership` here means "this wallet
+    // has a stake", which is a different thing. So the check could only ever
+    // hand seats out first-come to anyone on the internet, while the real roster
+    // was decided somewhere it could not see. `joinLeague` in `@rostr/db`
+    // enforces the size against the actual roster, and always did.
+    //
+    // Meanwhile it cost about **0.011 SOL to brick a twelve-seat league
+    // permanently** (issue #18): claim every seat with throwaway keypairs, and
+    // since no instruction closes a `Membership` or decrements `member_count`,
+    // the seats never come back. Not even `refund_stake` releases one. The only
+    // remedy was recreating the league under a new UUID.
+    //
+    // **Do not restore the check.** An eviction instruction was considered and
+    // is weaker: it can only clear seats that were never funded, so an attacker
+    // who deposits still blocks the league and merely pays for the privilege
+    // with money they get back at the timelock.
     pub max_teams: u8,
-    /// How many stakes have ever been opened. **Descriptive, not a limit.**
-    ///
-    /// Saturates at 255 rather than erroring — see `join_league`. Nothing reads
-    /// it to make a decision, so a count that stops climbing is a wrong number
-    /// on a dashboard rather than a wrong outcome.
+    // How many stakes have ever been opened. **Descriptive, not a limit.**
+    //
+    // Saturates at 255 rather than erroring — see `join_league`. Nothing reads
+    // it to make a decision, so a count that stops climbing is a wrong number
+    // on a dashboard rather than a wrong outcome.
     pub member_count: u8,
     /// Running total of live deposits, in base units. Decreases on refund, so
     /// it tracks what the vault actually holds rather than what it ever held.
@@ -725,11 +737,11 @@ pub enum EscrowError {
     RefundUnlockNotInFuture,
     #[msg("Accepted rules hash does not match the league's")]
     RulesHashMismatch,
-    /// **No longer raised.** Kept because error codes are positional: deleting a
-    /// variant renumbers every one below it, which silently changes what a
-    /// deployed client reports for four other failures, and it would move the
-    /// committed IDL that `idl:check` compares. Seat limits are enforced in
-    /// Postgres — see `League::max_teams`.
+    // **No longer raised.** Kept because error codes are positional: deleting a
+    // variant renumbers every one below it, which silently changes what a
+    // deployed client reports for four other failures, and it would move the
+    // committed IDL that `idl:check` compares. Seat limits are enforced in
+    // Postgres — see `League::max_teams`.
     #[msg("The league already has its full complement of teams")]
     LeagueFull,
     #[msg("This member has already staked their buy-in")]
