@@ -660,3 +660,92 @@ describe("the third-place game is played whether or not it pays", () => {
     expect(state.playoffs?.bracket.thirdPlaceGame).not.toBeNull();
   });
 });
+
+describe("the LOWEST_TEAM_ID backstop, where the query meets the sort", () => {
+  /**
+   * A team with a chosen id.
+   *
+   * `addTestTeam` lets Postgres draw the UUID, which is right everywhere else
+   * and useless here: this test exists to make join order and id order
+   * *disagree*, and a random draw agrees with slot order half the time. Every
+   * other column is written exactly as `addTestTeam` writes it, including the
+   * `max(slot) + 1` that makes slot the real join order.
+   */
+  async function addTeamWithId(
+    client: PGliteClient,
+    leagueId: string,
+    name: string,
+    teamId: string,
+  ): Promise<void> {
+    const [user] = await client.query<{ id: string }>(
+      `INSERT INTO users (email, display_name) VALUES ($1, $2) RETURNING id`,
+      [`${name.toLowerCase().replace(/\W+/g, "-")}-${leagueId.slice(0, 8)}@example.test`, name],
+    );
+
+    await client.query(
+      `INSERT INTO teams (league_id, owner_id, is_bot, name, slot, id)
+       VALUES ($1, $2, false, $3,
+               COALESCE((SELECT max(slot) FROM teams WHERE league_id = $1), 0) + 1, $4)`,
+      [leagueId, user!.id, name, teamId],
+    );
+  }
+
+  it("seeds the regular-season prize on the id, not on who joined first", async () => {
+    // The money assertion. `regularSeasonWinner` is seed 1, which is the
+    // REGULAR_SEASON prize — 1000 bps of the pot. Two teams are made exactly
+    // equal on all four real criteria, so the seed between them is decided by
+    // the backstop alone.
+    //
+    // If anyone ever "fixes" this to match `0005_teams_and_play.sql:11-13` and
+    // sorts the join slot, this test fails — and it fails on the one assertion
+    // that says a participant would have won a prize for having joined first.
+    db = await createTestDatabase();
+    await seedSport(db, NFL);
+
+    const commissioner = await createUser(db, "backstop@example.com", "Commish");
+    const rules = buildNflPprRules({ seasonYear: 2026, draft: DRAFT });
+    const league = await createLeague(db, NFL, {
+      name: "Backstop League",
+      commissionerId: commissioner.id,
+      rules,
+    });
+
+    // Ids descending as teams join, so id order is the exact reverse of slot
+    // order and the two orderings cannot accidentally agree.
+    const ids = [
+      "88888888-0000-4000-8000-000000000000",
+      "77777777-0000-4000-8000-000000000000",
+      "66666666-0000-4000-8000-000000000000",
+      "55555555-0000-4000-8000-000000000000",
+      "44444444-0000-4000-8000-000000000000",
+      "33333333-0000-4000-8000-000000000000",
+      "22222222-0000-4000-8000-000000000000",
+      "11111111-0000-4000-8000-000000000000",
+    ];
+    for (const [index, id] of ids.entries()) {
+      await addTeamWithId(db, league.id, `Team ${index + 1}`, id);
+    }
+
+    // Pairs 0 and 1 produce identical winners: same record, same points for,
+    // same points against, and they never met — so head-to-head returns null
+    // for that group rather than deciding it. Four criteria, all equal.
+    const points = [200_000, 100_000, 200_000, 100_000, 180_000, 80_000, 170_000, 70_000];
+    for (let i = 0; i + 1 < ids.length; i += 2) {
+      await db.query(
+        `INSERT INTO matchups
+           (league_id, week, phase, home_team_id, away_team_id,
+            home_milli_points, away_milli_points, finalized_at)
+         VALUES ($1, 1, 'REGULAR', $2, $3, $4, $5, $6)`,
+        [league.id, ids[i], ids[i + 1], points[i], points[i + 1], FINAL.toISOString()],
+      );
+    }
+    await db.query("UPDATE leagues SET state = 'IN_SEASON' WHERE id = $1", [league.id]);
+
+    const state = await playoffState(db, league.id);
+
+    // Team 3 joined third and Team 1 joined first. Team 3 holds the lower id, so
+    // Team 3 takes seed 1 — and with it the regular-season prize.
+    expect(state.regularSeasonWinner).toBe(ids[2]);
+    expect(state.regularSeasonWinner).not.toBe(ids[0]);
+  });
+});

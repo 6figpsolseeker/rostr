@@ -216,9 +216,10 @@ function scoresFor(
     case "HEAD_TO_HEAD":
       return headToHeadScores(group, results);
     case "LOWEST_TEAM_ID":
-      // The deterministic backstop. Not fair in any meaningful sense — it is
-      // simply guaranteed to terminate, which matters more than fairness once
-      // every real criterion has come up equal.
+      // The deterministic backstop, handled by `orderGroup` rather than scored
+      // here — see the branch there for which id it sorts and why. Not fair in
+      // any meaningful sense; it is simply guaranteed to terminate, which
+      // matters more than fairness once every real criterion has come up equal.
       return null;
   }
 }
@@ -257,6 +258,33 @@ function orderGroup(
   for (let i = 0; i < tiebreakers.length; i++) {
     const tiebreaker = tiebreakers[i]!;
 
+    // Sorts the team's **id** — a random UUID (`teams.id`) — ascending. Not the
+    // join slot, whatever `0005_teams_and_play.sql:11-13` says; that sentence is
+    // wrong and migration `0025` is the correction. It cannot be edited, because
+    // migrations are forward-only and the runner refuses an applied file whose
+    // checksum moved.
+    //
+    // Sorting on the join slot was considered and rejected. `slot` is
+    // `count(*) + 1` at join, so the lowest belongs to whoever joined first —
+    // in practice the commissioner, who holds the league URL before anyone
+    // else. That would give one participant the last word on every unresolved
+    // tie, and the 1000 bps regular-season prize that hangs off seed 1, by
+    // construction and every season. This repo removes powers like that rather
+    // than granting them.
+    //
+    // A UUID is arbitrary, and that is the point rather than a shortcoming: by
+    // the time this runs, four real criteria have said the teams are
+    // indistinguishable, so there is nothing left to be fair about. What is
+    // required is that it be total, deterministic, reproducible by anyone
+    // holding the published standings, and impossible for a participant to
+    // steer. Nobody supplies their own id, and there is no leave-league path,
+    // so nobody gets a second draw.
+    //
+    // The one residual, recorded because it is real rather than because it is
+    // worth code: a commissioner could create and discard unjoined leagues
+    // until their own UUID comes up low. Each attempt costs a fresh on-chain
+    // anchor, and it buys a branch that decides money on the order of once in
+    // a hundred million league-seasons.
     if (tiebreaker === "LOWEST_TEAM_ID") {
       return [...group]
         .sort((a, b) => a.teamId.localeCompare(b.teamId))

@@ -328,7 +328,38 @@ league that can never accept a deposit.
 ### The final tiebreaker is deterministic
 
 Every major platform ends its tiebreaker chain with a coin flip. Fine for bragging
-rights; unacceptable when the contract has to settle. The chain ends on lowest team ID.
+rights; unacceptable when the contract has to settle. The chain ends on lowest team ID —
+`teams.id`, the random UUID, sorted ascending.
+
+**Rejected: join order.** The obvious reading of "team ID" is a 1..N number, and
+`teams.slot` is exactly that. Ranking on it is worse than the arbitrariness it removes.
+`slot` is `count(*) + 1` at join, so the lowest belongs to whoever joined first — in
+practice the commissioner, who holds the league URL before anyone else has seen it. That
+makes the last word on every unresolved tie, and the 1000 bps regular-season prize hanging
+off seed 1, a standing property of having created the league. It is the same special power
+the rest of this system is built to delete, arriving through a column nobody thinks of as
+a permission.
+
+**Rejected: a key derived from the draft-order seed.** Attractive because the seed is
+already unpredictable and already published, so the tiebreak would be unguessable at
+formation and checkable afterwards. It closes nothing: a v4 UUID is equally unchooseable
+and equally checkable, and the seed becomes public at the draw either way. It costs a
+league-identity parameter threaded through a pure function that deliberately has none, a
+fallback for the pre-draw state it was meant to replace, and — since the value would no
+longer be a team id — either a rename that moves the golden hash and breaks every anchored
+league, or a name that lies about what the code does. That last is the defect this decision
+exists to correct, so paying for it with a fresh instance of it is not a trade.
+
+**Arbitrary is the requirement, not a concession.** Four real criteria have already found
+the teams indistinguishable. What is left is not a question about football, and inventing a
+measurement to answer it would be worse than admitting that. The bar is that it terminates,
+that anyone holding the standings can reproduce it, and that no participant can steer it.
+
+Note what this branch actually does in practice. Deciding money needs exact equality on win
+percentage, points for, head-to-head and points against — order 10⁻⁸ per league-season. But
+with no games played every team is equal on all four, so it orders the **entire league on
+every pre-season standings view**. The visible behaviour is common and the paying behaviour
+is vanishingly rare, which is why this is documented carefully and not engineered heavily.
 
 ---
 
