@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { Tank01Client } from "./client.js";
 import { DST_REF_PREFIX, Tank01Provider } from "./adapter.js";
+import rawBoxScore from "./__fixtures__/box-score.json" with { type: "json" };
 
 /**
  * Player records shaped exactly as `getNFLPlayerList` returns them, including
@@ -191,11 +192,24 @@ describe("listGames", () => {
   });
 
   it("maps game statuses we act on", async () => {
+    // `Completed` is the only wording in this list that came from a real Tank01
+    // response — `__fixtures__/box-score.json` carries it. Every other entry was
+    // written from documentation, which is why this test passed for months while
+    // the one string we had evidence for fell through to SCHEDULED. An
+    // unrecognised status there means `syncGames` writes a finished game as
+    // unstarted, and every week in the season finalises down the postponement
+    // fallback.
     const statuses = [
+      ["Completed", "FINAL"],
       ["Final", "FINAL"],
+      ["Final/OT", "FINAL"],
       ["Live - In Progress", "IN_PROGRESS"],
+      ["In Progress", "IN_PROGRESS"],
+      ["Halftime", "IN_PROGRESS"],
       ["Postponed", "POSTPONED"],
+      ["Canceled", "CANCELLED"],
       ["Scheduled", "SCHEDULED"],
+      ["Not Started", "SCHEDULED"],
     ] as const;
 
     for (const [raw, expected] of statuses) {
@@ -214,5 +228,34 @@ describe("listGames", () => {
       const [game] = await subject.listGames(2025, 1);
       expect(game?.status, `${raw} should map to ${expected}`).toBe(expected);
     }
+  });
+
+  it("maps the status the captured response actually carries", async () => {
+    // The list above is still a list of strings somebody typed. This one reads
+    // the wording out of the only real Tank01 response in the repo, so it cannot
+    // drift from the provider the way a hand-written fixture can — which is
+    // exactly how the mapping came to be wrong about `Completed` while a green
+    // test asserted `Final`.
+    const observed = (rawBoxScore as { gameStatus?: string }).gameStatus;
+
+    expect(observed, "the fixture should carry a gameStatus to assert against").toBeTruthy();
+
+    const subject = provider({
+      getNFLGamesForWeek: [
+        {
+          gameID: "g",
+          gameWeek: "Week 1",
+          home: "A",
+          away: "B",
+          gameTime_epoch: "1757031600.0",
+          gameStatus: observed,
+        },
+      ],
+    });
+
+    const [game] = await subject.listGames(2025, 1);
+    expect(game?.status, `the captured ${JSON.stringify(observed)} must read as finished`).toBe(
+      "FINAL",
+    );
   });
 });
