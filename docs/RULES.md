@@ -442,11 +442,21 @@ Optional per league. When enabled:
   A wider choice needs either a per-token cap or a price oracle; neither is worth building
   before the escrow has been reviewed.
 - Funds lock in escrow until the championship resolves.
-- **The buy-in is between $5 and $50 per member** while the escrow contract is young. Both
-  bounds are enforced by the program, not the interface, so they bind every caller. A
+- **The buy-in is between $5 and $50 per member** while the escrow contract is young. A
   league stakes any amount in that range — $5, $10, $25, $47, $50 — the ceiling is a limit,
   not a price. At twelve members the most a single league can lose to a bug in new code is
   therefore $600.
+
+  **Two things enforce that, and it is worth being exact about which does what**, because
+  the dollar figure above depends on both. The _bounds_ are enforced by the program rather
+  than the interface, so they bind every caller. The _token_ is set by this service, per
+  network, and is not something a league creator supplies — which is what makes a bound
+  expressed in base units mean a bound expressed in dollars. A cap of fifty on a token
+  nobody chose deliberately is a cap of fifty of something, and the $600 above would not
+  follow from it. The program checks the token has six decimals; it does not yet check
+  which token it is, so a caller who bypasses this service entirely can still create a
+  league denominated in another six-decimal token. Nobody can join or stake in such a
+  league through rostr, and pinning the mint in the program is planned before mainnet.
 
   The floor is there because a pot has fixed costs a stake does not scale with: every
   deposit and refund is a transaction, the vault and each membership cost rent, and

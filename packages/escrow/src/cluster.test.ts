@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
+import { PublicKey } from "@solana/web3.js";
 import type { Connection } from "@solana/web3.js";
 import {
   clusterFromGenesisHash,
   clusterMismatch,
   GENESIS_HASHES,
   parseCluster,
+  POT_MINTS,
+  potMintFor,
   resolveCluster,
   type Cluster,
 } from "./cluster.js";
@@ -118,5 +121,65 @@ describe("clusterMismatch", () => {
     // The reason it is dangerous here specifically is that the address is the
     // same on both chains, so every screen keeps rendering normally.
     expect(clusterMismatch("mainnet-beta", "devnet")).toMatch(/same address on every cluster/);
+  });
+});
+
+/**
+ * The mint decides what the money *is*, which is why it is a constant here and
+ * not a field in the create request. It used to be the latter: the API copied
+ * `pot.tokenMint` out of the request body into the rules document it then froze
+ * and hashed, while the fee recipient thirty lines above it was deliberately
+ * read from server config. A caller could therefore denominate a league in a
+ * token they minted and held the freeze authority for, and a frozen vault
+ * fails `refund_stake` — the one instruction the escrow's safety case rests on.
+ */
+describe("potMintFor", () => {
+  it("answers the real USDC mint on each public cluster", () => {
+    // Verified against live RPC on 2026-08-13, both reporting six decimals
+    // under the legacy SPL token program — which is what the program requires,
+    // since it rejects Token-2022 mints outright.
+    expect(potMintFor("mainnet-beta")).toBe("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
+    expect(potMintFor("devnet")).toBe("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU");
+  });
+
+  it("gives mainnet and devnet different answers", () => {
+    // The bug this replaces was one hardcoded mainnet address used everywhere,
+    // which on devnet names an account that does not exist — so `create_league`
+    // would have failed at account resolution rather than doing anything
+    // dangerous. Pinning both is what makes the constant usable at all.
+    expect(potMintFor("mainnet-beta")).not.toBe(potMintFor("devnet"));
+  });
+
+  it("has no answer for a cluster with no pot token", () => {
+    // Testnet has no USDC worth naming and localnet has no fixed mint at all.
+    // `null` rather than a fallback: the caller refuses to create a pot league,
+    // which is the only safe reading of "there is no token here".
+    expect(potMintFor("testnet")).toBeNull();
+    expect(potMintFor("localnet")).toBeNull();
+  });
+
+  it("takes an override on localnet, where there is nothing to protect", () => {
+    const local = "So11111111111111111111111111111111111111112";
+    expect(potMintFor("localnet", local)).toBe(local);
+  });
+
+  it("ignores the override on every public cluster", () => {
+    // The escape hatch must not become the hole. Declaring mainnet and passing
+    // a local mint does not widen mainnet — the argument is simply not read,
+    // so a misconfigured environment cannot promote a worthless token into a
+    // real pot.
+    const attacker = "So11111111111111111111111111111111111111112";
+    expect(potMintFor("mainnet-beta", attacker)).toBe(POT_MINTS["mainnet-beta"]);
+    expect(potMintFor("devnet", attacker)).toBe(POT_MINTS.devnet);
+    expect(potMintFor("testnet", attacker)).toBeNull();
+  });
+
+  it("names mints the program would accept", () => {
+    // Base58, 32 bytes. A truncated or mistyped constant here is frozen into
+    // every league created under it, so the shape is worth pinning even though
+    // the value cannot be checked without a node.
+    for (const mint of Object.values(POT_MINTS)) {
+      expect(new PublicKey(mint).toBase58()).toBe(mint);
+    }
   });
 });

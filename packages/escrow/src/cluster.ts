@@ -46,6 +46,61 @@ export const GENESIS_HASHES: Readonly<Record<Exclude<Cluster, "localnet">, strin
 };
 
 /**
+ * The token a pot is denominated in, per cluster.
+ *
+ * **Verified against the live chains on 2026-08-13**, not recalled — the same
+ * standard as {@link GENESIS_HASHES}, and for a sharper reason. A recalled
+ * address that is one character wrong is not a typo here, it is a different
+ * token, and the value is frozen into every league created under it:
+ *
+ * ```
+ * curl -s -X POST -H 'Content-Type: application/json' \
+ *   -d '{"jsonrpc":"2.0","id":1,"method":"getAccountInfo","params":["EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",{"encoding":"jsonParsed"}]}' \
+ *   https://api.mainnet-beta.solana.com
+ * ```
+ *
+ * Both answered `"decimals": 6` and `"program": "spl-token"`, which is what the
+ * program requires: `POT_MINT_DECIMALS` in `lib.rs`, and legacy SPL rather than
+ * Token-2022, whose mints the program rejects outright.
+ *
+ * **Why this is a constant and not a choice.** The buy-in cap is expressed in
+ * base units, so "fifty" only means fifty dollars if the token is worth a
+ * dollar. `docs/RULES.md` §7 tells members the $5–$50 bounds "bind every
+ * caller" and reasons from that to what a league can lose — a sentence that
+ * holds only if something decides the token. Nothing did: the mint arrived in
+ * the create request body and was written into the signed rules unread, while
+ * the fee recipient beside it was deliberately taken from server config
+ * because "a client-supplied recipient would let them redirect ours". The mint
+ * decides what the money *is*, which is the larger question of the two.
+ *
+ * **Testnet and localnet are deliberately absent**, and they are absent for
+ * different reasons. Testnet has no USDC worth naming. Localnet has no fixed
+ * mint at all — a fresh ledger per run, so the anchor tests create their own —
+ * which is the same reason {@link GENESIS_HASHES} skips it. Both answer `null`
+ * from {@link potMintFor}, and a caller with no mint refuses to create a pot
+ * league rather than falling back to whatever it was handed.
+ */
+export const POT_MINTS: Readonly<Partial<Record<Cluster, string>>> = {
+  "mainnet-beta": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+  devnet: "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+};
+
+/**
+ * The mint a pot must use on this cluster, or `null` where there is no answer.
+ *
+ * `localnetOverride` exists so a local validator can still exercise the pot
+ * flow end to end, and it is **ignored on every public cluster** — passing one
+ * while declaring mainnet does not widen mainnet, it is simply not read. That
+ * asymmetry is the point: the escape hatch cannot become the hole. A local
+ * chain has no shared identity and no real money on it, which is the same
+ * reasoning that lets an unrecognised genesis hash read as `"localnet"`.
+ */
+export function potMintFor(cluster: Cluster, localnetOverride?: string): string | null {
+  if (cluster === "localnet") return localnetOverride || null;
+  return POT_MINTS[cluster] ?? null;
+}
+
+/**
  * The cluster a genesis hash identifies, or `"localnet"` for anything else.
  *
  * Answering `"localnet"` rather than `null` for an unknown hash is the fail-safe

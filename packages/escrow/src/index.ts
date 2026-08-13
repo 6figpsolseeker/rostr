@@ -9,9 +9,11 @@
 export { ESCROW_IDL, type EscrowIdl } from "./idl.js";
 export {
   GENESIS_HASHES,
+  POT_MINTS,
   clusterFromGenesisHash,
   clusterMismatch,
   parseCluster,
+  potMintFor,
   resolveCluster,
   type Cluster,
 } from "./cluster.js";

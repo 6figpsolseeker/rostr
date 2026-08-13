@@ -9,6 +9,7 @@
  * sees everything wrong at once.
  */
 
+import bs58 from "bs58";
 import type { SportDef } from "../sports/types.js";
 import { slotTypesByKey, statKeysByKey } from "../sports/types.js";
 import {
@@ -540,6 +541,23 @@ function validateRefundUnlock(rules: LeagueRules, refundUnlockAt: number, out: s
   }
 }
 
+/**
+ * Whether a string is a well-formed Solana address.
+ *
+ * Base58 decoding to exactly 32 bytes, which is all a chain-free package can
+ * honestly check: it does not prove the account exists, holds a mint, or is the
+ * one anybody wanted. It does refuse the failures that are silent and permanent
+ * — a truncated paste, a checksum-less typo, an address in the wrong encoding.
+ * `bs58.decode` throws on an invalid alphabet rather than returning a flag.
+ */
+function isPublicKeyLike(value: string): boolean {
+  try {
+    return bs58.decode(value).length === 32;
+  } catch {
+    return false;
+  }
+}
+
 function validatePot(rules: LeagueRules, out: string[]): void {
   const pot = rules.pot;
   if (pot === null) return;
@@ -564,7 +582,15 @@ function validatePot(rules: LeagueRules, out: string[]): void {
       );
     }
   }
-  if (pot.tokenMint.length === 0) out.push("pot requires a token mint");
+  // Shape only, deliberately. *Which* mint is a per-cluster question and this
+  // package is chain-free — it depends on no web3 library and knows nothing
+  // about clusters, which is what lets the same encoder produce the same hash
+  // everywhere. The server picks the mint from `POT_MINTS`; this checks that
+  // whatever ends up in the frozen document is at least a public key, because
+  // "is not the empty string" was the entire test and it let a typo, a
+  // truncation, or a sentence be hashed into a league's rules for good.
+  if (!isPublicKeyLike(pot.tokenMint)) out.push("pot requires a valid token mint address");
+
   if (pot.refundUnlockAt <= 0) {
     out.push("pot requires a refund unlock time");
   } else {

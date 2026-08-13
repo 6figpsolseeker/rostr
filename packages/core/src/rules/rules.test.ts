@@ -347,6 +347,32 @@ describe("validateLeagueRules", () => {
     expect(validateLeagueRules(bad, NFL)).toContainEqual(expect.stringContaining("90 seconds"));
   });
 
+  it.each([
+    ["empty", ""],
+    ["truncated", "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt"],
+    ["not base58", "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1O"],
+    ["a sentence", "USDC please"],
+    ["too long", "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1vEPjFW"],
+  ])("rejects a token mint that is %s", (_label, mint) => {
+    // Only emptiness was checked before, which let a mistyped or truncated
+    // address be canonically encoded, hashed, signed and frozen — and a frozen
+    // rules document cannot be corrected. This cannot say the mint is the one
+    // anybody wanted; it can refuse the shapes that are silent and permanent.
+    const bad = mutate((d) => {
+      (d.pot as { tokenMint: string }).tokenMint = mint;
+    });
+    expect(validateLeagueRules(bad, NFL)).toContainEqual(
+      expect.stringContaining("valid token mint address"),
+    );
+  });
+
+  it("accepts a well-formed mint", () => {
+    // The control: the check must not reject the address every fixture uses.
+    expect(validateLeagueRules(FIXTURE, NFL)).not.toContainEqual(
+      expect.stringContaining("token mint"),
+    );
+  });
+
   it("rejects a buy-in below the minimum", () => {
     const bad = mutate((d) => {
       (d.pot as { buyInBaseUnits: string }).buyInBaseUnits = "4999999";
