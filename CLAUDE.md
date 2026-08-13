@@ -548,9 +548,37 @@ injury. Two behaviours look like oversights and are not:
 - **A player on a bye never locks.** There is no game to have started, so that slot stays
   fillable — with a Monday-night player, for instance.
 
+There was a **third** case that did look like an oversight and was one: an **unknown**
+player never locked either. `isSlotLocked` read the kickoff out of the roster map, and
+`roster.get(id)?.kickoffAt` answered `undefined` both for a bye and for a player who was
+not in the map — so cutting the man in a locked slot deleted the lock with him. It now
+**fails closed**: an unknown player locks.
+
+**The lock no longer consults a roster at all.** It takes `KickoffTimes` — player id to
+kickoff — built over the union of the roster and whoever is standing in the stored lineup.
+A lock is a fact about a game that has started; who owns the player is a different
+question, answered by the same map that answers `NOT_ON_ROSTER`. Conflating them is what
+made the lock defeasible. **Do not widen `loadRosterForWeek` to fix a lock** — that map is
+`validateLineup`'s ownership oracle, and widening it would let a manager start a player he
+had cut, put released players in the autofill's candidate pool, and offer them in the
+editor.
+
 A locked slot may **keep** its player; it may not change. Rejecting the slot outright
 would make submitting a whole lineup on Sunday fail because of a Thursday slot the
-manager can do nothing about.
+manager can do nothing about. It may not be **emptied** either, or the empty-slot rule
+above would become the bypass instead — there is a test.
+
+**`RULES.md` §6 is now implemented, and it had never been.** _"A player cannot be added or
+dropped once his own game has kicked off. Otherwise a manager could cut an injured player
+mid-game, or add one after his touchdown."_ Members signed that and nothing enforced it.
+`dropPlayer` and `addFreeAgent` now refuse with `GAME_STARTED`.
+
+The two release paths that **cannot** refuse are left alone deliberately: a throw inside
+`processWaivers` rolls back the whole league's run and leaves the claim PENDING forever,
+and `resolveTrade` cannot undo a trade the league already approved because a game started.
+Those are covered by the lock instead, which holds however the player left. Closing the
+route and closing the outcome are different jobs and this needs both — the same argument
+`ASSET_GONE` makes for trades.
 
 **The autolineup is deterministic, and that is the whole point.** An abandoned team plays
 out the season and its results move other people's playoff seeds — which in a pot league
@@ -567,6 +595,17 @@ inactive player both score nothing, but only one keeps the lineup legal.
 greyed out in the UI — `setLineup` loads what is _currently stored_, works out which slots
 have kicked off, and refuses any change to them. A crafted request gets the same answer as
 the screen.
+
+That last sentence used to be true and useless: the screen and the server both computed
+the lock from a roster map that had already lost the player, so they agreed and were both
+wrong. `loadKickoffs` is now the one definition of when a player locks, and the lineup
+route asks it the same question `setLineup` does.
+
+**`autoFillLineup` evicts a player who left the roster before his kickoff.** He is a hole,
+not a choice the manager made — and leaving him let his slot lock at kickoff around a
+player nobody rosters, who then scored for the team that cut him. Note the `lockedAssignments`
+call there was dead code before this: it is a strict subset of the loop below it, since a
+null player never locks, so it never kept a slot the second loop would not have kept anyway.
 
 `ensureLineups` is what makes `resolveWeek`'s precondition true. That function throws when
 a scheduled team has no lineup, deliberately — scoring a missing team as zero hands its

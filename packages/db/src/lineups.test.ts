@@ -11,6 +11,7 @@ import {
   autoFillLineup,
   ensureLineups,
   loadAverages,
+  loadKickoffs,
   loadLineup,
   loadProjectedPoints,
   loadRosterForWeek,
@@ -1044,5 +1045,121 @@ describe("one source ranks the autofill", () => {
     const projected = await loadProjectedPoints(fx.client, SEASON, WEEK, fx.rules);
 
     expect(projected.get(qb)).toBe(12_000);
+  });
+});
+
+describe("the lock survives a drop", () => {
+  /**
+   * The exploit, as a regression test.
+   *
+   * Start a Thursday player, watch him play, cut him, and swap a Sunday player
+   * into his slot. This resolved before the lock stopped consulting the roster:
+   * `loadRosterForWeek` excludes released players, so the slot's occupant
+   * vanished from the map and an absent player read as "never locked".
+   */
+  it("refuses the swap after the locked player is dropped", async () => {
+    const fx = await setup();
+
+    await setLineup(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: fx.teamId,
+      week: WEEK,
+      assignments: [{ slotType: "QB", slotIndex: 0, playerId: fx.players.get("thu-qb")! }],
+      now: BEFORE_ANYTHING,
+    });
+
+    // Released directly rather than through `dropPlayer`, which now refuses this
+    // outright — see the waiver suite. The point here is that the lineup lock
+    // holds however the player left, including the paths that cannot refuse:
+    // `resolveTrade` and `processWaivers` both release rows mid-week.
+    await fx.client.query(
+      "UPDATE roster_entries SET released_at = now() WHERE team_id = $1 AND player_id = $2",
+      [fx.teamId, fx.players.get("thu-qb")],
+    );
+
+    await expect(
+      setLineup(fx.client, {
+        leagueId: fx.leagueId,
+        teamId: fx.teamId,
+        week: WEEK,
+        assignments: [{ slotType: "QB", slotIndex: 0, playerId: fx.players.get("sun-qb")! }],
+        now: AFTER_THURSDAY,
+      }),
+    ).rejects.toMatchObject({ code: "INVALID_LINEUP" });
+  });
+
+  it("knows a released player's kickoff even though the roster does not", async () => {
+    // The two functions answering differently is the design, not an accident.
+    const fx = await setup();
+    await fx.client.query(
+      "UPDATE roster_entries SET released_at = now() WHERE team_id = $1 AND player_id = $2",
+      [fx.teamId, fx.players.get("thu-qb")],
+    );
+
+    const roster = await loadRosterForWeek(fx.client, fx.teamId, SEASON, WEEK);
+    const kickoffs = await loadKickoffs(fx.client, [fx.players.get("thu-qb")!], SEASON, WEEK);
+
+    expect(roster.has(fx.players.get("thu-qb")!)).toBe(false);
+    expect(kickoffs.get(fx.players.get("thu-qb")!)).toBe(THURSDAY_SECONDS);
+  });
+
+  it("lets the autofill replace a player dropped before his kickoff", async () => {
+    // The companion half. A player cut on Tuesday is a hole, not a choice — and
+    // leaving him would let his slot lock at kickoff around a man nobody owns,
+    // who would then score for the team that cut him.
+    const fx = await setup();
+
+    await setLineup(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: fx.teamId,
+      week: WEEK,
+      assignments: [{ slotType: "QB", slotIndex: 0, playerId: fx.players.get("thu-qb")! }],
+      now: BEFORE_ANYTHING,
+    });
+
+    await fx.client.query(
+      "UPDATE roster_entries SET released_at = now() WHERE team_id = $1 AND player_id = $2",
+      [fx.teamId, fx.players.get("thu-qb")],
+    );
+
+    const filled = await autoFillLineup(
+      fx.client,
+      fx.leagueId,
+      fx.teamId,
+      WEEK,
+      BEFORE_ANYTHING,
+    );
+
+    const qb = filled.find((slot) => slot.slotType === "QB" && slot.slotIndex === 0);
+    expect(qb?.playerId).not.toBe(fx.players.get("thu-qb"));
+    expect(qb?.playerId).toBe(fx.players.get("sun-qb"));
+  });
+
+  it("keeps a player dropped after his kickoff, because that slot is locked", async () => {
+    const fx = await setup();
+
+    await setLineup(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: fx.teamId,
+      week: WEEK,
+      assignments: [{ slotType: "QB", slotIndex: 0, playerId: fx.players.get("thu-qb")! }],
+      now: BEFORE_ANYTHING,
+    });
+
+    await fx.client.query(
+      "UPDATE roster_entries SET released_at = now() WHERE team_id = $1 AND player_id = $2",
+      [fx.teamId, fx.players.get("thu-qb")],
+    );
+
+    const filled = await autoFillLineup(
+      fx.client,
+      fx.leagueId,
+      fx.teamId,
+      WEEK,
+      AFTER_THURSDAY,
+    );
+
+    const qb = filled.find((slot) => slot.slotType === "QB" && slot.slotIndex === 0);
+    expect(qb?.playerId).toBe(fx.players.get("thu-qb"));
   });
 });

@@ -744,3 +744,98 @@ describe("one owner per league", () => {
     expect(owner?.team_id).toBe(fx.teams[1]);
   });
 });
+
+describe("RULES.md §6 — a player whose game has kicked off cannot be moved", () => {
+  /**
+   * The constitution has said this since it was frozen, and nothing implemented
+   * it:
+   *
+   * > A player cannot be added or dropped once **his own game has kicked off**.
+   * > Otherwise a manager could cut an injured player mid-game, or add one after
+   * > his touchdown.
+   *
+   * Both halves were live. Cutting a started player reopened the lineup slot he
+   * was in — and because a released player is still scored from the stored
+   * lineup, cutting one who had already done well kept his points *and* freed
+   * the roster spot, so twelve roster slots fielded thirteen contributors.
+   */
+  const KICKOFF = new Date("2026-09-13T17:00:00Z");
+  const DURING = new Date(KICKOFF.getTime() + 60_000);
+  const BEFORE = new Date(KICKOFF.getTime() - 60_000);
+
+  /** Give the league a real week-1 schedule; the base fixture has none. */
+  async function withSchedule(fx: Fixture): Promise<void> {
+    const [sport] = await fx.client.query<{ id: string }>(
+      "SELECT id FROM sports WHERE key = $1",
+      [NFL.key],
+    );
+    await fx.client.query(
+      `INSERT INTO games (sport_id, external_ref, season, week, home_team_ref, away_team_ref, kickoff_at)
+       VALUES ($1, 'wk1', 2026, 1, 'CIN', 'BAL', $2)`,
+      [sport!.id, KICKOFF],
+    );
+  }
+
+  it("refuses a drop once the player's game has started", async () => {
+    const fx = await setup();
+    await withSchedule(fx);
+
+    await expect(
+      dropPlayer(fx.client, fx.leagueId, fx.teams[0]!, fx.players.get("held")!, DURING),
+    ).rejects.toMatchObject({ code: "GAME_STARTED" });
+  });
+
+  it("still allows the drop before kickoff", async () => {
+    const fx = await setup();
+    await withSchedule(fx);
+
+    await expect(
+      dropPlayer(fx.client, fx.leagueId, fx.teams[0]!, fx.players.get("held")!, BEFORE),
+    ).resolves.toMatchObject({ destination: expect.any(String) });
+  });
+
+  it("refuses adding a player whose game has started", async () => {
+    // The other half of the same sentence. Harmless today only because
+    // `PLAYER_LOCKED` refuses to start him — which is a second line of defence,
+    // not the rule itself.
+    const fx = await setup();
+    await withSchedule(fx);
+
+    await expect(
+      addFreeAgent(fx.client, {
+        leagueId: fx.leagueId,
+        teamId: fx.teams[1]!,
+        addPlayerId: fx.players.get("target")!,
+        now: DURING,
+      }),
+    ).rejects.toMatchObject({ code: "GAME_STARTED" });
+  });
+
+  it("refuses an add whose drop side has started, not just the add side", async () => {
+    // `addFreeAgent` releases a roster row too. Without this the guard in
+    // `dropPlayer` is decorative — the same release, reached by another button.
+    const fx = await setup();
+    await withSchedule(fx);
+
+    await expect(
+      addFreeAgent(fx.client, {
+        leagueId: fx.leagueId,
+        teamId: fx.teams[0]!,
+        addPlayerId: fx.players.get("target")!,
+        dropPlayerId: fx.players.get("held")!,
+        now: DURING,
+      }),
+    ).rejects.toMatchObject({ code: "GAME_STARTED" });
+  });
+
+  it("stays silent when the week has no schedule at all", async () => {
+    // No games, no kickoff times, nothing to compare against. `setLineup`
+    // already refuses that case loudly for the decision that actually matters,
+    // and a waiver move is not the place to discover the sync has not run.
+    const fx = await setup();
+
+    await expect(
+      dropPlayer(fx.client, fx.leagueId, fx.teams[0]!, fx.players.get("held")!, DURING),
+    ).resolves.toMatchObject({ destination: expect.any(String) });
+  });
+});

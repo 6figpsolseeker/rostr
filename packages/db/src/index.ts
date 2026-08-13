@@ -92,6 +92,7 @@ export {
   ensureLineups,
   LineupError,
   loadLineup,
+  loadKickoffs,
   loadRosterForWeek,
   loadWeekLineups,
   loadWeekStats,

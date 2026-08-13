@@ -9,7 +9,7 @@ import {
   startingSlots,
   validateLineup,
 } from "./lineup.js";
-import type { LineupAssignment, LineupPlayer } from "./lineup.js";
+import type { KickoffTimes, LineupAssignment, LineupPlayer } from "./lineup.js";
 
 const SHAPE = buildRosterShape(NFL_PPR_ROSTER, NFL);
 
@@ -41,6 +41,20 @@ const ROSTER = new Map<string, LineupPlayer>(
     player("def1", ["DEF"]),
   ].map((p) => [p.playerId, p]),
 );
+
+/**
+ * Kickoffs derived from a roster.
+ *
+ * In production the two come from different queries on purpose — a lock is a
+ * fact about a game, not about who owns the player — but for a fixture whose
+ * roster and lineup agree, deriving one from the other keeps the tests honest
+ * about what they are exercising. The cases where they *disagree* are written
+ * out explicitly further down; those are the ones this whole change is about.
+ */
+const kickoffsOf = (roster: ReadonlyMap<string, LineupPlayer>): KickoffTimes =>
+  new Map([...roster].map(([id, entry]) => [id, entry.kickoffAt]));
+
+const KICKOFFS = kickoffsOf(ROSTER);
 
 /** A legal starting nine. */
 const LEGAL: LineupAssignment[] = [
@@ -81,7 +95,9 @@ describe("startingSlots", () => {
 
 describe("validateLineup", () => {
   it("accepts a legal lineup", () => {
-    expect(validateLineup({ assignments: LEGAL, shape: SHAPE, roster: ROSTER })).toEqual([]);
+    expect(
+      validateLineup({ assignments: LEGAL, shape: SHAPE, roster: ROSTER, kickoffs: KICKOFFS }),
+    ).toEqual([]);
   });
 
   it("rejects a player who cannot play the slot", () => {
@@ -89,6 +105,7 @@ describe("validateLineup", () => {
       assignments: [{ slotType: "QB", slotIndex: 0, playerId: "rb1" }],
       shape: SHAPE,
       roster: ROSTER,
+      kickoffs: KICKOFFS,
     });
 
     expect(codes(problems)).toEqual(["POSITION_NOT_ELIGIBLE"]);
@@ -100,6 +117,7 @@ describe("validateLineup", () => {
       assignments: [{ slotType: "FLEX", slotIndex: 0, playerId: "qb2" }],
       shape: SHAPE,
       roster: ROSTER,
+      kickoffs: KICKOFFS,
     });
 
     expect(codes(problems)).toEqual(["POSITION_NOT_ELIGIBLE"]);
@@ -110,6 +128,7 @@ describe("validateLineup", () => {
       assignments: [{ slotType: "FLEX", slotIndex: 0, playerId: "rb3" }],
       shape: SHAPE,
       roster: ROSTER,
+      kickoffs: KICKOFFS,
     });
 
     expect(problems).toEqual([]);
@@ -120,6 +139,7 @@ describe("validateLineup", () => {
       assignments: [{ slotType: "QB", slotIndex: 0, playerId: "somebody-elses-qb" }],
       shape: SHAPE,
       roster: ROSTER,
+      kickoffs: KICKOFFS,
     });
 
     expect(codes(problems)).toEqual(["NOT_ON_ROSTER"]);
@@ -133,6 +153,7 @@ describe("validateLineup", () => {
       ],
       shape: SHAPE,
       roster: ROSTER,
+      kickoffs: KICKOFFS,
     });
 
     expect(codes(problems)).toEqual(["PLAYER_TWICE"]);
@@ -143,6 +164,7 @@ describe("validateLineup", () => {
       assignments: [{ slotType: "RB", slotIndex: 5, playerId: "rb1" }],
       shape: SHAPE,
       roster: ROSTER,
+      kickoffs: KICKOFFS,
     });
 
     expect(codes(problems)).toEqual(["UNKNOWN_SLOT"]);
@@ -156,6 +178,7 @@ describe("validateLineup", () => {
       ],
       shape: SHAPE,
       roster: ROSTER,
+      kickoffs: KICKOFFS,
     });
 
     expect(codes(problems)).toEqual(["DUPLICATE_SLOT"]);
@@ -166,6 +189,7 @@ describe("validateLineup", () => {
       assignments: [{ slotType: "QB", slotIndex: 0, playerId: null }],
       shape: SHAPE,
       roster: ROSTER,
+      kickoffs: KICKOFFS,
     });
 
     expect(problems).toEqual([]);
@@ -182,6 +206,7 @@ describe("validateLineup", () => {
       ],
       shape: SHAPE,
       roster: ROSTER,
+      kickoffs: KICKOFFS,
     });
 
     expect(codes(problems).sort()).toEqual([
@@ -197,6 +222,7 @@ describe("validateLineup", () => {
         assignments: LEGAL.slice(0, 5),
         shape: SHAPE,
         roster: ROSTER,
+        kickoffs: KICKOFFS,
         requireFull: true,
       });
 
@@ -210,6 +236,7 @@ describe("validateLineup", () => {
         assignments: LEGAL.slice(0, 5),
         shape: SHAPE,
         roster: ROSTER,
+        kickoffs: KICKOFFS,
       });
 
       expect(problems).toEqual([]);
@@ -220,6 +247,7 @@ describe("validateLineup", () => {
         assignments: LEGAL,
         shape: SHAPE,
         roster: ROSTER,
+        kickoffs: KICKOFFS,
         requireFull: true,
       });
 
@@ -240,6 +268,85 @@ const MIXED = new Map<string, LineupPlayer>([
   ["te1", player("te1", ["TE"], null)], // bye week
 ]);
 
+const MIXED_KICKOFFS = kickoffsOf(MIXED);
+
+describe("a lock outlives the roster", () => {
+  // The bug this separation exists for. A manager starts a Thursday RB, watches
+  // him bust, cuts him, and moves a Sunday RB into the slot — which used to work,
+  // because the lock asked the roster when he kicked off and a released player is
+  // not in the roster.
+  const DURING_THURSDAY = THURSDAY + 60;
+
+  /** `rb1` has played and is no longer owned; `rb3` is on the bench, unplayed. */
+  const DROPPED_ROSTER = new Map(
+    [...ROSTER].filter(([id]) => id !== "rb1").map(([id, entry]) => [id, entry]),
+  );
+  const DROPPED_KICKOFFS: KickoffTimes = new Map([
+    ...kickoffsOf(DROPPED_ROSTER),
+    ["rb1", THURSDAY],
+  ]);
+  const CURRENT: LineupAssignment[] = [{ slotType: "RB", slotIndex: 0, playerId: "rb1" }];
+
+  it("refuses the swap after the locking player has been dropped", () => {
+    const problems = validateLineup({
+      assignments: [{ slotType: "RB", slotIndex: 0, playerId: "rb3" }],
+      shape: SHAPE,
+      roster: DROPPED_ROSTER,
+      kickoffs: DROPPED_KICKOFFS,
+      current: CURRENT,
+      now: DURING_THURSDAY,
+    });
+
+    expect(codes(problems)).toContain("SLOT_LOCKED");
+  });
+
+  it("refuses emptying the slot too, so the drop opens no second door", () => {
+    // An empty slot never locks, deliberately. If cutting the player were allowed
+    // to empty his slot, that rule would become the bypass instead.
+    const problems = validateLineup({
+      assignments: [{ slotType: "RB", slotIndex: 0, playerId: null }],
+      shape: SHAPE,
+      roster: DROPPED_ROSTER,
+      kickoffs: DROPPED_KICKOFFS,
+      current: CURRENT,
+      now: DURING_THURSDAY,
+    });
+
+    expect(codes(problems)).toContain("SLOT_LOCKED");
+  });
+
+  it("locks a slot whose occupant is unknown to both maps", () => {
+    // Fail closed. A caller who under-populates `kickoffs` gets refusals, not a
+    // silent bypass — which is the direction that was wrong before: an absent
+    // player and a bye both answered `undefined` and both read as "never locks".
+    const problems = validateLineup({
+      assignments: [{ slotType: "RB", slotIndex: 0, playerId: "rb3" }],
+      shape: SHAPE,
+      roster: DROPPED_ROSTER,
+      kickoffs: kickoffsOf(DROPPED_ROSTER),
+      current: CURRENT,
+      now: DURING_THURSDAY,
+    });
+
+    expect(codes(problems)).toContain("SLOT_LOCKED");
+  });
+
+  it("still lets the slot be changed before that player's kickoff", () => {
+    // The lock is about the game starting, not about the drop. Cutting somebody
+    // on Tuesday must not freeze his slot for the rest of the week.
+    const problems = validateLineup({
+      assignments: [{ slotType: "RB", slotIndex: 0, playerId: "rb3" }],
+      shape: SHAPE,
+      roster: DROPPED_ROSTER,
+      kickoffs: DROPPED_KICKOFFS,
+      current: CURRENT,
+      now: THURSDAY - 60,
+    });
+
+    expect(codes(problems)).not.toContain("SLOT_LOCKED");
+  });
+});
+
 const DURING_THURSDAY = THURSDAY + 60;
 const BEFORE_SUNDAY = SUNDAY - 3600;
 
@@ -250,6 +357,7 @@ describe("locks", () => {
       current: [{ slotType: "QB", slotIndex: 0, playerId: "qb1" }],
       shape: SHAPE,
       roster: MIXED,
+      kickoffs: MIXED_KICKOFFS,
       now: DURING_THURSDAY,
     });
 
@@ -264,6 +372,7 @@ describe("locks", () => {
       current: [{ slotType: "WR", slotIndex: 0, playerId: "wr1" }],
       shape: SHAPE,
       roster: MIXED,
+      kickoffs: MIXED_KICKOFFS,
       now: DURING_THURSDAY,
     });
 
@@ -278,6 +387,7 @@ describe("locks", () => {
       current: [{ slotType: "QB", slotIndex: 0, playerId: "qb1" }],
       shape: SHAPE,
       roster: MIXED,
+      kickoffs: MIXED_KICKOFFS,
       now: DURING_THURSDAY,
     });
 
@@ -290,6 +400,7 @@ describe("locks", () => {
       current: [{ slotType: "QB", slotIndex: 0, playerId: "qb1" }],
       shape: SHAPE,
       roster: MIXED,
+      kickoffs: MIXED_KICKOFFS,
       now: THURSDAY - 1,
     });
 
@@ -302,6 +413,7 @@ describe("locks", () => {
       current: [{ slotType: "QB", slotIndex: 0, playerId: "qb1" }],
       shape: SHAPE,
       roster: MIXED,
+      kickoffs: MIXED_KICKOFFS,
       now: THURSDAY,
     });
 
@@ -317,6 +429,7 @@ describe("locks", () => {
       current: [{ slotType: "RB", slotIndex: 0, playerId: null }],
       shape: SHAPE,
       roster: MIXED,
+      kickoffs: MIXED_KICKOFFS,
       now: DURING_THURSDAY,
     });
 
@@ -332,6 +445,7 @@ describe("locks", () => {
       current: [{ slotType: "RB", slotIndex: 0, playerId: null }],
       shape: SHAPE,
       roster: MIXED,
+      kickoffs: MIXED_KICKOFFS,
       now: SUNDAY_LATE,
     });
 
@@ -346,6 +460,7 @@ describe("locks", () => {
       current: [{ slotType: "FLEX", slotIndex: 0, playerId: null }],
       shape: SHAPE,
       roster: MIXED,
+      kickoffs: MIXED_KICKOFFS,
       now: SUNDAY_LATE + 60,
     });
 
@@ -359,6 +474,7 @@ describe("locks", () => {
       current: [{ slotType: "TE", slotIndex: 0, playerId: "te1" }],
       shape: SHAPE,
       roster: MIXED,
+      kickoffs: MIXED_KICKOFFS,
       now: SUNDAY_LATE,
     });
 
@@ -372,6 +488,7 @@ describe("locks", () => {
       current: [{ slotType: "QB", slotIndex: 0, playerId: "qb1" }],
       shape: SHAPE,
       roster: MIXED,
+      kickoffs: MIXED_KICKOFFS,
     });
 
     expect(problems).toEqual([]);
@@ -380,34 +497,38 @@ describe("locks", () => {
 
 describe("lockedAssignments", () => {
   it("lists only the slots that have started", () => {
-    const locked = lockedAssignments(LEGAL, MIXED, DURING_THURSDAY);
+    const locked = lockedAssignments(LEGAL, MIXED_KICKOFFS, DURING_THURSDAY);
 
     expect(locked.map((a) => a.slotType)).toEqual(["QB"]);
   });
 
   it("grows as the day goes on", () => {
-    expect(lockedAssignments(LEGAL, MIXED, BEFORE_SUNDAY)).toHaveLength(1);
-    expect(lockedAssignments(LEGAL, MIXED, SUNDAY).length).toBeGreaterThan(1);
+    expect(lockedAssignments(LEGAL, MIXED_KICKOFFS, BEFORE_SUNDAY)).toHaveLength(1);
+    expect(lockedAssignments(LEGAL, MIXED_KICKOFFS, SUNDAY).length).toBeGreaterThan(1);
   });
 
   it("is empty before anything kicks off", () => {
-    expect(lockedAssignments(LEGAL, MIXED, THURSDAY - 1)).toEqual([]);
+    expect(lockedAssignments(LEGAL, MIXED_KICKOFFS, THURSDAY - 1)).toEqual([]);
   });
 });
 
 describe("slotLocksAt", () => {
   it("reports the kickoff a manager is racing", () => {
-    expect(slotLocksAt({ slotType: "QB", slotIndex: 0, playerId: "qb1" }, MIXED)).toBe(
+    expect(slotLocksAt({ slotType: "QB", slotIndex: 0, playerId: "qb1" }, MIXED_KICKOFFS)).toBe(
       THURSDAY,
     );
   });
 
   it("is null for an empty slot", () => {
-    expect(slotLocksAt({ slotType: "QB", slotIndex: 0, playerId: null }, MIXED)).toBeNull();
+    expect(
+      slotLocksAt({ slotType: "QB", slotIndex: 0, playerId: null }, MIXED_KICKOFFS),
+    ).toBeNull();
   });
 
   it("is null on a bye", () => {
-    expect(slotLocksAt({ slotType: "TE", slotIndex: 0, playerId: "te1" }, MIXED)).toBeNull();
+    expect(
+      slotLocksAt({ slotType: "TE", slotIndex: 0, playerId: "te1" }, MIXED_KICKOFFS),
+    ).toBeNull();
   });
 });
 
@@ -416,11 +537,11 @@ describe("lineupIsFullyLocked", () => {
   const PLAYING = LEGAL.filter((a) => a.slotType !== "TE");
 
   it("is false while anything can still move", () => {
-    expect(lineupIsFullyLocked(PLAYING, MIXED, SUNDAY)).toBe(false);
+    expect(lineupIsFullyLocked(PLAYING, MIXED_KICKOFFS, SUNDAY)).toBe(false);
   });
 
   it("is true once the last game has started", () => {
-    expect(lineupIsFullyLocked(PLAYING, MIXED, SUNDAY_LATE + 1)).toBe(true);
+    expect(lineupIsFullyLocked(PLAYING, MIXED_KICKOFFS, SUNDAY_LATE + 1)).toBe(true);
   });
 
   it("stays false while a bye slot is still fillable", () => {
@@ -428,13 +549,13 @@ describe("lineupIsFullyLocked", () => {
     // started — so the manager can still put a Monday-night player in it. The
     // lineup is genuinely not settled, and saying otherwise would be a lie the
     // UI would repeat.
-    expect(lineupIsFullyLocked(LEGAL, MIXED, SUNDAY_LATE + 1)).toBe(false);
+    expect(lineupIsFullyLocked(LEGAL, MIXED_KICKOFFS, SUNDAY_LATE + 1)).toBe(false);
   });
 
   it("is false for an empty lineup", () => {
     // Nothing is locked because nothing is set — not the same as "settled".
     const empty = LEGAL.map((a) => ({ ...a, playerId: null }));
 
-    expect(lineupIsFullyLocked(empty, MIXED, SUNDAY_LATE + 1)).toBe(false);
+    expect(lineupIsFullyLocked(empty, MIXED_KICKOFFS, SUNDAY_LATE + 1)).toBe(false);
   });
 });

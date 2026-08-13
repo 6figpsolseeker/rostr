@@ -41,10 +41,12 @@ import {
 import type { DraftablePlayer, LeagueRules, WaiverClaim } from "@rostr/core";
 import type { SqlClient } from "./client.js";
 import { getLeagueRules } from "./leagues.js";
+import { loadKickoffs } from "./lineups.js";
 import { isUniqueViolation } from "./pg-errors.js";
 import { loadDraftBoard } from "./sync.js";
 import { lockedByTrade } from "./trades.js";
 import { withTransaction } from "./transaction.js";
+import { currentWeek } from "./week.js";
 
 export class WaiverError extends Error {
   constructor(
@@ -58,7 +60,8 @@ export class WaiverError extends Error {
       | "NOT_ON_WAIVERS"
       | "ROSTER_FULL"
       | "DUPLICATE_CLAIM"
-      | "IN_A_TRADE",
+      | "IN_A_TRADE"
+      | "GAME_STARTED",
   ) {
     super(message);
     this.name = "WaiverError";
@@ -203,6 +206,62 @@ export async function availablePlayers(
 }
 
 // ---------------------------------------------------------------------------
+// Kickoff locks
+// ---------------------------------------------------------------------------
+
+/**
+ * Refuse to move a player whose own game has already started.
+ *
+ * `docs/RULES.md` §6 has said this since the constitution was frozen, and it was
+ * implemented nowhere:
+ *
+ * > A player cannot be added or dropped once **his own game has kicked off**.
+ * > Otherwise a manager could cut an injured player mid-game, or add one after
+ * > his touchdown.
+ *
+ * Members signed that. Both halves of the exploit it names were live: cutting a
+ * started player reopened the lineup slot he was in, and — because a released
+ * player's points are still scored from the stored lineup — cutting one who had
+ * *already* done well kept his points and freed the roster spot for somebody
+ * else, so a twelve-man roster fielded thirteen contributors.
+ *
+ * **This guards the two member-initiated paths only.** `processWaivers` and
+ * `resolveTrade` also release roster rows, and neither can refuse: a throw
+ * inside the waiver run rolls back the whole league's run and leaves the claim
+ * PENDING forever, and a trade the league already approved cannot be undone
+ * because a game started. Those two are covered instead by the lineup lock now
+ * keying on the player rather than the roster, which makes the release harmless
+ * wherever it comes from. Closing the outcome and closing the route are
+ * different jobs and this repo needs both — the same argument `ASSET_GONE`
+ * makes for trades.
+ *
+ * Silent when the week has no schedule: with no kickoff times there is nothing
+ * to compare against, and `setLineup` already refuses that case loudly for the
+ * decision that actually matters.
+ */
+async function refuseIfKickedOff(
+  db: SqlClient,
+  rules: LeagueRules,
+  playerId: string,
+  now: Date,
+  verb: "added" | "dropped",
+): Promise<void> {
+  const week = await currentWeek(db, rules.sportKey, now);
+  if (week === null) return;
+
+  const kickoffs = await loadKickoffs(db, [playerId], rules.seasonYear, week);
+  const kickoff = kickoffs.get(playerId);
+  if (kickoff === undefined || kickoff === null) return;
+
+  if (Math.floor(now.getTime() / 1000) >= kickoff) {
+    throw new WaiverError(
+      `That player's game has already kicked off, so he cannot be ${verb} this week.`,
+      "GAME_STARTED",
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Dropping
 // ---------------------------------------------------------------------------
 
@@ -233,6 +292,8 @@ export async function dropPlayer(
       "IN_A_TRADE",
     );
   }
+
+  await refuseIfKickedOff(db, stored.rules, playerId, now, "dropped");
 
   return withTransaction(db, async (tx) => {
     const [entry] = await tx.query<{ id: string; acquired_at: string }>(
@@ -296,6 +357,16 @@ export interface AddInput {
 export async function addFreeAgent(db: SqlClient, input: AddInput): Promise<void> {
   const stored = await getLeagueRules(db, input.leagueId);
   if (!stored) throw new WaiverError("League has no rules", "LEAGUE_NOT_FOUND");
+
+  // Both halves of `RULES.md` §6, on both players. The add half stops "add one
+  // after his touchdown" — harmless today only because `PLAYER_LOCKED` refuses
+  // to start him, which is a second line rather than the rule itself. The drop
+  // half matters more: it is the same release `dropPlayer` guards, reached
+  // through a different button, and without it the guard there is decorative.
+  await refuseIfKickedOff(db, stored.rules, input.addPlayerId, input.now, "added");
+  if (input.dropPlayerId) {
+    await refuseIfKickedOff(db, stored.rules, input.dropPlayerId, input.now, "dropped");
+  }
 
   await withTransaction(db, async (tx) => {
     // A shared lock on the league, held for the whole add.

@@ -1,5 +1,11 @@
 import { NextResponse } from "next/server";
-import { indexScoringRules, scorePlayer, slotLocksAt, startingSlots } from "@rostr/core";
+import {
+  indexScoringRules,
+  scorePlayer,
+  slotIsLocked,
+  slotLocksAt,
+  startingSlots,
+} from "@rostr/core";
 import { buildRosterShape, NFL } from "@rostr/core";
 import type { LineupAssignment } from "@rostr/core";
 import {
@@ -8,6 +14,7 @@ import {
   loadAverages,
   loadLineup,
   loadProjectedPoints,
+  loadKickoffs,
   loadRosterForWeek,
   loadWeekStats,
   setAutofillEnabled,
@@ -53,6 +60,23 @@ export async function GET(
     const roster = await loadRosterForWeek(client, context.myTeamId, context.season, week);
     const assignments = await loadLineup(client, context.myTeamId, week, context.rules);
 
+    // Roster plus whoever is standing in the stored lineup, exactly as
+    // `setLineup` builds it. The screen must agree with the server about which
+    // slots are locked, and the occupant of a locked slot may no longer be
+    // rostered — that is the whole point of keying locks on the player.
+    const kickoffs = await loadKickoffs(
+      client,
+      [
+        ...new Set(
+          [...roster.keys(), ...assignments.map((entry) => entry.playerId)].filter(
+            (playerId): playerId is string => playerId !== null,
+          ),
+        ),
+      ],
+      context.season,
+      week,
+    );
+
     // Points so far this week, so a manager can see what their lineup is doing
     // while it is doing it.
     const stats = await loadWeekStats(client, NFL.key, context.season, week);
@@ -81,7 +105,7 @@ export async function GET(
           (entry) => entry.slotType === slot.slotType && entry.slotIndex === slot.slotIndex,
         ) ?? { slotType: slot.slotType, slotIndex: slot.slotIndex, playerId: null };
 
-        const locksAt = slotLocksAt(assignment, roster);
+        const locksAt = slotLocksAt(assignment, kickoffs);
 
         return {
           slotType: slot.slotType,
@@ -89,7 +113,12 @@ export async function GET(
           eligiblePositions: slot.eligiblePositions,
           playerId: assignment.playerId,
           locksAt,
-          locked: locksAt !== null && now >= locksAt,
+          // Ask the shared helper rather than re-deriving it from `locksAt`.
+          // The two disagree for a player the map does not know: `locksAt` is
+          // null so the screen would offer the edit, while the server refuses.
+          // A UI that offers an edit the server rejects is the failure the
+          // draft clock already taught us to avoid.
+          locked: slotIsLocked(assignment, kickoffs, now),
         };
       }),
       roster: [...roster.values()].map((player) => ({
