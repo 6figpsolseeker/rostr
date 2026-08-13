@@ -7,6 +7,7 @@ import { seedSport } from "./sports.js";
 import { setLineup } from "./lineups.js";
 import { addTestTeam, createTestDatabase } from "./testing.js";
 import type { PGliteClient } from "./testing.js";
+import type { SqlClient } from "./client.js";
 import {
   finalizationHours,
   loadScheduledWeek,
@@ -737,5 +738,88 @@ describe("standings from resolved weeks", () => {
     await schedule(fx);
 
     expect(await loadWeekResults(fx.client, fx.leagueId, WEEK)).toEqual([]);
+  });
+});
+
+describe("a finalised week survives an overlapping run", () => {
+  /**
+   * The guard is a check-then-act across two connections.
+   *
+   * `resolveLeagueWeek` reads "is this week finalised" outside any transaction,
+   * then does `ensureLineups`, the lineup load, the stat load and the
+   * finalisation decision, and only then opens the transaction that writes. Two
+   * overlapped runs both pass the read; the loser then writes a stat snapshot
+   * taken *before* the winner's over a finalised row.
+   *
+   * **PGlite is single-connection, so the race itself cannot be reproduced
+   * here** — the same limitation the repo records for `acceptTrade`. What these
+   * tests do reproduce is the *ordering*: a client that finalises the week
+   * partway through the run, at exactly the point a competing run would have.
+   * That is the state the loser's write executes against, which is what the fix
+   * has to survive.
+   */
+  function finalisingMidRun(client: PGliteClient, leagueId: string, week: number): SqlClient {
+    let fired = false;
+    return {
+      exec: (sql) => client.exec(sql),
+      query: async <T = Record<string, unknown>>(
+        sql: string,
+        params?: readonly unknown[],
+      ): Promise<T[]> => {
+        // `ensureLineups` reads the team list first — the same instant a
+        // competing run would be finishing ahead of us.
+        if (!fired && sql.includes("autofill_enabled")) {
+          fired = true;
+          await client.query(
+            `UPDATE matchups
+                SET home_milli_points = 111000, away_milli_points = 222000,
+                    finalized_at = $3
+              WHERE league_id = $1 AND week = $2`,
+            [leagueId, week, new Date("2026-01-01T00:00:00Z").toISOString()],
+          );
+        }
+        return client.query<T>(sql, params);
+      },
+    };
+  }
+
+  it("refuses rather than writing a stale snapshot over it", async () => {
+    const fx = await setup();
+    await schedule(fx);
+    await finishGames(fx);
+
+    const racing = finalisingMidRun(fx.client, fx.leagueId, WEEK);
+
+    await expect(
+      resolveLeagueWeek(racing, fx.leagueId, WEEK, AFTER_STANDARD),
+    ).rejects.toMatchObject({ code: "ALREADY_FINAL" });
+  });
+
+  it("leaves the winner's points and timestamp exactly as they were", async () => {
+    // The assertion that matters. Before the fix the losing run overwrote both,
+    // and `CASE ... ELSE finalized_at` hid it.
+    const fx = await setup();
+    await schedule(fx);
+    await finishGames(fx);
+
+    const racing = finalisingMidRun(fx.client, fx.leagueId, WEEK);
+    await resolveLeagueWeek(racing, fx.leagueId, WEEK, AFTER_STANDARD).catch(() => undefined);
+
+    const rows = await fx.client.query<{
+      home_milli_points: number;
+      away_milli_points: number;
+      finalized_at: string;
+    }>(
+      `SELECT home_milli_points, away_milli_points, finalized_at
+         FROM matchups WHERE league_id = $1 AND week = $2`,
+      [fx.leagueId, WEEK],
+    );
+
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) {
+      expect(Number(row.home_milli_points)).toBe(111000);
+      expect(Number(row.away_milli_points)).toBe(222000);
+      expect(new Date(row.finalized_at).toISOString()).toBe("2026-01-01T00:00:00.000Z");
+    }
   });
 });

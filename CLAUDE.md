@@ -583,6 +583,28 @@ and, _within_ that window, only when every game is `FINAL`. A finalised week is 
 rescored — in a paying week it has already decided money, and a silently changed result
 afterwards is exactly what the window exists to prevent.
 
+**Two guards enforce that, and naming them is the point.** The pre-check refuses an
+already-final week cheaply, with the `ALREADY_FINAL` code the cron reports. The `UPDATE`
+then carries `AND finalized_at IS NULL` and `RETURNING id`, because the pre-check reads on
+one connection and the write happens on another many round trips later — `ensureLineups`
+alone opens a transaction per team. Two overlapping runs both passed the check, and the
+loser wrote its older stat snapshot over the winner's finalised points; `CASE … ELSE
+finalized_at` then preserved the timestamp, so the rewrite left no trace.
+
+**`score-week` was the only one of the four crons with no serialisation.** `waivers` takes
+`FOR UPDATE` on the league, `trades` on the trade row, `draft-tick` on the draft row —
+and `waivers`' own comment says why: _"a slow run and a retry can overlap."_ A lock was
+rejected here because it would have to be held across `ensureLineups`, `loadWeekStats`
+and `finalizationHold`, and because a lock serialises without making a pre-lock decision
+true afterwards — the trap issue #22 records. The atomic predicate does both.
+
+**The empty `UPDATE` throws rather than skipping.** A silent no-op would be half a fix:
+the return value is built from the in-memory results, so a losing run would report
+`matchups: N, finalized: true` with a stale snapshot and the cron would publish it. The
+throw also makes the write all-or-nothing, matching the pre-check rather than quietly
+applying a second policy — which matters because a week can legitimately hold finalised
+consolation fixtures beside unfinalised playoff ones.
+
 The window comes from the rules: 48 hours normally, **168 for weeks 14 and 17**, because
 official NFL stat corrections arrive for up to seven days.
 

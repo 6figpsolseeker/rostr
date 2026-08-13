@@ -19,6 +19,20 @@ import { cronForbidden } from "@/lib/cron";
  * has elapsed, which inside that window also requires every game to be final. A
  * finalised week is skipped, not rescored.
  *
+ * **Safe to run *concurrently*, which is a different claim and was not true.**
+ * Unlike the other three crons, nothing here serialises two runs — `waivers`
+ * takes `FOR UPDATE` on the league, `trades` on the trade row, `draft-tick` on
+ * the draft row, and this had nothing. The sentence above was enforced by a
+ * check that read on one connection and wrote on another many round trips
+ * later, so two overlapped runs both passed it and the loser wrote its older
+ * stat snapshot over the winner's finalised points.
+ *
+ * It is now enforced by `finalized_at IS NULL` on the write itself, so the
+ * loser matches no rows and reports `ALREADY_FINAL` instead of publishing a
+ * restated week as the outcome. Overlap is not hypothetical: `?week=N` is
+ * accepted here precisely so an operator can hand-run a week that will not
+ * settle, which is the run most likely to collide with the sweep.
+ *
  * Past the window a week finalises whether or not every game reached `FINAL` —
  * `docs/RULES.md` §10, the postponed game — and says so in
  * `finalizedWithUnfinishedGames`. That field is the only signal that a week

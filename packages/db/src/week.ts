@@ -22,8 +22,16 @@
  * wait 48.
  *
  * So `resolveLeagueWeek` updates points every time it runs and sets
- * `finalized_at` only once the wait has elapsed. A finalised week is never
- * rescored.
+ * `finalized_at` only once the wait has elapsed.
+ *
+ * **A finalised week is never rescored, and two things enforce that** — say which,
+ * because this sentence was here on its own for a while and was not true. The
+ * pre-check refuses a week that is already final, cheaply and with a code the
+ * cron reports. The write then re-asserts it in its own `WHERE`, because the
+ * pre-check reads on one connection and the write happens on another many round
+ * trips later: two overlapping runs both pass the check, and without the
+ * predicate the loser wrote a stat snapshot taken before the winner's over a
+ * finalised row. Neither guard replaces the other — see the comments at each.
  *
  * ## The wait is bounded, because a game may never be played
  *
@@ -172,9 +180,22 @@ export async function resolveLeagueWeek(
     [leagueId, week],
   );
   if (Number(already?.count ?? 0) > 0) {
-    // A finalised week is not rescored. In a paying week it has already decided
-    // money, and a silently changed result afterwards is the exact thing the
-    // correction window exists to prevent.
+    // A fast path and a published error code — **not** the guarantee.
+    //
+    // The guarantee is `finalized_at IS NULL` on the UPDATE below. This reads on
+    // one connection and the write happens on another many round trips later —
+    // `ensureLineups` alone opens a transaction per team — so two overlapped
+    // runs both pass here. Same trap as issue #22: a decision taken before the
+    // write is not true at it.
+    //
+    // It stays for three reasons. It saves a whole scoring pass on a re-run of a
+    // settled week. `ALREADY_FINAL` is what the cron reports, and callers key on
+    // it. And — the one that stops it being redundant — it refuses a
+    // **part-finalised** week *whole*: a week can legitimately hold finalised
+    // consolation fixtures beside unfinalised playoff ones, and without this the
+    // loop would write the unfinalised rows, refuse the finalised ones, and roll
+    // back its own legitimate work. See the complementarity note on
+    // `resolveLeagueWeeksThrough`.
     throw new WeekError(`Week ${week} is already final`, "ALREADY_FINAL");
   }
 
@@ -196,14 +217,28 @@ export async function resolveLeagueWeek(
 
   await withTransaction(db, async (tx) => {
     for (const result of results) {
-      await tx.query(
+      // `AND finalized_at IS NULL` is the guarantee the pre-check cannot give.
+      //
+      // A single UPDATE is atomic with respect to its own predicate, and under
+      // READ COMMITTED a statement that blocks on a concurrent writer re-checks
+      // that predicate against the newly committed row. So the losing run of an
+      // overlap matches nothing, whichever order the two arrive in.
+      //
+      // It does not break the two cases that must still write. The live rewrite
+      // runs against rows whose `finalized_at` is null — this statement is the
+      // only writer of that column in the repo, and there is no default — and
+      // the finalising run matches on the *pre-update* row image, then sets it
+      // in the same statement.
+      const [written] = await tx.query<{ id: string }>(
         `UPDATE matchups
             SET home_milli_points = $3,
                 away_milli_points = $4,
                 finalized_at = CASE WHEN $5::boolean THEN $6 ELSE finalized_at END
           WHERE league_id = $1 AND week = $2
             AND home_team_id = $7
-            AND away_team_id IS NOT DISTINCT FROM $8`,
+            AND away_team_id IS NOT DISTINCT FROM $8
+            AND finalized_at IS NULL
+        RETURNING id`,
         [
           leagueId,
           week,
@@ -215,6 +250,23 @@ export async function resolveLeagueWeek(
           result.awayTeamId,
         ],
       );
+
+      // Nothing matched, so the week finalised while this run was working.
+      //
+      // Throwing rather than continuing, for two reasons. It rolls the
+      // transaction back, so a partly-rewritten week cannot exist — the same
+      // all-or-nothing policy the pre-check applies, rather than a second one
+      // that differs only in timing. And a silent skip would be half a fix:
+      // this function's return value is built from the in-memory `results`, so
+      // the run would report `matchups: N, finalized: true` with a stale
+      // snapshot and the cron would publish it as the week's outcome. That is
+      // the silent restatement being fixed, wearing a different hat.
+      //
+      // `ALREADY_FINAL` is deliberately the same code the pre-check throws: it
+      // is the same fact, learned later. Both callers already handle it.
+      if (!written) {
+        throw new WeekError(`Week ${week} is already final`, "ALREADY_FINAL");
+      }
     }
   });
 
