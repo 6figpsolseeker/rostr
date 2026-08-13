@@ -563,6 +563,15 @@ and leaves TE empty. There is a test.
 An unavailable player still gets started when there is nobody else: an empty slot and an
 inactive player both score nothing, but only one keeps the lineup legal.
 
+**The lock reads the lineup, not the roster.** Scoring takes starters from the stored
+lineup with no roster join, so the lock has to answer for whoever is _in_ that lineup —
+including a player the team has since released. Deriving it from the roster meant a
+released player and a player on a bye were both simply absent, so a manager could start a
+Thursday player, watch him score badly, drop him, and move a Sunday player into the slot he
+vacated: the bad result deleted from the week and a chosen one installed, repeatable at
+every kickoff wave. `loadKickoffsForPlayers` answers locks; `loadRosterForWeek` answers
+ownership. Two maps, two meanings — conflating them was the bug (issue #76).
+
 **Persistence is `packages/db/src/lineups.ts`.** The lock is enforced there, not just
 greyed out in the UI — `setLineup` loads what is _currently stored_, works out which slots
 have kicked off, and refuses any change to them. A crafted request gets the same answer as

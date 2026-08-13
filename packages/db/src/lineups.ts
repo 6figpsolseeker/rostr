@@ -216,16 +216,7 @@ export async function loadRosterForWeek(
     [teamId, season, week],
   );
 
-  // The earliest kickoff of the week, used as the conservative lock time for a
-  // player whose team is not in the schedule at all. Null when the week has no
-  // games — `setLineup` refuses in that case rather than guessing.
-  const [firstGame] = await db.query<{ kickoff_at: string | null }>(
-    `SELECT min(kickoff_at) AS kickoff_at FROM games WHERE season = $1 AND week = $2`,
-    [season, week],
-  );
-  const weekStartsAt = firstGame?.kickoff_at
-    ? Math.floor(new Date(firstGame.kickoff_at).getTime() / 1000)
-    : null;
+  const weekStartsAt = await weekFirstKickoff(db, season, week);
 
   return new Map(
     rows.map((row) => [
@@ -235,16 +226,124 @@ export async function loadRosterForWeek(
         fullName: row.full_name,
         status: row.status,
         positions: row.positions,
-        kickoffAt: row.kickoff_at
-          ? Math.floor(new Date(row.kickoff_at).getTime() / 1000)
-          : // No game this week. A bye keeps null and stays movable; a player
-            // whose team is nowhere in the schedule gets the week's first
-            // kickoff, so he freezes when the week begins rather than never.
-            row.team_scheduled
-            ? null
-            : weekStartsAt,
+        kickoffAt: lockInstant(row, weekStartsAt),
       },
     ]),
+  );
+}
+
+/**
+ * The earliest kickoff of the week.
+ *
+ * The conservative lock time for a player whose team is not in the schedule at
+ * all. Null when the week has no games — `setLineup` refuses in that case rather
+ * than guessing.
+ */
+async function weekFirstKickoff(
+  db: SqlClient,
+  season: number,
+  week: number,
+): Promise<number | null> {
+  const [firstGame] = await db.query<{ kickoff_at: string | null }>(
+    `SELECT min(kickoff_at) AS kickoff_at FROM games WHERE season = $1 AND week = $2`,
+    [season, week],
+  );
+
+  return firstGame?.kickoff_at
+    ? Math.floor(new Date(firstGame.kickoff_at).getTime() / 1000)
+    : null;
+}
+
+/**
+ * When a player's slot locks, from his game row.
+ *
+ * The three-way distinction lives here and only here, because two loaders need
+ * it and a second copy would drift: a bye keeps `null` and stays movable, a
+ * player whose team is nowhere in the schedule gets the week's first kickoff so
+ * he freezes when the week begins rather than never, and everyone else locks at
+ * their own kickoff.
+ */
+function lockInstant(
+  row: { kickoff_at: string | null; team_scheduled: boolean },
+  weekStartsAt: number | null,
+): number | null {
+  if (row.kickoff_at) return Math.floor(new Date(row.kickoff_at).getTime() / 1000);
+  return row.team_scheduled ? null : weekStartsAt;
+}
+
+/**
+ * When each of these players' slots locks — **including players the team no
+ * longer holds.**
+ *
+ * This exists because the lock and the score read different tables, and that
+ * disagreement was exploitable. Scoring takes starters from the stored lineup
+ * (`loadWeekLineups`) with no roster join, but the lock was derived from the
+ * roster — so dropping a player after his game finished removed him from the
+ * roster map, `isSlotLocked` could not tell "released" from "on a bye", and his
+ * slot came unlocked. A manager could watch a starter score badly, drop him, and
+ * move a player whose game had not started into the vacated slot: the bad result
+ * was deleted from the week and a chosen one installed in its place, repeatable
+ * at every kickoff wave.
+ *
+ * So locks are answered for whoever is *in the lineup*, not whoever is on the
+ * roster. Ownership stays `loadRosterForWeek`'s job — `NOT_ON_ROSTER` must still
+ * refuse a released player submitted into a slot, and the autofill must not
+ * consider him a candidate. Two maps, two meanings; conflating them is the bug.
+ */
+/**
+ * Every player whose lock matters for a submission: whoever holds a slot now,
+ * plus whoever is being put in one.
+ *
+ * The stored side is the half that was missing. A player being submitted is on
+ * the roster by definition, so the roster map covered him; the player he is
+ * replacing may have been dropped minutes earlier, and that is the gap.
+ */
+export function lockablePlayerIds(
+  current: readonly LineupAssignment[],
+  submitted: readonly LineupAssignment[],
+): readonly string[] {
+  const ids = new Set<string>();
+  for (const assignment of [...current, ...submitted]) {
+    if (assignment.playerId !== null) ids.add(assignment.playerId);
+  }
+  return [...ids];
+}
+
+export async function loadKickoffsForPlayers(
+  db: SqlClient,
+  playerIds: readonly string[],
+  season: number,
+  week: number,
+): Promise<ReadonlyMap<string, { kickoffAt: number | null }>> {
+  if (playerIds.length === 0) return new Map();
+
+  const rows = await db.query<{
+    player_id: string;
+    kickoff_at: string | null;
+    team_scheduled: boolean;
+  }>(
+    `SELECT p.id AS player_id,
+            g.kickoff_at,
+            EXISTS (
+              SELECT 1 FROM games sg
+               WHERE sg.sport_id = p.sport_id
+                 AND sg.season = $2
+                 AND (sg.home_team_ref = p.team_ref OR sg.away_team_ref = p.team_ref)
+            ) AS team_scheduled
+       FROM players p
+       LEFT JOIN games g
+         ON g.sport_id = p.sport_id
+        AND g.season = $2
+        AND g.week = $3
+        AND (g.home_team_ref = p.team_ref OR g.away_team_ref = p.team_ref)
+      WHERE p.id = ANY($1)`,
+    [playerIds, season, week],
+  );
+
+  const weekStartsAt = await weekFirstKickoff(db, season, week);
+
+  return new Map(
+    rows.map((row) => [row.player_id, { kickoffAt: lockInstant(row, weekStartsAt) }]),
   );
 }
 
@@ -334,11 +433,22 @@ export async function setLineup(
   const roster = await loadRosterForWeek(db, input.teamId, season, input.week);
   const current = await loadLineup(db, input.teamId, input.week, stored.rules);
 
+  // Locks are answered for whoever is in the stored lineup or being submitted,
+  // not for whoever is on the roster — a player dropped after his game finished
+  // is absent from the roster and his slot would otherwise read unlocked.
+  const kickoffs = await loadKickoffsForPlayers(
+    db,
+    lockablePlayerIds(current, input.assignments),
+    season,
+    input.week,
+  );
+
   const problems = [
     ...validateLineup({
       assignments: input.assignments,
       shape: buildRosterShape(stored.rules.roster, NFL),
       roster,
+      kickoffs,
       current,
       now: input.now,
     }),
@@ -541,6 +651,17 @@ export async function autoFillLineup(
   const roster = await loadRosterForWeek(db, teamId, season, week);
   const current = await loadLineup(db, teamId, week, stored.rules);
 
+  // For the locked-slot scan below. The candidate pool still comes from the
+  // roster — a released player must never be *seated* by the autofill — but a
+  // released player already in a slot has to keep it, because he is what the
+  // week will score.
+  const autofillKickoffs = await loadKickoffsForPlayers(
+    db,
+    lockablePlayerIds(current, []),
+    season,
+    week,
+  );
+
   const averages = await loadAverages(db, [...roster.keys()], season, week, stored.rules);
 
   // Only fetched when the league ranks on them. A league set to SEASON_AVERAGE
@@ -565,7 +686,7 @@ export async function autoFillLineup(
   // Anything already locked is a fixed point, and anything already set by the
   // manager is left alone: this fills gaps, it does not second-guess.
   const keep = new Map<string, LineupAssignment>();
-  for (const assignment of lockedAssignments(current, roster, now)) {
+  for (const assignment of lockedAssignments(current, autofillKickoffs, now)) {
     keep.set(`${assignment.slotType}#${assignment.slotIndex}`, assignment);
   }
   for (const assignment of current) {

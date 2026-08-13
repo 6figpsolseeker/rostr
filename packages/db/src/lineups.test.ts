@@ -17,6 +17,8 @@ import {
   loadWeekLineups,
   loadWeekStats,
   PRIMARY_PROJECTION_SOURCE,
+  LineupError,
+  loadKickoffsForPlayers,
   PRIMARY_STAT_SOURCE,
   setLineup,
 } from "./lineups.js";
@@ -205,10 +207,13 @@ describe("loadRosterForWeek", () => {
   });
 
   it("leaves out released players", async () => {
+    // A fixed instant, not now(). Against a 2026 fixture week, now() happened to
+    // sit before kickoff and made this pass for a reason the test never stated —
+    // and it would have started failing on its own in September 2026.
     const fx = await setup();
     await fx.client.query(
-      "UPDATE roster_entries SET released_at = now() WHERE team_id = $1 AND player_id = $2",
-      [fx.teamId, fx.players.get("rb-c")],
+      "UPDATE roster_entries SET released_at = to_timestamp($3) WHERE team_id = $1 AND player_id = $2",
+      [fx.teamId, fx.players.get("rb-c"), BEFORE_ANYTHING],
     );
 
     const roster = await loadRosterForWeek(fx.client, fx.teamId, SEASON, WEEK);
@@ -1044,5 +1049,122 @@ describe("one source ranks the autofill", () => {
     const projected = await loadProjectedPoints(fx.client, SEASON, WEEK, fx.rules);
 
     expect(projected.get(qb)).toBe(12_000);
+  });
+});
+
+describe("the lock survives dropping the player who holds it", () => {
+  /**
+   * Issue #76. The lock used to be derived from the roster, and a released
+   * player is absent from the roster map — indistinguishable, to `isSlotLocked`,
+   * from a player on a bye. So the slot came unlocked.
+   *
+   * The cheat ran entirely through shipped endpoints: start a Thursday player,
+   * watch his game finish, drop him, then move a Sunday player into the slot he
+   * vacated. Scoring reads the stored lineup, so the bad result was deleted from
+   * the week and a chosen one installed in its place — repeatable at every
+   * kickoff wave.
+   */
+  const startThursdayQb = async (fx: Fixture): Promise<void> => {
+    await setLineup(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: fx.teamId,
+      week: WEEK,
+      assignments: lineupOf(fx, { ...FULL, "QB:0": "thu-qb" }),
+      now: BEFORE_ANYTHING,
+    });
+  };
+
+  const dropThursdayQb = (fx: Fixture) =>
+    fx.client.query(
+      `UPDATE roster_entries SET released_at = to_timestamp($3)
+        WHERE team_id = $1 AND player_id = $2 AND released_at IS NULL`,
+      [fx.teamId, fx.players.get("thu-qb"), AFTER_THURSDAY],
+    );
+
+  const swapInSundayQb = (fx: Fixture) =>
+    setLineup(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: fx.teamId,
+      week: WEEK,
+      assignments: lineupOf(fx, FULL),
+      now: AFTER_THURSDAY,
+    });
+
+  it("refuses the swap after the starter has been dropped", async () => {
+    const fx = await setup();
+    await startThursdayQb(fx);
+    await dropThursdayQb(fx);
+
+    const refused = await swapInSundayQb(fx).catch((error: unknown) => error);
+
+    expect(refused).toBeInstanceOf(LineupError);
+    expect((refused as LineupError).code).toBe("INVALID_LINEUP");
+    expect((refused as LineupError).problems.map((p) => p.code)).toContain("SLOT_LOCKED");
+  });
+
+  it("refuses the same swap without a drop, which is the control", async () => {
+    // If this ever stops failing, the test above proves nothing.
+    const fx = await setup();
+    await startThursdayQb(fx);
+
+    const refused = await swapInSundayQb(fx).catch((error: unknown) => error);
+
+    expect((refused as LineupError).problems.map((p) => p.code)).toContain("SLOT_LOCKED");
+  });
+
+  it("still refuses a released player submitted into a different slot", async () => {
+    // Ownership and locking are separate questions now, and separating them must
+    // not weaken the first: a dropped player may keep the slot he already holds,
+    // but he may not be put anywhere new.
+    const fx = await setup();
+    await startThursdayQb(fx);
+    await dropThursdayQb(fx);
+
+    const refused = await setLineup(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: fx.teamId,
+      week: WEEK,
+      assignments: lineupOf(fx, { ...FULL, "QB:0": "thu-qb", "FLEX:0": "thu-qb" }),
+      now: AFTER_THURSDAY,
+    }).catch((error: unknown) => error);
+
+    expect((refused as LineupError).problems.map((p) => p.code)).toContain("NOT_ON_ROSTER");
+  });
+
+  it("leaves a bye player movable after his team's non-game", async () => {
+    // The distinction the roster map could not make. A bye keeps kickoffAt null
+    // and must stay editable; only a real kickoff locks.
+    const fx = await setup();
+    const bye = fx.players.get("bye-te")!;
+
+    const kickoffs = await loadKickoffsForPlayers(fx.client, [bye], SEASON, WEEK);
+
+    expect(kickoffs.get(bye)?.kickoffAt).toBeNull();
+  });
+
+  it("answers for a player the team no longer holds", async () => {
+    const fx = await setup();
+    const dropped = fx.players.get("thu-qb")!;
+    await dropThursdayQb(fx);
+
+    const roster = await loadRosterForWeek(fx.client, fx.teamId, SEASON, WEEK);
+    const kickoffs = await loadKickoffsForPlayers(fx.client, [dropped], SEASON, WEEK);
+
+    // The two maps disagree deliberately: one is ownership, one is locking.
+    expect(roster.has(dropped)).toBe(false);
+    expect(kickoffs.get(dropped)?.kickoffAt).toBe(THURSDAY_SECONDS);
+  });
+
+  it("does not let the autofill seat a player the team has released", async () => {
+    // The hazard in the fix the issue itself proposed: if released players
+    // re-entered the roster map, the autofill's candidate pool would include
+    // them and could start a player the team does not own.
+    const fx = await setup();
+    await dropThursdayQb(fx);
+
+    await autoFillLineup(fx.client, fx.leagueId, fx.teamId, WEEK, BEFORE_ANYTHING);
+
+    const stored = await loadLineup(fx.client, fx.teamId, WEEK, fx.rules);
+    expect(stored.map((a) => a.playerId)).not.toContain(fx.players.get("thu-qb"));
   });
 });

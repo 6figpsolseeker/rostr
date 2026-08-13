@@ -8,7 +8,9 @@ import {
   loadAverages,
   loadLineup,
   loadProjectedPoints,
+  loadKickoffsForPlayers,
   loadRosterForWeek,
+  lockablePlayerIds,
   loadWeekStats,
   setAutofillEnabled,
   setLineup,
@@ -53,6 +55,15 @@ export async function GET(
     const roster = await loadRosterForWeek(client, context.myTeamId, context.season, week);
     const assignments = await loadLineup(client, context.myTeamId, week, context.rules);
 
+    // Locks come from the lineup, not the roster, so a slot held by a released
+    // player still shows as locked rather than silently inviting a swap.
+    const kickoffs = await loadKickoffsForPlayers(
+      client,
+      lockablePlayerIds(assignments, []),
+      context.season,
+      week,
+    );
+
     // Points so far this week, so a manager can see what their lineup is doing
     // while it is doing it.
     const stats = await loadWeekStats(client, NFL.key, context.season, week);
@@ -81,7 +92,7 @@ export async function GET(
           (entry) => entry.slotType === slot.slotType && entry.slotIndex === slot.slotIndex,
         ) ?? { slotType: slot.slotType, slotIndex: slot.slotIndex, playerId: null };
 
-        const locksAt = slotLocksAt(assignment, roster);
+        const locksAt = slotLocksAt(assignment, kickoffs);
 
         return {
           slotType: slot.slotType,
