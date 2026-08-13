@@ -36,10 +36,27 @@ export interface ProviderGame {
 
 export interface ProviderBoxScore {
   readonly gameRef: string;
+  /**
+   * The season and week this box score belongs to.
+   *
+   * **A provider that is handed only a game reference cannot know these**, and
+   * `Tank01Provider.getBoxScore` returns `0` for both. A caller must take them
+   * from its own `games` row: writing these straight into `stat_lines` lands
+   * every row at season 0, week 0, where nothing ever reads it and every
+   * matchup scores zero with no error anywhere.
+   */
   readonly season: number;
   readonly week: number;
   /** Keyed by player external ref. */
   readonly players: ReadonlyMap<string, readonly StatLine[]>;
+  /**
+   * Things that did not reconcile, carried rather than thrown.
+   *
+   * A discrepancy in one player's line is not a reason to discard the other
+   * ninety — see `getBoxScore`. The caller is expected to record these against
+   * the game so a stat that quietly went missing is visible afterwards.
+   */
+  readonly warnings: readonly string[];
 }
 
 export interface ProviderInjury {

@@ -151,3 +151,112 @@ describe("no phantom stats", () => {
     }
   });
 });
+
+describe("a blocked kick is credited to whoever blocked it", () => {
+  /**
+   * Both play strings below are recorded verbatim in `docs/TANK01.md`, and they
+   * put different teams in `play.team` — which is the whole defect. The original
+   * code assumed `play.team` was always the *kicking* team and derived the
+   * blocker as "the other one", so a block returned for a score credited the two
+   * points to the team whose kick was blocked. Two defenses, usually two
+   * different rosters: a four-point swing, silently.
+   */
+  const dst = (home: string, away: string): Record<string, unknown> => ({
+    home: { teamAbv: home, ptsAllowed: "20" },
+    away: { teamAbv: away, ptsAllowed: "24" },
+  });
+
+  const blkOf = (lines: readonly StatLine[] | undefined): number =>
+    lines?.find((line) => line.statKey === "def_blk_kick")?.value ?? 0;
+
+  it("credits the returning team when the block is taken back for a score", () => {
+    const translated = translateBoxScore({
+      gameID: "g",
+      playerStats: {},
+      DST: dst("PHI", "DAL"),
+      scoringPlays: [
+        {
+          // PHI blocked it, recovered it and scored — so `team` is PHI.
+          score: "Blocked Kick Recovered by Jordan Davis (PHI) for a 61 Yd Touchown Return",
+          team: "PHI",
+        },
+      ],
+    });
+
+    expect(blkOf(translated.teamDefense.get("PHI"))).toBe(1);
+    expect(blkOf(translated.teamDefense.get("DAL"))).toBe(0);
+  });
+
+  it("still credits the opponent when the block is noted on the kicking team's own score", () => {
+    const translated = translateBoxScore({
+      gameID: "g",
+      playerStats: {},
+      DST: dst("PHI", "DAL"),
+      scoringPlays: [
+        // DAL scored the touchdown and their PAT was blocked, so `team` is DAL
+        // and the blocker is the opponent.
+        { score: "Blake Corum 1 Yd Rush (Joshua Karty PAT blocked)", team: "DAL" },
+      ],
+    });
+
+    expect(blkOf(translated.teamDefense.get("PHI"))).toBe(1);
+    expect(blkOf(translated.teamDefense.get("DAL"))).toBe(0);
+  });
+});
+
+describe("a defense that cannot be read says so", () => {
+  /**
+   * `translateTeamDefense` was the only translator not given the `warnings`
+   * array, so a missing or unparseable field vanished in silence. That matters
+   * most for `def_pts_allowed`: it is the only tiered rule in the sport, absent
+   * is not zero, and a unit that still emits a sack looks like it played and
+   * scored 2 rather than 12.
+   */
+  it("warns when points allowed is absent", () => {
+    const translated = translateBoxScore({
+      gameID: "g",
+      playerStats: {},
+      DST: { home: { teamAbv: "PHI", sacks: "2" }, away: { teamAbv: "DAL", ptsAllowed: "24" } },
+      scoringPlays: [],
+    });
+
+    expect(translated.warnings.join(" ")).toContain("def_pts_allowed");
+    expect(translated.warnings.join(" ")).toContain("PHI");
+  });
+
+  it("warns when points allowed is present but unreadable", () => {
+    const translated = translateBoxScore({
+      gameID: "g",
+      playerStats: {},
+      DST: {
+        home: { teamAbv: "PHI", ptsAllowed: "20-0" },
+        away: { teamAbv: "DAL", ptsAllowed: "24" },
+      },
+      scoringPlays: [],
+    });
+
+    expect(translated.warnings.join(" ")).toContain("PHI");
+  });
+});
+
+describe("a warning is not a reason to discard the game", () => {
+  it("keeps every other player when one line does not reconcile", () => {
+    // The clean fixture produces no warnings and no fatal, which is what makes
+    // the distinction observable rather than theoretical.
+    expect(box.warnings).toEqual([]);
+    expect(box.fatal).toEqual([]);
+    expect(box.players.size).toBeGreaterThan(50);
+  });
+
+  it("marks a response with no player stats as fatal", () => {
+    const translated = translateBoxScore({ gameID: "g", playerStats: {}, DST: {} });
+
+    expect(translated.fatal.join(" ")).toContain("playerStats");
+  });
+
+  it("marks a response with no game id as fatal", () => {
+    const translated = translateBoxScore({ playerStats: { a: { playerID: "1" } }, DST: {} });
+
+    expect(translated.fatal.join(" ")).toContain("gameID");
+  });
+});

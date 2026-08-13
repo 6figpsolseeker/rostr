@@ -197,11 +197,26 @@ export class Tank01Provider implements StatsProvider {
     const raw = await this.client.get<unknown>("getNFLBoxScore", { gameID: gameRef });
     const translated = translateBoxScore(raw);
 
-    if (translated.warnings.length > 0) {
-      // Surfaced rather than swallowed: a warning here means a stat did not
-      // reconcile, and silently scoring it anyway is how wrong totals ship.
+    // **Only `fatal` throws, and that split is the whole point.**
+    //
+    // This used to throw on any warning at all. One kicker whose `Kicking.fgMade`
+    // disagreed with the field goals parsed from his own scoring plays — two
+    // independently-updated parts of the same payload — discarded every stat line
+    // for all ~90 players in the game.
+    //
+    // Composed with clock-based finalisation that is not "retry later". The game
+    // is still `FINAL`, so `finalizationHold` counts it finished and the
+    // postponement fallback never fires; the week settles with sixteen real
+    // starters on zero, permanently, with no signal anywhere that anything was
+    // missing. A discrepancy about one kicker's 3-versus-4-point bucket is not a
+    // reason to throw away ninety players' verified stats.
+    //
+    // So `fatal` means "we could not read this response" and throws; `warnings`
+    // means "we read it and something did not add up" and is carried on the
+    // result for the caller to record.
+    if (translated.fatal.length > 0) {
       throw new ProviderError(
-        `Box score ${gameRef} did not reconcile:\n  ${translated.warnings.join("\n  ")}`,
+        `Box score ${gameRef} could not be read:\n  ${translated.fatal.join("\n  ")}`,
         this.name,
       );
     }
@@ -214,9 +229,13 @@ export class Tank01Provider implements StatsProvider {
 
     return {
       gameRef: translated.gameRef,
+      // The caller knows these; this method is handed a gameRef and does not.
+      // A producer that trusted them would write every row into a (0, 0)
+      // coordinate that nothing ever reads.
       season: 0,
       week: 0,
       players,
+      warnings: translated.warnings,
     };
   }
 
