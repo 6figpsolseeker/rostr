@@ -148,6 +148,14 @@ export {
 } from "./identity.js";
 
 export {
+  CORRECTION_WINDOW_HOURS,
+  FAILED_RETRY_MINUTES,
+  FINAL_RECHECK_HOURS,
+  syncBoxScores,
+  type BoxScoreSyncResult,
+} from "./box-scores.js";
+
+export {
   loadDraftBoard,
   loadProjections,
   syncByeWeeks,
