@@ -838,4 +838,100 @@ describe("RULES.md §6 — a player whose game has kicked off cannot be moved", 
       dropPlayer(fx.client, fx.leagueId, fx.teams[0]!, fx.players.get("held")!, DURING),
     ).resolves.toMatchObject({ destination: expect.any(String) });
   });
+
+  /**
+   * The release — which the first version of this guard got wrong.
+   *
+   * It asked `currentWeek`, "the week of the most recent kickoff", which keeps
+   * answering week N until week N+1 kicks off on the Thursday. So it refused
+   * every add and drop for days after a week's games had ended, swallowing the
+   * Tuesday turnover and the Wednesday 03:00 ET free-agency opening that §6's
+   * own cycle table guarantees.
+   *
+   * The fixture is the shape that would have caught it: **two** weeks on the
+   * calendar, so "the week under test" and "the week the code picks" can differ,
+   * and instants sampled across the whole cycle rather than sixty seconds either
+   * side of one kickoff. A lock with no release test is a lock with untested
+   * scope.
+   */
+  async function withTwoWeeks(fx: Fixture): Promise<void> {
+    const [sport] = await fx.client.query<{ id: string }>(
+      "SELECT id FROM sports WHERE key = $1",
+      [NFL.key],
+    );
+    await fx.client.query(
+      `INSERT INTO games (sport_id, external_ref, season, week, home_team_ref, away_team_ref, kickoff_at)
+       VALUES ($1, 'w1-sun', 2026, 1, 'CIN', 'BAL', $2),
+              ($1, 'w2-thu', 2026, 2, 'BUF', 'NYJ', $3),
+              ($1, 'w2-sun', 2026, 2, 'CIN', 'BAL', $4)`,
+      [sport!.id, KICKOFF, new Date("2026-09-18T00:15:00Z"), new Date("2026-09-20T17:00:00Z")],
+    );
+  }
+
+  it("releases the lock at the weekly turnover, not at the next kickoff", async () => {
+    // Tuesday 00:30 ET. Every week-1 game has been played, the cycle has rolled
+    // over, and §6 says every unrostered player has returned to waivers.
+    const fx = await setup();
+    await withTwoWeeks(fx);
+
+    await expect(
+      dropPlayer(
+        fx.client,
+        fx.leagueId,
+        fx.teams[0]!,
+        fx.players.get("held")!,
+        new Date("2026-09-15T04:30:00Z"),
+      ),
+    ).resolves.toMatchObject({ destination: expect.any(String) });
+  });
+
+  it("leaves free agency open at Wednesday 03:00 ET", async () => {
+    // The one assertion that fails on the first version of this guard. The
+    // constitution opens free agency at this instant; the guard was closing it.
+    const fx = await setup();
+    await withTwoWeeks(fx);
+
+    await expect(
+      addFreeAgent(fx.client, {
+        leagueId: fx.leagueId,
+        teamId: fx.teams[1]!,
+        addPlayerId: fx.players.get("target")!,
+        now: new Date("2026-09-16T07:05:00Z"),
+      }),
+    ).resolves.toBeUndefined();
+  });
+
+  it("still refuses while the week is live, after his own game has ended", async () => {
+    // Sunday 23:00 ET. His game is long over but the week is not, and releasing
+    // here is the tempting misreading of §6: his points are already banked in
+    // the stored lineup, so a freed roster spot buys a Monday-night starter and
+    // twelve roster slots field thirteen contributors.
+    const fx = await setup();
+    await withTwoWeeks(fx);
+
+    await expect(
+      dropPlayer(
+        fx.client,
+        fx.leagueId,
+        fx.teams[0]!,
+        fx.players.get("held")!,
+        new Date("2026-09-14T03:00:00Z"),
+      ),
+    ).rejects.toMatchObject({ code: "GAME_STARTED" });
+  });
+
+  it("locks again the following week, so it is a rule and not a week-1 case", async () => {
+    const fx = await setup();
+    await withTwoWeeks(fx);
+
+    await expect(
+      dropPlayer(
+        fx.client,
+        fx.leagueId,
+        fx.teams[0]!,
+        fx.players.get("held")!,
+        new Date("2026-09-20T17:30:00Z"),
+      ),
+    ).rejects.toMatchObject({ code: "GAME_STARTED" });
+  });
 });
