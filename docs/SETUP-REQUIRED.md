@@ -297,22 +297,61 @@ The fee is **1%, taken once at settlement** — decided 2026-08-07, documented i
 address it pays to. That address is the Squads **vault**; see the multisig entry above,
 which is where the decision actually lives.
 
-### ⬜ Pin the USDC mint before mainnet
+### ⬜ Pin the USDC mint in the program before mainnet
 
-**Blocks:** nothing on localnet. It is the last gap between the $50 cap and the $50 it is
-supposed to mean.
-**Needed by:** **before any mainnet deployment**.
+**Blocks:** nothing. The service half shipped, and it is what closes the reachable
+attack — this entry is now defence-in-depth rather than the fix.
+**Needed by:** **before any mainnet deployment**, and specifically before the upgrade
+authority is burned, because after that the constant can never be corrected.
 
 The program requires pot tokens to have **six decimals**, which is what makes
 `MAX_BUY_IN_BASE_UNITS = 50_000_000` mean fifty dollars rather than fifty million of
-something. That is as tight as this can be without a price oracle, and it is **not a proof
-of value**: nothing stops a six-decimal token worth far more than a dollar, which would
-blow through the cap while satisfying every check.
+something. That is as tight as a program can be without a price oracle, and it is **not a
+proof of value**: nothing stops a six-decimal token worth far more, or far less, than a
+dollar.
 
-Pinning USDC's mint address closes it — one constant in `lib.rs`. The reason it is not
-done already is that localnet tests cannot mint at a fixed mainnet address, so it needs
-either a cluster-conditional constant or an allowlist, and either one wants a moment's
-thought rather than being bolted on at deploy time.
+**What already shipped.** The mint used to arrive in the create request body and go into
+the frozen rules unread, so a crafted POST could denominate a league in any six-decimal
+token — including one the caller minted and held the **freeze authority** for. That is the
+part that had teeth: a frozen vault makes `refund_stake` fail, and `refund_stake` is the
+instruction the whole safety case rests on. The service now derives the mint from
+`POT_MINTS` per cluster, the way it already derived the fee recipient, which removes the
+only write an attacker had into the signed document. Verified live on 2026-08-13:
+
+| cluster      | mint                                           | decimals |
+| ------------ | ---------------------------------------------- | -------- |
+| mainnet-beta | `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v` | 6        |
+| devnet       | `4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU` | 6        |
+
+**What that does not cover, and why the on-chain pin still matters.** The derivation binds
+only while this service is the only way leagues are created. `join_league` and `deposit`
+are permissionless, so a socially-directed victim depositing into a raw PDA is defended by
+the program alone; and the detection layer is one `if` in the anchor route, which a
+refactor could weaken. The program's own comment already says it: an off-chain check
+"produces good error messages", and the on-chain one "is what actually binds, because it is
+the only one an attacker cannot skip by calling the program directly."
+
+**Why it was not done in the same change.** Localnet cannot mint at a fixed mainnet
+address, so it needs a build-time constant with a test-only escape — Anchor programs cannot
+ask which chain they are running on, so there is no runtime alternative. That costs **61 of
+72 test cases** in `programs/rostr-escrow/tests/`, which all obtain their mint from one
+helper. Real work, and not work to do in a hurry.
+
+**Get the polarity right.** Put mainnet in the _default_ build and the test mints behind
+the feature flag. A build that forgot its flag then refuses every league on devnet —
+loud, immediate, one redeploy. The opposite ships a mainnet program that accepts any
+six-decimal token and looks perfectly healthy until someone's pot is denominated in a token
+its creator prints.
+
+**And pinning USDC does not remove the freeze risk — it renames it.** Both USDC mints carry
+a live freeze authority (mainnet's is Circle's, `7dGbd2QZcCKcTndnHcTL8q7SMVXAkp688NTQYwrRCrar`,
+confirmed on-chain). So `require!(mint.freeze_authority.is_none())` and pinning USDC are
+mutually exclusive: shipping both makes league creation impossible. The trade is a
+regulated issuer who freezes on legal order in place of an anonymous commissioner who can
+freeze a mint they made this morning — much better, and not nothing. `docs/RULES.md`,
+`lib.rs`'s `refund_stake` and the deposit screen all currently promise a refund that
+"can never be stuck"; that sentence needs the exception written into it, in the signed rule
+set rather than a banner, the same way the unaudited-escrow warning is.
 
 ---
 

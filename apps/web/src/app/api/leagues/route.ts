@@ -10,7 +10,9 @@ import {
 } from "@rostr/core";
 import type { PotRules } from "@rostr/core";
 import { createDraftRecord, createLeague, LeagueValidationError, seedSport } from "@rostr/db";
+import { potMintFor } from "@rostr/escrow";
 import { db } from "@/lib/db";
+import { declaredCluster } from "@/lib/cluster";
 import { currentUser } from "@/lib/session";
 
 /**
@@ -60,7 +62,12 @@ interface CreateBody {
   draftAt?: number;
   tradeDeadlineWeek?: number;
   pot?: {
-    tokenMint: string;
+    /**
+     * Deliberately absent: the token. It comes from `POT_MINTS` on the server,
+     * for the same reason `feeRecipient` does — see where it is derived below.
+     * Declaring it here and ignoring it would invite someone to start reading
+     * it again.
+     */
     buyInBaseUnits: string;
     refundUnlockAt: number;
     /** Which prize shape. Anything else, including absent, is the split. */
@@ -139,6 +146,36 @@ export async function POST(request: Request): Promise<NextResponse> {
     );
   }
 
+  // **And the token, for the same reason, which was the one that got missed.**
+  // The fee recipient decides where 1% goes; the mint decides what the money
+  // *is*, and it used to arrive in the request body and go into the frozen
+  // rules unread — `validateLeagueRules` asked only that the string was not
+  // empty. A crafted POST could denominate a league in any six-decimal token,
+  // including one the caller minted and holds the freeze authority for, which
+  // would let them freeze the vault and hold every stake to ransom.
+  //
+  // Deriving it here removes the only write an attacker had into the signed
+  // document, and everything downstream is already checked against that
+  // document: the anchor route refuses a chain account whose terms differ, and
+  // the deposit path builds the member's token account from the *signed* mint,
+  // so the program's own `member_token_account.mint == league.token_mint`
+  // rejects anything else. The gap was never the checking, it was that the
+  // thing being checked against came from the caller.
+  //
+  // A cluster with no mint refuses rather than falling back — no mint is a
+  // reason not to take money, not a reason to accept whatever was offered.
+  const potMint = potMintFor(declaredCluster(), process.env.POT_MINT_LOCALNET);
+  if (body.pot && !potMint) {
+    return NextResponse.json(
+      {
+        error:
+          `Pot leagues are unavailable on ${declaredCluster()}: no pot token is ` +
+          `configured for this cluster`,
+      },
+      { status: 503 },
+    );
+  }
+
   // An unrecognised shape is refused rather than quietly treated as the split.
   // The whole creation promise is that the previewed hash is the frozen hash, so
   // a client sending a shape this server does not know about must fail loudly —
@@ -157,7 +194,8 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   const pot: PotRules | null = body.pot
     ? {
-        tokenMint: body.pot.tokenMint,
+        // `potMint` is non-null here: the guard above returned 503 otherwise.
+        tokenMint: potMint!,
         buyInBaseUnits: body.pot.buyInBaseUnits,
         // The commissioner picks the shape of the prize at creation, and it is
         // frozen with everything else. Both presets are decidable in a league of

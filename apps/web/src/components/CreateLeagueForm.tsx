@@ -15,6 +15,7 @@ import {
   NFL_WINNER_TAKE_ALL_PAYOUT,
 } from "@rostr/core";
 import type { LeagueRules, PotRules } from "@rostr/core";
+import { parseCluster, potMintFor } from "@rostr/escrow";
 import { RulesView } from "@/components/RulesView";
 
 /**
@@ -45,8 +46,30 @@ const SLOW_CLOCKS = [
   { label: "24 hours", seconds: 86_400 },
 ];
 
-/** USDC on mainnet. The only token offered for now — one pot, one token. */
-const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+/**
+ * The pot token for the cluster this build targets.
+ *
+ * **This was hardcoded to mainnet USDC, which was a live break and not only a
+ * hardening gap.** The deployment targets devnet, where that mint account does
+ * not exist, so `initialize_league` — which takes the mint as a real account —
+ * would have failed at account resolution the first time anyone anchored a pot
+ * league there. It never surfaced because the program has not been deployed to
+ * devnet yet.
+ *
+ * It must be the same value the server derives, because the whole creation
+ * promise is that the previewed hash is the frozen hash. Both read `POT_MINTS`;
+ * a build pointed at one cluster and a server at another would disagree, and
+ * the preview would be a hash of terms nobody stored. `NEXT_PUBLIC_*` is
+ * inlined at build time, so this is a property of the deployment, exactly as
+ * `NEXT_PUBLIC_FEE_RECIPIENT` is.
+ *
+ * `null` where the cluster has no pot token, which disables the pot section
+ * rather than previewing a league the server would refuse to create.
+ */
+const POT_MINT = potMintFor(
+  parseCluster(process.env["NEXT_PUBLIC_SOLANA_CLUSTER"]) ?? "devnet",
+  process.env["NEXT_PUBLIC_POT_MINT_LOCALNET"],
+);
 
 /**
  * Must match `FEE_RECIPIENT` on the server — see the comment where it is used.
@@ -153,13 +176,13 @@ export function CreateLeagueForm() {
   }
 
   const pot: PotRules | null = useMemo(() => {
-    if (!withPot) return null;
+    if (!withPot || !POT_MINT) return null;
 
     const amount = Number.parseFloat(buyIn);
     if (!Number.isFinite(amount) || amount <= 0) return null;
 
     return {
-      tokenMint: USDC_MINT,
+      tokenMint: POT_MINT,
       // USDC has six decimals. A decimal string, because this is a u64 on chain
       // and JavaScript numbers stop being exact well before a u64 does.
       buyInBaseUnits: String(Math.round(amount * 1_000_000)),
@@ -216,7 +239,11 @@ export function CreateLeagueForm() {
           tradeDeadlineWeek,
           pot: pot
             ? {
-                tokenMint: pot.tokenMint,
+                // No `tokenMint`. The server derives it from the cluster, for
+                // the same reason it derives the fee recipient — a mint the
+                // caller chose is a mint the caller can pick for its freeze
+                // authority. The preview above uses the identical constant, so
+                // the hash shown is still the hash stored.
                 buyInBaseUnits: pot.buyInBaseUnits,
                 refundUnlockAt: pot.refundUnlockAt,
                 payout: payoutShape,
@@ -355,12 +382,26 @@ export function CreateLeagueForm() {
             <input
               type="checkbox"
               checked={withPot}
+              disabled={!POT_MINT}
               onChange={(e) => setWithPot(e.target.checked)}
             />
-            <span>Play for a pot</span>
+            <span className={POT_MINT ? undefined : "text-white/40"}>Play for a pot</span>
           </label>
 
-          {withPot ? (
+          {/*
+            Offered only where there is a token to denominate it in. The server
+            refuses a pot league on such a cluster, so an enabled checkbox here
+            would be a form that submits and fails — and the honest failure is
+            the one shown before anything is typed.
+          */}
+          {!POT_MINT && (
+            <p className="text-xs text-white/40">
+              Pot leagues are unavailable on this network — no pot token is configured for it.
+              Everything else works.
+            </p>
+          )}
+
+          {withPot && POT_MINT ? (
             <div className="space-y-3">
               <p className="rounded border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
                 The escrow contract holding this money has <strong>not been audited</strong>. Do
