@@ -254,6 +254,60 @@ describe("validateLeagueRules", () => {
 
     expect(validateLeagueRules(wta, NFL)).toEqual([]);
   });
+  it("rejects a refund unlock before the league can settle", () => {
+    // The timelock is the only way tokens leave the vault, and it consults no
+    // league state — so an early one lets a member withdraw a stake the pot
+    // still owes a champion. The program cannot catch it: its only check is
+    // that the date is in the future.
+    const early = mutate((d) => {
+      (d.pot as { refundUnlockAt: number }).refundUnlockAt = d.draft.scheduledAt + 60;
+    });
+
+    expect(validateLeagueRules(early, NFL)).toContainEqual(
+      expect.stringContaining("before this league can settle"),
+    );
+  });
+
+  it("rejects a refund unlock more than a year past settlement", () => {
+    // Year 5138 validated cleanly before this bound existed, and the program
+    // permits it — so every deposit would have been locked for good.
+    const late = mutate((d) => {
+      (d.pot as { refundUnlockAt: number }).refundUnlockAt = 99_999_999_999;
+    });
+
+    expect(validateLeagueRules(late, NFL)).toContainEqual(
+      expect.stringContaining("past settlement"),
+    );
+  });
+
+  it.each([Number.NaN, 1.5, Number.POSITIVE_INFINITY, 2 ** 53])(
+    "rejects a refund unlock of %s, which slips past a numeric window",
+    (value) => {
+      // Load-bearing rather than tidiness: NaN compares false against BOTH
+      // bounds, so without the integer guard it passes the window untouched and
+      // fails later inside canonicalize as a 500 rather than a rules problem.
+      const bad = mutate((d) => {
+        (d.pot as { refundUnlockAt: number }).refundUnlockAt = value;
+      });
+
+      expect(validateLeagueRules(bad, NFL)).toContainEqual(
+        expect.stringContaining("whole Unix seconds"),
+      );
+    },
+  );
+
+  it("rejects a refund unlock supplied as a string", () => {
+    // The request body is cast, never runtime-checked, so a JSON string
+    // reaches the encoder and hashes as a string — a document that contradicts
+    // its own type and re-encodes to a different hash for anyone verifying it.
+    const stringy = mutate((d) => {
+      (d.pot as unknown as { refundUnlockAt: unknown }).refundUnlockAt = "1893456000";
+    });
+
+    expect(validateLeagueRules(stringy, NFL)).toContainEqual(
+      expect.stringContaining("whole Unix seconds"),
+    );
+  });
   it("rejects a paying finalisation window shorter than the stat-correction window", () => {
     const bad = mutate((d) => {
       (d.settlement as { payingFinalizationHours: number }).payingFinalizationHours = 48;

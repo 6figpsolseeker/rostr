@@ -14,7 +14,9 @@ import { slotTypesByKey, statKeysByKey } from "../sports/types.js";
 import {
   BASIS_POINTS_TOTAL,
   MAX_BUY_IN_BASE_UNITS,
+  DRAFT_TO_KICKOFF_SLACK_SECONDS,
   MAX_FEE_BPS,
+  MAX_REFUND_UNLOCK_LEAD_SECONDS,
   MIN_BUY_IN_BASE_UNITS,
 } from "./types.js";
 import type { LeagueRules, ScoringRule } from "./types.js";
@@ -243,6 +245,31 @@ function validateTrades(rules: LeagueRules, out: string[]): void {
   }
 }
 
+/**
+ * The earliest instant a league can possibly have finished paying out.
+ *
+ * Everything here comes from the frozen rules, deliberately: validation takes no
+ * clock, so a time-dependent bound would make a fixture that passes today fail
+ * on some arbitrary future date and turn CI into a time bomb.
+ *
+ * The slack matters and is easy to leave out. The draft is scheduled *before*
+ * week 1 — roughly three weeks before, in the 2026 calendar — so counting the
+ * season's weeks from `scheduledAt` lands short of the championship. Without it
+ * the floor for a default league falls on 2026-12-26, which is inside week 16,
+ * and the bound would license exactly the mid-playoff withdrawal it exists to
+ * prevent.
+ */
+function settlementInstant(rules: LeagueRules): number {
+  const lastWeek = Math.max(rules.schedule.regularSeasonWeeks, ...rules.schedule.playoffWeeks);
+
+  return (
+    rules.draft.scheduledAt +
+    DRAFT_TO_KICKOFF_SLACK_SECONDS +
+    lastWeek * 7 * 86_400 +
+    rules.settlement.payingFinalizationHours * 3_600
+  );
+}
+
 function validatePot(rules: LeagueRules, out: string[]): void {
   const pot = rules.pot;
   if (pot === null) return;
@@ -268,7 +295,39 @@ function validatePot(rules: LeagueRules, out: string[]): void {
     }
   }
   if (pot.tokenMint.length === 0) out.push("pot requires a token mint");
-  if (pot.refundUnlockAt <= 0) out.push("pot requires a refund unlock time");
+
+  // **The timelock is the escape hatch, so it has to be reachable and it has to
+  // be late enough.** `refund_stake` is the only instruction that moves tokens
+  // out of the vault, it consults no league state, and the rules are frozen — so
+  // both ends of this window are permanent for the league that signs them.
+  //
+  // Too early and a member withdraws a stake the pot still owes a champion.
+  // Too late and "your money is recoverable" is a promise about a date nobody
+  // lives to see; the program will happily accept either.
+  //
+  // Derived from the rule set rather than the clock, so validation stays pure
+  // and a fixture cannot rot into failure on an arbitrary future date.
+  if (!Number.isSafeInteger(pot.refundUnlockAt) || pot.refundUnlockAt <= 0) {
+    // Not merely tidiness. `NaN` compares false against *both* bounds below, so
+    // without this guard it walks through the window untouched and only fails
+    // later, inside `canonicalize`, as a 500 rather than a validation problem.
+    out.push("pot requires a refund unlock time in whole Unix seconds");
+  } else {
+    const settlesAt = settlementInstant(rules);
+
+    if (pot.refundUnlockAt < settlesAt) {
+      out.push(
+        `refund unlock (${pot.refundUnlockAt}) falls before this league can settle ` +
+          `(${settlesAt}) — a member could withdraw a stake the pot still owes`,
+      );
+    } else if (pot.refundUnlockAt > settlesAt + MAX_REFUND_UNLOCK_LEAD_SECONDS) {
+      out.push(
+        `refund unlock (${pot.refundUnlockAt}) is more than ` +
+          `${MAX_REFUND_UNLOCK_LEAD_SECONDS / 86_400} days past settlement ` +
+          `(${settlesAt}) — the escape hatch has to stay reachable`,
+      );
+    }
+  }
 
   // A fee is permitted to be zero — a league that pays us nothing is a valid
   // league — but never negative, never fractional, and never unbounded.

@@ -44,6 +44,27 @@ export const MAX_BUY_IN_BASE_UNITS = 50_000_000;
  */
 export const MAX_FEE_BPS = 500;
 
+/**
+ * Days between the draft and the season's first kickoff, used to place the
+ * earliest legal refund unlock.
+ *
+ * The 2026 calendar drafts on Aug 22 and kicks off Sep 9 — eighteen days. Three
+ * weeks is that with room to spare, and erring long is the safe direction here:
+ * it pushes the earliest legal unlock *later*, never earlier, so the margin can
+ * only ever protect a pot rather than expose one.
+ */
+export const DRAFT_TO_KICKOFF_SLACK_SECONDS = 21 * 24 * 3600;
+
+/**
+ * How long after settlement a league may hold a stake before the timelock opens.
+ *
+ * A year. `refund_stake` is the only way tokens leave the vault and no
+ * instruction can change the date afterwards, so an unbounded value is
+ * indistinguishable from confiscation — and the member agreed to a date they
+ * were shown, not to "eventually".
+ */
+export const MAX_REFUND_UNLOCK_LEAD_SECONDS = 365 * 24 * 3600;
+
 // ---------------------------------------------------------------------------
 // Scoring
 // ---------------------------------------------------------------------------

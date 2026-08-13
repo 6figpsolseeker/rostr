@@ -55,11 +55,20 @@ let provider: anchor.AnchorProvider;
 let mint: anchor.web3.PublicKey;
 let db: PGliteClient;
 
+/**
+ * Anchored to now, because this fixture has to satisfy two clocks at once.
+ *
+ * The rule set requires the refund unlock to fall after the season it describes
+ * could have settled — derived from `scheduledAt`, no wall clock. The *program*
+ * separately requires it to be in the future. A draft hard-coded in the past
+ * satisfies the first and fails the second, and drifts further out of reach every
+ * day the repo ages.
+ */
 const DRAFT = {
   type: "SNAKE",
   mode: "SLOW",
   pickSeconds: 14_400,
-  scheduledAt: 1_756_400_000,
+  scheduledAt: Math.floor(Date.now() / 1000) + 7 * 24 * 3600,
 } as const;
 
 beforeAll(async () => {
@@ -91,7 +100,12 @@ async function createPotLeague(name: string) {
       // program that had quietly become a fixed price.
       buyInBaseUnits: "23500000",
       payout: NFL_DEFAULT_PAYOUT,
-      refundUnlockAt: Math.floor(Date.now() / 1000) + 365 * 24 * 3600,
+      // Relative to the draft, not to the wall clock. Measuring from `Date.now()`
+      // against a draft hard-coded in the past drifted further out every day, so
+      // it would eventually have failed the refund-unlock window on a date
+      // nobody chose — the exact rot the bound is derived rather than timed to
+      // avoid. 200 days clears the season and stays inside the year-long cap.
+      refundUnlockAt: DRAFT.scheduledAt + 200 * 24 * 3600,
       feeBps: NFL_DEFAULT_FEE_BPS,
       feeRecipient: anchor.web3.Keypair.generate().publicKey.toBase58(),
     },
