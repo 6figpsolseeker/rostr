@@ -78,7 +78,10 @@ See [`docs/BUILD-PLAN.md`](docs/BUILD-PLAN.md) for the full commit-by-commit pla
   and the `MatchupResult`s the standings consume. This was the missing join: the scoring
   engine and the standings table were both finished and had no way to reach each other.
 
-- B6–B8: Tank01 adapter, box scores, live sync (`packages/stats/`, `packages/db/sync.ts`)
+- B6–B7: Tank01 adapter and the box-score **translator** (`packages/stats/`). **B8 is
+  partial**: players, byes, rankings, projections and now the schedule sync; there is
+  still **no box-score producer**, so `stat_lines` is empty and `getBoxScore` has no
+  caller. See issue #75 — "live sync" was listed as done here and was not.
 
 - B16: the draft persisted (`packages/db/src/draft.ts`, migration `0009`)
 
@@ -119,9 +122,29 @@ See [`docs/BUILD-PLAN.md`](docs/BUILD-PLAN.md) for the full commit-by-commit pla
 - **The on-chain anchor recorded** (migration `0014`) — transaction and cluster, write-once
   by trigger. `recordChainAnchor` / `getChainState` in `packages/db/src/leagues.ts`.
 
-**Both hard deadlines are now covered in code.** Aug 22 is create → join → draft; Sep 9 is
-set a lineup → score the week → standings. What they need is deployment and the
-credentials in `SETUP-REQUIRED.md`, not more code.
+**Aug 22 is covered in code — create → join → draft. Sep 9 is not, and this paragraph
+used to say it was.**
+
+The sentence here read "Both hard deadlines are now covered in code… what they need is
+deployment and the credentials in `SETUP-REQUIRED.md`, not more code." That was false, and
+it is the most expensive kind of false: it is the sentence that stops someone looking.
+
+What was missing (issue #75): **nothing wrote `stat_lines` and nothing called `syncGames`.**
+`getBoxScore` had no caller outside its own interface and a test stub. So on a real
+deployment `games` was empty, `weekHasSchedule` was false, and **no manager could set a
+lineup at all** — `setLineup` refuses with `SCHEDULE_MISSING`. `currentWeek` was null, so
+`/api/cron/score-week` returned `{week: null, leagues: []}` and had been a no-op every ten
+minutes since it shipped. And with `games` hand-populated but no stat lines, every week
+would have finalised **0–0, permanently**, because a finalised week is never rescored.
+
+`docs/LIVE-SCORING.md` describes six automation jobs in the present tense and only one of
+them exists. Reading a plan as a description is how the claim above got written.
+
+**Now:** `syncGames` is wired into `pnpm db:sync` and the schedule is real. **Still
+outstanding:** `syncBoxScores` does not exist, so `stat_lines` is still empty and every
+player still scores zero. Sep 9 is not covered until that lands, and the adapter defects in
+issue #81 — which are latent only because nothing calls `getBoxScore` — become live the
+moment it does.
 
 - **Anchoring wired into the app** — `POST /api/leagues/[id]/anchor`, `AnchorPanel.tsx`,
   and `readOnlyEscrow()` in `apps/web/src/lib/escrow.ts`. The commissioner signs from

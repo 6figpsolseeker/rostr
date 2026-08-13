@@ -18,10 +18,20 @@ import { seedSport } from "./sports.js";
 import {
   loadDraftBoard,
   syncByeWeeks,
+  syncGames,
   syncPlayers,
   syncProjections,
   syncRankings,
 } from "./sync.js";
+
+/**
+ * NFL regular-season weeks.
+ *
+ * Not read from a league's rules on purpose — this syncs the *sport's* schedule,
+ * which every league in the database shares, and a league's own
+ * `regularSeasonWeeks` is how much of it that league plays.
+ */
+const REGULAR_SEASON_WEEKS = 18;
 
 function connectionString(): string {
   const url = process.env["DATABASE_URL"];
@@ -119,6 +129,26 @@ async function main(): Promise<void> {
             console.log(`    ... and ${rankings.unmatched.length - 15} more`);
           }
         }
+
+        // The schedule, and it was missing from this list entirely.
+        //
+        // Without `games` rows nothing works: `weekHasSchedule` is false so
+        // `setLineup` refuses every lineup with `SCHEDULE_MISSING`, `currentWeek`
+        // is null so the scoring cron returns `{week: null, leagues: []}` and
+        // does nothing, and `finalizationHold` answers "no games are scheduled"
+        // so no week can ever finalise. `syncGames` was written, exported and
+        // tested, and never called — the one command an operator runs did not
+        // include it.
+        //
+        // Every week up front, not just the current one. The NFL schedule is
+        // published in May, and a manager setting a Week 1 lineup the day before
+        // kickoff needs those rows to already exist.
+        let games = 0;
+        for (let week = 1; week <= REGULAR_SEASON_WEEKS; week++) {
+          const result = await syncGames(client, provider, NFL.key, season, week);
+          games += result.inserted + result.updated;
+        }
+        console.log(`games      ${games} scheduled across ${REGULAR_SEASON_WEEKS} weeks`);
 
         const projections = await syncProjections(client, provider, NFL.key, season);
         console.log(

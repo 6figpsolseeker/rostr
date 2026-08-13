@@ -100,23 +100,51 @@ interface RawGame {
   gameStatus?: string;
 }
 
-/** Tank01's game status wording to ours. */
+/**
+ * Tank01's game status wording to ours.
+ *
+ * **`"Completed"` is the one form we have actually observed**, and it was
+ * missing. `__fixtures__/box-score.json` is the only real Tank01 response in the
+ * repo and it carries `gameStatus: "Completed"` with `gameStatusCode: "2"`; every
+ * other branch below was written from documentation. The unit test that appears
+ * to cover this feeds `"Final"` — a string invented in the test, not captured —
+ * so it passed while the mapping was wrong for the only evidence available.
+ *
+ * That miss is not cosmetic. An unrecognised status falls to `SCHEDULED`, so
+ * `syncGames` writes every finished game as unstarted with a null `final_at`,
+ * `finalizationHold` counts `finished = 0`, and every week in the season
+ * finalises down `RULES.md` §10's postponement fallback — the path reserved for
+ * a game that was never played. It is the fourth time a field guessed from
+ * documentation has been wrong here.
+ *
+ * So: match on a prefix rather than an exact string, because the observed
+ * vocabulary is inconsistent (`"Completed"`, and `docs/TANK01.md` records
+ * `"Final/OT"` elsewhere), and treat an unrecognised value as `SCHEDULED` **but
+ * say so** — a silent default is what hid this.
+ */
 function mapGameStatus(status: string | undefined): ProviderGame["status"] {
-  switch ((status ?? "").toLowerCase()) {
-    case "final":
-    case "final/ot":
-      return "FINAL";
-    case "in progress":
-    case "live - in progress":
-      return "IN_PROGRESS";
-    case "postponed":
-      return "POSTPONED";
-    case "cancelled":
-    case "canceled":
-      return "CANCELLED";
-    default:
-      return "SCHEDULED";
+  const raw = (status ?? "").trim().toLowerCase();
+
+  if (raw.startsWith("final") || raw.startsWith("completed")) return "FINAL";
+  if (raw.startsWith("in progress") || raw.startsWith("live")) return "IN_PROGRESS";
+  if (raw.startsWith("halftime")) return "IN_PROGRESS";
+  if (raw.startsWith("postponed")) return "POSTPONED";
+  if (raw.startsWith("cancel") || raw.startsWith("canceled")) return "CANCELLED";
+  if (raw === "" || raw.startsWith("scheduled") || raw.startsWith("not started")) {
+    return "SCHEDULED";
   }
+
+  // Loud, because the silent version of this cost a season's finalisation. It
+  // still answers `SCHEDULED` — refusing outright would take a whole sync down
+  // over one unfamiliar word — but an operator gets told rather than the wrong
+  // answer being written 16 times a week without comment.
+  // eslint-disable-next-line no-console
+  console.warn(
+    `[tank01] unrecognised gameStatus ${JSON.stringify(status)} — treating it as ` +
+      `SCHEDULED. If this is a finished game, finalisation will fall back to the ` +
+      `postponement path. Record the verbatim string in docs/TANK01.md and add it here.`,
+  );
+  return "SCHEDULED";
 }
 
 export class Tank01Provider implements StatsProvider {
