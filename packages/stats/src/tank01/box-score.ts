@@ -60,8 +60,25 @@ export interface TranslatedBoxScore {
    *
    * Never silently absorbed: a translation that quietly drops a stat produces
    * wrong scores that look right.
+   *
+   * **A warning is not a reason to discard the game.** It used to be: the
+   * adapter threw on any warning at all, so one kicker whose `Kicking.fgMade`
+   * disagreed with the field goals parsed from his own scoring plays threw away
+   * every player in the game. Composed with clock-based finalisation that is not
+   * "retry later" — the game is still `FINAL`, so the postponement fallback does
+   * not fire, and the week settles with sixteen real starters on zero,
+   * permanently, with no signal anywhere.
    */
   readonly warnings: readonly string[];
+  /**
+   * Reasons this response cannot be used at all.
+   *
+   * The distinction is the point. `warnings` means "we read this and something
+   * did not add up" — drop the affected stat, keep the other ninety players.
+   * `fatal` means "we could not read this", which is the only case where
+   * discarding is right.
+   */
+  readonly fatal: readonly string[];
 }
 
 function accumulate(into: Map<string, number>, statKey: string, value: number): void {
@@ -180,10 +197,42 @@ function translatePlayer(
  * Blocked kicks are credited to the team that *blocked* one, which is the
  * opponent of the team whose kick it was.
  */
+/**
+ * Which team blocked the kick in this scoring play.
+ *
+ * `play.team` is the team that **scored** the play, and a blocked kick reaches
+ * the scoring list in two shapes that put different teams there:
+ *
+ *   - A block on somebody else's kick, noted in the trailing parenthetical of
+ *     *their* touchdown — `"Blake Corum 1 Yd Rush (Joshua Karty PAT blocked)"`.
+ *     `play.team` is the kicking team, so the blocker is the opponent.
+ *   - A block returned for a score — `"Blocked Kick Recovered by Jordan Davis
+ *     (PHI) … 61 Yd Touchown Return"`. Here `play.team` is the **blocking** team,
+ *     because they are the ones who scored.
+ *
+ * Both strings are recorded verbatim in `docs/TANK01.md`. The original code
+ * assumed the first shape always held and derived the blocker as "the other
+ * team", which credited the second shape's two points to the team whose kick was
+ * blocked — a four-point swing between two defenses, usually on two different
+ * rosters, with no warning.
+ */
+function blockingTeamOf(play: ScoringPlay, teamAbvs: readonly string[]): string | null {
+  const scoringTeam = play.team ?? "";
+  if (!scoringTeam) return null;
+
+  const text = play.score ?? "";
+  // A return or a recovery means the team on the play is the one that blocked it.
+  const scoredByTheBlocker = /\brecover(?:ed|y)\b/i.test(text) || /\breturn\b/i.test(text);
+
+  if (scoredByTheBlocker) return scoringTeam;
+  return teamAbvs.find((abv) => abv !== scoringTeam) ?? null;
+}
+
 function translateTeamDefense(
   raw: Record<string, unknown>,
   scoringPlays: readonly ScoringPlay[],
   teamAbvs: readonly string[],
+  warnings: string[],
 ): Map<string, StatLine[]> {
   const result = new Map<string, StatLine[]>();
 
@@ -198,7 +247,26 @@ function translateTeamDefense(
 
     for (const [field, statKey] of Object.entries(TANK01_DST_MAP)) {
       const parsed = parseStatValue(unit[field]);
-      if (parsed === null) continue;
+      if (parsed === null) {
+        // This translator used to be the only one with no `warnings` array, so a
+        // missing or unparseable field vanished in silence. That matters most
+        // for `def_pts_allowed`: it is the sport's only TIERED rule, absent is
+        // not zero, and a unit that still emits a sack looks like it played and
+        // scored 2 rather than 12. The rest are worth reporting too — a field
+        // the provider renamed should not read as a quiet zero.
+        if (unit[field] !== undefined) {
+          warnings.push(
+            `${teamAbv}: ${field} is ${JSON.stringify(unit[field])}, which is not a number — ` +
+              `${statKey} was dropped`,
+          );
+        } else if (statKey === "def_pts_allowed") {
+          warnings.push(
+            `${teamAbv}: the box score carries no ${field}, so ${statKey} was dropped — ` +
+              `this is the only tiered rule in the sport and absent is not zero`,
+          );
+        }
+        continue;
+      }
 
       // Points allowed is meaningful at zero; the rest are not worth emitting.
       if (parsed !== 0 || statKey === "def_pts_allowed") {
@@ -206,13 +274,9 @@ function translateTeamDefense(
       }
     }
 
-    // A blocked kick belongs to whoever blocked it — the other team.
     for (const play of scoringPlays) {
       if (!isBlockedKick(play.score ?? "")) continue;
-
-      const kickingTeam = play.team ?? "";
-      const blockingTeam = teamAbvs.find((abv) => abv !== kickingTeam);
-      if (blockingTeam === teamAbv) accumulate(totals, "def_blk_kick", 1);
+      if (blockingTeamOf(play, teamAbvs) === teamAbv) accumulate(totals, "def_blk_kick", 1);
     }
 
     result.set(teamAbv, toStatLines(totals));
@@ -242,7 +306,18 @@ export function translateBoxScore(raw: unknown): TranslatedBoxScore {
     String((dst["away"] as Record<string, unknown> | undefined)?.["teamAbv"] ?? ""),
   ].filter(Boolean);
 
-  const teamDefense = translateTeamDefense(dst, scoringPlays, teamAbvs);
+  const teamDefense = translateTeamDefense(dst, scoringPlays, teamAbvs, warnings);
 
-  return { gameRef, players, teamDefense, warnings };
+  // A response we cannot read at all is a different fact from one that read fine
+  // with a discrepancy in it, and only the first is a reason to throw the game
+  // away. See `fatal` on `TranslatedBoxScore`.
+  const fatal: string[] = [];
+  if (!gameRef) {
+    fatal.push("the response carries no gameID, so it cannot be attributed to a game");
+  }
+  if (Object.keys(playerStats).length === 0) {
+    fatal.push("the response carries no playerStats at all");
+  }
+
+  return { gameRef, players, teamDefense, warnings, fatal };
 }
