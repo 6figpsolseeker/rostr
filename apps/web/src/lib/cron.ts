@@ -14,11 +14,20 @@ import { NextResponse } from "next/server";
  * Not much, and that is worth saying plainly rather than letting the word
  * "secret" imply otherwise. These endpoints only do what the clock already
  * permits: `catchUpExpiredPicks` is deterministic and stamped at the missed
- * deadline, scoring is idempotent and rewrites the same numbers, and
+ * deadline, scoring rewrites an unfinalised week and is refused a finalised one
+ * by `AND finalized_at IS NULL` on the write in `resolveLeagueWeek`, and
  * `finalizationHold` decides finalisation independently of who asked. An
  * unauthorised call cannot produce a wrong pick, a wrong score, or an early
  * settlement. **The guard is about database load**, and about not handing
  * anonymous callers a lever on every league at once.
+ *
+ * That middle clause used to read "scoring is idempotent and rewrites the same
+ * numbers", which was the whole justification for the guard being deliberately
+ * weak and was not true. An extra caller overlapping the scheduled sweep raced
+ * it: both passed the `ALREADY_FINAL` check, and the slower one wrote its older
+ * stat snapshot over the settled result. Naming the enforcement point rather
+ * than asserting idempotence is the difference — the property now holds because
+ * a specific predicate refuses the write, which is checkable against `week.ts`.
  *
  * ## Why it refuses when the secret is missing in production
  *

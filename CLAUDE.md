@@ -622,6 +622,31 @@ and, _within_ that window, only when every game is `FINAL`. A finalised week is 
 rescored — in a paying week it has already decided money, and a silently changed result
 afterwards is exactly what the window exists to prevent.
 
+**And that is enforced on the write, not by the check above it** (issue #76). `ALREADY_FINAL`
+reads `count(*)` in its own autocommit statement and the `UPDATE` runs four round trips later
+— `ensureLineups` alone opens a transaction of its own — so two overlapping runs both read
+zero and the slower one wrote its older stat snapshot over the settled row. Nothing recorded
+it: `finalized_at = CASE … ELSE finalized_at END` kept the timestamp, and the sweep's
+`NOT EXISTS` selection means the guard that failed to prevent the write is the same guard
+that prevents the repair. There is no winner column, so the overwrite flips `winnerOf` and
+everything seeded from it.
+
+`AND finalized_at IS NULL` on the `UPDATE` is what closes it, and it has to be _in the
+statement_: at READ COMMITTED the loser blocks on the row lock, wakes when the winner
+commits, and re-evaluates that WHERE against the committed row. Which is also why there is
+no `FOR UPDATE` here — serialising the two runs would only queue the loser up to write its
+stale numbers in turn. The lock decides who writes first; it cannot make a decision taken
+before the lock true afterwards.
+
+**Refused everything throws; refused _some_ reports.** A run that matched no rows raises
+`ALREADY_FINAL`, and the rollback discards nothing because nothing was written. A week can
+also hold a settled row beside an open one, and there the run legitimately writes the open
+one — throwing would roll back a real write that nothing would ever retry. That case says so
+in `matchupsAlreadyFinal`, and `matchups` counts rows written rather than results scored.
+The count is only knowable because the statement ends in `RETURNING id`: `PostgresClient.query`
+returns `rows` and discards `rowCount`, so a refused write was not merely ignored, it was
+unobservable.
+
 The window comes from the rules: 48 hours normally, **168 for weeks 14 and 17**, because
 official NFL stat corrections arrive for up to seven days.
 
