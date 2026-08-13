@@ -23,7 +23,12 @@
  *
  * So `resolveLeagueWeek` updates points every time it runs and sets
  * `finalized_at` only once the wait has elapsed. A finalised week is never
- * rescored.
+ * rescored — and that is enforced by `AND finalized_at IS NULL` on the write
+ * itself, not by the `ALREADY_FINAL` check above it. The check reads in its own
+ * statement and the write happens four round trips later, so two overlapping
+ * runs both passed it and the slower one overwrote a settled result. Making the
+ * write conditional is what closes that, because it is the write that has to
+ * refuse.
  *
  * ## The wait is bounded, because a game may never be played
  *
@@ -193,6 +198,13 @@ export async function loadScheduledWeek(
 
 export interface ResolveWeekOutcome {
   readonly week: number;
+  /**
+   * How many matchups this run actually wrote — not how many it scored.
+   *
+   * The two differ only when a row was refused for being already final, which
+   * `matchupsAlreadyFinal` then reports. Counting the scored results instead
+   * would assert writes that a refused row never received.
+   */
   readonly matchups: number;
   readonly finalized: boolean;
   /** Why it was not finalised, when it was not. */
@@ -208,6 +220,19 @@ export interface ResolveWeekOutcome {
    * because a finalised week is never rescored.
    */
   readonly finalizedWithUnfinishedGames?: string;
+  /**
+   * How many matchups this run declined to write because they were already
+   * final, when it wrote at least one other.
+   *
+   * Present only when it happened, like `holdReason`. A run that was refused
+   * everything throws `ALREADY_FINAL` instead — this field is the partial case,
+   * where a week holds both a settled row and an open one and only the open one
+   * moved. Reporting it matters for the same reason
+   * `finalizedWithUnfinishedGames` does: without it the outcome describes writes
+   * that did not happen, and an operator reads `matchups: 7` as seven rows
+   * updated.
+   */
+  readonly matchupsAlreadyFinal?: number;
   readonly results: readonly MatchupResult[];
 }
 
@@ -262,16 +287,39 @@ export async function resolveLeagueWeek(
   const decision = await finalizationHold(db, stored.rules, week, now);
   const finalized = decision.hold === null;
 
+  // `AND finalized_at IS NULL` is what actually keeps a settled week settled.
+  // The check above is a fast path, not the guarantee: it reads in its own
+  // autocommit statement, and by the time this transaction opens, four round
+  // trips have passed — `ensureLineups` alone opens a transaction of its own.
+  // Two runs overlapping in that gap both read zero, and the slower one used to
+  // write its older stat snapshot straight over the finalised row, flipping who
+  // won a week nothing would ever revisit.
+  //
+  // Moving the check inside the transaction would not have been enough. At READ
+  // COMMITTED the loser blocks on the row lock, wakes when the winner commits,
+  // and re-evaluates *this* WHERE against the committed row — so the predicate
+  // has to be in the statement for the re-check to see it. That is also why no
+  // `FOR UPDATE` is needed: serialising the two runs would only queue the loser
+  // up to write its stale numbers in turn. The lock decides who writes first; it
+  // cannot make a decision taken before the lock true afterwards.
+  let written = 0;
+  let alreadyFinal = 0;
+
   await withTransaction(db, async (tx) => {
     for (const result of results) {
-      await tx.query(
+      // `RETURNING id` because `PostgresClient.query` hands back `rows` and
+      // drops `rowCount` — without it, a refused write is not merely ignored,
+      // it is unobservable.
+      const touched = await tx.query<{ id: string }>(
         `UPDATE matchups
             SET home_milli_points = $3,
                 away_milli_points = $4,
                 finalized_at = CASE WHEN $5::boolean THEN $6 ELSE finalized_at END
           WHERE league_id = $1 AND week = $2
             AND home_team_id = $7
-            AND away_team_id IS NOT DISTINCT FROM $8`,
+            AND away_team_id IS NOT DISTINCT FROM $8
+            AND finalized_at IS NULL
+        RETURNING id`,
         [
           leagueId,
           week,
@@ -283,15 +331,31 @@ export async function resolveLeagueWeek(
           result.awayTeamId,
         ],
       );
+
+      if (touched.length === 0) alreadyFinal++;
+      else written++;
+    }
+
+    // Refused everything: another run settled this week while this one was
+    // scoring, and the answer is the same one the fast path gives. Throwing
+    // here costs nothing — the rollback has no writes to discard — and it keeps
+    // the raced path and the serialised path reporting one fact.
+    //
+    // Refused *some* is a different fact and must not throw. A week can hold a
+    // settled row beside an open one, and rolling back would destroy the
+    // legitimate write to the open one. That case reports itself instead.
+    if (written === 0 && results.length > 0) {
+      throw new WeekError(`Week ${week} is already final`, "ALREADY_FINAL");
     }
   });
 
   return {
     week,
-    matchups: results.length,
+    matchups: written,
     finalized,
     ...(decision.hold === null ? {} : { holdReason: decision.hold }),
     ...(decision.fallback ? { finalizedWithUnfinishedGames: decision.fallback } : {}),
+    ...(alreadyFinal > 0 ? { matchupsAlreadyFinal: alreadyFinal } : {}),
     results,
   };
 }

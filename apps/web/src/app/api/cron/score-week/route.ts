@@ -154,6 +154,7 @@ export async function GET(request: Request): Promise<NextResponse> {
           ...(o.finalizedWithUnfinishedGames
             ? { finalizedWithUnfinishedGames: o.finalizedWithUnfinishedGames }
             : {}),
+          ...(o.matchupsAlreadyFinal ? { matchupsAlreadyFinal: o.matchupsAlreadyFinal } : {}),
         })),
         ...(sweep.failures.length > 0 ? { failedWeeks: sweep.failures } : {}),
         ...(sweep.deferred.length > 0 ? { deferredWeeks: sweep.deferred } : {}),
