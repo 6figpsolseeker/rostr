@@ -60,11 +60,41 @@ export interface LineupProblem {
   readonly playerId?: string;
 }
 
+/**
+ * When each relevant player's game kicks off this week, in Unix seconds.
+ * `null` means a bye — a known player with no game.
+ *
+ * **Deliberately not the roster.** A lock is a fact about a game that has
+ * started, not about who owns the player now, and conflating the two is what let
+ * a manager reopen a Thursday slot by cutting the man in it: the roster map
+ * excludes released players, so the slot's occupant vanished and an absent
+ * player read as "never locks".
+ *
+ * The caller must cover the roster **and** everyone named in the stored lineup —
+ * the union, because the whole point is that the occupant of a locked slot may
+ * no longer be rostered. A player missing from this map locks, so a caller who
+ * under-populates it gets refusals rather than a silent bypass.
+ */
+export type KickoffTimes = ReadonlyMap<string, number | null>;
+
 export interface ValidateLineupInput {
   readonly assignments: readonly LineupAssignment[];
   readonly shape: RosterShape;
-  /** The team's roster, keyed by player ID. */
+  /**
+   * The team's roster, keyed by player ID.
+   *
+   * Answers "may I start this player" — ownership and eligibility. It no longer
+   * answers "has his game started"; see `kickoffs`.
+   */
   readonly roster: ReadonlyMap<string, LineupPlayer>;
+  /**
+   * Kickoffs for the roster and for whoever is standing in the stored lineup.
+   *
+   * Required, not optional-with-a-fallback. An optional filter that defaults to
+   * permissive is the shape that produced the `loadProjections` defect, and here
+   * the permissive default is the bug being fixed.
+   */
+  readonly kickoffs: KickoffTimes;
   /**
    * What is currently in each slot. Needed to tell an edit from a no-op: a
    * locked slot may keep its player, it simply may not change.
@@ -90,7 +120,7 @@ const key = (slotType: string, slotIndex: number): string => `${slotType}#${slot
  * @returns every problem found, or an empty array
  */
 export function validateLineup(input: ValidateLineupInput): readonly LineupProblem[] {
-  const { assignments, shape, roster, current, now, requireFull } = input;
+  const { assignments, shape, roster, kickoffs, current, now, requireFull } = input;
   const problems: LineupProblem[] = [];
 
   const slots = new Map(
@@ -137,7 +167,7 @@ export function validateLineup(input: ValidateLineupInput): readonly LineupProbl
     // manager submit their whole lineup on Sunday without the Thursday slot
     // making the submission fail.
     const wasLocked =
-      now !== undefined && isSlotLocked(currentBySlot.get(slotKey) ?? null, roster, now);
+      now !== undefined && isSlotLocked(currentBySlot.get(slotKey) ?? null, kickoffs, now);
 
     if (wasLocked && currentBySlot.get(slotKey) !== assignment.playerId) {
       problems.push({
@@ -172,7 +202,7 @@ export function validateLineup(input: ValidateLineupInput): readonly LineupProbl
     if (
       now !== undefined &&
       currentBySlot.get(slotKey) !== assignment.playerId &&
-      isSlotLocked(assignment.playerId, roster, now)
+      isSlotLocked(assignment.playerId, kickoffs, now)
     ) {
       problems.push({
         code: "PLAYER_LOCKED",
@@ -282,16 +312,24 @@ export function startingSlots(
  * cheating.
  *
  * A player on a **bye never locks** either — there is no game to have started.
+ *
+ * **An unknown player locks.** That is the third case, and it used to be missing:
+ * `roster.get(id)?.kickoffAt` answered `undefined` both for a bye and for a
+ * player who was not in the map at all, and both read as "never locks". Since the
+ * map excluded released players, cutting the man in a slot reopened it — see
+ * `KickoffTimes` for why the lock no longer consults a roster at all. Refusing an
+ * edit we cannot price is the same direction `blockTime` takes: a refusal costs a
+ * retry and is visible, a wrong "unlocked" is invisible and decides a matchup.
  */
-function isSlotLocked(
-  playerId: string | null,
-  roster: ReadonlyMap<string, LineupPlayer>,
-  now: number,
-): boolean {
+function isSlotLocked(playerId: string | null, kickoffs: KickoffTimes, now: number): boolean {
   if (playerId === null) return false;
 
-  const kickoff = roster.get(playerId)?.kickoffAt;
-  if (kickoff === null || kickoff === undefined) return false;
+  // `has`, not `?? undefined` — that collapse is what hid the bug. A bye is a
+  // known player with no game; an absent player is a question we cannot answer.
+  if (!kickoffs.has(playerId)) return true;
+
+  const kickoff = kickoffs.get(playerId) ?? null;
+  if (kickoff === null) return false;
 
   return now >= kickoff;
 }
@@ -299,10 +337,25 @@ function isSlotLocked(
 /** Which of the current assignments can no longer be changed. */
 export function lockedAssignments(
   current: readonly LineupAssignment[],
-  roster: ReadonlyMap<string, LineupPlayer>,
+  kickoffs: KickoffTimes,
   now: number,
 ): readonly LineupAssignment[] {
-  return current.filter((assignment) => isSlotLocked(assignment.playerId, roster, now));
+  return current.filter((assignment) => isSlotLocked(assignment.playerId, kickoffs, now));
+}
+
+/**
+ * Whether this slot can still be changed.
+ *
+ * Exported so the screen and the server share one implementation of the rule. A
+ * UI that re-derives it can disagree with the server, and the direction that
+ * matters is offering an edit the server will refuse.
+ */
+export function slotIsLocked(
+  assignment: LineupAssignment,
+  kickoffs: KickoffTimes,
+  now: number,
+): boolean {
+  return isSlotLocked(assignment.playerId, kickoffs, now);
 }
 
 /**
@@ -313,20 +366,20 @@ export function lockedAssignments(
  */
 export function slotLocksAt(
   assignment: LineupAssignment,
-  roster: ReadonlyMap<string, LineupPlayer>,
+  kickoffs: KickoffTimes,
 ): number | null {
   if (assignment.playerId === null) return null;
-  return roster.get(assignment.playerId)?.kickoffAt ?? null;
+  return kickoffs.get(assignment.playerId) ?? null;
 }
 
 /** Whether a whole lineup is now beyond editing. */
 export function lineupIsFullyLocked(
   current: readonly LineupAssignment[],
-  roster: ReadonlyMap<string, LineupPlayer>,
+  kickoffs: KickoffTimes,
   now: number,
 ): boolean {
   const fillable = current.filter((assignment) => assignment.playerId !== null);
   if (fillable.length === 0) return false;
 
-  return fillable.every((assignment) => isSlotLocked(assignment.playerId, roster, now));
+  return fillable.every((assignment) => isSlotLocked(assignment.playerId, kickoffs, now));
 }

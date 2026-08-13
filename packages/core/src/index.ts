@@ -176,7 +176,9 @@ export {
 export {
   lineupIsFullyLocked,
   lockedAssignments,
+  slotIsLocked,
   slotLocksAt,
+  type KickoffTimes,
   startingSlots,
   validateLineup,
   type LineupAssignment,
