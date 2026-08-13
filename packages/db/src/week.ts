@@ -36,7 +36,13 @@
  * and 17 means nobody is ever paid.
  */
 
-import { generateSchedule, indexScoringRules, resolveWeek, winnerOf } from "@rostr/core";
+import {
+  generateSchedule,
+  indexScoringRules,
+  nextWeekly,
+  resolveWeek,
+  winnerOf,
+} from "@rostr/core";
 import type { LeagueRules, MatchupResult, ScheduledMatchup } from "@rostr/core";
 import type { SqlClient } from "./client.js";
 import { getLeagueRules } from "./leagues.js";
@@ -81,6 +87,61 @@ export async function currentWeek(
       ORDER BY g.kickoff_at DESC
       LIMIT 1`,
     [sportKey, at.toISOString()],
+  );
+
+  return row ? Number(row.week) : null;
+}
+
+/**
+ * The week the league is currently **transacting** in.
+ *
+ * **Not `currentWeek`, and the difference is a rule.** `currentWeek` answers
+ * "which week's scores am I writing" from the most recent kickoff, so from a
+ * week's first kickoff until the *next* week's first kickoff it keeps answering
+ * that week — including the Tuesday-to-Thursday stretch in which every one of
+ * its games has already been played. `docs/RULES.md` §6's kickoff lock asked
+ * against that week refuses every player who played, for days, and §6 opens free
+ * agency at Wednesday 03:00 ET in the middle of them.
+ *
+ * This answers a different question: which week's games belong to the cycle the
+ * league is transacting in now. §6's own table defines that cycle — every
+ * unrostered player returns to waivers at Tuesday 00:00 ET — so the week is the
+ * first one kicking off after the most recent weekly lock.
+ *
+ * The boundary is a weekday and a local hour out of the league's frozen rules,
+ * never an offset, so it follows the November DST change rather than sliding an
+ * hour through it.
+ *
+ * **Season-scoped, which `currentWeek` is not.** With two seasons ingested — and
+ * validating the engine against real 2025 box scores is planned work — that one
+ * answers "week 18" all summer, from a row belonging to a season the caller then
+ * does not look the player up in.
+ *
+ * `null` when the current cycle holds no games at all: before the schedule is
+ * ingested, and after the season ends. A caller enforcing a rule must read that
+ * as "this lock cannot be checked", never as "nothing is locked".
+ */
+export async function transactionWeek(
+  db: SqlClient,
+  rules: LeagueRules,
+  at: Date,
+): Promise<number | null> {
+  // The most recent weekly lock at or before `at`. `nextWeekly` is
+  // strictly-after, so asking it from a week earlier yields this cycle's.
+  const since = nextWeekly(
+    new Date(at.getTime() - 7 * 24 * 60 * 60 * 1000),
+    rules.waivers.weeklyLock,
+    rules.waivers.timezone,
+  );
+
+  const [row] = await db.query<{ week: number }>(
+    `SELECT g.week
+       FROM games g
+       JOIN sports s ON s.id = g.sport_id
+      WHERE s.key = $1 AND g.season = $2 AND g.kickoff_at > $3
+      ORDER BY g.kickoff_at ASC
+      LIMIT 1`,
+    [rules.sportKey, rules.seasonYear, since.toISOString()],
   );
 
   return row ? Number(row.week) : null;

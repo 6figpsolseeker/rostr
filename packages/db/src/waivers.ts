@@ -41,12 +41,11 @@ import {
 import type { DraftablePlayer, LeagueRules, WaiverClaim } from "@rostr/core";
 import type { SqlClient } from "./client.js";
 import { getLeagueRules } from "./leagues.js";
-import { loadKickoffs } from "./lineups.js";
 import { isUniqueViolation } from "./pg-errors.js";
 import { loadDraftBoard } from "./sync.js";
 import { lockedByTrade } from "./trades.js";
 import { withTransaction } from "./transaction.js";
-import { currentWeek } from "./week.js";
+import { transactionWeek } from "./week.js";
 
 export class WaiverError extends Error {
   constructor(
@@ -235,9 +234,34 @@ export async function availablePlayers(
  * different jobs and this repo needs both — the same argument `ASSET_GONE`
  * makes for trades.
  *
- * Silent when the week has no schedule: with no kickoff times there is nothing
- * to compare against, and `setLineup` already refuses that case loudly for the
- * decision that actually matters.
+ * ## The lock releases when the week does, and getting that wrong is a worse bug
+ *
+ * §2 says a locked player "cannot be moved **for that week**", so the lock is
+ * week-scoped. The first version of this asked `currentWeek`, which answers "the
+ * week of the most recent kickoff" — and that keeps answering week N right up
+ * until week N+1's Thursday. So it refused every add and drop for the three days
+ * *after* a week's games ended, swallowing the Tuesday turnover and most of the
+ * free-agency window §6's own cycle table opens at Wednesday 03:00 ET.
+ *
+ * The release point is the **weekly lock** — `waivers.weeklyLock`, Tuesday 00:00
+ * ET by default, already in the frozen rules, so this needs no new field and
+ * cannot move a rules hash. It is the moment the transaction week turns over,
+ * and it falls after the last Monday-night whistle, which matters: releasing at
+ * the week's last *kickoff* instead would reopen the exploit during that game.
+ *
+ * ## Silent, not refusing, in three cases — each for its own reason
+ *
+ * No live week, no game row for this player, or no schedule at all. §6 refuses a
+ * player "once **his own game** has kicked off"; a player with no game this week
+ * has no game to have started, so there is nothing to refuse.
+ *
+ * That is deliberately *not* the fail-closed direction `isSlotLocked` takes on
+ * the same data, and the difference is the point. `loadKickoffs` synthesises the
+ * week's first kickoff for a player whose team matches no game (`lineups.ts` —
+ * its case three), which is right for a lineup slot and wrong here: `team_ref`
+ * is nullable, so every unsigned free agent matches nothing, and consuming that
+ * synthesis would make the entire free-agent pool unaddable for most of every
+ * week. This asks for the player's own game directly instead.
  */
 async function refuseIfKickedOff(
   db: SqlClient,
@@ -246,14 +270,27 @@ async function refuseIfKickedOff(
   now: Date,
   verb: "added" | "dropped",
 ): Promise<void> {
-  const week = await currentWeek(db, rules.sportKey, now);
+  const week = await transactionWeek(db, rules, now);
   if (week === null) return;
 
-  const kickoffs = await loadKickoffs(db, [playerId], rules.seasonYear, week);
-  const kickoff = kickoffs.get(playerId);
-  if (kickoff === undefined || kickoff === null) return;
+  // This player's own game, and only his. Season-scoped, sport-scoped, and no
+  // fallback — an absent row means he does not play this week.
+  const [row] = await db.query<{ kickoff_at: string }>(
+    `SELECT g.kickoff_at
+       FROM players p
+       JOIN games g
+         ON g.sport_id = p.sport_id
+        AND g.season = $2
+        AND g.week = $3
+        AND (g.home_team_ref = p.team_ref OR g.away_team_ref = p.team_ref)
+      WHERE p.id = $1
+      ORDER BY g.kickoff_at
+      LIMIT 1`,
+    [playerId, rules.seasonYear, week],
+  );
+  if (!row) return;
 
-  if (Math.floor(now.getTime() / 1000) >= kickoff) {
+  if (now.getTime() >= new Date(row.kickoff_at).getTime()) {
     throw new WaiverError(
       `That player's game has already kicked off, so he cannot be ${verb} this week.`,
       "GAME_STARTED",
