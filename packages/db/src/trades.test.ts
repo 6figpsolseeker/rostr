@@ -6,7 +6,14 @@ import { createUser } from "./identity.js";
 import { seedSport } from "./sports.js";
 import { addTestTeam, createTestDatabase } from "./testing.js";
 import type { PGliteClient } from "./testing.js";
-import { availabilityOf, dropPlayer } from "./waivers.js";
+import {
+  addFreeAgent,
+  availabilityOf,
+  dropPlayer,
+  processWaivers,
+  seedWaiverPriority,
+  submitClaim,
+} from "./waivers.js";
 import {
   acceptTrade,
   declineTrade,
@@ -524,6 +531,176 @@ describe("the freeze between acceptance and execution", () => {
     await resolveDueTrades(fx.client, fx.leagueId, new Date(MONDAY.getTime() + 49 * HOUR));
 
     expect(await lockedByTrade(fx.client, fx.leagueId)).toEqual(new Set());
+  });
+
+  /**
+   * A player rostered by nobody, so he can be added or claimed.
+   *
+   * `active` matters: `availablePlayers` and the draft board both filter on it,
+   * and a player who is not active cannot be claimed at all.
+   */
+  async function unrostered(fx: Fixture, handle: string): Promise<string> {
+    const [sport] = await fx.client.query<{ id: string }>(
+      "SELECT id FROM sports WHERE key = $1",
+      [NFL.key],
+    );
+    const [position] = await fx.client.query<{ id: string }>(
+      "SELECT id FROM positions WHERE sport_id = $1 AND key = 'RB'",
+      [sport!.id],
+    );
+    const [row] = await fx.client.query<{ id: string }>(
+      `INSERT INTO players (sport_id, external_ref, full_name, primary_position_id, team_ref)
+       VALUES ($1, $2, $2, $3, 'CIN') RETURNING id`,
+      [sport!.id, handle, position!.id],
+    );
+    fx.players.set(handle, row!.id);
+    return row!.id;
+  }
+
+  /**
+   * An instant with no kickoff behind it, so `GAME_STARTED` stays silent.
+   *
+   * Every player in this fixture belongs to `CIN`, and at `MONDAY` week 5's
+   * games have already started — which is fine for the trade machinery and
+   * fatal for anything that has to *succeed* at dropping somebody. Week 6's
+   * cycle opens Tuesday 04:00Z and its first game is the Thursday, so this sits
+   * in the gap between them.
+   *
+   * Worth stating rather than quietly picking a magic number: `refuseIfKickedOff`
+   * and the freeze both refuse a drop, and a test that cannot tell which one
+   * refused proves nothing about the freeze.
+   */
+  const QUIET = new Date("2026-10-13T06:00:00Z");
+
+  const holds = async (fx: Fixture, teamId: string, playerId: string): Promise<boolean> => {
+    const rows = await fx.client.query(
+      "SELECT 1 FROM roster_entries WHERE team_id = $1 AND player_id = $2 AND released_at IS NULL",
+      [teamId, playerId],
+    );
+    return rows.length > 0;
+  };
+
+  it("refuses the add-with-drop that cuts a frozen player", async () => {
+    // The hole, and it needed no concurrency: accept a trade, then cut the
+    // player you promised through a different button. `dropPlayer` refused it
+    // and this path did not, so the guard there was decorative.
+    //
+    // Worse than one lost player. `resolveTrade` throws `ASSET_GONE` and rolls
+    // the whole swap back, so in a multi-asset trade dropping the *cheapest*
+    // frozen player destroys the trade and returns everything else — a
+    // unilateral cancel after acceptance, which `withdrawTrade` refuses on
+    // purpose and which `RULES.md` §9 denies even the commissioner.
+    const fx = await setupWithSecondLeague();
+    const fa = await unrostered(fx, "fa");
+    const p1 = fx.players.get("p1")!;
+
+    const tradeId = await propose(fx);
+    await acceptTrade(fx.client, tradeId, fx.teams[1]!, MONDAY);
+
+    await expect(
+      addFreeAgent(fx.client, {
+        leagueId: fx.leagueId,
+        teamId: fx.teams[0]!,
+        addPlayerId: fa,
+        dropPlayerId: p1,
+        now: QUIET,
+      }),
+    ).rejects.toMatchObject({ code: "IN_A_TRADE" });
+
+    // **The property, not the code.** An assertion on the error alone passes
+    // against a check placed before the transaction — which would close this
+    // hole and leave the racy read of part 3 exactly as it was.
+    expect(await holds(fx, fx.teams[0]!, p1)).toBe(true);
+    expect(await holds(fx, fx.teams[0]!, fa)).toBe(false);
+  });
+
+  it("fails a claim whose drop is frozen, and gives the player to the next priority", async () => {
+    // **The half a per-player check at the write cannot do.**
+    //
+    // `resolveWaiverClaims` marks a player taken the moment a claim wins him and
+    // fails every later claim with `PLAYER_TAKEN`. So refusing the winner's
+    // award afterwards leaves the runner-up already rejected and the player
+    // awarded to nobody — one manager's frozen drop silently denying him to the
+    // whole league. Filtering before resolution lets the next priority win.
+    const fx = await setupWithSecondLeague();
+    const wire = await unrostered(fx, "wire");
+
+    // Team 1 claims first, team 3 second — priority is the reverse of the draft
+    // order, so seeding it descending makes team 1 the best.
+    for (const [index, teamId] of fx.teams.entries()) {
+      await fx.client.query("UPDATE teams SET draft_position = $1 WHERE id = $2", [
+        fx.teams.length - index,
+        teamId,
+      ]);
+    }
+    await seedWaiverPriority(fx.client, fx.leagueId);
+
+    // He has to be genuinely on the wire, or `submitClaim` sends the manager to
+    // the add button instead.
+    await fx.client.query(
+      `INSERT INTO waiver_wire (league_id, player_id, clears_at) VALUES ($1, $2, $3)`,
+      [fx.leagueId, wire, QUIET.toISOString()],
+    );
+
+    // The best priority claims him and offers `p1` — who is about to be frozen.
+    await submitClaim(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: fx.teams[0]!,
+      addPlayerId: wire,
+      dropPlayerId: fx.players.get("p1")!,
+      now: MONDAY,
+    });
+    await submitClaim(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: fx.teams[2]!,
+      addPlayerId: wire,
+      now: MONDAY,
+    });
+
+    const tradeId = await propose(fx);
+    await acceptTrade(fx.client, tradeId, fx.teams[1]!, MONDAY);
+
+    const outcome = await processWaivers(fx.client, fx.leagueId, QUIET);
+
+    // The runner-up gets him. Under a check-at-the-write fix, nobody does.
+    expect(await holds(fx, fx.teams[2]!, wire)).toBe(true);
+    expect(outcome.awarded).toBe(1);
+    expect(outcome.failed).toBe(1);
+    expect(outcome.deferred).toBe(0);
+  });
+
+  it("still allows an ordinary drop while another player is frozen", async () => {
+    // The negative that stops the fix being worse than the bug. A league with an
+    // accepted trade in it must remain an ordinary league for everyone else.
+    const fx = await setupWithSecondLeague();
+    const spare = fx.players.get("spare")!;
+
+    const tradeId = await propose(fx);
+    await acceptTrade(fx.client, tradeId, fx.teams[1]!, MONDAY);
+
+    await expect(
+      dropPlayer(fx.client, fx.leagueId, fx.teams[0]!, spare, QUIET),
+    ).resolves.toMatchObject({ destination: "WAIVERS" });
+    expect(await holds(fx, fx.teams[0]!, spare)).toBe(false);
+    expect(await holds(fx, fx.teams[0]!, fx.players.get("p1")!)).toBe(true);
+  });
+
+  it("lets the player go once the trade that froze him is vetoed", async () => {
+    // The freeze is `state = 'ACCEPTED'` and nothing else, so it lifts by
+    // itself. Widening it — to PROPOSED, say — would let any manager freeze an
+    // opponent's roster for free, because a proposal needs no consent.
+    const fx = await setupWithSecondLeague();
+    const p1 = fx.players.get("p1")!;
+
+    const tradeId = await propose(fx);
+    await acceptTrade(fx.client, tradeId, fx.teams[1]!, MONDAY);
+    await vetoTrade(fx.client, tradeId, fx.teams[2]!, MONDAY);
+    await vetoTrade(fx.client, tradeId, fx.teams[3]!, MONDAY);
+    await resolveDueTrades(fx.client, fx.leagueId, AFTER_WINDOW);
+
+    await expect(
+      dropPlayer(fx.client, fx.leagueId, fx.teams[0]!, p1, QUIET),
+    ).resolves.toMatchObject({ destination: "WAIVERS" });
   });
 });
 
