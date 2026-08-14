@@ -472,8 +472,14 @@ export async function acceptTrade(
     // blocks, wakes after the winner commits, re-checks a snapshot that predates
     // it, and passes. Both trades reach ACCEPTED and the player is minted. The
     // lock would be doing real work and guarding a value already read.
+    // **`ORDER BY player_id`, and it is not cosmetic.** Pass one takes a row
+    // lock per asset in whatever order this returns, so two accepts of two
+    // different trades sharing two players could take them in opposite orders
+    // and deadlock. An unordered `SELECT` is not a stable order, it is whatever
+    // the plan produces. Sorting on the same key in every caller makes the cycle
+    // unconstructible.
     const assets = await tx.query<{ from_team_id: string; player_id: string }>(
-      "SELECT from_team_id, player_id FROM trade_assets WHERE trade_id = $1",
+      "SELECT from_team_id, player_id FROM trade_assets WHERE trade_id = $1 ORDER BY player_id",
       [tradeId],
     );
 

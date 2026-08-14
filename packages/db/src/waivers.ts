@@ -270,6 +270,85 @@ export async function availablePlayers(
  * synthesis would make the entire free-agent pool unaddable for most of every
  * week. This asks for the player's own game directly instead.
  */
+/**
+ * Take the roster row and hold it, so a decision made about it stays true.
+ *
+ * **`FOR UPDATE OF r`, not a bare `FOR UPDATE`, and the league comes from the
+ * row rather than a join.** A bare `FOR UPDATE` on a joined query locks a row in
+ * *every* table in the FROM list — so joining `teams` for league scoping would
+ * quietly take a lock on the team row as well. `processWaivers` holds the league
+ * row and ends by updating `teams.waiver_priority`; a drop holding a `teams` row
+ * and waiting on a roster row the run has already released is a deadlock cycle
+ * that does not exist today only because this function did not lock at all.
+ *
+ * `roster_entries.league_id` has been `NOT NULL` and trigger-maintained since
+ * migration `0022`, so the join was never needed for correctness — and
+ * `availabilityOf` and `processWaivers` already read it directly.
+ */
+async function lockRosterRow(
+  tx: SqlClient,
+  leagueId: string,
+  teamId: string,
+  playerId: string,
+): Promise<{ id: string; acquired_at: string } | undefined> {
+  const [entry] = await tx.query<{ id: string; acquired_at: string }>(
+    `SELECT r.id, r.acquired_at FROM roster_entries r
+      WHERE r.league_id = $1 AND r.team_id = $2 AND r.player_id = $3
+        AND r.released_at IS NULL
+      FOR UPDATE OF r`,
+    [leagueId, teamId, playerId],
+  );
+  return entry;
+}
+
+/**
+ * Refuse to release a player an accepted trade has committed.
+ *
+ * Between acceptance and execution the players are in escrow: `docs/RULES.md` §6
+ * says a committed player "cannot be dropped, claimed away, or entered into a
+ * second trade", and that sentence is in the document members sign. It was true
+ * of exactly one of the three paths that release a roster row.
+ *
+ * **`addFreeAgent`'s drop leg was the hole**, and it needed no concurrency: a
+ * manager could accept a trade and then cut the player they promised through the
+ * add-with-drop button, one request, no race. Worse than it sounds in a
+ * multi-asset trade — `resolveTrade` throws `ASSET_GONE` and rolls back, so
+ * dropping the *cheapest* frozen asset destroys the whole trade and hands the
+ * proposer back everything else. `withdrawTrade` refuses after acceptance
+ * precisely to prevent that ("it is now up to the league"), and `RULES.md` §9
+ * denies the power even to the commissioner.
+ *
+ * ## Call it inside the transaction, after the roster row is locked
+ *
+ * `acceptTrade` already documents why, twenty lines away: *"Take every row lock
+ * first, and only then read the freeze set."* Read the other way round and both
+ * callers compute a freeze set before either takes a lock; the loser blocks,
+ * wakes after the winner commits, re-checks a snapshot that predates it, and
+ * passes. `dropPlayer` did exactly that — read on `db`, before `withTransaction`,
+ * with no lock — so an `acceptTrade` committing in between left a trade
+ * `ACCEPTED`, the state whose whole meaning is "these players are frozen", with
+ * its player on waivers.
+ *
+ * **This is correct only under READ COMMITTED**, which is Postgres's default and
+ * what `withTransaction`'s bare `BEGIN` gets. Each statement takes a fresh
+ * snapshot, so this read — issued *after* the lock was granted — sees any
+ * `acceptTrade` that committed before it. Under REPEATABLE READ it would read
+ * the transaction's original snapshot and silently revert to the bug.
+ */
+async function refuseIfFrozen(
+  tx: SqlClient,
+  leagueId: string,
+  playerId: string,
+): Promise<void> {
+  const committed = await lockedByTrade(tx, leagueId);
+  if (committed.has(playerId)) {
+    throw new WaiverError(
+      "That player is committed to an accepted trade and cannot be dropped until it resolves",
+      "IN_A_TRADE",
+    );
+  }
+}
+
 async function refuseIfKickedOff(
   db: SqlClient,
   rules: LeagueRules,
@@ -326,28 +405,19 @@ export async function dropPlayer(
   const stored = await getLeagueRules(db, leagueId);
   if (!stored) throw new WaiverError("League has no rules", "LEAGUE_NOT_FOUND");
 
-  // An accepted trade has already committed this player. Between acceptance and
-  // execution he is effectively in escrow — dropping him would leave the trade
-  // with a hole where a roster spot used to be.
-  const committed = await lockedByTrade(db, leagueId);
-  if (committed.has(playerId)) {
-    throw new WaiverError(
-      "That player is committed to an accepted trade and cannot be dropped until it resolves",
-      "IN_A_TRADE",
-    );
-  }
-
-  await refuseIfKickedOff(db, stored.rules, playerId, now, "dropped");
-
   return withTransaction(db, async (tx) => {
-    const [entry] = await tx.query<{ id: string; acquired_at: string }>(
-      `SELECT r.id, r.acquired_at FROM roster_entries r
-         JOIN teams t ON t.id = r.team_id
-        WHERE t.league_id = $1 AND r.team_id = $2 AND r.player_id = $3
-          AND r.released_at IS NULL`,
-      [leagueId, teamId, playerId],
-    );
+    const entry = await lockRosterRow(tx, leagueId, teamId, playerId);
     if (!entry) throw new WaiverError("That player is not on this roster", "NOT_ON_ROSTER");
+
+    // **After the lock, not before.** Both of these used to run on `db` above,
+    // outside the transaction — see `refuseIfFrozen` for what that cost.
+    //
+    // The ownership check comes first now, and that is a small improvement of
+    // its own: a team that does not hold the player used to be told
+    // `IN_A_TRADE`, which discloses that a trade exists involving somebody
+    // else's player.
+    await refuseIfFrozen(tx, leagueId, playerId);
+    await refuseIfKickedOff(tx, stored.rules, playerId, now, "dropped");
 
     await tx.query("UPDATE roster_entries SET released_at = $2 WHERE id = $1", [
       entry.id,
@@ -457,12 +527,17 @@ export async function addFreeAgent(db: SqlClient, input: AddInput): Promise<void
     if (input.dropPlayerId) {
       // Inside the same transaction, so a full roster never briefly holds one
       // player too many and never briefly holds one too few.
-      const [entry] = await tx.query<{ id: string }>(
-        `SELECT id FROM roster_entries
-          WHERE team_id = $1 AND player_id = $2 AND released_at IS NULL`,
-        [input.teamId, input.dropPlayerId],
-      );
+      //
+      // **Locked, and the freeze read after it.** This is the same release
+      // `dropPlayer` performs, reached through a different button, and until now
+      // it asked none of the questions that one asks — so an accepted trade's
+      // player could be cut here with no concurrency at all. The comment above
+      // makes exactly this argument about the kickoff lock ("without it the
+      // guard there is decorative") and it applies unchanged to the freeze.
+      const entry = await lockRosterRow(tx, input.leagueId, input.teamId, input.dropPlayerId);
       if (!entry) throw new WaiverError("That player is not on this roster", "NOT_ON_ROSTER");
+
+      await refuseIfFrozen(tx, input.leagueId, input.dropPlayerId);
 
       await tx.query("UPDATE roster_entries SET released_at = $2 WHERE id = $1", [
         entry.id,
@@ -798,9 +873,45 @@ export async function processWaivers(
       return clears !== undefined && clears.getTime() > now.getTime();
     };
 
+    /**
+     * Claims whose *drop* player an accepted trade has committed.
+     *
+     * **A third exclusion set, and it has to be computed before resolution —
+     * not checked when the award is written.** `resolveWaiverClaims` marks a
+     * player taken the moment a claim wins him, and fails every later claim for
+     * him with `PLAYER_TAKEN`. So refusing the winner's award afterwards leaves
+     * the runner-up already rejected and the player awarded to nobody: one
+     * manager's frozen drop would quietly deny the player to the whole league.
+     * Filtering here lets the next priority win him, which is what the rules
+     * say should happen.
+     *
+     * **Failed, not deferred.** The freeze is temporary — at most the veto
+     * window plus cron lag — so deferring looks tempting. It does not help: the
+     * sweep below deletes the *add* player's wire row in this same run, so he
+     * becomes a free agent within the hour and is gone before any later run
+     * could award him. `RULES.md` §6 says a failed claim costs nothing and
+     * priority moves only on success, so the manager re-files with a different
+     * drop and loses nothing but the week. Deferring would also make
+     * `deferred`'s own docstring false — it says "has not cleared waivers yet",
+     * which is a statement about the add player's wire clock, not this.
+     *
+     * `processWaivers` cannot refuse by throwing, unlike the two member-facing
+     * paths: the whole run is one transaction, so a throw rolls back every award
+     * and leaves every claim PENDING for the next run to fail on identically.
+     * That is the permanent wedge this module's other filters exist to avoid.
+     */
+    const frozen = await lockedByTrade(tx, leagueId);
+    const dropIsFrozen = (row: { drop_player_id: string | null }): boolean =>
+      row.drop_player_id !== null && frozen.has(row.drop_player_id);
+
     const resolution = resolveWaiverClaims({
       claims: claims
-        .filter((row) => !alreadyHeld.has(row.add_player_id) && !notYetClear(row.add_player_id))
+        .filter(
+          (row) =>
+            !alreadyHeld.has(row.add_player_id) &&
+            !notYetClear(row.add_player_id) &&
+            !dropIsFrozen(row),
+        )
         .map((row): WaiverClaim => ({
           claimId: row.id,
           teamId: row.team_id,
@@ -816,19 +927,21 @@ export async function processWaivers(
     let awarded = 0;
     let failed = 0;
 
-    // **Two filters above, and only one of them is a failure.**
+    // **Three filters above, and two of them are failures.**
     //
-    // A claim for a player somebody already holds can never succeed, so it is
-    // written FAILED here — leaving it PENDING would retry it hourly forever.
-    // A claim for a player who has not cleared yet is not failed, it is *early*:
-    // it stays PENDING deliberately and is resolved by the run after he clears.
+    // A claim for a player somebody already holds can never succeed, and one
+    // naming a frozen player as its drop cannot be honoured as written — both
+    // are written FAILED here, because leaving them PENDING would retry them
+    // hourly forever. A claim for a player who has not cleared yet is not
+    // failed, it is *early*: it stays PENDING deliberately and is resolved by
+    // the run after he clears.
     //
-    // So this loop keys on `alreadyHeld` specifically. Do not "simplify" it to
+    // So this loop keys on those two sets specifically. Do not "simplify" it to
     // "anything missing from `resolution.outcomes` failed" — that would turn
     // every deferral into a permanent rejection, silently, and the manager would
     // be told their claim lost to a player nobody had.
     for (const row of claims) {
-      if (!alreadyHeld.has(row.add_player_id)) continue;
+      if (!alreadyHeld.has(row.add_player_id) && !dropIsFrozen(row)) continue;
 
       await tx.query(
         "UPDATE waiver_claims SET state = 'FAILED', processed_at = $2 WHERE id = $1",
