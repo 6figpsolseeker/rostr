@@ -53,7 +53,15 @@ interface TradesResponse {
   enabled: boolean;
   deadlineWeek: number;
   vetoWindowHours: number;
-  week: number;
+  /**
+   * Whether a proposal made now would already land past the deadline.
+   *
+   * Decided by the server, not by comparing a week here. There is no week to
+   * compare once the season's games are exhausted, and the field this replaced
+   * reported that case as week zero — which rendered as "trading is open", in
+   * January, permanently.
+   */
+  tradingClosed: boolean;
   teams: TradeTeam[];
   trades: Trade[];
 }
@@ -109,7 +117,7 @@ export function TradeBlock({ leagueId }: { leagueId: string }) {
 
   const mine = data.teams.find((team) => team.teamId === data.myTeamId);
   const partner = data.teams.find((team) => team.teamId === withTeam);
-  const pastDeadline = data.week > data.deadlineWeek;
+  const pastDeadline = data.tradingClosed;
 
   function toggle(set: Set<string>, id: string): Set<string> {
     const next = new Set(set);
@@ -172,8 +180,9 @@ export function TradeBlock({ leagueId }: { leagueId: string }) {
 
       {data.enabled && pastDeadline && (
         <p className="rounded border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-sm text-amber-200/80">
-          The trade deadline was the end of week {data.deadlineWeek}. Nothing new can be
-          proposed.
+          The trade deadline is the end of week {data.deadlineWeek}, and an accepted trade waits{" "}
+          {data.vetoWindowHours} hours before it executes — so anything proposed now would land
+          after it. Nothing new can be proposed.
         </p>
       )}
 

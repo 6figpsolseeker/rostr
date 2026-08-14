@@ -225,6 +225,7 @@ export {
 
 export {
   isVetoed,
+  pastTradeDeadline,
   tradeBlockedBecause,
   vetoWindowEndsAt,
   vetoWindowHasClosed,

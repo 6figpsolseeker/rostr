@@ -1,13 +1,14 @@
 import { NextResponse } from "next/server";
-import { NFL } from "@rostr/core";
+import { pastTradeDeadline } from "@rostr/core";
+import type { LeagueRules } from "@rostr/core";
 import {
   acceptTrade,
-  currentWeek,
   declineTrade,
   listTrades,
   lockedByTrade,
   proposeTrade,
   TradeError,
+  transactionWeek,
   vetoTrade,
   withdrawTrade,
 } from "@rostr/db";
@@ -34,19 +35,23 @@ const STATUS: Record<string, number> = {
 };
 
 /**
- * The week a trade proposed now would soonest execute in.
+ * Whether a proposal made now would already be past the league's deadline.
  *
- * **Server-derived, never taken from the request.** A deadline checked against a
- * client-supplied week is not a deadline: anyone could trade in January by
- * posting `week: 1`. And it is the *execution* week rather than today's, because
- * a trade accepted on the deadline still has a veto window to sit through, and a
- * trade that landed after the deadline is exactly what the deadline prevents.
+ * **For the screen only. The rule is enforced in `proposeTrade`**, which derives
+ * the execution week itself rather than being handed one — a deadline checked
+ * against a number worked out somewhere else is not a deadline, and this route
+ * used to be that somewhere else. Both now go through `transactionWeek` and
+ * `pastTradeDeadline`, so the banner cannot disagree with the refusal.
  *
- * Zero before the season's first kickoff, which no deadline is ever below.
+ * The reason this is a boolean rather than a week is that there is no week to
+ * report in the cases that matter: once the season's games are exhausted the
+ * schedule cannot name an execution week at all, and the old `?? 0` fallback
+ * reported that as week zero — which the screen rendered as "trading is open",
+ * in January, permanently.
  */
-async function executionWeek(now: Date, vetoWindowHours: number): Promise<number> {
-  const lands = new Date(now.getTime() + vetoWindowHours * 3600 * 1000);
-  return (await currentWeek(db(), NFL.key, lands)) ?? 0;
+async function tradingClosed(now: Date, rules: LeagueRules): Promise<boolean> {
+  const lands = new Date(now.getTime() + rules.trades.vetoWindowHours * 3600 * 1000);
+  return pastTradeDeadline(await transactionWeek(db(), rules, lands), rules.trades);
 }
 
 /**
@@ -95,7 +100,7 @@ export async function GET(
       enabled: context.rules.trades.enabled,
       deadlineWeek: context.rules.trades.deadlineWeek,
       vetoWindowHours: context.rules.trades.vetoWindowHours,
-      week: await executionWeek(now, context.rules.trades.vetoWindowHours),
+      tradingClosed: await tradingClosed(now, context.rules),
       teams: teams.map((team) => ({
         teamId: team.id,
         name: team.name,
@@ -177,7 +182,6 @@ export async function POST(
         receiverTeamId: body.receiverTeamId,
         proposerGives: body.proposerGives,
         receiverGives: body.receiverGives,
-        week: await executionWeek(now, context.rules.trades.vetoWindowHours),
         now,
       });
 
