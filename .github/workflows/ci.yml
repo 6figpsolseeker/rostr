@@ -14,6 +14,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The migration check below compares against the base branch, and
+          # checkout does not fetch it: it is a single-refspec fetch rather than
+          # a clone, so `origin/main` does not exist in the runner at all and
+          # `git ls-tree origin/main` fails outright.
+          fetch-depth: 0
+
+      # Deliberately before install: it needs only git and node, so a numbering
+      # mistake is reported in seconds rather than behind a full install and
+      # build. Runs on every pull request rather than being filtered to
+      # `packages/db/migrations/**` — a required check that never fires reads as
+      # permanently pending and blocks the merge, so it exits early instead.
+      - name: Migration numbering
+        if: github.event_name == 'pull_request'
+        run: node scripts/check-migration-numbers.mjs "origin/${{ github.base_ref }}"
 
       - uses: pnpm/action-setup@v4
 
