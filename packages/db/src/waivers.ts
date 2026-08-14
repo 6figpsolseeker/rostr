@@ -20,9 +20,14 @@
  * `processWaivers` is where contested players are awarded, and it is the moment
  * a league is most likely to feel cheated. Two properties matter:
  *
- *   * **Blind.** Nobody sees anyone else's claims before they resolve, so the
- *     resolution cannot depend on submission order — and `resolveWaiverClaims`
- *     is written so it does not.
+ *   * **Blind.** Nobody sees anyone else's claims before they resolve, so no
+ *     team's outcome may depend on when another team filed — and
+ *     `resolveWaiverClaims` is written so it does not: waiver priority decides
+ *     every contest between teams, and submission time only orders a team's own
+ *     claims against each other. This used to say the resolution "cannot depend
+ *     on submission order" at all. That is stronger than blindness needs, and it
+ *     was untrue of the code: two claims by one team tie on priority and the
+ *     sort fell through to a v4 UUID.
  *   * **Replayable.** The resolution is pure. Given the same claims, priority and
  *     rosters, it produces the same outcome, so a disputed run can be re-run
  *     exactly rather than argued about.
@@ -649,6 +654,14 @@ async function placeDroppedPlayer(
  * Nothing happens until processing. Claims are blind, so this deliberately tells
  * the claimant nothing about who else has claimed — and a failed claim costs
  * nothing, so there is no reason to hoard them.
+ *
+ * **`created_at` is left to the database, and that now decides something.** The
+ * column defaults to `now()` and this function deliberately does not write
+ * `input.now`, so the order a team's own claims are tried in comes from the
+ * server clock at the instant each INSERT commits and no caller can name it.
+ * Since that order became load-bearing, that is a property rather than an
+ * omission: a writable submission time is a way to file a claim and then move it
+ * to the front of your own queue. `input.now` decides availability only.
  */
 export async function submitClaim(
   db: SqlClient,
@@ -710,12 +723,15 @@ export async function cancelClaim(
 }
 
 /**
- * A team's own pending claims, newest last.
+ * A team's own pending claims, newest last — which is the order they will be
+ * tried in.
  *
- * **Not the order they resolve in**, which it used to claim. Resolution is by
- * waiver priority first, and a claim for a player who has not cleared yet waits
- * for a later run than one filed after it — so submission order predicts neither
- * the ordering nor the run.
+ * **Their order relative to each other, and nothing further.** Waiver priority
+ * decides every contest against another team, and a claim for a player who has
+ * not cleared yet waits for a later run than one filed after it — so this
+ * predicts neither who wins nor which run resolves it. It used to say it was
+ * "not the order they resolve in" at all, which stopped being true when the
+ * intra-team tiebreak stopped being a random UUID.
  */
 export async function pendingClaims(
   db: SqlClient,
@@ -812,13 +828,16 @@ export async function processWaivers(
     // between the read below and the writes either.
     await tx.query("SELECT id FROM leagues WHERE id = $1 FOR UPDATE", [leagueId]);
 
+    // No `ORDER BY`: `resolveWaiverClaims` sorts, and one here would suggest the
+    // array order it is handed matters. It must not.
     const claims = await tx.query<{
       id: string;
       team_id: string;
       add_player_id: string;
       drop_player_id: string | null;
+      created_at: string;
     }>(
-      `SELECT id, team_id, add_player_id, drop_player_id
+      `SELECT id, team_id, add_player_id, drop_player_id, created_at
          FROM waiver_claims WHERE league_id = $1 AND state = 'PENDING'`,
       [leagueId],
     );
@@ -937,6 +956,10 @@ export async function processWaivers(
           teamId: row.team_id,
           addPlayerId: row.add_player_id,
           dropPlayerId: row.drop_player_id,
+          // Wrapped, following this file's convention for timestamp columns:
+          // both drivers hand `timestamptz` back as a `Date` already, and the
+          // wrap normalises the string shape too if one ever stops.
+          submittedAt: new Date(row.created_at),
         })),
       priority,
       rosters,

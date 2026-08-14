@@ -4,13 +4,27 @@
  * Claims are **blind**: nobody sees anyone else's until they process. That is
  * the property that makes waivers fair, and the one place this project could
  * eventually beat ESPN — there, you trust their server not to peek before
- * processing; a commit-reveal scheme would make it provable. Not v1, but the
- * resolution below is deliberately independent of *when* claims arrived, so
- * adding that later changes nothing here.
+ * processing; a commit-reveal scheme would make it provable. Not v1.
+ *
+ * **Blind means no team's outcome depends on when another team filed**, and the
+ * resolution below is written so it does not: waiver priority decides every
+ * contest *between* teams, and submission time is consulted only to order one
+ * team's own claims against each other. Filing early buys you nothing against
+ * anybody but yourself. A commit-reveal scheme still works — a team commits to
+ * its own ordering inside the commitment and reveals it to nobody early.
+ *
+ * This paragraph used to claim the stronger property, that the resolution was
+ * "deliberately independent of *when* claims arrived", and the code never
+ * implemented it either. Two claims by one team tie on priority, so the sort
+ * fell through to `claimId` — `gen_random_uuid()`, a v4 UUID. A coin flip
+ * decided which of a team's own claims was tried first, and therefore which
+ * player was still on the board for the next team down: it moved outcomes
+ * *across* teams, not merely within one.
  *
  * Resolution is otherwise simple and entirely deterministic:
  *
- *   1. Sort claims by the claiming team's waiver priority.
+ *   1. Sort claims by the claiming team's waiver priority, then by the order
+ *      that team filed its own.
  *   2. Award each in turn, skipping any whose player is already gone or whose
  *      roster cannot take him.
  *   3. A team that wins moves to the back of the order. A team that loses does
@@ -26,6 +40,15 @@ export interface WaiverClaim {
   readonly addPlayerId: string;
   /** Player to drop to make room. Required when the roster is full. */
   readonly dropPlayerId: string | null;
+  /**
+   * When the team filed this claim — `waiver_claims.created_at`.
+   *
+   * Orders a team's *own* claims against each other and decides nothing else;
+   * see the sort in `resolveWaiverClaims`. It is data on the claim rather than
+   * a clock read, so the function stays pure and a disputed run replays from
+   * the stored rows exactly.
+   */
+  readonly submittedAt: Date;
 }
 
 export type ClaimFailure =
@@ -63,22 +86,47 @@ export interface ResolveInput {
 /**
  * Resolve a round of waiver claims.
  *
- * Pure: no clock, no database. The same inputs always produce the same
- * outcomes, which is what lets a disputed waiver run be replayed exactly.
+ * Pure: no clock, no database. `submittedAt` arrives as data on each claim —
+ * this function never asks what time it is — so the same inputs always produce
+ * the same outcomes, which is what lets a disputed waiver run be replayed
+ * exactly.
  */
 export function resolveWaiverClaims(input: ResolveInput): WaiverResolution {
   const { claims, priority, rosters, pool, shape } = input;
 
   const rank = new Map(priority.map((teamId, index) => [teamId, index]));
 
-  // Priority first, then submission order within a team so a team's own claims
-  // resolve in the order they intended. `claimId` breaks any remaining tie,
-  // because a resolution that depended on array order would not be replayable.
+  // Priority first. Then, within one team, the order that team filed its own
+  // claims, so a manager with one open spot and two claims gets the player they
+  // asked for first. `claimId` closes the sort so it stays total: a comparator
+  // that returned 0 for two distinct claims would leave the result riding on
+  // `sort` stability, and therefore on database row order.
+  //
+  // **`submittedAt` is only ever compared between two claims that tied on
+  // priority, and a tie means one team.** `loadWaiverPriority` lists every team
+  // in the league exactly once, so two claims share a rank only when they share
+  // a team. That is what keeps this blind: no team's outcome can move because of
+  // when a *different* team filed.
+  //
+  // Do **not** try to enforce that by making the time term conditional on
+  // `a.teamId === b.teamId`. It looks tighter and it is not transitive — A < B
+  // by time, B < C by id, C < A by id is constructible — and a non-transitive
+  // comparator makes the sort depend on input order, which is exactly the
+  // replayability this function exists to provide.
+  //
+  // The one residue: claims from a team *absent* from `priority` share the
+  // `MAX_SAFE_INTEGER` fallback, so two of those from different teams would
+  // compare on time. Nothing produces that state — and such a claim would be
+  // awarded a player in a league it does not belong to long before its ordering
+  // mattered, which is a schema gap filed separately, not an ordering one.
   const ordered = [...claims].sort((a, b) => {
     const byPriority =
       (rank.get(a.teamId) ?? Number.MAX_SAFE_INTEGER) -
       (rank.get(b.teamId) ?? Number.MAX_SAFE_INTEGER);
-    return byPriority !== 0 ? byPriority : a.claimId.localeCompare(b.claimId);
+    if (byPriority !== 0) return byPriority;
+
+    const byTime = a.submittedAt.getTime() - b.submittedAt.getTime();
+    return byTime !== 0 ? byTime : a.claimId.localeCompare(b.claimId);
   });
 
   const working = new Map<string, DraftablePlayer[]>(

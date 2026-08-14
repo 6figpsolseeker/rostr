@@ -803,10 +803,26 @@ player's availability rather than by which button was pressed. A client that cou
 would be able to ask for an immediate add on a player who is on waivers — which is exactly
 what waivers exist to prevent.
 
-Two properties of `processWaivers` are load-bearing: it is **blind** (resolution cannot
-depend on submission order) and **replayable** (pure, so a disputed run can be re-run
-rather than argued about). Both come from `resolveWaiverClaims`; do not reimplement them
-here.
+Two properties of `processWaivers` are load-bearing: it is **blind** (no team's outcome
+depends on when another team filed — priority decides every contest between teams, and
+submission time only orders a team's own claims against each other) and **replayable**
+(pure, so a disputed run can be re-run rather than argued about). Both come from
+`resolveWaiverClaims`; do not reimplement them here.
+
+This used to say the resolution could not depend on submission order **at all**, and the
+code never did that either: one team's two claims tie on priority and fell through to
+`claimId`, a v4 UUID. A coin flip chose which of a team's own claims was tried first — and
+therefore which player was left on the board for the next team down, so it moved outcomes
+**across** teams, not merely within one. `created_at` is deliberately left to the database
+rather than written from `input.now`: now that it decides who gets a player, a caller-
+settable submission time would be a way to file a claim and then move it to the front of
+your own queue.
+
+**ESPN, Sleeper and Yahoo all let a manager rank their own pending claims** — ESPN's
+*Pending Moves* panel says "Reorder claims by dragging them into your preferred priority".
+Filing order is an *approximation* of that, not conformance with it, and the app shows the
+order without labelling it. The explicit rank is separate work; do not describe the current
+behaviour as matching ESPN.
 
 Priority is seeded at draft completion, reversed from the draft order. Winners move to the
 back, losers do not move at all — a failed claim costs nothing, so there is no reason to
