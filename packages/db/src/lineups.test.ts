@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { buildNflPprRules, indexScoringRules, NFL, NFL_PPR_SCORING } from "@rostr/core";
 import { resolveWeek } from "@rostr/core";
 import type { DraftRules, LeagueRules, LineupAssignment } from "@rostr/core";
+import type { SqlClient } from "./client.js";
 import { createLeague } from "./leagues.js";
 import { createUser } from "./identity.js";
 import { seedSport } from "./sports.js";
@@ -508,6 +509,156 @@ describe("autoFillLineup", () => {
     expect(filled.find((slot) => slot.slotType === "QB")?.playerId).toBe(
       fx.players.get("thu-qb"),
     );
+  });
+});
+
+/**
+ * A client that runs `onFirstBegin` immediately before the first `BEGIN` it is
+ * asked to issue, then behaves normally.
+ *
+ * PGlite is a single connection, so the race here cannot be run *as* a race —
+ * there is no second session, and a second in-flight statement queues rather
+ * than interleaves. The **interleaving** is what matters and that can be forced
+ * exactly: `autoFillLineup` takes its expensive reads before `withTransaction`
+ * issues `BEGIN`, so firing here lands the manager's write in the window the bug
+ * lived in — after the reads, before the transaction that acts on them.
+ *
+ * That window is where the stored lineup used to be read from. It no longer is,
+ * which is the fix, and which is why these tests fail on `main`.
+ *
+ * One-shot, and not for tidiness: the callback's own `setLineup` opens a
+ * transaction too, so a re-entrant hook would recurse until the stack ran out.
+ *
+ * No `connect`, deliberately — `withTransaction` runs directly on whatever it is
+ * given when that is absent, so every statement of the autofill's transaction
+ * goes through this wrapper.
+ */
+function interleaveAtFirstBegin(inner: PGliteClient, onFirstBegin: () => Promise<void>): SqlClient {
+  let fired = false;
+  return {
+    async exec(sql: string): Promise<void> {
+      if (!fired && sql.trim().toUpperCase().startsWith("BEGIN")) {
+        fired = true;
+        await onFirstBegin();
+      }
+      await inner.exec(sql);
+    },
+    query<T = Record<string, unknown>>(sql: string, params?: readonly unknown[]): Promise<T[]> {
+      return inner.query<T>(sql, params);
+    },
+  };
+}
+
+describe("the autofill never reverts a manager's edit", () => {
+  it("leaves a slot the manager changed while it was still thinking", async () => {
+    // Issue #90. The autofill used to decide from a lineup read outside any
+    // transaction and then write every starting slot back unconditionally, so an
+    // edit saved in that window was written, silently restored to the snapshot,
+    // and then scored. `lineups` keeps no history, so nothing recorded that it
+    // happened and the manager had only their memory to argue from.
+    const fx = await setup();
+
+    // The autolineup always takes `te-a` over `bye-te` — a player on a bye
+    // scores nothing at all — so a manager starting `bye-te` is making exactly
+    // the choice the autofill would reverse. Pinned by the test above.
+    const byeTe = fx.players.get("bye-te")!;
+
+    const client = interleaveAtFirstBegin(fx.client, async () => {
+      await setLineup(fx.client, {
+        leagueId: fx.leagueId,
+        teamId: fx.teamId,
+        week: WEEK,
+        assignments: [{ slotType: "TE", slotIndex: 0, playerId: byeTe }],
+        now: BEFORE_ANYTHING,
+      });
+    });
+
+    const filled = await autoFillLineup(client, fx.leagueId, fx.teamId, WEEK, BEFORE_ANYTHING);
+
+    // What it returns is what was stored, not what it intended.
+    expect(filled.find((slot) => slot.slotType === "TE")?.playerId).toBe(byeTe);
+
+    const stored = await loadLineup(fx.client, fx.teamId, WEEK, fx.rules);
+    expect(stored.find((slot) => slot.slotType === "TE")?.playerId).toBe(byeTe);
+
+    // And the rest of the autofill still landed. A guard that protected the
+    // manager by writing nothing at all would satisfy both assertions above and
+    // leave the team fielding one player.
+    expect(stored.filter((slot) => slot.playerId !== null)).toHaveLength(9);
+  });
+
+  it("still fills a slot that exists and is empty", async () => {
+    // The case `IS NOT DISTINCT FROM` exists for, and the one `=` would break
+    // silently: the row is present holding `NULL`, so `lineups.player_id = $6`
+    // is `NULL = NULL` — not true — and the slot could never be filled again.
+    // Reachable on any team whose roster grew after a pass that could not fill
+    // everything, which is every waiver claim.
+    const fx = await setup();
+
+    // The other team has one player, so its first pass materialises all nine
+    // rows and leaves eight of them empty.
+    await autoFillLineup(fx.client, fx.leagueId, fx.otherTeamId, WEEK, BEFORE_ANYTHING);
+    const before = await loadLineup(fx.client, fx.otherTeamId, WEEK, fx.rules);
+    expect(before.filter((slot) => slot.playerId !== null)).toHaveLength(1);
+
+    // They pick somebody up off the wire.
+    const [sport] = await fx.client.query<{ id: string }>(
+      "SELECT id FROM sports WHERE key = $1",
+      [NFL.key],
+    );
+    const [rbPosition] = await fx.client.query<{ id: string }>(
+      "SELECT id FROM positions WHERE sport_id = $1 AND key = 'RB'",
+      [sport!.id],
+    );
+    const [wireRb] = await fx.client.query<{ id: string }>(
+      `INSERT INTO players (sport_id, external_ref, full_name, primary_position_id, team_ref)
+       VALUES ($1, 'wire-rb', 'Wire RB', $2, 'CIN') RETURNING id`,
+      [sport!.id, rbPosition!.id],
+    );
+    await fx.client.query(
+      `INSERT INTO roster_entries (team_id, player_id, acquired_via) VALUES ($1, $2, 'WAIVER')`,
+      [fx.otherTeamId, wireRb!.id],
+    );
+
+    const filled = await autoFillLineup(
+      fx.client,
+      fx.leagueId,
+      fx.otherTeamId,
+      WEEK,
+      BEFORE_ANYTHING,
+    );
+
+    expect(filled.some((slot) => slot.playerId === wireRb!.id)).toBe(true);
+  });
+
+  it("fills the slots the manager did not touch from the state they left behind", async () => {
+    // The half a per-row guard on its own cannot do. The manager takes a player
+    // the autofill's plan had earmarked for another slot; a compare-and-swap
+    // conditioned on a stale snapshot writes him twice and trips migration
+    // 0016's constraint at COMMIT, losing the whole pass. Reading inside the
+    // transaction computes one self-consistent lineup instead, so the
+    // interleaving simply cannot produce that state.
+    const fx = await setup();
+    const flexPick = fx.players.get("rb-c")!;
+
+    const client = interleaveAtFirstBegin(fx.client, async () => {
+      await setLineup(fx.client, {
+        leagueId: fx.leagueId,
+        teamId: fx.teamId,
+        week: WEEK,
+        assignments: [{ slotType: "FLEX", slotIndex: 0, playerId: flexPick }],
+        now: BEFORE_ANYTHING,
+      });
+    });
+
+    const filled = await autoFillLineup(client, fx.leagueId, fx.teamId, WEEK, BEFORE_ANYTHING);
+
+    expect(filled.find((slot) => slot.slotType === "FLEX")?.playerId).toBe(flexPick);
+    expect(filled.filter((slot) => slot.playerId !== null)).toHaveLength(9);
+
+    // Nobody starts twice — the whole lineup was decided from one reading of it.
+    const started = filled.map((slot) => slot.playerId).filter((id) => id !== null);
+    expect(new Set(started).size).toBe(started.length);
   });
 });
 

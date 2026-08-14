@@ -627,8 +627,25 @@ const OUT_STATUSES = new Set(["OUT", "IR", "INACTIVE", "SUSPENDED", "DOUBTFUL", 
 /**
  * Fill a team's lineup automatically.
  *
- * Preserves any slot that has already locked, and writes only what is missing —
- * so calling this on a team whose manager set a full lineup changes nothing.
+ * Preserves any slot that has already locked and any slot the manager has
+ * already filled: this fills gaps, it does not second-guess.
+ *
+ * **The stored lineup is read inside the transaction, under a row lock, and
+ * everything expensive is read before it.** That ordering is the whole of issue
+ * #90 and it is the reverse of what this function used to do. It decided from a
+ * snapshot taken outside any transaction — roster, lineup, season averages and,
+ * on the default rules, a whole-week projections scan — and then wrote every
+ * starting slot back, including the ones it had deliberately left alone. A
+ * manager who saved a lineup inside that window had their edit written and then
+ * silently restored to the snapshot, and `lineups` keeps no history, so nothing
+ * anywhere recorded that it happened. `ensureLineups` runs this for every
+ * autofill-enabled team every ten minutes, so the exposed surface was the whole
+ * lineup rather than the empty slots.
+ *
+ * Nothing below the lock needs the lineup: `loadAverages` ranks the *roster*,
+ * and `loadProjectedPoints` reads neither. So the reads that take a hundred
+ * milliseconds stay outside, and the lock covers a `SELECT`, a pure computation
+ * and nine writes.
  */
 export async function autoFillLineup(
   db: SqlClient,
@@ -642,23 +659,6 @@ export async function autoFillLineup(
 
   const season = stored.rules.seasonYear;
   const roster = await loadRosterForWeek(db, teamId, season, week);
-  const current = await loadLineup(db, teamId, week, stored.rules);
-
-  // Roster plus whoever is standing in the stored lineup — see `loadKickoffs`.
-  // Without the second half a dropped player's slot reads as unlocked here too,
-  // and the autofill would quietly replace a starter whose game had begun.
-  const kickoffs = await loadKickoffs(
-    db,
-    [
-      ...new Set(
-        [...roster.keys(), ...current.map((assignment) => assignment.playerId)].filter(
-          (playerId): playerId is string => playerId !== null,
-        ),
-      ),
-    ],
-    season,
-    week,
-  );
 
   const averages = await loadAverages(db, [...roster.keys()], season, week, stored.rules);
 
@@ -681,36 +681,80 @@ export async function autoFillLineup(
     unavailable: player.kickoffAt === null || OUT_STATUSES.has(player.status.toUpperCase()),
   }));
 
-  // Anything already locked is a fixed point, and anything already set by the
-  // manager is left alone: this fills gaps, it does not second-guess.
-  //
-  // The exception is a player who has **left the roster and is not locked**. He
-  // is not a choice the manager made — he is a hole, and leaving him there let
-  // his slot lock at his kickoff around a player nobody rosters, who then scored
-  // for the team that cut him. Note the first loop used to be dead: it is a
-  // strict subset of the second, since `isSlotLocked` is false for a null player,
-  // so nothing it returned was ever the only reason a slot was kept.
-  const locked = new Set(
-    lockedAssignments(current, kickoffs, now).map(
-      (assignment) => `${assignment.slotType}#${assignment.slotIndex}`,
-    ),
-  );
-  const keep = new Map<string, LineupAssignment>();
-  for (const assignment of current) {
-    if (assignment.playerId === null) continue;
-    const slot = `${assignment.slotType}#${assignment.slotIndex}`;
-    if (!roster.has(assignment.playerId) && !locked.has(slot)) continue;
-    keep.set(slot, assignment);
-  }
+  const slotTypeIds = await loadSlotTypeIds(db, stored.rules);
 
-  const filled = autolineup({
-    shape: buildRosterShape(stored.rules.roster, NFL),
-    roster: candidates,
-    mode,
-    locked: [...keep.values()],
+  return withTransaction(db, async (tx) => {
+    // The lineup is read here and nowhere earlier. Everything above decided
+    // from the roster, which this function does not write and which no manager
+    // action moves mid-week; this is the one input a manager can change while
+    // the reads above are in flight, so it is taken last and taken locked.
+    //
+    // `FOR UPDATE` makes `setLineup`'s write wait rather than interleave. It
+    // locks the rows that exist, which is not all of them — a slot nobody has
+    // ever written has no row to lock — so the write below carries a
+    // compare-and-swap as well. Migration `0016` prescribes exactly this pair:
+    // the lock is the fast path, and something the lock cannot reach is the
+    // backstop.
+    await tx.query(`SELECT 1 FROM lineups WHERE team_id = $1 AND week = $2 FOR UPDATE`, [
+      teamId,
+      week,
+    ]);
+
+    const current = await loadLineup(tx, teamId, week, stored.rules);
+
+    // Roster plus whoever is standing in the stored lineup — see `loadKickoffs`.
+    // Without the second half a dropped player's slot reads as unlocked here
+    // too, and the autofill would quietly replace a starter whose game had
+    // begun.
+    //
+    // **Inside the lock, because it is derived from `current`.** The reads that
+    // cost something — the season averages, and on the default rules a
+    // whole-week projections scan — stay outside where they belong; this one is
+    // a single lookup on `games` keyed by a list the fresh lineup determines,
+    // and it cannot be hoisted without reintroducing the stale snapshot the
+    // lock exists to prevent.
+    const kickoffs = await loadKickoffs(
+      tx,
+      [
+        ...new Set(
+          [...roster.keys(), ...current.map((assignment) => assignment.playerId)].filter(
+            (playerId): playerId is string => playerId !== null,
+          ),
+        ),
+      ],
+      season,
+      week,
+    );
+
+    // Anything already locked is a fixed point, and anything already set by the
+    // manager is left alone: this fills gaps, it does not second-guess.
+    //
+    // The exception is a player who has **left the roster and is not locked**.
+    // He is not a choice the manager made — he is a hole, and leaving him there
+    // let his slot lock at his kickoff around a player nobody rosters, who then
+    // scored for the team that cut him.
+    const locked = new Set(
+      lockedAssignments(current, kickoffs, now).map(
+        (assignment) => `${assignment.slotType}#${assignment.slotIndex}`,
+      ),
+    );
+    const keep = new Map<string, LineupAssignment>();
+    for (const assignment of current) {
+      if (assignment.playerId === null) continue;
+      const slot = `${assignment.slotType}#${assignment.slotIndex}`;
+      if (!roster.has(assignment.playerId) && !locked.has(slot)) continue;
+      keep.set(slot, assignment);
+    }
+
+    const filled = autolineup({
+      shape: buildRosterShape(stored.rules.roster, NFL),
+      roster: candidates,
+      mode,
+      locked: [...keep.values()],
+    });
+
+    return setLineupUnchecked(tx, teamId, week, filled, current, slotTypeIds, stored.rules);
   });
-
-  return setLineupUnchecked(db, teamId, week, filled, stored.rules);
 }
 
 /**
@@ -720,32 +764,74 @@ export async function autoFillLineup(
  * own shape and this team's own roster, and which must succeed even when a
  * manager's own lineup would be rejected — an abandoned team still has to be
  * given one.
+ *
+ * **Runs inside a transaction its caller opened**, rather than opening one, so
+ * that the lock and the read the write is conditioned on are inside the same
+ * one. `withTransaction` issues a real `BEGIN` on whichever client it is given,
+ * so opening a second here would make this `COMMIT` commit the caller's work
+ * too — the same reason `generateSeasonSchedule` takes a transaction instead of
+ * making one.
+ *
+ * `snapshot` is what the lineup held when `assignments` was decided, and every
+ * write compares against it: a slot that has moved since is left as whoever
+ * moved it left it. Under the caller's `FOR UPDATE` nothing can move a row that
+ * exists, so this is the backstop for the rows the lock could not reach — a slot
+ * with no row yet, which is every slot of a team's first pass. Losing that
+ * compare writes nothing and raises nothing, which is what makes it safe to
+ * apply nine times a run for every team in the league.
+ *
+ * `IS NOT DISTINCT FROM` rather than `=`, and that is load-bearing rather than
+ * tidy. The ordinary case is an empty slot, so the compared value is `NULL`, and
+ * `NULL = NULL` is `NULL` rather than true — `=` would refuse to fill any row
+ * that had ever been materialised, which is every slot the autofill itself could
+ * not fill on an earlier pass. The `::uuid` cast goes with it: beside a `uuid`
+ * column a bare parameter is `unknown` on the null path and Postgres cannot
+ * resolve the operator.
+ *
+ * **Not `WHERE lineups.player_id IS NULL`.** "Only ever fill an empty slot" is
+ * the tempting simplification and it is wrong twice: it forbids evicting a
+ * player who has left the roster — an occupied slot that *must* change — and it
+ * turns every legitimate replacement into a silent no-op. The compare says the
+ * narrower and truer thing: do not overwrite a decision somebody else took after
+ * this one was made.
  */
 async function setLineupUnchecked(
-  db: SqlClient,
+  tx: SqlClient,
   teamId: string,
   week: number,
   assignments: readonly LineupAssignment[],
+  snapshot: readonly LineupAssignment[],
+  slotTypeIds: ReadonlyMap<string, string>,
   rules: LeagueRules,
 ): Promise<readonly LineupAssignment[]> {
-  const slotTypeIds = await loadSlotTypeIds(db, rules);
+  const expected = new Map(
+    snapshot.map((slot) => [`${slot.slotType}#${slot.slotIndex}`, slot.playerId]),
+  );
 
-  return withTransaction(db, async (tx) => {
-    for (const assignment of assignments) {
-      const slotTypeId = slotTypeIds.get(assignment.slotType);
-      if (!slotTypeId) continue;
+  for (const assignment of assignments) {
+    const slotTypeId = slotTypeIds.get(assignment.slotType);
+    if (!slotTypeId) continue;
 
-      await tx.query(
-        `INSERT INTO lineups (team_id, week, slot_type_id, slot_index, player_id)
-         VALUES ($1, $2, $3, $4, $5)
-         ON CONFLICT (team_id, week, slot_type_id, slot_index)
-         DO UPDATE SET player_id = EXCLUDED.player_id`,
-        [teamId, week, slotTypeId, assignment.slotIndex, assignment.playerId],
-      );
-    }
+    await tx.query(
+      `INSERT INTO lineups (team_id, week, slot_type_id, slot_index, player_id)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (team_id, week, slot_type_id, slot_index)
+       DO UPDATE SET player_id = EXCLUDED.player_id
+        WHERE lineups.player_id IS NOT DISTINCT FROM $6::uuid`,
+      [
+        teamId,
+        week,
+        slotTypeId,
+        assignment.slotIndex,
+        assignment.playerId,
+        expected.get(`${assignment.slotType}#${assignment.slotIndex}`) ?? null,
+      ],
+    );
+  }
 
-    return loadLineup(tx, teamId, week, rules);
-  });
+  // Read back inside the transaction, so this returns what was stored rather
+  // than what was intended. The two can now differ.
+  return loadLineup(tx, teamId, week, rules);
 }
 
 /**
