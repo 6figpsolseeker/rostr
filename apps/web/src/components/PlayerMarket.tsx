@@ -8,7 +8,8 @@ import useSWR from "swr";
  *
  * The same button says "Add" or "Claim" depending on where the player stands,
  * because those are genuinely different things: an add is immediate and first
- * come first served, a claim waits for Wednesday and is decided by priority.
+ * come first served, a claim waits for the run that player clears at and is
+ * decided by priority.
  * Showing one control that quietly does either would hide the only distinction
  * that matters here.
  *
@@ -112,7 +113,10 @@ export function PlayerMarket({ leagueId }: { leagueId: string }) {
       if (!response.ok) throw new Error(payload.error ?? "That did not work");
 
       if (payload.claimed) {
-        setNote("Claim submitted. It resolves at the next waiver run, by priority.");
+        // Not "the next waiver run" — a player who has not served his waiver
+        // period is not awarded at the next run, he waits for the run he clears
+        // at. The screen already shows that time beside his name.
+        setNote("Claim submitted. It resolves by priority, at the run he clears at.");
       } else if (payload.added) {
         setNote("Added.");
       } else if (payload.dropped) {

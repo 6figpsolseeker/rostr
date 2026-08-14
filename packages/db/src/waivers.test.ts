@@ -512,6 +512,272 @@ describe("processing", () => {
   });
 });
 
+/**
+ * RULES.md §6, "Waiver period": *"A player clears at the first processing run at
+ * least a full day after landing on waivers — so someone dropped on Tuesday
+ * evening does not clear the next morning, which would leave the rest of the
+ * league no real chance to claim him."*
+ *
+ * He did. `processWaivers` selected every PENDING claim with no reference to the
+ * wire, so a claim was awarded at the run 168 hours before its player's own
+ * `clears_at` — at an instant when `availabilityOf` still answered ON_WAIVERS
+ * for the same player.
+ *
+ * **The instants below are the real week-2 2026 calendar, and they are literals
+ * on purpose.** Every existing processing test drops at one instant and runs
+ * eleven hours the safe side of `clears_at`, so none of them can see this bug in
+ * either direction — a no-op fix, an inverted comparison, or a filter on the
+ * wrong column all ship green against them. Computing an expectation with
+ * `waiverClearsAt` would inherit the same blindness.
+ */
+describe("RULES.md §6 — a claim waits for its player to clear", () => {
+  /** Wed 16 Sep 2026, 03:00 EDT. The week-2 processing instant. */
+  const RUN = new Date("2026-09-16T07:00:00.000Z");
+  /** Wed 23 Sep 2026, 03:00 EDT. */
+  const NEXT_RUN = new Date("2026-09-23T07:00:00.000Z");
+  /**
+   * Tue 15 Sep 2026, 22:00 EDT — inside the band.
+   *
+   * Any drop after Tuesday 03:00 ET rounds its clear up to the *following*
+   * Wednesday, because a one-day waiver period against a weekly run rounds up by
+   * a whole week. The run below is five hours away; the clear is seven days.
+   */
+  const LATE_DROP = new Date("2026-09-16T02:00:00.000Z");
+
+  it("defers a claim whose player has not served his waiver period", async () => {
+    const fx = await setup();
+    const held = fx.players.get("held")!;
+
+    const drop = await dropPlayer(fx.client, fx.leagueId, fx.teams[0]!, held, LATE_DROP);
+    expect(drop.destination).toBe("WAIVERS");
+    expect(drop.clearsAt?.toISOString()).toBe("2026-09-23T07:00:00.000Z");
+
+    await submitClaim(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: fx.teams[3]!,
+      addPlayerId: held,
+      now: new Date(LATE_DROP.getTime() + 30 * 60 * 1000),
+    });
+
+    const before = await loadWaiverPriority(fx.client, fx.leagueId);
+    const outcome = await processWaivers(fx.client, fx.leagueId, RUN);
+
+    // Deferred, and that is a third thing: not awarded, and emphatically not
+    // failed. A manager told their claim failed would go and look for the player.
+    expect(outcome.awarded).toBe(0);
+    expect(outcome.failed).toBe(0);
+    expect(outcome.deferred).toBe(1);
+
+    const [claim] = await fx.client.query<{ state: string; processed_at: string | null }>(
+      "SELECT state, processed_at FROM waiver_claims WHERE league_id = $1",
+      [fx.leagueId],
+    );
+    expect(claim?.state).toBe("PENDING");
+    expect(claim?.processed_at).toBeNull();
+
+    // The wire row survives, so the player is still on waivers and the run that
+    // was supposed to decide him has not spent anything.
+    const [wire] = await fx.client.query<{ clears_at: string }>(
+      "SELECT clears_at FROM waiver_wire WHERE league_id = $1 AND player_id = $2",
+      [fx.leagueId, held],
+    );
+    expect(new Date(wire!.clears_at).toISOString()).toBe("2026-09-23T07:00:00.000Z");
+
+    // Priority is not spent on a claim that has not resolved.
+    expect(await loadWaiverPriority(fx.client, fx.leagueId)).toEqual(before);
+
+    // And nobody holds him.
+    const rostered = await fx.client.query(
+      "SELECT 1 FROM roster_entries WHERE player_id = $1 AND released_at IS NULL",
+      [held],
+    );
+    expect(rostered).toHaveLength(0);
+
+    // ---- the same claim, at the run it was actually waiting for ------------
+    //
+    // Deliberately the same database and the same test. Two separate tests
+    // cannot tell "deferred" from "lost" — only running on and seeing it land
+    // proves the claim survived.
+    const later = await processWaivers(fx.client, fx.leagueId, NEXT_RUN);
+
+    expect(later.awarded).toBe(1);
+    expect(later.deferred).toBe(0);
+
+    const [winner] = await fx.client.query<{ team_id: string }>(
+      `SELECT team_id FROM roster_entries
+        WHERE player_id = $1 AND released_at IS NULL AND acquired_via = 'WAIVER'`,
+      [held],
+    );
+    expect(winner?.team_id).toBe(fx.teams[3]);
+  });
+
+  it("still awards an ordinary claim at the very run its player clears at", async () => {
+    // **The test that stops the fix being worse than the bug.** `clears_at` is a
+    // processing instant and this runs at processing instants, so for an
+    // ordinary drop the two are *equal* — the normal case, not a boundary. A
+    // `<` rather than `<=` would delay every waiver claim in every league by a
+    // week, and no other test in this file would notice.
+    const fx = await setup();
+    const held = fx.players.get("held")!;
+
+    const drop = await dropPlayer(fx.client, fx.leagueId, fx.teams[0]!, held, MONDAY);
+    expect(drop.clearsAt?.toISOString()).toBe(RUN.toISOString());
+
+    await submitClaim(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: fx.teams[3]!,
+      addPlayerId: held,
+      now: new Date(MONDAY.getTime() + 30 * 60 * 1000),
+    });
+
+    const outcome = await processWaivers(fx.client, fx.leagueId, RUN);
+
+    expect(outcome.awarded).toBe(1);
+    expect(outcome.deferred).toBe(0);
+  });
+
+  it("holds at one millisecond before the clear and awards at the clear", async () => {
+    const fx = await setup();
+    const held = fx.players.get("held")!;
+
+    await dropPlayer(fx.client, fx.leagueId, fx.teams[0]!, held, MONDAY);
+    await submitClaim(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: fx.teams[3]!,
+      addPlayerId: held,
+      now: new Date(MONDAY.getTime() + 30 * 60 * 1000),
+    });
+
+    const early = await processWaivers(fx.client, fx.leagueId, new Date(RUN.getTime() - 1));
+    expect(early.awarded).toBe(0);
+    expect(early.deferred).toBe(1);
+
+    const onTime = await processWaivers(fx.client, fx.leagueId, RUN);
+    expect(onTime.awarded).toBe(1);
+  });
+
+  it("awards a claim whose wire row is already gone", async () => {
+    // A claim can outlive its wire row: the post-run sweep removes it once the
+    // clear passes, and so does a free-agent add. **No row means clear**, never
+    // blocked — reading it the other way (an inner join, which is the obvious
+    // way to write this filter) would strand such a claim PENDING forever, hourly.
+    const fx = await setup();
+    const held = fx.players.get("held")!;
+
+    await dropPlayer(fx.client, fx.leagueId, fx.teams[0]!, held, MONDAY);
+    await submitClaim(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: fx.teams[3]!,
+      addPlayerId: held,
+      now: new Date(MONDAY.getTime() + 30 * 60 * 1000),
+    });
+
+    await fx.client.query("DELETE FROM waiver_wire WHERE league_id = $1", [fx.leagueId]);
+
+    const outcome = await processWaivers(fx.client, fx.leagueId, RUN);
+    expect(outcome.awarded).toBe(1);
+  });
+
+  it("resolves a cleared claim without dragging an uncleared one along", async () => {
+    // Per claim, not per league. A guard that skipped the whole run while any
+    // claim was uncleared would pass every test above and reintroduce the
+    // "unrelated claims taken down with a stale one" bug this file already
+    // guards against elsewhere.
+    const fx = await setup();
+    const ready = fx.players.get("held")!;
+    const notReady = fx.players.get("other")!;
+
+    // Long enough on the roster that dropping him goes to waivers rather than
+    // straight to free agency.
+    await fx.client.query(
+      `INSERT INTO roster_entries (team_id, player_id, acquired_via, acquired_at)
+       VALUES ($1, $2, 'DRAFT', $3)`,
+      [fx.teams[0], notReady, new Date(MONDAY.getTime() - 7 * DAY).toISOString()],
+    );
+
+    await dropPlayer(fx.client, fx.leagueId, fx.teams[0]!, ready, MONDAY);
+    await dropPlayer(fx.client, fx.leagueId, fx.teams[0]!, notReady, LATE_DROP);
+
+    await submitClaim(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: fx.teams[3]!,
+      addPlayerId: ready,
+      now: new Date(MONDAY.getTime() + 30 * 60 * 1000),
+    });
+    await submitClaim(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: fx.teams[2]!,
+      addPlayerId: notReady,
+      now: new Date(LATE_DROP.getTime() + 30 * 60 * 1000),
+    });
+
+    const outcome = await processWaivers(fx.client, fx.leagueId, RUN);
+
+    expect(outcome.awarded).toBe(1);
+    expect(outcome.deferred).toBe(1);
+
+    const [winner] = await fx.client.query<{ team_id: string }>(
+      `SELECT team_id FROM roster_entries
+        WHERE player_id = $1 AND released_at IS NULL AND acquired_via = 'WAIVER'`,
+      [ready],
+    );
+    expect(winner?.team_id).toBe(fx.teams[3]);
+
+    const [stillWaiting] = await fx.client.query<{ state: string }>(
+      "SELECT state FROM waiver_claims WHERE add_player_id = $1",
+      [notReady],
+    );
+    expect(stillWaiting?.state).toBe("PENDING");
+  });
+
+  it("does not re-freeze a player a pending claim merely names", async () => {
+    // The run used to call `placeDroppedPlayer` for every pending claim's drop
+    // player, whether or not the run had released him. So a player somebody else
+    // legitimately dropped was swept into free agency by the clear and then
+    // immediately re-frozen for another week by a stranger's unresolved claim.
+    //
+    // A deferred claim is re-read every hour for a week, so that fires on every
+    // tick — and since a fresh clear is always in the future, the victim could
+    // never clear at all.
+    const fx = await setup();
+    const held = fx.players.get("held")!;
+    const victim = fx.players.get("spare")!;
+
+    // Team 4 holds someone, and offers him as the drop side of a claim for a
+    // player who will not clear until next week. The claim will be deferred.
+    await fx.client.query(
+      `INSERT INTO roster_entries (team_id, player_id, acquired_via, acquired_at)
+       VALUES ($1, $2, 'DRAFT', $3)`,
+      [fx.teams[3], victim, new Date(MONDAY.getTime() - 7 * DAY).toISOString()],
+    );
+    await dropPlayer(fx.client, fx.leagueId, fx.teams[0]!, held, LATE_DROP);
+    await submitClaim(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: fx.teams[3]!,
+      addPlayerId: held,
+      dropPlayerId: victim,
+      now: new Date(LATE_DROP.getTime() + 30 * 60 * 1000),
+    });
+
+    // Then they drop him for real, early enough that he clears at this run.
+    const drop = await dropPlayer(fx.client, fx.leagueId, fx.teams[3]!, victim, MONDAY);
+    expect(drop.clearsAt?.toISOString()).toBe(RUN.toISOString());
+
+    const outcome = await processWaivers(fx.client, fx.leagueId, RUN);
+    expect(outcome.deferred).toBe(1);
+
+    // He served his week and became a free agent. Nothing about somebody else's
+    // outstanding claim may put him back on the wire.
+    expect(outcome.cleared).toBe(1);
+    const wire = await fx.client.query(
+      "SELECT 1 FROM waiver_wire WHERE league_id = $1 AND player_id = $2",
+      [fx.leagueId, victim],
+    );
+    expect(wire).toHaveLength(0);
+    expect(await availabilityOf(fx.client, fx.leagueId, victim, RUN)).toBe("FREE_AGENT");
+  });
+});
+
 describe("availablePlayers", () => {
   it("lists everyone unrostered", async () => {
     const fx = await setup();

@@ -25,6 +25,8 @@ export async function GET(request: Request): Promise<NextResponse> {
     leagueId: string;
     awarded?: number;
     failed?: number;
+    /** Claims whose player has not cleared waivers yet. Left PENDING on purpose. */
+    deferred?: number;
     cleared?: number;
     error?: string;
   }[] = [];
@@ -36,6 +38,10 @@ export async function GET(request: Request): Promise<NextResponse> {
         leagueId,
         awarded: outcome.awarded,
         failed: outcome.failed,
+        // Reported rather than collapsed into a zero-everything run. A league
+        // waiting on a player to clear and a league with nothing to do are
+        // different states, and only this tells them apart.
+        deferred: outcome.deferred,
         cleared: outcome.cleared,
       });
     } catch (error) {

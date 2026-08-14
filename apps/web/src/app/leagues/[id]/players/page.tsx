@@ -34,7 +34,8 @@ export default async function PlayersPage({ params }: { params: Promise<{ id: st
         </a>
         <h1 className="text-2xl font-semibold tracking-tight">Players</h1>
         <p className="text-sm text-white/50">
-          Next waiver run {nextRun.toLocaleString()} — claims are resolved then, by priority.
+          Next waiver run {nextRun.toLocaleString()}. A claim is resolved by priority at the run
+          its player clears at, which is not always the next one.
         </p>
       </header>
 
