@@ -12,7 +12,7 @@ import {
   waiverClearsAt,
 } from "./schedule.js";
 import { initialWaiverPriority, resolveWaiverClaims } from "./claims.js";
-import type { WaiverClaim } from "./claims.js";
+import type { WaiverClaim, WaiverResolution } from "./claims.js";
 
 const RULES = NFL_DEFAULT_WAIVERS;
 const SHAPE = buildRosterShape(NFL_PPR_ROSTER, NFL);
@@ -200,12 +200,19 @@ const player = (id: string, positions: string[] = ["WR"]): DraftablePlayer => ({
   rank: 1,
 });
 
+/** Wednesday 03:00 ET — the processing instant — plus n minutes. */
+const AT = (minutes: number): Date => new Date(Date.UTC(2026, 8, 16, 7, minutes));
+
+// `submittedAt` defaults to one shared instant, so every test that does not care
+// about filing order ties there and falls through to `claimId` exactly as it did
+// before that term existed.
 const claim = (
   claimId: string,
   teamId: string,
   addPlayerId: string,
   dropPlayerId: string | null = null,
-): WaiverClaim => ({ claimId, teamId, addPlayerId, dropPlayerId });
+  submittedAt: Date = AT(0),
+): WaiverClaim => ({ claimId, teamId, addPlayerId, dropPlayerId, submittedAt });
 
 const POOL = new Map(["star", "other", "third"].map((id) => [id, player(id)] as const));
 
@@ -334,31 +341,110 @@ describe("resolveWaiverClaims", () => {
     });
   });
 
-  it("is independent of the order claims were submitted in", () => {
-    // Blind claims must not reward being early. Same claims, shuffled input,
-    // identical result.
+  it("tries a team's own claims in the order the team filed them", () => {
+    // One open spot, two claims. The claim ids are chosen so `c9` sorts *after*
+    // `c1`: an id-only tiebreak awards "other" and fails "star", so this fails
+    // deterministically rather than half the time.
+    const nearlyFull = Array.from({ length: SHAPE.totalSlots - 1 }, (_, i) => player(`p${i}`));
+
+    const result = resolveWaiverClaims({
+      claims: [
+        claim("c9", "team-a", "star", null, AT(1)),
+        claim("c1", "team-a", "other", null, AT(2)),
+      ],
+      priority,
+      rosters: new Map([["team-a", nearlyFull]]),
+      pool: POOL,
+      shape: SHAPE,
+    });
+
+    expect(result.outcomes.filter((o) => o.awarded).map((o) => o.addPlayerId)).toEqual([
+      "star",
+    ]);
+    expect(result.outcomes.find((o) => o.addPlayerId === "other")).toMatchObject({
+      awarded: false,
+      reason: "ROSTER_FULL",
+    });
+  });
+
+  it("does not let one team's filing order decide a rival's claim by chance", () => {
+    // The reason this is a defect and not a preference. team-a outranks team-b
+    // and has one spot; it filed for "star" first, so "other" must still be on
+    // the board when team-b's claim is tried. Order team-a's own claims the
+    // other way and team-b is awarded nothing — a coin flip deciding the
+    // outcome of a team that is not party to it.
+    const nearlyFull = Array.from({ length: SHAPE.totalSlots - 1 }, (_, i) => player(`p${i}`));
+
+    const result = resolveWaiverClaims({
+      claims: [
+        claim("c9", "team-a", "star", null, AT(1)),
+        claim("c1", "team-a", "other", null, AT(2)),
+        claim("c5", "team-b", "other", null, AT(3)),
+      ],
+      priority,
+      rosters: new Map([...emptyRosters, ["team-a", nearlyFull]]),
+      pool: POOL,
+      shape: SHAPE,
+    });
+
+    const awarded = new Map(
+      result.outcomes.filter((o) => o.awarded).map((o) => [o.addPlayerId, o.teamId]),
+    );
+    expect(awarded.get("star")).toBe("team-a");
+    expect(awarded.get("other")).toBe("team-b");
+  });
+
+  it("is independent of the order the claims are passed in", () => {
+    // Not the order they were *submitted* in — a team's own claims are tried in
+    // filing order, so submission time is an input and it decides things. What
+    // must never matter is the order the array happens to arrive in, which is
+    // database row order: a resolution that moved with it would not be
+    // replayable. team-a files twice deliberately — the version of this test
+    // that predated intra-team ordering used one claim per team and compared
+    // only the awarded team ids, so it could not have caught the bug it was
+    // named after.
     const claims = [
-      claim("c1", "team-c", "star"),
-      claim("c2", "team-a", "star"),
-      claim("c3", "team-b", "other"),
+      claim("c1", "team-c", "star", null, AT(3)),
+      claim("c2", "team-a", "star", null, AT(2)),
+      claim("c3", "team-a", "other", null, AT(1)),
+      claim("c4", "team-b", "third", null, AT(4)),
     ];
     const args = { priority, rosters: emptyRosters, pool: POOL, shape: SHAPE };
 
     const forwards = resolveWaiverClaims({ ...args, claims });
     const backwards = resolveWaiverClaims({ ...args, claims: [...claims].reverse() });
 
-    expect(
-      forwards.outcomes
-        .filter((o) => o.awarded)
-        .map((o) => o.teamId)
-        .sort(),
-    ).toEqual(
-      backwards.outcomes
-        .filter((o) => o.awarded)
-        .map((o) => o.teamId)
-        .sort(),
-    );
+    const key = (r: WaiverResolution): string =>
+      JSON.stringify([...r.outcomes].sort((x, y) => x.claimId.localeCompare(y.claimId)));
+
+    expect(key(forwards)).toEqual(key(backwards));
     expect(forwards.priorityAfter).toEqual(backwards.priorityAfter);
+  });
+
+  it("falls back to the claim id when a team files twice in the same instant", () => {
+    // The residue, pinned rather than hoped about: two claims that tie on time
+    // still order totally, so the result cannot ride on `sort` stability.
+    const nearlyFull = Array.from({ length: SHAPE.totalSlots - 1 }, (_, i) => player(`p${i}`));
+    const same = AT(7);
+    const claims = [
+      claim("c9", "team-a", "star", null, same),
+      claim("c1", "team-a", "other", null, same),
+    ];
+    const args = {
+      priority,
+      rosters: new Map([["team-a", nearlyFull]]),
+      pool: POOL,
+      shape: SHAPE,
+    };
+
+    const forwards = resolveWaiverClaims({ ...args, claims });
+    const backwards = resolveWaiverClaims({ ...args, claims: [...claims].reverse() });
+
+    const won = (r: WaiverResolution): string | undefined =>
+      r.outcomes.find((o) => o.awarded)?.claimId;
+
+    expect(won(forwards)).toBe("c1");
+    expect(won(backwards)).toBe("c1");
   });
 
   it("resolves nothing when there are no claims", () => {

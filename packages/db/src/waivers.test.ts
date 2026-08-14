@@ -373,6 +373,58 @@ describe("processing", () => {
     expect(winner?.team_id).toBe(fx.teams[3]);
   });
 
+  it("tries a team's own claims in the order it filed them", async () => {
+    // The wiring, which no test in `@rostr/core` can see: that `created_at` is
+    // actually selected and threaded into `WaiverClaim`. Room is expressed as a
+    // shared drop rather than by fabricating a full roster — whichever claim is
+    // tried first spends `spare`, and the other fails DROP_NOT_ON_ROSTER.
+    const fx = await setup();
+    const team = fx.teams[3]!; // best priority, the reverse of the draft order
+    const rival = fx.teams[1]!;
+
+    await fx.client.query(
+      `INSERT INTO roster_entries (team_id, player_id, acquired_via, acquired_at)
+       VALUES ($1, $2, 'DRAFT', $3)`,
+      [team, fx.players.get("spare")!, new Date(MONDAY.getTime() - 7 * DAY)],
+    );
+
+    // On waivers at MONDAY, cleared by the Wednesday run.
+    for (const handle of ["target", "other"]) {
+      await fx.client.query(
+        "INSERT INTO waiver_wire (league_id, player_id, clears_at) VALUES ($1, $2, $3)",
+        [fx.leagueId, fx.players.get(handle)!, new Date(MONDAY.getTime() + DAY)],
+      );
+    }
+
+    const file = (teamId: string, add: string, drop: string | null = null): Promise<unknown> =>
+      submitClaim(fx.client, {
+        leagueId: fx.leagueId,
+        teamId,
+        addPlayerId: fx.players.get(add)!,
+        dropPlayerId: drop === null ? null : fx.players.get(drop)!,
+        now: MONDAY,
+      });
+
+    // `target` first — that is the whole assertion. `created_at` comes from the
+    // database, so these must stay sequential and awaited.
+    await file(team, "target", "spare");
+    await file(team, "other", "spare");
+    await file(rival, "other");
+
+    await processWaivers(fx.client, fx.leagueId, WEDNESDAY);
+
+    const rows = await fx.client.query<{ team_id: string; player_id: string }>(
+      `SELECT team_id, player_id FROM roster_entries
+        WHERE league_id = $1 AND released_at IS NULL AND acquired_via = 'WAIVER'`,
+      [fx.leagueId],
+    );
+    const owner = new Map(rows.map((r) => [r.player_id, r.team_id]));
+
+    expect(owner.get(fx.players.get("target")!)).toBe(team);
+    // And the rival gets the player the first team could no longer take.
+    expect(owner.get(fx.players.get("other")!)).toBe(rival);
+  });
+
   it("sends the winner to the back of the order", async () => {
     const fx = await setup();
     await contested(fx, [3]);
