@@ -896,6 +896,27 @@ the same SQL (`apps/web/src/app/api/cron/score-week/route.ts:46-54`) rather than
 it; that is tolerable, because it wants exactly the lagging semantics, but it is a copy and
 not a shared call.
 
+**A trade never leaves the league it was proposed in, and until recently only the _veto_
+enforced that.** `proposeTrade` took the receiving team out of the request body and never
+joined it to the league; `acceptTrade` loaded a trade by id alone and read its `league_id`
+only to fetch rules. So a manager with a team in two leagues could propose in one naming
+the other, accept from the far side, and let the hourly cron execute it — moving a player
+between two closed pools.
+
+Nothing caught it downstream, and that is the part worth remembering: `0022`'s trigger
+derives `roster_entries.league_id` from the destination team, so the imported row lands
+correctly stamped and `roster_entries_one_owner_per_league` is satisfied. The result is
+indistinguishable from a legitimate acquisition. And because `resolveTrade` releases with a
+direct `UPDATE` rather than through `dropPlayer`, neither player touches `waiver_wire` — so
+the receiving league's blind claim queue and priority order are bypassed in both directions.
+
+Both teams are now bound at proposal, and every other entry point **derives** the league by
+joining rather than taking it as an argument — the shape `vetoTrade` has used since `0020`,
+and the reason it was the one entry point never exploitable. A `leagueId` parameter would
+close the same hole while creating an obligation each future caller has to honour.
+Migration `0026` makes the row unrepresentable, using the composite uniqueness `0020`
+already added and did not use.
+
 **A veto is scoped to the trade's own league, at three layers.** `vetoTrade` refuses an
 outside voter (`NOT_IN_LEAGUE`); the tally in `loadTrade` counts only rows from teams that
 are in the league, not bots, and not party to the trade — the _same three conditions as the

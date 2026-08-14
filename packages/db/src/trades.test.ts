@@ -189,6 +189,78 @@ async function seedSchedule(client: PGliteClient, sportId: string): Promise<void
   );
 }
 
+interface TwoLeagueFixture extends Fixture {
+  otherLeagueId: string;
+  otherTeams: string[];
+}
+
+/**
+ * The same league, plus a second one holding players of its own.
+ *
+ * A trade is a closed swap inside one league, and nothing in a single-league
+ * fixture can tell the difference between "scoped to the league being proposed
+ * in" and "scoped to whatever league the proposer happens to be in" — those are
+ * the same value until a second league exists.
+ *
+ * League B gets **new** player rows rather than reusing league A's. Reusing one
+ * would make the test pass on `roster_entries_one_owner_per_league` instead of
+ * on the fix, which is per-league and would fire for its own reasons.
+ *
+ * No second schedule: `games` are keyed by sport and season, so the one seeded
+ * above already answers for both leagues.
+ */
+async function setupWithSecondLeague(): Promise<TwoLeagueFixture> {
+  const fx = await setup();
+
+  const other = await createUser(fx.client, "outside@example.com", "Outside");
+  const otherLeague = await createLeague(fx.client, NFL, {
+    name: "Somewhere Else",
+    commissionerId: other.id,
+    rules: buildNflPprRules({ seasonYear: 2026, draft: DRAFT }) as LeagueRules,
+  });
+
+  const otherTeams: string[] = [];
+  for (let i = 0; i < 2; i++) {
+    otherTeams.push((await addTestTeam(fx.client, otherLeague.id, `Other ${i + 1}`)).teamId);
+  }
+
+  const [sport] = await fx.client.query<{ id: string }>(
+    "SELECT id FROM sports WHERE key = $1",
+    [NFL.key],
+  );
+  const [position] = await fx.client.query<{ id: string }>(
+    "SELECT id FROM positions WHERE sport_id = $1 AND key = 'RB'",
+    [sport!.id],
+  );
+
+  for (const [index, teamId] of otherTeams.entries()) {
+    const handle = `q${index + 1}`;
+    const [player] = await fx.client.query<{ id: string }>(
+      `INSERT INTO players (sport_id, external_ref, full_name, primary_position_id, team_ref)
+       VALUES ($1, $2, $3, $4, 'CIN') RETURNING id`,
+      [sport!.id, handle, handle, position!.id],
+    );
+    fx.players.set(handle, player!.id);
+
+    await fx.client.query(
+      `INSERT INTO roster_entries (team_id, player_id, acquired_via, acquired_at)
+       VALUES ($1, $2, 'DRAFT', $3)`,
+      [teamId, player!.id, new Date(MONDAY.getTime() - 30 * DAY).toISOString()],
+    );
+  }
+
+  return { ...fx, otherLeagueId: otherLeague.id, otherTeams };
+}
+
+/** Which team actively holds a player, anywhere. Null if nobody does. */
+async function ownerOf(fx: Fixture, playerId: string): Promise<string | null> {
+  const [row] = await fx.client.query<{ team_id: string }>(
+    "SELECT team_id FROM roster_entries WHERE player_id = $1 AND released_at IS NULL",
+    [playerId],
+  );
+  return row?.team_id ?? null;
+}
+
 /** The straightforward one-for-one: team 1's player for team 2's. */
 async function propose(fx: Fixture, now = MONDAY): Promise<string> {
   const { tradeId } = await proposeTrade(fx.client, {
@@ -716,6 +788,113 @@ describe("vetoing", () => {
         [tradeId, outsider, otherLeague.id, MONDAY.toISOString()],
       ),
     ).rejects.toThrow(/trade_vetoes_trade_in_league/);
+  });
+
+  it("refuses a proposal naming a team in another league", async () => {
+    // Two closed player pools. A manager holding a team in each could propose in
+    // one naming the other, accept from the far side, and let the cron execute
+    // it — importing a player the receiving league's waiver queue never got to
+    // allocate, and exporting one who never reaches its wire at all, because
+    // `resolveTrade` releases with a direct UPDATE rather than through
+    // `dropPlayer`.
+    //
+    // The same defect `vetoTrade` was fixed for, twenty lines away in the same
+    // file, left standing on propose and accept.
+    const fx = await setupWithSecondLeague();
+
+    await expect(
+      proposeTrade(fx.client, {
+        leagueId: fx.leagueId,
+        proposerTeamId: fx.teams[0]!,
+        receiverTeamId: fx.otherTeams[0]!,
+        proposerGives: [fx.players.get("p1")!],
+        receiverGives: [fx.players.get("q1")!],
+        now: MONDAY,
+      }),
+    ).rejects.toMatchObject({ code: "NOT_IN_LEAGUE" });
+
+    // **The property, not the code.** A refusal at the door proves nothing about
+    // where the players ended up, which is what actually matters — and a fix
+    // that closed propose while leaving the resolution path open would satisfy
+    // the assertion above.
+    expect(await listTrades(fx.client, fx.leagueId)).toHaveLength(0);
+    expect(await listTrades(fx.client, fx.otherLeagueId)).toHaveLength(0);
+
+    expect(await ownerOf(fx, fx.players.get("q1")!)).toBe(fx.otherTeams[0]);
+    expect(await ownerOf(fx, fx.players.get("p1")!)).toBe(fx.teams[0]);
+  });
+
+  it("says the team is not in this league rather than that it is a bot", async () => {
+    // Ordering. The bot check queries teams by id with no league predicate, so
+    // it answers correctly across leagues — which is the problem: reached first,
+    // it turns a refusal into an oracle. `BOT_CANNOT_TRADE` confirms the id
+    // names a real team, and that it is a bot, for an id the caller was never
+    // entitled to resolve. `NOT_IN_LEAGUE` reveals nothing.
+    //
+    // The mirror of this test is "refuses a trade involving a bot" above: a bot
+    // in *this* league must still say so. Either alone leaves the order free.
+    const fx = await setupWithSecondLeague();
+    await fx.client.query("UPDATE teams SET owner_id = NULL, is_bot = true WHERE id = $1", [
+      fx.otherTeams[0],
+    ]);
+
+    await expect(
+      proposeTrade(fx.client, {
+        leagueId: fx.leagueId,
+        proposerTeamId: fx.teams[0]!,
+        receiverTeamId: fx.otherTeams[0]!,
+        proposerGives: [fx.players.get("p1")!],
+        receiverGives: [fx.players.get("q1")!],
+        now: MONDAY,
+      }),
+    ).rejects.toMatchObject({ code: "NOT_IN_LEAGUE" });
+  });
+
+  it("cannot even record a trade whose teams are not in its league", async () => {
+    // The guards in `proposeTrade` and `acceptTrade` close the doors. This
+    // asserts the stronger thing, as `0020` did for vetoes: after `0026` the row
+    // is unrepresentable, so a future caller — or a hand-written statement —
+    // cannot reintroduce it.
+    //
+    // It is also why there is no test here for `acceptTrade` refusing a
+    // cross-league trade: that state can no longer be constructed to accept.
+    // A test that cannot build its own precondition would pass against the fix,
+    // against the bug, and against no guard at all.
+    const fx = await setupWithSecondLeague();
+
+    await expect(
+      fx.client.query(
+        `INSERT INTO trades (league_id, proposer_team_id, receiver_team_id, state, proposed_at)
+         VALUES ($1, $2, $3, 'PROPOSED', $4)`,
+        [fx.leagueId, fx.teams[0], fx.otherTeams[0], MONDAY.toISOString()],
+      ),
+    ).rejects.toThrow(/trades_receiver_in_league/);
+
+    await expect(
+      fx.client.query(
+        `INSERT INTO trades (league_id, proposer_team_id, receiver_team_id, state, proposed_at)
+         VALUES ($1, $2, $3, 'PROPOSED', $4)`,
+        [fx.otherLeagueId, fx.teams[0], fx.otherTeams[0], MONDAY.toISOString()],
+      ),
+    ).rejects.toThrow(/trades_proposer_in_league/);
+  });
+
+  it("still executes an ordinary trade with another league present", async () => {
+    // The negative. Every other trade test runs in one league, so this is the
+    // only one that would catch a league predicate scoped against the wrong
+    // value — though not one scoped to the proposer's league rather than the
+    // league being proposed in, since here those are the same. That mutation is
+    // caught by "refuses a proposal naming a team in another league" and by
+    // nothing else.
+    const fx = await setupWithSecondLeague();
+    const tradeId = await propose(fx);
+    await acceptTrade(fx.client, tradeId, fx.teams[1]!, MONDAY);
+
+    const [resolution] = await resolveDueTrades(fx.client, fx.leagueId, AFTER_WINDOW);
+    expect(resolution?.outcome).toBe("EXECUTED");
+
+    expect(await ownerOf(fx, fx.players.get("p1")!)).toBe(fx.teams[1]);
+    expect(await ownerOf(fx, fx.players.get("q1")!)).toBe(fx.otherTeams[0]);
   });
 
   it("does not count a veto from a bot or from a team in the trade", async () => {
