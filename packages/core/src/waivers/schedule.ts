@@ -149,6 +149,35 @@ export function nextWeekly(after: Date, moment: WeeklyMoment, timeZone: string):
   );
 }
 
+/**
+ * The most recent occurrence of a weekly moment at or before `now`.
+ *
+ * **Consecutive weekly moments are not 168 hours apart.** Across a fall-back
+ * they are 169, across a spring-forward 167, and a jurisdiction with a two-hour
+ * transition moves them further still. Both callers of this used to find the
+ * previous lock by asking `nextWeekly` from exactly `now - 7 * 24h`, and a
+ * 168-hour lookback cannot span a 169-hour gap: it lands precisely *on* the
+ * previous lock, `nextWeekly` is strictly-after so it skips it, and the answer
+ * is a lock **one hour in the future**.
+ *
+ * That was live for the hour of Monday 2 November 2026, 23:00–23:59 ET, on the
+ * shipped default rules — see the tests.
+ *
+ * So walk instead of guessing an interval. Starting nine days back guarantees at
+ * least one occurrence in range whatever the transition, and stepping forward
+ * while the next is still `<= now` lands on the last one. At most two
+ * iterations, and it assumes nothing about how long a week is.
+ */
+export function latestWeekly(now: Date, moment: WeeklyMoment, timeZone: string): Date {
+  let cursor = nextWeekly(new Date(now.getTime() - 9 * DAY_MS), moment, timeZone);
+
+  for (;;) {
+    const next = nextWeekly(cursor, moment, timeZone);
+    if (next.getTime() > now.getTime()) return cursor;
+    cursor = next;
+  }
+}
+
 /** The next waiver processing run strictly after `now`. */
 export function nextProcessingAt(now: Date, rules: WaiverRules): Date {
   return nextWeekly(now, rules.processing, rules.timezone);
@@ -198,14 +227,7 @@ export function nextWeeklyLockAt(now: Date, rules: WaiverRules): Date {
  * answers first, and it outlives this window.
  */
 export function everyoneIsOnWaivers(now: Date, rules: WaiverRules): boolean {
-  // `nextWeekly` is strictly-after, so asking it from a week earlier yields the
-  // most recent lock at or before `now` — the same trick `transactionWeek` uses
-  // to find the cycle it is in.
-  const lock = nextWeekly(
-    new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000),
-    rules.weeklyLock,
-    rules.timezone,
-  );
+  const lock = latestWeekly(now, rules.weeklyLock, rules.timezone);
 
   return now.getTime() < nextProcessingAt(lock, rules).getTime();
 }

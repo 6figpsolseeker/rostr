@@ -7,6 +7,7 @@ import {
   availabilityAt,
   dropDestination,
   everyoneIsOnWaivers,
+  latestWeekly,
   nextProcessingAt,
   nextWeeklyLockAt,
   waiverClearsAt,
@@ -69,6 +70,109 @@ describe("RULES.md §6 — every unrostered player returns to waivers on Tuesday
     const novLock = new Date("2026-11-17T05:00:00Z");
     expect(everyoneIsOnWaivers(new Date(novLock.getTime() - 1), RULES)).toBe(false);
     expect(everyoneIsOnWaivers(novLock, RULES)).toBe(true);
+  });
+});
+
+describe("the week before a weekly lock is not always 168 hours", () => {
+  // US clocks go back on Sunday 1 November 2026, so the Tuesday locks either
+  // side of it are 169 hours apart:
+  //   2026-10-27T04:00Z (Tue 00:00 EDT) -> 2026-11-03T05:00Z (Tue 00:00 EST)
+  // Both callers used to find "the most recent lock" by asking `nextWeekly` from
+  // exactly `now - 7 * 24h`. That lands *on* the earlier lock, and `nextWeekly`
+  // is strictly-after, so it skipped it and answered with a lock in the future.
+  const OCT_LOCK = new Date("2026-10-27T04:00:00Z");
+  const NOV_LOCK = new Date("2026-11-03T05:00:00Z");
+
+  it("has a 169-hour gap across the fall-back", () => {
+    expect(nextWeeklyLockAt(new Date("2026-10-26T12:00:00Z"), RULES)).toEqual(OCT_LOCK);
+    expect(nextWeeklyLockAt(new Date("2026-11-02T12:00:00Z"), RULES)).toEqual(NOV_LOCK);
+    expect(NOV_LOCK.getTime() - OCT_LOCK.getTime()).toBe(169 * 3600 * 1000);
+  });
+
+  it("still names the October lock in the hour a 168-hour lookback loses", () => {
+    // Monday 2 November, 23:00-23:59 ET. Across that whole hour `now - 168h`
+    // lands at or after OCT_LOCK, so a strictly-after search from there skips
+    // the lock it was supposed to find and returns the November one instead.
+    for (const iso of [
+      "2026-11-03T04:00:00Z",
+      "2026-11-03T04:30:00Z",
+      "2026-11-03T04:59:59Z",
+    ]) {
+      const now = new Date(iso);
+      expect(now.getTime() - 7 * 24 * 3600 * 1000, iso).toBeGreaterThanOrEqual(
+        OCT_LOCK.getTime(),
+      );
+
+      expect(latestWeekly(now, RULES.weeklyLock, RULES.timezone), iso).toEqual(OCT_LOCK);
+    }
+  });
+
+  it("keeps free agency open until the lock actually arrives", () => {
+    // The consequence, and the reason this is a rule and not a rounding error:
+    // §6 opens free agency from Wednesday 03:00 to Tuesday 00:00, and Monday
+    // night is when Monday Night Football is being played.
+    for (const iso of [
+      "2026-11-03T03:59:59Z", // Mon 22:59 ET
+      "2026-11-03T04:00:00Z", // Mon 23:00 ET — was reported ON_WAIVERS
+      "2026-11-03T04:59:59Z", // Mon 23:59 ET
+    ]) {
+      expect(everyoneIsOnWaivers(new Date(iso), RULES), iso).toBe(false);
+    }
+
+    expect(everyoneIsOnWaivers(NOV_LOCK, RULES)).toBe(true);
+  });
+
+  it("returns the moment itself when now is exactly on it", () => {
+    // "At or before", not "strictly before" — the lock instant belongs to the
+    // cycle it opens.
+    expect(latestWeekly(NOV_LOCK, RULES.weeklyLock, RULES.timezone)).toEqual(NOV_LOCK);
+    expect(
+      latestWeekly(new Date(NOV_LOCK.getTime() - 1), RULES.weeklyLock, RULES.timezone),
+    ).toEqual(OCT_LOCK);
+  });
+
+  it("holds across the spring-forward, where the gap is 167 hours", () => {
+    // The other direction, in case anyone is tempted to hardcode 169.
+    const before = new Date("2027-03-09T05:00:00Z"); // Tue 00:00 EST
+    const after = new Date("2027-03-16T04:00:00Z"); // Tue 00:00 EDT
+
+    expect(after.getTime() - before.getTime()).toBe(167 * 3600 * 1000);
+    expect(
+      latestWeekly(new Date(after.getTime() - 1), RULES.weeklyLock, RULES.timezone),
+    ).toEqual(before);
+
+    // And the mirror of the November hole, which the 168-hour lookback also had
+    // and in the other direction: half an hour *into* the new lock, `now - 168h`
+    // falls before the previous one, so the old trick answered with the stale
+    // cycle and left the pool open while it should have been shut.
+    const justInside = new Date(after.getTime() + 30 * 60 * 1000);
+    expect(latestWeekly(justInside, RULES.weeklyLock, RULES.timezone)).toEqual(after);
+    expect(everyoneIsOnWaivers(justInside, RULES)).toBe(true);
+  });
+
+  it("never answers with a moment in the future", () => {
+    // The whole class of bug rather than the two instants that expose it, swept
+    // hourly across both transitions — the only places the property can break.
+    // Deliberately not swept across the whole season: `schedule.ts` builds a
+    // fresh `Intl.DateTimeFormat` per probe, so a season-long fine grid costs
+    // minutes for coverage of weeks where every gap is exactly 168 hours.
+    for (const [from, days] of [
+      ["2026-10-27T00:00:00Z", 10], // fall-back, 1 Nov 2026
+      ["2027-03-07T00:00:00Z", 11], // spring-forward, 14 Mar 2027
+    ] as const) {
+      const start = new Date(from).getTime();
+
+      for (let hour = 0; hour < 24 * days; hour++) {
+        const now = new Date(start + hour * 3600 * 1000);
+        const lock = latestWeekly(now, RULES.weeklyLock, RULES.timezone);
+
+        expect(lock.getTime(), now.toISOString()).toBeLessThanOrEqual(now.getTime());
+        // And it is the *most recent* one: the next is genuinely after `now`.
+        expect(nextWeeklyLockAt(lock, RULES).getTime(), now.toISOString()).toBeGreaterThan(
+          now.getTime(),
+        );
+      }
+    }
   });
 });
 

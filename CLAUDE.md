@@ -832,6 +832,19 @@ hoard claims.
 **Eastern**, which is 07:00 UTC — so a test using "Wednesday 18:00 UTC" is _after_ the
 clear, not before it. One test asserted the opposite and was wrong.
 
+**"A week ago" is not `now - 7 * 24h`, and use `latestWeekly` rather than writing it
+again.** Consecutive weekly moments are 169 hours apart across the November fall-back and
+167 across the spring change — a week of _local days_, which is the entire reason the rules
+carry a weekday and an hour instead of an offset. Both `everyoneIsOnWaivers` and
+`transactionWeek` used to find the most recent lock by asking the strictly-after
+`nextWeekly` from exactly 168 hours back, which lands _on_ the previous lock and is then
+skipped, so for the hour of **Monday 2 November 2026, 23:00–23:59 ET** they answered with a
+lock in the future: free agency closed early, and `transactionWeek` named week 10 while week
+9's Monday night game was being played — which sends §6's kickoff lock to look up games that
+have not started, during the one game it most needs to refuse. The spring change had the
+mirror of it. `latestWeekly` walks instead of assuming an interval, and assumes nothing about
+how long a week is.
+
 ### The bracket
 
 `packages/core/src/season/bracket.ts` (pure), `packages/db/src/playoffs.ts` (state),
