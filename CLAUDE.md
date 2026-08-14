@@ -234,12 +234,36 @@ defect was in a _verifier_ rather than in the wiring.
   **inverted** and `verifyOnChainDeposit` never consulted `refunded` at all. See "Deposit and
   refund: `deposited > 0` is not currently staked" below for the four `Membership` states and
   why reading one field could never have been enough.
-- **#31 — still open, still effectively unreviewed**, and the only one of his three left. It adds `settle_authority` to the `League` account
-  and an instruction where that authority posts the winners. Before anything else, weigh
-  that against `CLAUDE.md`'s "immutability is by omission… the account has **no authority
-  field**" and `DECISIONS.md`'s "Settlement is derived, not declared". The author is upfront
-  that it is a "trust-minimized bridge"; the question is whether the code matches that
-  description and whether the owner accepts the trade.
+- **#31 — closed 2026-08-14**, reviewed at last. It added `settle_authority` to the
+  `League` account and an instruction where that authority posts the winners. Two findings,
+  either sufficient on its own:
+
+  **`settle_authority` was written and never read.** Assigned at `initialize_league`,
+  declared on the account, used as the rent `payer` and as a `Signer` — and never compared
+  to anything. No `has_one`, no constraint, nowhere in the program. So
+  `post_final_standings` accepted **any** keypair, and `payout_fee` and `payout_prize` had
+  no `Signer` field at all. Since `join_league` is permissionless (issue #18), anyone could
+  take a seat for rent, name themselves in all five prize slots, and drain the vault once
+  members deposited. `standings` is `init` with no `close`, so the first caller froze the
+  winners permanently — a stranger could make any pot league unsettleable for the price of
+  rent.
+
+  **It killed the timelock refund**, without touching it. `payout_prize` zeroes
+  `league.total_deposited`, so a later `refund_stake` underflows on `checked_sub`; and
+  `payout_fee` decrements nothing, so after a fee-only drain the last member's transfer
+  fails against an under-funded vault forever. The unconditional refund is what makes
+  shipping before an audit defensible, and this removed it from the outside.
+
+  **And the design was wrong even fixed.** `RULES.md` §7 — rendered above the join control,
+  its hash signed by every member — says "No one declares a winner… no commissioner
+  sign-off, no vote, and no discretion." A settle authority makes that false for people who
+  already signed it. The calendar does not force it either: the first money movement is the
+  Week 14 prize on 13 Dec, the timelock refund already works, and the derived path is D6
+  behind the G4–G8 oracle, scheduled for exactly that window.
+
+  Issue **#28 stays open** — the diagnosis was right, and the program does need a payout
+  path. The piece worth building is **G7**, finalised scores on-chain; `championship()`
+  already derives all five prize-holders in TypeScript with no stored winner.
 
 **A pattern worth naming, because it recurs across both reviewers and across our own work:**
 several of these PRs ship a comment asserting a guarantee the code does not provide. This
@@ -261,7 +285,7 @@ still needs Rust and a decision before Aug 22:
 **Next, in order:**
 
 0. **The PR queue above.** Squid's four still fix live bugs and outrank new features.
-   Ammar's are done except #31.
+   Ammar's are all resolved: #29 and #30 superseded and merged, #31 reviewed and closed.
 
    **`anchor test` is not a reason to defer a PR.** `.github/workflows/anchor.yml` runs it
    on CI for anything touching `programs/**`, `Anchor.toml`, `Cargo.*` or
