@@ -139,8 +139,17 @@ export async function GET(
 /**
  * Propose, accept, decline, withdraw, or veto.
  *
- * The acting team always comes from the session, never the body — a route that
- * took a team ID would let anyone accept anyone's trade.
+ * The **acting** team always comes from the session, never the body — a route
+ * that took a team ID would let anyone accept anyone's trade.
+ *
+ * **The objects it acts on do come from the body**, and that is the half this
+ * comment used to leave out. `receiverTeamId` and `tradeId` are both read off
+ * the wire, and authorising the actor says nothing about them: for a while a
+ * manager could name a team in a different league as the receiver, because
+ * nothing downstream joined it to the league in the URL. Both are now bound in
+ * `@rostr/db` rather than here — derived from the database on each call, so a
+ * second route could not get it wrong — and migration `0026` makes a trade whose
+ * teams are not in its league unrepresentable.
  */
 export async function POST(
   request: Request,

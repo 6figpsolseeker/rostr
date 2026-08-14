@@ -70,6 +70,8 @@ export type TradeState =
 
 export interface TradeSummary {
   readonly tradeId: string;
+  /** The league this trade belongs to. A trade never leaves it. */
+  readonly leagueId: string;
   readonly proposerTeamId: string;
   readonly receiverTeamId: string;
   readonly state: TradeState;
@@ -164,6 +166,7 @@ async function loadTrade(db: SqlClient, tradeId: string): Promise<TradeSummary> 
 
   return {
     tradeId: trade.id,
+    leagueId: trade.league_id,
     proposerTeamId: trade.proposer_team_id,
     receiverTeamId: trade.receiver_team_id,
     state: trade.state,
@@ -179,6 +182,35 @@ async function loadTrade(db: SqlClient, tradeId: string): Promise<TradeSummary> 
     vetoes: Number(votes?.n ?? 0),
     vetoesRequired: vetoesRequired(electorate, stored.rules.trades),
   };
+}
+
+/**
+ * Refuse a team acting on a trade that belongs to another league.
+ *
+ * **Derived, never supplied.** Both halves are read from the database in one
+ * query, so there is no league argument for a caller to get wrong — the shape
+ * `vetoTrade` has used since migration `0020`, and the reason it was the only
+ * one of the five entry points that was never exploitable. A `leagueId`
+ * parameter would have closed the same hole while creating an obligation every
+ * future caller has to honour, in a module whose rule is that the server does
+ * not take identifiers from the caller and trust them.
+ *
+ * `TRADE_NOT_FOUND` rather than `NOT_IN_LEAGUE`, deliberately: a trade in
+ * another league is one this team has no business knowing exists, and a distinct
+ * code would confirm the id names something real.
+ */
+async function requireSameLeague(
+  db: SqlClient,
+  tradeId: string,
+  actingTeamId: string,
+): Promise<void> {
+  const [row] = await db.query<{ id: string }>(
+    `SELECT t.id FROM teams t
+       JOIN trades tr ON tr.id = $2
+      WHERE t.id = $1 AND t.league_id = tr.league_id`,
+    [actingTeamId, tradeId],
+  );
+  if (!row) throw new TradeError("Trade not found", "TRADE_NOT_FOUND");
 }
 
 /** Every trade in a league, newest first. */
@@ -281,6 +313,38 @@ export async function proposeTrade(
   });
   if (blocked) throw new TradeError(explain(blocked, stored.rules), blocked);
 
+  // **Both teams must be in this league, and this is checked before anything
+  // else looks at them.**
+  //
+  // A trade is a closed swap inside one league. Nothing used to say so: the
+  // receiver arrived from the request body and was never joined to
+  // `input.leagueId`, so a manager holding a team in two leagues could name the
+  // other one and move a player between closed player pools — bypassing the
+  // receiving league's waiver queue in both directions, since `resolveTrade`
+  // releases with a direct `UPDATE` and never puts anyone on the wire.
+  //
+  // `vetoTrade` was fixed for exactly this and has been correct since migration
+  // `0020`; propose and accept were not revisited. This is that same join.
+  //
+  // **Order matters.** It has to come before the bot check below, which queries
+  // teams by id with no league predicate — so a receiver in another league gets
+  // `BOT_CANNOT_TRADE` rather than `NOT_IN_LEAGUE`, which answers "does this id
+  // name a bot somewhere" for an id the caller was never entitled to resolve.
+  // Two separate checks rather than one combined query, so a bot in this league
+  // still reports `BOT_CANNOT_TRADE`.
+  //
+  // The proposer is checked too, though today it always arrives as
+  // `context.myTeamId`, which the route derives with a league predicate of its
+  // own. That makes it safe by virtue of its one caller, which is the property
+  // this whole fix exists to stop relying on.
+  const inLeague = await db.query<{ id: string }>(
+    "SELECT id FROM teams WHERE id = ANY($1) AND league_id = $2",
+    [[input.proposerTeamId, input.receiverTeamId], input.leagueId],
+  );
+  if (inLeague.length !== 2) {
+    throw new TradeError("Both teams must be in this league", "NOT_IN_LEAGUE");
+  }
+
   // A bot has nobody to weigh an offer, so it cannot accept one. Letting a
   // manager propose to a bot would either strand the trade forever or require
   // the bot to judge it — and a bot that judges trades is a commissioner with
@@ -377,6 +441,8 @@ export async function acceptTrade(
   now: Date,
 ): Promise<TradeSummary> {
   const trade = await loadTrade(db, tradeId);
+  await requireSameLeague(db, tradeId, actingTeamId);
+
   if (trade.state !== "PROPOSED") {
     throw new TradeError(`This trade is ${trade.state.toLowerCase()}`, "WRONG_STATE");
   }
@@ -384,11 +450,7 @@ export async function acceptTrade(
     throw new TradeError("Only the team offered a trade can accept it", "NOT_YOUR_TRADE");
   }
 
-  const [row] = await db.query<{ league_id: string }>(
-    "SELECT league_id FROM trades WHERE id = $1",
-    [tradeId],
-  );
-  const stored = await getLeagueRules(db, row!.league_id);
+  const stored = await getLeagueRules(db, trade.leagueId);
   if (!stored) throw new TradeError("League has no rules", "LEAGUE_NOT_FOUND");
 
   const deadline = new Date(
@@ -433,7 +495,7 @@ export async function acceptTrade(
 
     // Pass two, with every lock now held, so a competing accept has either
     // already committed and is visible here, or is still blocked behind us.
-    const frozen = await lockedByTrade(tx, row!.league_id);
+    const frozen = await lockedByTrade(tx, trade.leagueId);
     for (const asset of assets) {
       if (frozen.has(asset.player_id)) {
         throw new TradeError(
@@ -452,7 +514,15 @@ export async function acceptTrade(
   });
 }
 
-/** Decline an offer. Only the team it was made to. */
+/**
+ * Decline an offer. Only the team it was made to.
+ *
+ * The league check below is symmetry rather than a hole being closed: the
+ * receiver-equality test underneath it means only a party to the trade gets
+ * this far, and a party in another league can only exist because `proposeTrade`
+ * let one through. Scoped anyway, because leaving one of five entry points
+ * deriving the league differently from the other four is how this recurs.
+ */
 export async function declineTrade(
   db: SqlClient,
   tradeId: string,
@@ -460,6 +530,8 @@ export async function declineTrade(
   now: Date,
 ): Promise<void> {
   const trade = await loadTrade(db, tradeId);
+  await requireSameLeague(db, tradeId, actingTeamId);
+
   if (trade.state !== "PROPOSED") {
     throw new TradeError(`This trade is ${trade.state.toLowerCase()}`, "WRONG_STATE");
   }
@@ -487,6 +559,8 @@ export async function withdrawTrade(
   now: Date,
 ): Promise<void> {
   const trade = await loadTrade(db, tradeId);
+  await requireSameLeague(db, tradeId, actingTeamId);
+
   if (trade.state !== "PROPOSED") {
     throw new TradeError(
       trade.state === "ACCEPTED"
