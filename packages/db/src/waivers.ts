@@ -8,7 +8,9 @@
  * ## Why a drop is not just a delete
  *
  * Dropping a player puts him somewhere. Held 24 hours or more, he goes to
- * **waivers** and is claimable only by blind claim until the next Wednesday run;
+ * **waivers** and is claimable only by blind claim until the run he clears at —
+ * the first processing run a full waiver period after he landed, which for a
+ * drop late in the cycle is the Wednesday *after* next, not the next one;
  * held less, he goes straight to **free agency**. That second rule is ESPN's and
  * it exists to stop a manager adding someone, cutting him hours later, and
  * re-adding him to dodge the queue.
@@ -119,7 +121,12 @@ export async function loadWaiverPriority(
  *
  * Three states, and the difference between the last two is the whole system: a
  * free agent is first come first served, a player on waivers is claimable only
- * by blind claim until the next processing run.
+ * by blind claim until the run at which he clears.
+ *
+ * The `<=` against `clears_at` below is the definition of "cleared", and
+ * `processWaivers` compares the same way against the same column. It did not,
+ * and the two disagreeing by a week is what let a claim be awarded while this
+ * function still answered `ON_WAIVERS` for the same player at the same instant.
  */
 export async function availabilityOf(
   db: SqlClient,
@@ -607,7 +614,14 @@ export async function cancelClaim(
   );
 }
 
-/** A team's own pending claims, in the order they will resolve. */
+/**
+ * A team's own pending claims, newest last.
+ *
+ * **Not the order they resolve in**, which it used to claim. Resolution is by
+ * waiver priority first, and a claim for a player who has not cleared yet waits
+ * for a later run than one filed after it — so submission order predicts neither
+ * the ordering nor the run.
+ */
 export async function pendingClaims(
   db: SqlClient,
   leagueId: string,
@@ -639,17 +653,35 @@ export interface WaiverRunOutcome {
   readonly leagueId: string;
   readonly awarded: number;
   readonly failed: number;
+  /**
+   * Claims left PENDING because their player has not cleared waivers yet.
+   *
+   * **Not collapsed into "nothing happened".** A run that defers three claims
+   * and a run with no work look identical from `awarded`/`failed`/`cleared`, and
+   * they are different facts — only the first explains to whoever is watching
+   * why a manager's claim is still outstanding. Same argument as
+   * `finalizedWithUnfinishedGames` on the week outcome.
+   *
+   * It is also the only trace this leaves. A wrongly-early award used to destroy
+   * its own evidence: the wire row carrying `clears_at` is deleted as part of
+   * awarding, and nothing else stores it.
+   */
+  readonly deferred: number;
   readonly priorityAfter: readonly string[];
   readonly cleared: number;
 }
 
 /**
- * Resolve every pending claim in a league.
+ * Resolve every pending claim whose player has cleared waivers.
  *
  * The decision belongs entirely to `resolveWaiverClaims`; this loads its inputs
  * and writes its outputs. Everything happens in one transaction, so a run either
  * lands whole or not at all — a half-applied waiver run would leave rosters that
  * no rule produced.
+ *
+ * **Not every pending claim, and the difference is a signed rule.** A claim
+ * filed against a player who has not served his waiver period stays PENDING and
+ * is resolved by a later run. It is deferred, never failed.
  *
  * **The inputs are read inside that transaction too.** They were not, and the gap
  * was the whole bug: every roster in the league was read on `db`, resolved
@@ -733,9 +765,42 @@ export async function processWaivers(
      */
     const alreadyHeld = new Set(rosterRows.map((row) => row.player_id));
 
+    /**
+     * Players whose waiver period has not elapsed yet.
+     *
+     * **The run must not award a player before he clears**, and until this
+     * existed it did. `waiverClearsAt` rounds a drop up to the first processing
+     * run at least `waiverPeriodDays` later, and the runs are weekly — so a drop
+     * in the 24 hours before a run rounds up by a whole week, while the run
+     * itself is hours away. `docs/RULES.md` §6 names that exact case: "someone
+     * dropped on Tuesday evening does not clear the next morning, which would
+     * leave the rest of the league no real chance to claim him." He did.
+     *
+     * **A missing row means clear, never blocked.** An absent wire row is what
+     * "free agent" *is* everywhere else in this module, and a claim can outlive
+     * its row — the sweep below removes it, and so does an add. An inner join
+     * here would leave those claims PENDING forever, retried hourly, which is
+     * the permanent wedge the filter above exists to prevent.
+     *
+     * **`<=`, matching `availabilityOf` and the sweep exactly.** `clears_at` is
+     * itself a processing instant and this runs at processing instants, so
+     * equality is the ordinary case rather than a boundary curiosity: a `<` here
+     * would defer every ordinary claim by a week, and would defer a claim in the
+     * same run that the sweep below frees his player to whoever is fastest.
+     */
+    const wireRows = await tx.query<{ player_id: string; clears_at: string }>(
+      "SELECT player_id, clears_at FROM waiver_wire WHERE league_id = $1",
+      [leagueId],
+    );
+    const clearsAt = new Map(wireRows.map((row) => [row.player_id, new Date(row.clears_at)]));
+    const notYetClear = (playerId: string): boolean => {
+      const clears = clearsAt.get(playerId);
+      return clears !== undefined && clears.getTime() > now.getTime();
+    };
+
     const resolution = resolveWaiverClaims({
       claims: claims
-        .filter((row) => !alreadyHeld.has(row.add_player_id))
+        .filter((row) => !alreadyHeld.has(row.add_player_id) && !notYetClear(row.add_player_id))
         .map((row): WaiverClaim => ({
           claimId: row.id,
           teamId: row.team_id,
@@ -751,9 +816,17 @@ export async function processWaivers(
     let awarded = 0;
     let failed = 0;
 
-    // Filtered out above, so they never reach `outcomes` — and a claim left
-    // PENDING is retried every hour forever, which is the wedge this is here to
-    // avoid. It really did fail, and for a reason worth telling the manager.
+    // **Two filters above, and only one of them is a failure.**
+    //
+    // A claim for a player somebody already holds can never succeed, so it is
+    // written FAILED here — leaving it PENDING would retry it hourly forever.
+    // A claim for a player who has not cleared yet is not failed, it is *early*:
+    // it stays PENDING deliberately and is resolved by the run after he clears.
+    //
+    // So this loop keys on `alreadyHeld` specifically. Do not "simplify" it to
+    // "anything missing from `resolution.outcomes` failed" — that would turn
+    // every deferral into a permanent rejection, silently, and the manager would
+    // be told their claim lost to a player nobody had.
     for (const row of claims) {
       if (!alreadyHeld.has(row.add_player_id)) continue;
 
@@ -763,6 +836,10 @@ export async function processWaivers(
       );
       failed++;
     }
+
+    // Players this run actually released, which is not the same as every player
+    // any pending claim happens to name. See the loop below the transaction.
+    const dropped: string[] = [];
 
     for (const outcome of resolution.outcomes) {
       const claim = claims.find((row) => row.id === outcome.claimId)!;
@@ -782,6 +859,7 @@ export async function processWaivers(
             WHERE team_id = $1 AND player_id = $2 AND released_at IS NULL`,
           [claim.team_id, claim.drop_player_id, now.toISOString()],
         );
+        dropped.push(claim.drop_player_id);
       }
 
       // No `try` around this one, unlike `addFreeAgent`. There, a unique
@@ -824,10 +902,22 @@ export async function processWaivers(
       ]);
     }
 
-    return { awarded, failed, claims, priorityAfter: resolution.priorityAfter };
+    // Everything the run neither awarded nor failed: still PENDING, waiting for
+    // its player to clear. Reported rather than inferred — a league with three
+    // deferred claims and a league with nothing to do are different facts, and
+    // only the first explains why a manager's claim is still outstanding.
+    const deferred = claims.length - awarded - failed;
+
+    return {
+      awarded,
+      failed,
+      deferred,
+      dropped,
+      priorityAfter: resolution.priorityAfter,
+    };
   });
 
-  const { awarded, failed, claims } = run;
+  const { awarded, failed, deferred, dropped } = run;
 
   // Players nobody claimed become free agents once their wire time passes.
   // Removing the row is what makes them free — absent means available.
@@ -840,16 +930,23 @@ export async function processWaivers(
 
   // Anyone dropped in the same run must not be swept up by that clear: he landed
   // after it, and his own wire time has not passed.
-  for (const claim of claims) {
-    if (claim.drop_player_id) {
-      await placeDroppedPlayer(db, leagueId, claim.drop_player_id, now, stored.rules);
-    }
+  //
+  // **Players this run released, not players some pending claim mentions.** It
+  // used to walk every pending claim, so a claim that failed — or, now that
+  // claims can be deferred, one that has simply not resolved yet — re-dated the
+  // wire row of a player it never touched. That is somebody else's player: a
+  // manager who legitimately dropped him watched his `clears_at` pushed a week
+  // further out by a stranger's losing claim, hourly, for as long as the claim
+  // sat there. Since `waiverClearsAt(now) > now` always, he could never clear.
+  for (const playerId of dropped) {
+    await placeDroppedPlayer(db, leagueId, playerId, now, stored.rules);
   }
 
   return {
     leagueId,
     awarded,
     failed,
+    deferred,
     priorityAfter: run.priorityAfter,
     cleared: cleared.length,
   };
