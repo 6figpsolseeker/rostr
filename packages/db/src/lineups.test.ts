@@ -533,7 +533,10 @@ describe("autoFillLineup", () => {
  * given when that is absent, so every statement of the autofill's transaction
  * goes through this wrapper.
  */
-function interleaveAtFirstBegin(inner: PGliteClient, onFirstBegin: () => Promise<void>): SqlClient {
+function interleaveAtFirstBegin(
+  inner: PGliteClient,
+  onFirstBegin: () => Promise<void>,
+): SqlClient {
   let fired = false;
   return {
     async exec(sql: string): Promise<void> {
