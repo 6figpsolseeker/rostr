@@ -92,12 +92,23 @@ endpoint sign in as any address they name.
 **To do:** sign up at resend.com, verify a sending domain, put the key and a from-address
 in `.env`.
 
-### ⬜ Supabase project
+### ✅ Supabase project
 
-**Blocks:** the web app past its home page, and the session that league creation and
-joining both need. Migrations and their tests run on PGlite (in-process Postgres, no
-service) and do not need this.
-**Needed by:** now. This is the current blocker.
+**Done 2026-08-06.** The connection string is in `.env` (gitignored, never committed) and
+points at a session pooler on port 5432, which is what `packages/db/migrations/README.md`
+requires. This entry read "⬜ … Needed by: now. This is the current blocker" until
+2026-08-14, eight days after it stopped being true.
+
+**Migrations are not applied automatically.** `ci.yml` has no Postgres service and never
+runs `db:migrate`; every test builds a fresh in-process PGlite database. So the hosted
+database only advances when somebody runs `pnpm db:migrate` by hand, and it drifts behind
+`main` in the meantime — on 2026-08-14 it held through version 20 while `main` carried 0027. `pnpm db:status` tells you which; run it before assuming either way.
+
+**Still to do here:** move to Pro before Week 1, per the note below.
+
+**Blocks:** nothing now. Historically: the web app past its home page, and the session that
+league creation and joining both need. Migrations and their tests run on PGlite (in-process
+Postgres, no service) and never needed this.
 
 **Cost:** Free ($0) is fine for development — 500 MB database, 5 GB egress, 50k monthly
 active users, 2 active projects. Our data is tiny.
@@ -123,13 +134,16 @@ to the result. The credentials go in `.env`, which is gitignored, so they must b
 to each machine by hand — move them through a password manager, not chat or email. Sign up
 with the same email as GitHub so the account does not get orphaned.
 
-**To do:**
+**Done, and kept as the recipe for the second machine** — the credentials are per-machine
+because `.env` is gitignored, so a fresh checkout still needs steps 2 onward:
 
-1. Create a project at supabase.com.
-2. Put its connection string in `.env` as `DATABASE_URL` (see `.env.example`).
-3. `pnpm db:migrate` — applies the schema.
-4. `pnpm db:seed` — inserts the NFL registry.
-5. `pnpm db:status` — confirms what is applied.
+1. ~~Create a project at supabase.com.~~ Done 2026-08-06.
+2. Put its connection string in `.env` as `DATABASE_URL` (see `.env.example`). Move it
+   through a password manager, not chat or email.
+3. `pnpm db:status` — **first**, not last. It tells you what the hosted database already
+   has, and running `db:migrate` blind is how a forward-only runner meets a surprise.
+4. `pnpm db:migrate` — applies whatever is pending.
+5. `pnpm db:seed` — inserts the NFL registry.
 
 ---
 

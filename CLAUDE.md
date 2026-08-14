@@ -47,7 +47,7 @@ Do not build it in August.
 
 See [`docs/BUILD-PLAN.md`](docs/BUILD-PLAN.md) for the full commit-by-commit plan.
 
-**Done — 909 tests, CI green:**
+**Done — 1222 tests, CI green:**
 
 - Full specification — rules, data model, live scoring, build plan
 - A1: pnpm monorepo, TS strict, vitest, eslint, prettier, CI
@@ -201,9 +201,11 @@ moment it does.
 Two outside reviewers have opened PRs. **They are not the same kind of contribution and
 should not be treated the same way.**
 
-**0x-SquidSol.** Seven PRs already merged (#3, #5, #8, #10, #12, #14, #16), each followed
-by a fix of our own on top. Four still open — **#32, #34, #36, #38 — and every one of them
-addresses a bug that is live on `main` right now.** Verified individually on 2026-08-10:
+**0x-SquidSol.** Seven PRs merged (#3, #5, #8, #10, #12, #14, #16), each followed by a fix
+of our own on top. Four more — **#32, #34, #36, #38 — all now closed**, each superseded by
+our own version of the same fix. They are kept below because the _diagnoses_ are the
+record: every one named a bug that was live on `main` when it was filed, and the pattern
+of what they found is worth more than their status. Verified individually on 2026-08-10:
 
 - **#32** — `verifyLeagueAnchor` compares `rulesHash` and nothing else. `OnChainLeague` does
   not even expose `refundUnlockAt`, `feeRecipient` or `payoutBps`, so three of the economic
@@ -222,9 +224,10 @@ addresses a bug that is live on `main` right now.** Verified individually on 202
   rethrows it and one undersized league aborts scoring for every league.
 
 **Three of those four are bugs in code written in this repo the same week** (#34 and #38 in
-the playoff work, #36 in trades). Squid's diagnoses have been right every time so far. What
-has _not_ been checked is whether each proposed **fix** is correct — that is a separate
-question from whether the bug is real, and it is the one still open.
+the playoff work, #36 in trades). Squid's diagnoses have been right every time. The lesson
+that outlasted the PRs: **a correct diagnosis and a correct fix are separate questions**,
+and on this repo the second has needed our own work every time — which is why each of the
+four was closed in favour of a version written here rather than merged as sent.
 
 **vip-ultr (Ammar).** Three PRs. **Two are now merged**, each as a follow-up built on his
 commit rather than a replacement, so his authorship is in `main`. His diagnoses have been
@@ -293,8 +296,17 @@ still needs Rust and a decision before Aug 22:
 
 **Next, in order:**
 
-0. **The PR queue above.** Squid's four still fix live bugs and outrank new features.
-   Ammar's are all resolved: #29 and #30 superseded and merged, #31 reviewed and closed.
+0. **The PR queue is empty as of 2026-08-14**, for the first time since it formed. Sixteen
+   PRs landed in one pass and `main` is green on both CI and Anchor. Squid's four and
+   Ammar's three are all resolved — merged, superseded, or reviewed and closed.
+
+   **Two things that made the queue expensive, so they do not recur.** It had gone
+   unmerged since 2026-08-11 while growing to nineteen, and by then it contained the same
+   fix twice, twice: #85 duplicated #88 and #86 duplicated #89, from the two machines. It
+   also contained two migrations at `0025`, which would have failed every database-backed
+   test on `main` the moment both merged. **Land work sooner; a queue this deep is where
+   both of those came from.** Migration numbering now has a CI guard and `main` requires
+   branches to be up to date, so the second cannot happen silently again.
 
    **`anchor test` is not a reason to defer a PR.** `.github/workflows/anchor.yml` runs it
    on CI for anything touching `programs/**`, `Anchor.toml`, `Cargo.*` or
@@ -1749,12 +1761,30 @@ Docker, no credentials. `createTestDatabase()` in `packages/db/src/testing.ts` g
 fresh migrated database per test.
 
 The real database is **Supabase** (hosted, so it follows you between machines; also
-matches the stack in `percolator-launch`). Not set up yet — see
-[`docs/SETUP-REQUIRED.md`](docs/SETUP-REQUIRED.md).
+matches the stack in `percolator-launch`). **Provisioned since 2026-08-06** — the
+connection string is in `.env`, which is gitignored and has never been committed. This
+file and `SETUP-REQUIRED.md` both said "not set up yet" until 2026-08-14, and that
+staleness cost real time: a migration renumber was reasoned about on the premise that
+nothing had ever been applied.
+
+**It is not automatically in sync with `main`.** Nothing in CI runs migrations against it
+— there is no Postgres service in `ci.yml`, and every test builds a fresh PGlite database
+— so it only moves when somebody runs `pnpm db:migrate` by hand. On 2026-08-14 it was at
+version 20 while `main` carried through 0027. Check with `pnpm db:status` before assuming.
 
 Migrations are **forward-only** plain SQL. There are no down migrations: a league's rules
 are immutable and its history must stay auditable, so the answer to a bad migration is
 another migration. Editing an already-applied file makes the runner refuse to start.
+
+**Numbering is the part that only bites across machines**, and it is not the runner's job
+— read [`packages/db/migrations/README.md`](packages/db/migrations/README.md) before adding
+one. Two branches can pick the same number, and on this project they have: #72 and #95
+both took `0025` against a `main` at `0024`, both went green, and merging both would have
+thrown `Duplicate migration version 25` on load and failed every database-backed test.
+Take the next number **above main's highest**, renumber on rebase if main moved, and never
+merge a PR whose number is at or below main's head. CI now refuses the second half of that
+(`scripts/check-migration-numbers.mjs`); the first half is caught only by requiring
+branches be up to date before merging, which `main`'s protection does.
 
 ---
 
@@ -1928,7 +1958,7 @@ Expect ~30–60 minutes; compiling AVM from source is the slow part.
 
 ```bash
 pnpm install
-pnpm test        # 909 tests, all green
+pnpm test        # 1222 tests, all green
 pnpm typecheck
 pnpm lint
 ```
@@ -2019,6 +2049,12 @@ single credential.
 
 The two that matter most right now:
 
-- **The escrow audit** — 2–4 weeks of calendar time, gates pot leagues opening on Aug 22.
-  Should be quoted _now_, before the program is finished.
+- **The escrow review** — and note this is **not** a commercial audit. That was decided on
+  2026-08-05: no firm for the 2026 season, because the 2–4 week booking lead time sat on
+  the critical path. The owner reviews the program himself and has a professional auditor
+  who will look once the tech is mostly built; a commercial audit is deferred past the
+  season, not dropped. `SETUP-REQUIRED.md` carries the decision and, more importantly, the
+  four things that limit exposure without a firm's sign-off — the $50 buy-in cap and the
+  unconditional timelock refund being the two that do the work. This entry described a
+  booking that had already been decided against.
 - **Bot draft sophistication** — a scope decision needed before Milestone B.
