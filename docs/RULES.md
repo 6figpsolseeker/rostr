@@ -362,7 +362,7 @@ which would leave the rest of the league no real chance to claim him.
 - A team that wins several claims in one run moves once.
 - Starting order is the **reverse of the draft order**.
 - **Your own claims are tried in the order you filed them.** Priority decides every contest
-  with another manager; filing order only decides which of *your* claims gets your last
+  with another manager; filing order only decides which of _your_ claims gets your last
   roster spot. So file the player you want most first.
 
 #### Locks

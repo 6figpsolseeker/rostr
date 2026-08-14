@@ -819,8 +819,8 @@ settable submission time would be a way to file a claim and then move it to the 
 your own queue.
 
 **ESPN, Sleeper and Yahoo all let a manager rank their own pending claims** — ESPN's
-*Pending Moves* panel says "Reorder claims by dragging them into your preferred priority".
-Filing order is an *approximation* of that, not conformance with it, and the app shows the
+_Pending Moves_ panel says "Reorder claims by dragging them into your preferred priority".
+Filing order is an _approximation_ of that, not conformance with it, and the app shows the
 order without labelling it. The explicit rank is separate work; do not describe the current
 behaviour as matching ESPN.
 

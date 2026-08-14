@@ -358,7 +358,9 @@ describe("resolveWaiverClaims", () => {
       shape: SHAPE,
     });
 
-    expect(result.outcomes.filter((o) => o.awarded).map((o) => o.addPlayerId)).toEqual(["star"]);
+    expect(result.outcomes.filter((o) => o.awarded).map((o) => o.addPlayerId)).toEqual([
+      "star",
+    ]);
     expect(result.outcomes.find((o) => o.addPlayerId === "other")).toMatchObject({
       awarded: false,
       reason: "ROSTER_FULL",
@@ -428,7 +430,12 @@ describe("resolveWaiverClaims", () => {
       claim("c9", "team-a", "star", null, same),
       claim("c1", "team-a", "other", null, same),
     ];
-    const args = { priority, rosters: new Map([["team-a", nearlyFull]]), pool: POOL, shape: SHAPE };
+    const args = {
+      priority,
+      rosters: new Map([["team-a", nearlyFull]]),
+      pool: POOL,
+      shape: SHAPE,
+    };
 
     const forwards = resolveWaiverClaims({ ...args, claims });
     const backwards = resolveWaiverClaims({ ...args, claims: [...claims].reverse() });
