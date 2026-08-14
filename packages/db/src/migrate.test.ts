@@ -1,3 +1,4 @@
+import { readdirSync } from "node:fs";
 import { afterEach, describe, expect, it } from "vitest";
 import { loadMigrations, migrate, MigrationError } from "./migrate.js";
 import { createTestDatabase } from "./testing.js";
@@ -29,6 +30,23 @@ describe("loadMigrations", () => {
     for (const m of loadMigrations()) {
       expect(m.checksum).toMatch(/^[0-9a-f]{64}$/);
     }
+  });
+
+  it("leaves no .sql file in the directory unloaded", () => {
+    // A filename the pattern does not match is **silently skipped**, not
+    // rejected: `loadMigrations` filters on the pattern, and so does the CI
+    // numbering check. So `25_thing.sql`, `0025-thing.sql` or `0025_Thing.sql`
+    // is a migration that never runs, on any database, with nothing anywhere
+    // saying so — while reading as applied to anyone looking at the directory.
+    //
+    // Hermetic on purpose: it reads the same directory the runner does and
+    // needs no database, so it fails on the machine that made the typo rather
+    // than on the one that deploys.
+    const onDisk = readdirSync(new URL("../migrations", import.meta.url))
+      .filter((name) => name.endsWith(".sql"))
+      .sort();
+
+    expect(loadMigrations().map((m) => m.filename)).toEqual(onDisk);
   });
 });
 
