@@ -26,6 +26,7 @@
 
 import {
   isVetoed,
+  pastTradeDeadline,
   tradeBlockedBecause,
   vetoWindowEndsAt,
   vetoWindowHasClosed,
@@ -35,7 +36,7 @@ import type { LeagueRules } from "@rostr/core";
 import type { SqlClient } from "./client.js";
 import { getLeagueRules } from "./leagues.js";
 import { withTransaction } from "./transaction.js";
-import { currentWeek } from "./week.js";
+import { transactionWeek } from "./week.js";
 
 export class TradeError extends Error {
   constructor(
@@ -224,9 +225,32 @@ export interface ProposeTradeInput {
   readonly receiverTeamId: string;
   readonly proposerGives: readonly string[];
   readonly receiverGives: readonly string[];
-  /** The current week, checked against the league's frozen deadline. */
-  readonly week: number;
   readonly now: Date;
+}
+
+/**
+ * The week a trade decided at `at` would execute in.
+ *
+ * **`transactionWeek`, never `currentWeek`.** `currentWeek` answers "the week of
+ * the most recent kickoff", so from a week's last game until the next week's
+ * first it keeps naming a week whose games have all been played — and a trade
+ * landing in that stretch executes into the *following* week's rosters. Asking
+ * it about a deadline let a trade land roughly three days past a date members
+ * signed, which is exactly what `docs/RULES.md` §6 says the deadline prevents.
+ *
+ * It is also season-scoped, which `currentWeek` is not: with a prior season's
+ * games ingested, `currentWeek` answers "week 18" all summer and would refuse
+ * every proposal in the preseason.
+ *
+ * `null` when the schedule cannot answer. `pastTradeDeadline` decides what that
+ * means, in one place, for both callers.
+ */
+async function executionWeek(
+  db: SqlClient,
+  rules: LeagueRules,
+  at: Date,
+): Promise<number | null> {
+  return transactionWeek(db, rules, at);
 }
 
 export async function proposeTrade(
@@ -236,9 +260,20 @@ export async function proposeTrade(
   const stored = await getLeagueRules(db, input.leagueId);
   if (!stored) throw new TradeError("League has no rules", "LEAGUE_NOT_FOUND");
 
+  // Derived here, never taken from the caller. This used to be a `week` field on
+  // the input, supplied by the route — so the rule depended on a number computed
+  // outside the package that enforces it, and the route computed it wrongly.
+  // A deadline checked against a week somebody else worked out is not a deadline.
+  //
+  // The earliest a proposal can land is when its veto window closes, which is
+  // the check `RULES.md` §6 requires at proposal time.
+  const lands = new Date(
+    input.now.getTime() + stored.rules.trades.vetoWindowHours * 3600 * 1000,
+  );
+
   const blocked = tradeBlockedBecause({
     rules: stored.rules.trades,
-    week: input.week,
+    week: await executionWeek(db, stored.rules, lands),
     proposerTeamId: input.proposerTeamId,
     receiverTeamId: input.receiverTeamId,
     proposerGives: input.proposerGives,
@@ -567,8 +602,14 @@ export async function resolveDueTrades(
   // proposal check can only bound the earliest week it might land in, and a
   // trade left unaccepted for days slides past that. This is where it actually
   // holds, and it is the reason `EXPIRED` exists in the state enum.
-  const week = await currentWeek(db, stored.rules.sportKey, now);
-  const pastDeadline = week !== null && week > stored.rules.trades.deadlineWeek;
+  //
+  // Same derivation as the proposal check, same rule applied to it. The two used
+  // to be independent: this one asked `currentWeek` and the route asked it
+  // separately, so one rule had two implementations and both were wrong.
+  const pastDeadline = pastTradeDeadline(
+    await executionWeek(db, stored.rules, now),
+    stored.rules.trades,
+  );
 
   const out: TradeResolution[] = [];
 

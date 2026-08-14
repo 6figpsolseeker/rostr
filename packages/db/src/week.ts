@@ -69,8 +69,15 @@ export class WeekError extends Error {
  * **This exists so no route has to take a week from the client.** A deadline
  * checked against a client-supplied week is not a deadline — anyone could
  * trade in January by posting `week: 1`. Callers that legitimately display an
- * arbitrary week (a lineup for a past week, say) can still accept one; callers
- * enforcing a rule must use this.
+ * arbitrary week (a lineup for a past week, say) can still accept one.
+ *
+ * **But a caller enforcing a rule wants `transactionWeek`, not this.** This
+ * answers "which week am I scoring" and so keeps naming a week whose games have
+ * all been played, right up until the next week kicks off — which is the correct
+ * lag for the scoreboard and a three-day hole in any rule that binds on where a
+ * roster change lands. It is also not season-scoped: with a prior season's games
+ * ingested it answers "week 18" all summer. Both defects have been shipped and
+ * fixed once each, in the waiver lock and in the trade deadline.
  *
  * Returns `null` before the season's first kickoff, when there is no week yet.
  */

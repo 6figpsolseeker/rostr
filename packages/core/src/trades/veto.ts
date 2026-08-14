@@ -80,6 +80,33 @@ export function vetoWindowHasClosed(
 export type TradeBlock = "TRADES_DISABLED" | "PAST_DEADLINE" | "SAME_TEAM" | "NOTHING_OFFERED";
 
 /**
+ * Whether a trade landing in `executionWeek` is past the league's deadline.
+ *
+ * **One definition, because the rule is enforced twice.** `docs/RULES.md` §6
+ * requires both a proposal check — against the earliest week the trade could
+ * land in — and a resolution check, since a trade left unaccepted for days
+ * slides past the first. Two comparisons written separately are two chances to
+ * write it differently, and the deadline exists to stop an eliminated team
+ * handing its roster to a contender.
+ *
+ * **`null` is past every deadline, and that direction is deliberate.** The
+ * caller supplies the week a trade would execute in, derived from the schedule;
+ * `null` means it could not be determined — the season's games are exhausted,
+ * or no schedule is ingested for the league's season at all. Reading that as
+ * "not past the deadline" would open the trade window permanently the moment a
+ * season ended, which is precisely the January free-for-all the deadline exists
+ * to prevent. A rule that cannot be checked is not a rule that does not apply.
+ *
+ * The cost of the strict direction is that a league whose schedule has never
+ * been ingested cannot trade. That league cannot set a lineup either — every
+ * lock derives from `games.kickoff_at`, and `setLineup` already refuses without
+ * a schedule — so it is not operational in the first place.
+ */
+export function pastTradeDeadline(executionWeek: number | null, rules: TradeRules): boolean {
+  return executionWeek === null || executionWeek > rules.deadlineWeek;
+}
+
+/**
  * Whether a trade may be proposed at all.
  *
  * The deadline is checked against the week the trade would *execute*, not the
@@ -87,17 +114,20 @@ export type TradeBlock = "TRADES_DISABLED" | "PAST_DEADLINE" | "SAME_TEAM" | "NO
  * window to run, and a trade that executed after the deadline would be exactly
  * what the deadline exists to prevent: an eliminated team handing its roster to
  * a contender.
+ *
+ * `week` is that execution week, or `null` when the schedule cannot answer —
+ * see `pastTradeDeadline` for why that refuses rather than permits.
  */
 export function tradeBlockedBecause(input: {
   readonly rules: TradeRules;
-  readonly week: number;
+  readonly week: number | null;
   readonly proposerTeamId: string;
   readonly receiverTeamId: string;
   readonly proposerGives: readonly string[];
   readonly receiverGives: readonly string[];
 }): TradeBlock | null {
   if (!input.rules.enabled) return "TRADES_DISABLED";
-  if (input.week > input.rules.deadlineWeek) return "PAST_DEADLINE";
+  if (pastTradeDeadline(input.week, input.rules)) return "PAST_DEADLINE";
   if (input.proposerTeamId === input.receiverTeamId) return "SAME_TEAM";
 
   // A trade where one side gives nothing is a gift, and a gift is how an

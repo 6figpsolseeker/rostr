@@ -872,11 +872,29 @@ unaccepted for days slides past the first check. A window closing past the deadl
 **expires** the trade, rosters untouched. That is what `EXPIRED` in the `trade_state` enum
 is for; it was unused before.
 
+**Both checks derive that week themselves, from `transactionWeek`, and share one
+comparison.** They used to be two independent implementations of one rule — `proposeTrade`
+took a `week` field computed by the route, and `resolveDueTrades` asked `currentWeek` — and
+both were wrong the same way. `currentWeek` names the week of the most recent kickoff, so
+from a week's last game until the next week's first it keeps answering a week whose games
+are over: a trade resolving on the Tuesday or Wednesday after week 11 executed into week
+12's rosters while being checked against week 11. `pastTradeDeadline` in `@rostr/core` is
+now the only place the comparison happens.
+
+**An execution week of `null` is past every deadline.** `transactionWeek` cannot name one
+when the season's games are exhausted, and reading that as "not past the deadline" would
+open the trade window permanently the moment a season ended — the January free-for-all the
+deadline exists to prevent. The strict direction costs a league with no schedule ingested
+its trade window, and such a league cannot set a lineup either, so it is not operational.
+
 **`currentWeek()` in `week.ts` exists so no route takes a week from the client.** A
 deadline checked against a client-supplied week is not a deadline — anyone could trade in
 January by posting `week: 1`. Routes that legitimately display an arbitrary week (a past
-lineup) still accept one; routes enforcing a rule must not. `score-week` had this query
-inline and now shares it.
+lineup) still accept one; routes enforcing a rule must not — and a rule-enforcing caller
+wants `transactionWeek` rather than this one. `score-week` still carries its own copy of
+the same SQL (`apps/web/src/app/api/cron/score-week/route.ts:46-54`) rather than importing
+it; that is tolerable, because it wants exactly the lagging semantics, but it is a copy and
+not a shared call.
 
 **A veto is scoped to the trade's own league, at three layers.** `vetoTrade` refuses an
 outside voter (`NOT_IN_LEAGUE`); the tally in `loadTrade` counts only rows from teams that

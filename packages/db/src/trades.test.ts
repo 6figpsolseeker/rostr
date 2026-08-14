@@ -35,9 +35,50 @@ const DRAFT: DraftRules = {
 };
 
 const HOUR = 3600 * 1000;
+const DAY = 24 * HOUR;
 const MONDAY = new Date("2026-10-12T18:00:00Z");
 /** Past the 48-hour veto window, so an accepted trade is due to resolve. */
 const AFTER_WINDOW = new Date(MONDAY.getTime() + 49 * HOUR);
+
+/**
+ * The real 2026 season, so a week number means something.
+ *
+ * Week 1's Thursday is 10 September 2026, the opener following Labor Day, which
+ * puts week 11 on 19-23 November and matches the trade deadline in `CLAUDE.md`'s
+ * calendar. `MONDAY` above is week 5's Monday night on the same schedule.
+ *
+ * **Three kickoffs a week, and every week, because fewer of either cannot see
+ * the bug this fixture exists for.** The deadline used to be checked with
+ * `currentWeek`, which disagrees with `transactionWeek` only while the calendar
+ * holds a week whose games are finished *and* a following week whose games have
+ * not started. A single-week fixture makes that state unrepresentable, which is
+ * why the two deadline tests this replaces both passed under the bug.
+ *
+ * Kickoffs step a uniform seven days in UTC, so from November they read an hour
+ * earlier in local time than the NFL plays. Deliberate and harmless: the rules
+ * turn on which side of Tuesday 00:00 **Eastern** a game falls, and an hour does
+ * not move any of these across it. That boundary is computed by `nextWeekly`
+ * from the league's frozen rules, which is code under test rather than fixture.
+ */
+const WEEK1_THURSDAY = new Date("2026-09-11T00:15:00Z");
+/** Thursday night, Sunday afternoon, Monday night, as offsets from the Thursday. */
+const SLOTS = [0, 2 * DAY + 16 * HOUR + 45 * 60 * 1000, 4 * DAY];
+
+/**
+ * The week-11/12 boundary, which is where the default deadline lives.
+ *
+ * Week 11's last game kicks off Monday evening; the league starts transacting in
+ * week 12 at Tuesday 00:00 ET, hours later; week 12's first game is not until
+ * the Thursday. So for three days "the week whose games were played" and "the
+ * week a roster change lands in" are different numbers, and every assertion
+ * below turns on which one the deadline is measured against.
+ */
+const WEEK11_FRIDAY = new Date("2026-11-20T18:00:00Z");
+const WEEK11_SUNDAY = new Date("2026-11-22T18:00:00Z");
+/** Monday 23:00 ET, after week 11's last kickoff and before the Tuesday lock. */
+const BEFORE_WEEK12_LOCK = new Date("2026-11-24T04:00:00Z");
+/** Tuesday 01:00 ET, an hour past it and still three days from any week-12 game. */
+const AFTER_WEEK12_LOCK = new Date("2026-11-24T06:00:00Z");
 
 interface Fixture {
   client: PGliteClient;
@@ -114,34 +155,48 @@ async function setup(overrides?: Partial<LeagueRules>): Promise<Fixture> {
     [teams[0], spare!.id, new Date(MONDAY.getTime() - 30 * 24 * HOUR)],
   );
 
+  await seedSchedule(db, sport!.id);
+
   return { client: db, leagueId: league.id, rules, teams, players };
 }
 
 /**
- * Put a kickoff on the calendar, so `currentWeek` has something to answer with.
- * The week is read from the schedule rather than guessed from the date.
+ * The whole 2026 regular season, on the calendar above.
+ *
+ * Seeded for **every** fixture rather than per test. The deadline is derived
+ * from the schedule, so a league with no games is one in which the rule cannot
+ * be evaluated at all — and it now refuses when it cannot be evaluated. Tests
+ * about vetoes and freezes are not trying to say anything about that; they need
+ * a league that is simply in season.
  */
-async function kickoff(fx: Fixture, week: number, at: Date): Promise<void> {
-  const [sport] = await fx.client.query<{ id: string }>(
-    "SELECT id FROM sports WHERE key = $1",
-    [NFL.key],
-  );
-  await fx.client.query(
+async function seedSchedule(client: PGliteClient, sportId: string): Promise<void> {
+  const rows: string[] = [];
+  const values: unknown[] = [sportId];
+
+  for (let week = 1; week <= 18; week++) {
+    for (const [slot, offset] of SLOTS.entries()) {
+      const at = new Date(WEEK1_THURSDAY.getTime() + (week - 1) * 7 * DAY + offset);
+      values.push(`w${week}g${slot}`, week, at.toISOString());
+      const i = values.length;
+      rows.push(`($1, $${i - 2}, 2026, $${i - 1}, 'CIN', 'CLE', $${i})`);
+    }
+  }
+
+  await client.query(
     `INSERT INTO games (sport_id, external_ref, season, week, home_team_ref, away_team_ref, kickoff_at)
-     VALUES ($1, $2, 2026, $3, 'CIN', 'CLE', $4)`,
-    [sport!.id, `w${week}`, week, at.toISOString()],
+     VALUES ${rows.join(", ")}`,
+    values,
   );
 }
 
 /** The straightforward one-for-one: team 1's player for team 2's. */
-async function propose(fx: Fixture, week = 5, now = MONDAY): Promise<string> {
+async function propose(fx: Fixture, now = MONDAY): Promise<string> {
   const { tradeId } = await proposeTrade(fx.client, {
     leagueId: fx.leagueId,
     proposerTeamId: fx.teams[0]!,
     receiverTeamId: fx.teams[1]!,
     proposerGives: [fx.players.get("p1")!],
     receiverGives: [fx.players.get("p2")!],
-    week,
     now,
   });
   return tradeId;
@@ -181,7 +236,6 @@ describe("proposing", () => {
         proposerGives: [fx.players.get("p3")!],
         receiverTeamId: fx.teams[1]!,
         receiverGives: [fx.players.get("p2")!],
-        week: 5,
         now: MONDAY,
       }),
     ).rejects.toMatchObject({ code: "NOT_YOUR_PLAYER" });
@@ -197,31 +251,43 @@ describe("proposing", () => {
         proposerGives: [fx.players.get("p1")!],
         receiverTeamId: fx.teams[1]!,
         receiverGives: [fx.players.get("p3")!],
-        week: 5,
         now: MONDAY,
       }),
     ).rejects.toMatchObject({ code: "NOT_YOUR_PLAYER" });
   });
 
-  it("refuses after the deadline", async () => {
+  it("refuses one that would land after the deadline", async () => {
+    // The proposal check bounds the *earliest* week a trade could execute in, so
+    // it asks about `now` plus the veto window rather than about now. Proposed
+    // during week 11's Sunday games, a 48-hour window closes on the Tuesday, by
+    // which time the league is transacting in week 12.
     const fx = await setup();
 
-    await expect(propose(fx, fx.rules.trades.deadlineWeek + 1)).rejects.toMatchObject({
+    await expect(propose(fx, WEEK11_SUNDAY)).rejects.toMatchObject({
       code: "PAST_DEADLINE",
     });
   });
 
-  it("allows one in the deadline week itself", async () => {
+  it("allows one whose window still closes inside the deadline week", async () => {
+    // Two days earlier the same 48 hours close on week 11's Sunday. Nothing
+    // about the deadline week itself is refused — only landing past it.
     const fx = await setup();
-    await expect(propose(fx, fx.rules.trades.deadlineWeek)).resolves.toBeTypeOf("string");
+
+    await expect(propose(fx, WEEK11_FRIDAY)).resolves.toBeTypeOf("string");
   });
 
-  it("honours a commissioner-set deadline", async () => {
+  it("honours a commissioner-set deadline, across the DST change", async () => {
+    // Deadline 8 rather than the default 11, which also moves the boundary to
+    // the other side of 1 November. The week-8 lock is 04:00 UTC and the week-9
+    // lock is 05:00 UTC, because both are Tuesday 00:00 *Eastern* — a fixed
+    // offset would put one of these two assertions on the wrong side of it.
     const base = buildNflPprRules({ seasonYear: 2026, draft: DRAFT });
     const fx = await setup({ trades: { ...base.trades, deadlineWeek: 8 } });
 
-    await expect(propose(fx, 9)).rejects.toMatchObject({ code: "PAST_DEADLINE" });
-    await expect(propose(fx, 8)).resolves.toBeTypeOf("string");
+    await expect(propose(fx, new Date("2026-11-01T12:00:00Z"))).rejects.toMatchObject({
+      code: "PAST_DEADLINE",
+    });
+    await expect(propose(fx, new Date("2026-10-28T12:00:00Z"))).resolves.toBeTypeOf("string");
   });
 
   it("refuses when the league disabled trading", async () => {
@@ -254,7 +320,6 @@ describe("proposing", () => {
         proposerGives: [fx.players.get("p1")!],
         receiverTeamId: fx.teams[1]!,
         receiverGives: [fx.players.get("p4")!],
-        week: 5,
         now: MONDAY,
       }),
     ).rejects.toBeInstanceOf(TradeError);
@@ -375,7 +440,6 @@ describe("the freeze between acceptance and execution", () => {
         proposerGives: [fx.players.get("p1")!],
         receiverTeamId: fx.teams[2]!,
         receiverGives: [fx.players.get("p3")!],
-        week: 5,
         now: MONDAY,
       }),
     ).rejects.toMatchObject({ code: "PLAYER_IN_ANOTHER_TRADE" });
@@ -405,7 +469,6 @@ describe("no double-spend across trades", () => {
       receiverTeamId: fx.teams[1]!,
       proposerGives: [p1],
       receiverGives: [fx.players.get("p2")!],
-      week: 5,
       now: MONDAY,
     });
     const b = await proposeTrade(fx.client, {
@@ -414,7 +477,6 @@ describe("no double-spend across trades", () => {
       receiverTeamId: fx.teams[2]!,
       proposerGives: [p1],
       receiverGives: [fx.players.get("p3")!],
-      week: 5,
       now: MONDAY,
     });
 
@@ -456,7 +518,6 @@ describe("no double-spend across trades", () => {
       receiverTeamId: fx.teams[1]!,
       proposerGives: [p1],
       receiverGives: [fx.players.get("p2")!],
-      week: 5,
       now: MONDAY,
     });
     await acceptTrade(fx.client, trade.tradeId, fx.teams[1]!, MONDAY);
@@ -500,7 +561,6 @@ describe("no double-spend across trades", () => {
       receiverTeamId: fx.teams[1]!,
       proposerGives: [p1],
       receiverGives: [fx.players.get("p2")!],
-      week: 5,
       now: MONDAY,
     });
     const healthy = await proposeTrade(fx.client, {
@@ -509,7 +569,6 @@ describe("no double-spend across trades", () => {
       receiverTeamId: fx.teams[3]!,
       proposerGives: [p3],
       receiverGives: [fx.players.get("p4")!],
-      week: 5,
       now: MONDAY,
     });
 
@@ -537,7 +596,6 @@ describe("no double-spend across trades", () => {
       receiverTeamId: fx.teams[1]!,
       proposerGives: [p1],
       receiverGives: [fx.players.get("p2")!],
-      week: 5,
       now: MONDAY,
     });
 
@@ -901,17 +959,17 @@ describe("resolution", () => {
     expect(owners[0]?.team_id).toBe(fx.teams[1]);
   });
 
-  it("expires a trade whose window closed after the deadline", async () => {
-    // The deadline binds on the week a trade *executes*. Checking only at
-    // proposal bounds the earliest week it might land in — a trade proposed on
-    // the deadline and accepted days later slides past it, and this is where
-    // that is caught.
+  it("expires a trade whose window closes in the gap after the deadline week", async () => {
+    // **The bug this fixture exists for.** Week 11's games are all played, week
+    // 12's have not started, and the league has been transacting in week 12
+    // since Tuesday 00:00 ET. `currentWeek` still answers 11 here, because it
+    // names the most recent kickoff — so the deadline used to read as unpassed,
+    // and the swap landed in week 12's rosters days past a date members signed.
     const fx = await setup();
-    const tradeId = await propose(fx, fx.rules.trades.deadlineWeek);
-    await acceptTrade(fx.client, tradeId, fx.teams[1]!, MONDAY);
-    await kickoff(fx, fx.rules.trades.deadlineWeek + 1, new Date(MONDAY.getTime() + 40 * HOUR));
+    const tradeId = await propose(fx, WEEK11_FRIDAY);
+    await acceptTrade(fx.client, tradeId, fx.teams[1]!, WEEK11_FRIDAY);
 
-    const [resolution] = await resolveDueTrades(fx.client, fx.leagueId, AFTER);
+    const [resolution] = await resolveDueTrades(fx.client, fx.leagueId, AFTER_WEEK12_LOCK);
 
     expect(resolution?.outcome).toBe("EXPIRED");
 
@@ -922,15 +980,38 @@ describe("resolution", () => {
     expect(row?.team_id).toBe(fx.teams[0]);
   });
 
-  it("executes when the closing week is still inside the deadline", async () => {
+  it("executes one whose window closes before that week turns over", async () => {
+    // Two hours earlier and the answer flips. The rule turns on the Tuesday lock
+    // rather than on week 12's Thursday kickoff, so this pins where the boundary
+    // is and not merely that one exists.
     const fx = await setup();
-    const tradeId = await propose(fx, fx.rules.trades.deadlineWeek);
-    await acceptTrade(fx.client, tradeId, fx.teams[1]!, MONDAY);
-    await kickoff(fx, fx.rules.trades.deadlineWeek, new Date(MONDAY.getTime() - HOUR));
+    const tradeId = await propose(fx, WEEK11_FRIDAY);
+    await acceptTrade(fx.client, tradeId, fx.teams[1]!, WEEK11_FRIDAY);
 
-    const [resolution] = await resolveDueTrades(fx.client, fx.leagueId, AFTER);
+    const [resolution] = await resolveDueTrades(fx.client, fx.leagueId, BEFORE_WEEK12_LOCK);
 
     expect(resolution?.outcome).toBe("EXECUTED");
+  });
+
+  it("expires rather than executing once the season's games are exhausted", async () => {
+    // The regression the obvious version of this fix introduces, and the reason
+    // a null execution week refuses. After the season's last Tuesday lock the
+    // schedule cannot name a week at all, and the shape this replaced —
+    // `week !== null && week > deadlineWeek` — read that as "not past the
+    // deadline". A trade left accepted would then execute in January, which is
+    // the exact free-for-all the deadline exists to prevent. A rule that cannot
+    // be checked is not a rule that has lapsed.
+    const fx = await setup();
+    const tradeId = await propose(fx, WEEK11_FRIDAY);
+    await acceptTrade(fx.client, tradeId, fx.teams[1]!, WEEK11_FRIDAY);
+
+    const [resolution] = await resolveDueTrades(
+      fx.client,
+      fx.leagueId,
+      new Date("2027-01-20T12:00:00Z"),
+    );
+
+    expect(resolution?.outcome).toBe("EXPIRED");
   });
 
   it("executes an uneven trade", async () => {
@@ -944,7 +1025,6 @@ describe("resolution", () => {
       proposerGives: [fx.players.get("p1")!, fx.players.get("spare")!],
       receiverTeamId: fx.teams[1]!,
       receiverGives: [fx.players.get("p2")!],
-      week: 5,
       now: MONDAY,
     });
     await acceptTrade(fx.client, tradeId, fx.teams[1]!, MONDAY);
@@ -998,7 +1078,6 @@ describe("finding work", () => {
       proposerGives: [fx.players.get("p3")!],
       receiverTeamId: fx.teams[3]!,
       receiverGives: [fx.players.get("p4")!],
-      week: 5,
       now: MONDAY,
     });
     await acceptTrade(fx.client, second, fx.teams[3]!, MONDAY);
@@ -1020,7 +1099,6 @@ describe("listing", () => {
       proposerGives: [fx.players.get("p3")!],
       receiverTeamId: fx.teams[3]!,
       receiverGives: [fx.players.get("p4")!],
-      week: 5,
       now: MONDAY,
     });
     await declineTrade(fx.client, gone, fx.teams[3]!, MONDAY);
