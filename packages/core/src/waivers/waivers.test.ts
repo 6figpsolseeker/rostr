@@ -6,6 +6,7 @@ import type { DraftablePlayer } from "../draft/roster.js";
 import {
   availabilityAt,
   dropDestination,
+  everyoneIsOnWaivers,
   nextProcessingAt,
   nextWeeklyLockAt,
   waiverClearsAt,
@@ -27,6 +28,49 @@ const eastern = (date: Date): string =>
     month: "2-digit",
     day: "2-digit",
   }).format(date);
+
+describe("RULES.md §6 — every unrostered player returns to waivers on Tuesday", () => {
+  // Week 2 of 2026, EDT throughout. The cycle §6 describes:
+  //   Tue 00:00 -> Wed 03:00  waivers, claims only
+  //   Wed 03:00 -> Tue 00:00  free agency, first come first served
+  const TUE_LOCK = new Date("2026-09-15T04:00:00Z"); // Tue 00:00 EDT
+  const WED_RUN = new Date("2026-09-16T07:00:00Z"); // Wed 03:00 EDT
+
+  it("locks the pool from the Tuesday boundary", () => {
+    expect(everyoneIsOnWaivers(new Date(TUE_LOCK.getTime() - 1), RULES)).toBe(false);
+    expect(everyoneIsOnWaivers(TUE_LOCK, RULES)).toBe(true);
+  });
+
+  it("reopens it at the processing run, not after it", () => {
+    // Half-open, `[lock, run)`. The run itself must be outside the window:
+    // `processWaivers` executes *at* this instant, and its claims resolve
+    // against a pool that has already reopened — otherwise the run would be
+    // reasoning about a lock it is in the act of lifting.
+    expect(everyoneIsOnWaivers(new Date(WED_RUN.getTime() - 1), RULES)).toBe(true);
+    expect(everyoneIsOnWaivers(WED_RUN, RULES)).toBe(false);
+  });
+
+  it("leaves the rest of the week open", () => {
+    // Thursday, Sunday, and the Monday night that makes this rule matter: a
+    // breakout is claimed by priority on Wednesday, not taken by whoever is
+    // refreshing fastest on Sunday.
+    for (const instant of [
+      "2026-09-17T18:00:00Z",
+      "2026-09-20T20:00:00Z",
+      "2026-09-15T02:00:00Z",
+    ]) {
+      expect(everyoneIsOnWaivers(new Date(instant), RULES)).toBe(false);
+    }
+  });
+
+  it("follows the timezone rather than a fixed offset", () => {
+    // The lock is a weekday and a local hour, so it moves with the November DST
+    // change instead of sliding an hour through it. Tue 00:00 EST is 05:00Z.
+    const novLock = new Date("2026-11-17T05:00:00Z");
+    expect(everyoneIsOnWaivers(new Date(novLock.getTime() - 1), RULES)).toBe(false);
+    expect(everyoneIsOnWaivers(novLock, RULES)).toBe(true);
+  });
+});
 
 describe("processing schedule", () => {
   it("finds the next Wednesday 03:00 Eastern", () => {

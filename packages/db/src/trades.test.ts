@@ -570,7 +570,12 @@ describe("the freeze between acceptance and execution", () => {
    * and the freeze both refuse a drop, and a test that cannot tell which one
    * refused proves nothing about the freeze.
    */
-  const QUIET = new Date("2026-10-13T06:00:00Z");
+  // Wednesday 08:00 ET: after that week's processing run and before week 6's
+  // Thursday kickoff. **Both halves are load-bearing.** Before the run, §6's
+  // weekly lock puts every unrostered player on waivers, so an add is refused
+  // with `NOT_A_FREE_AGENT` and never reaches the freeze check these tests are
+  // about — which is exactly what the first version of this constant did.
+  const QUIET = new Date("2026-10-14T12:00:00Z");
 
   const holds = async (fx: Fixture, teamId: string, playerId: string): Promise<boolean> => {
     const rows = await fx.client.query(

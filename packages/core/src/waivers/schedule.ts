@@ -159,6 +159,57 @@ export function nextWeeklyLockAt(now: Date, rules: WaiverRules): Date {
   return nextWeekly(now, rules.weeklyLock, rules.timezone);
 }
 
+/**
+ * Whether every unrostered player is on waivers right now.
+ *
+ * `docs/RULES.md` §6's cycle table, which members sign:
+ *
+ * > | **Tuesday 00:00**               | Every unrostered player returns to waivers |
+ * > | **Wednesday 03:00**             | Claims process, blind, by priority         |
+ * > | Wednesday 03:00 → Tuesday 00:00 | Free agency, first come first served       |
+ * >
+ * > This is the substance of the system, not the drop rule below it. A backup
+ * > who breaks out on Sunday is claimed by priority on Wednesday morning — not
+ * > by whoever happens to be refreshing on Sunday night.
+ *
+ * That is ESPN's model, verified against their published rules: *"All players
+ * not on a fantasy roster reside on waivers following each week of play."* It is
+ * **not** Sleeper's, which holds only recently-dropped players and instead locks
+ * the pool during games — and Sleeper's is what this codebase actually
+ * implemented, because the only writers of `waiver_wire` are drop-driven. Two
+ * coherent designs got crossed and the members signed the other one.
+ *
+ * ## Derived, never stored
+ *
+ * The obvious reading of "returns to waivers" is a job that writes a wire row per
+ * unrostered player each Tuesday — thousands of rows per league per week, a
+ * clears-at for players who never landed anywhere, and a new failure mode every
+ * time it half-runs. None of that is needed. Availability is already computed
+ * rather than stored, and the weekly lock is a *default*: outside the window an
+ * unrostered player with no wire row is a free agent, inside it he is on waivers.
+ * One predicate, no writes, no migration, no job to fail.
+ *
+ * The window is half-open — `[lock, run)` — so the run itself is not inside it.
+ * That matters: `processWaivers` executes *at* the processing instant, and its
+ * claims must resolve against a pool that has already reopened, or the run would
+ * be reasoning about a lock it is in the act of lifting.
+ *
+ * A player serving his own waiver period is unaffected either way: his wire row
+ * answers first, and it outlives this window.
+ */
+export function everyoneIsOnWaivers(now: Date, rules: WaiverRules): boolean {
+  // `nextWeekly` is strictly-after, so asking it from a week earlier yields the
+  // most recent lock at or before `now` — the same trick `transactionWeek` uses
+  // to find the cycle it is in.
+  const lock = nextWeekly(
+    new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000),
+    rules.weeklyLock,
+    rules.timezone,
+  );
+
+  return now.getTime() < nextProcessingAt(lock, rules).getTime();
+}
+
 export type DropDestination = "WAIVERS" | "FREE_AGENT";
 
 /**

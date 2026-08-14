@@ -32,6 +32,7 @@
 
 import {
   availabilityAt,
+  everyoneIsOnWaivers,
   buildRosterShape,
   dropDestination,
   initialWaiverPriority,
@@ -151,7 +152,16 @@ export async function availabilityOf(
     "SELECT clears_at FROM waiver_wire WHERE league_id = $1 AND player_id = $2",
     [leagueId, playerId],
   );
-  if (!wire) return "FREE_AGENT";
+
+  // No wire row means free — **except inside the weekly lock**, when `RULES.md`
+  // §6 puts every unrostered player back on waivers. See `everyoneIsOnWaivers`
+  // for why that is a derived default rather than a job that writes a row per
+  // player. Without this the table members sign describes a cycle the code does
+  // not run, and a breakout is taken by whoever refreshes fastest on Sunday
+  // night rather than allocated by priority on Wednesday.
+  if (!wire) {
+    return everyoneIsOnWaivers(now, stored.rules.waivers) ? "ON_WAIVERS" : "FREE_AGENT";
+  }
 
   // `clears_at` was computed when he landed. Re-deriving from it keeps one
   // definition of "cleared" rather than comparing timestamps in two places.
@@ -172,6 +182,9 @@ export async function availablePlayers(
     clearsAt: Date | null;
   }[]
 > {
+  const stored = await getLeagueRules(db, leagueId);
+  if (!stored) throw new WaiverError("League has no rules", "LEAGUE_NOT_FOUND");
+
   const rows = await db.query<{
     id: string;
     full_name: string;
@@ -198,14 +211,21 @@ export async function availablePlayers(
     [leagueId],
   );
 
+  const locked = everyoneIsOnWaivers(now, stored.rules.waivers);
+
   return rows.map((row) => {
     const clearsAt = row.clears_at ? new Date(row.clears_at) : null;
     return {
       playerId: row.id,
       fullName: row.full_name,
       positions: row.positions,
+      // The exact complement of `availabilityOf`, including the weekly lock —
+      // the two must not be able to disagree, because this decides what the
+      // screen offers and that decides what the server accepts.
       availability:
-        clearsAt && clearsAt > now ? ("ON_WAIVERS" as const) : ("FREE_AGENT" as const),
+        (clearsAt && clearsAt > now) || locked
+          ? ("ON_WAIVERS" as const)
+          : ("FREE_AGENT" as const),
       clearsAt,
     };
   });
