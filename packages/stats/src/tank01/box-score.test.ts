@@ -202,6 +202,55 @@ describe("a blocked kick is credited to whoever blocked it", () => {
     expect(blkOf(translated.teamDefense.get("PHI"))).toBe(1);
     expect(blkOf(translated.teamDefense.get("DAL"))).toBe(0);
   });
+
+  /**
+   * The two shapes compose, and that is what the first fix missed.
+   *
+   * A return touchdown whose *own* extra point is blocked contains both — a
+   * return in the body and a block in the parenthetical — so deciding on the
+   * word "return" anywhere in the text credits the block to the team that got
+   * blocked. That is the identical four-point swing, surviving in the one case
+   * where both forms appear at once.
+   *
+   * All three below score for PHI and have PHI's kick blocked by DAL, so a rule
+   * that reads the body gets every one of them backwards.
+   */
+  it.each([
+    ["a punt return", "Jahan Dotson 70 Yd punt return (Jake Elliott PAT blocked)"],
+    [
+      "an interception return",
+      "Cooper DeJean 25 Yd interception return (Jake Elliott PAT blocked)",
+    ],
+    ["a fumble recovery", "Zack Baun 12 Yd fumble recovery (Jake Elliott PAT blocked)"],
+  ])("credits the opponent when %s has its own extra point blocked", (_label, score) => {
+    const translated = translateBoxScore({
+      gameID: "g",
+      playerStats: {},
+      DST: dst("PHI", "DAL"),
+      // PHI scored, so `team` is PHI — but the block in the parenthetical is
+      // DAL's, because a parenthetical annotates the conversion on somebody
+      // else's score.
+      scoringPlays: [{ score, team: "PHI" }],
+    });
+
+    expect(blkOf(translated.teamDefense.get("DAL"))).toBe(1);
+    expect(blkOf(translated.teamDefense.get("PHI"))).toBe(0);
+  });
+
+  it("credits the returning team when a blocked kick is returned and the extra point stands", () => {
+    // The control for the case above: same return shape, no second block. If the
+    // parenthetical rule ever regressed to "any mention of a block", this would
+    // start crediting DAL.
+    const translated = translateBoxScore({
+      gameID: "g",
+      playerStats: {},
+      DST: dst("PHI", "DAL"),
+      scoringPlays: [{ score: "Jordan Davis 61 Yd Return of Blocked Field Goal", team: "PHI" }],
+    });
+
+    expect(blkOf(translated.teamDefense.get("PHI"))).toBe(1);
+    expect(blkOf(translated.teamDefense.get("DAL"))).toBe(0);
+  });
 });
 
 describe("a defense that cannot be read says so", () => {
