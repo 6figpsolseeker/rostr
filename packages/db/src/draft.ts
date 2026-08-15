@@ -46,6 +46,7 @@ import {
 import { deriveOrderSeed } from "@rostr/core";
 import type { DraftablePlayer, DraftPick, DraftState, RosterShape } from "@rostr/core";
 import type { SqlClient } from "./client.js";
+import { getLeagueRules } from "./leagues.js";
 import { isUniqueViolation } from "./pg-errors.js";
 import type { RandomnessBeacon } from "./randomness.js";
 import { withTransaction } from "./transaction.js";
@@ -63,6 +64,7 @@ export class DraftPersistenceError extends Error {
       | "ORDER_NOT_DRAWN"
       | "ORDER_ALREADY_DRAWN"
       | "TOO_EARLY_TO_DRAW"
+      | "BELOW_MIN_HUMANS"
       | "RULES_MISSING"
       | "NOT_IN_PROGRESS"
       | "ALREADY_STARTED"
@@ -196,6 +198,31 @@ export interface DrawOrderInput {
  * Being able to *check* the draw matters as much as making it. Everything a
  * sceptic needs is recorded; `explainOrderDraw` in `@rostr/core` prints the
  * instructions.
+ *
+ * ## And it refuses a field too small to play
+ *
+ * `docs/RULES.md` §3 says "minimum humans to start: 2", and `minHumans` sits in
+ * the frozen rule set every member signs. Nothing compared it to the roster,
+ * which mattered because of what happens *after* a short draft rather than
+ * during one: the draft completes normally, and `generateSeasonSchedule`
+ * declines to write fixtures below two teams, so the league reaches `IN_SEASON`
+ * holding drafted rosters and no games.
+ *
+ * **That state is terminal.** `createDraftRecord` refuses a redraft, the draw is
+ * write-once by trigger, the field is locked by migration `0028`, and the only
+ * moment that writes a schedule — the completing pick — has already passed and
+ * cannot recur. It is also silent: the league looks finished. Every other
+ * failure on this path is something an operator can undo.
+ *
+ * So the draw is where it is caught, because it is the last moment before any of
+ * that is written. It is deliberately *not* also checked in `startDraft`: the
+ * order exists by then, and refusing there would strand a league holding an
+ * order it may never use.
+ *
+ * This refuses the draw; it does not dissolve the league. `RULES.md` §10
+ * promises auto-dissolve with refunds for a league that never reaches two
+ * humans, and nothing implements that yet (#137). A stake is still returned by
+ * the unconditional timelock refund, which no part of this touches.
  */
 export async function drawDraftOrder(
   db: SqlClient,
@@ -223,6 +250,11 @@ export async function drawDraftOrder(
     );
   }
 
+  // Read outside the transaction, like `addBot` does: `league_rules` is
+  // immutable by trigger, so there is nothing to hold a lock against.
+  const stored = await getLeagueRules(db, input.leagueId);
+  if (!stored) throw new DraftPersistenceError("League has no rules", "RULES_MISSING");
+
   // Fetched outside the transaction: an RPC round trip should not hold a lock,
   // and the block is immutable once produced, so nothing changes underneath.
   const block = await input.beacon.firstBlockAtOrAfter(scheduledAt);
@@ -246,12 +278,38 @@ export async function drawDraftOrder(
     // Ordered by join slot so the input to the shuffle is deterministic. Without
     // it the order would depend on how Postgres happened to return the rows, and
     // a seed anyone can check would produce an order nobody can reproduce.
-    const teams = await tx.query<{ id: string }>(
-      "SELECT id FROM teams WHERE league_id = $1 ORDER BY slot",
+    // `is_bot` comes back with the rows rather than as a second aggregate query,
+    // because this result *is* the shuffle input — an aggregate is a different
+    // row shape, and filtering the query itself would drop the bot out of the
+    // draft order entirely and shorten the rotation.
+    const teams = await tx.query<{ id: string; is_bot: boolean }>(
+      "SELECT id, is_bot FROM teams WHERE league_id = $1 ORDER BY slot",
       [input.leagueId],
     );
     if (teams.length === 0) {
       throw new DraftPersistenceError("League has no teams to draft", "NO_TEAMS");
+    }
+
+    // After `NO_TEAMS`, so an empty league still answers the more specific fact —
+    // the same ordering `removeBot` keeps for `DRAFT_ALREADY_DRAWN`.
+    //
+    // **Humans, not rows.** A bot is a placeholder for a person who is missing
+    // from an otherwise playable league — `RULES.md` §3's five friends who do not
+    // want a stranger — and it cannot be paid, so it can never satisfy a rule
+    // denominated in humans. Counting rows would wave through a free league of
+    // one human and one bot, which is reachable today.
+    //
+    // **`<`, never `<=`.** `validateLeagueRules` permits `maxTeams == minHumans`,
+    // so a league created with two of each is legal; `<=` would make it
+    // undraftable forever, and the rules are frozen so nobody could correct it.
+    const humans = teams.filter((team) => !team.is_bot).length;
+    if (humans < stored.rules.league.minHumans) {
+      throw new DraftPersistenceError(
+        `This league has ${humans} manager${humans === 1 ? "" : "s"} and its rules ` +
+          `require ${stored.rules.league.minHumans} to start. A bot cannot fill the ` +
+          `gap: it is a placeholder for a person, not a person.`,
+        "BELOW_MIN_HUMANS",
+      );
     }
 
     const seed = deriveOrderSeed({

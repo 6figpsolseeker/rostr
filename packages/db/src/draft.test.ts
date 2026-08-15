@@ -12,6 +12,7 @@ import type { DraftablePlayer, DraftRules, LeagueRules } from "@rostr/core";
 import { createLeague } from "./leagues.js";
 import { createUser } from "./identity.js";
 import { seedSport } from "./sports.js";
+import { addBot } from "./membership.js";
 import { addTestTeam, createTestDatabase } from "./testing.js";
 import type { PGliteClient } from "./testing.js";
 import { FixedBeacon } from "./randomness.js";
@@ -1352,5 +1353,101 @@ describe("queues", () => {
 
     expect(queues.get(fx.teamIds[0]!)).toEqual(ids.slice(0, 3));
     expect(queues.get(fx.teamIds[1]!)).toEqual(ids.slice(3, 5));
+  });
+});
+
+// ---------------------------------------------------------------------------
+
+/**
+ * `minHumans` is in the frozen rule set and the draw is where it binds.
+ *
+ * `docs/RULES.md` §3 — "minimum humans to start: 2" — was signed by every member
+ * and compared to nothing. What made that worth a guard is not the draft itself,
+ * which completes fine: it is that a short league then reaches `IN_SEASON` with
+ * no fixtures and **cannot be recovered**. There is no redraft, the draw is
+ * write-once by trigger, the field is locked, and the one moment that writes a
+ * schedule has passed.
+ *
+ * The boundary is exercised in both directions here: one human refused, two
+ * allowed. Note also `setup(2)` in the suites above — those drafts run against
+ * the default `minHumans: 2`, so they are a standing detector for anyone who
+ * writes `<=` where the guard needs `<`.
+ */
+describe("the draw refuses a field below minHumans", () => {
+  it("refuses a single-manager league", async () => {
+    const fx = await setup(1);
+    await createDraftRecord(fx.client, scheduleArgs(fx.leagueId));
+
+    await expect(
+      drawDraftOrder(fx.client, { leagueId: fx.leagueId, beacon: BEACON, now: DRAW_TIME }),
+    ).rejects.toMatchObject({ code: "BELOW_MIN_HUMANS" });
+  });
+
+  it("says how many it has and how many it needs", async () => {
+    // The commissioner is the only person who ever sees this string, and it is
+    // the only thing telling them what to do about it.
+    const fx = await setup(1);
+    await createDraftRecord(fx.client, scheduleArgs(fx.leagueId));
+
+    await expect(
+      drawDraftOrder(fx.client, { leagueId: fx.leagueId, beacon: BEACON, now: DRAW_TIME }),
+    ).rejects.toThrow(/1 manager and its rules require 2/);
+  });
+
+  it("still answers NO_TEAMS for an empty league", async () => {
+    // Zero teams is the more specific fact and keeps its own code, which is why
+    // the human count is checked after it rather than before.
+    const fx = await setup(0);
+    await createDraftRecord(fx.client, scheduleArgs(fx.leagueId));
+
+    await expect(
+      drawDraftOrder(fx.client, { leagueId: fx.leagueId, beacon: BEACON, now: DRAW_TIME }),
+    ).rejects.toMatchObject({ code: "NO_TEAMS" });
+  });
+
+  it("counts humans, not rows: one manager and a bot is still one manager", async () => {
+    // Reachable today — `addBot` permits a bot at an odd human count, and one is
+    // odd. A bot is a placeholder for a person who is missing from an otherwise
+    // playable league (`RULES.md` §3), and it cannot be paid, so it can never
+    // satisfy a minimum denominated in humans. A `count(*)` here would pass this
+    // league straight through.
+    const fx = await setup(1);
+    await addBot(fx.client, fx.leagueId, "Sub");
+    await createDraftRecord(fx.client, scheduleArgs(fx.leagueId));
+
+    await expect(
+      drawDraftOrder(fx.client, { leagueId: fx.leagueId, beacon: BEACON, now: DRAW_TIME }),
+    ).rejects.toMatchObject({ code: "BELOW_MIN_HUMANS" });
+  });
+
+  it("allows exactly minHumans, and the bot still joins the order", async () => {
+    // `validateLeagueRules` permits `maxTeams == minHumans`, so a league of
+    // exactly two is legal and must remain draftable — `<=` here would brick it
+    // permanently, against frozen rules nobody could correct.
+    //
+    // The bot is refused a seat in the *count* and keeps its seat in the *draft*:
+    // filtering the query rather than the count would shorten the rotation.
+    const fx = await setup(3);
+    await addBot(fx.client, fx.leagueId, "Sub");
+
+    const order = await scheduled(fx);
+
+    expect(order).toHaveLength(4);
+    expect(new Set(order).size).toBe(4);
+  });
+
+  it("lets a two-manager league draw", async () => {
+    // The control, in its cheap form. Without something like it the guard could
+    // be refusing every league and every test above would still pass.
+    //
+    // The expensive half already exists: "starts the season when the draft
+    // completes" drafts a two-team league to completion and asserts fourteen
+    // fixtures. It runs through this same guard, so it is a standing control
+    // that a short-field refusal has not swallowed a legal one.
+    const fx = await setup(2);
+
+    const order = await scheduled(fx);
+
+    expect(order).toHaveLength(2);
   });
 });

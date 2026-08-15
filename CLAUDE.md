@@ -321,12 +321,22 @@ tests, and every docstring the change falsified rewritten in the same commit:
 
 **Read these three before picking anything up:**
 
-- **#136 is live on `main` and it bites the draft.** A one-team league draws, starts, and then
-  hangs **permanently** — the final pick calls `generateSeasonSchedule`, which throws below two
-  teams _inside the pick's own transaction_, so it rolls back forever, and `ScheduleError` is not
-  `DraftContextError` so the draft room 500s on every poll. `minHumans` is in the signed rules and
-  read by nothing. #135 removed the "wait for a second member" escape, so this is now the first
-  thing to fix on the draft path, and Aug 22 is the draft deadline.
+- **#136 — fixed, and the mechanism this file gave for it was wrong.** It said a one-team league
+  hangs permanently because the final pick's `generateSeasonSchedule` throws inside the pick's own
+  transaction and the room then 500s on every poll. **It does not.** `generateSeasonSchedule`
+  guards `if (teams.length < 2) return { written: 0 }` (`packages/db/src/week.ts`) _before_ calling
+  `generateSchedule`, and that is the only non-test call site of the generator — so no
+  `ScheduleError` ever reaches the transaction, the pick commits, and nothing 500s. The guard has
+  been there since the function was written. Two agents refuted this independently; it was believed
+  because `draft.ts` and `schedule.ts` were read without opening the function in between.
+
+  What was real: `minHumans` sat in the signed rules and was compared to nothing, so a short
+  league drafted to completion and reached `IN_SEASON` **with no fixtures** — and that state is
+  terminal, because there is no redraft, the draw is write-once by trigger, the field is locked by
+  `0028`, and the only moment that writes a schedule has passed. `drawDraftOrder` now refuses below
+  `minHumans`, counting humans rather than rows. It was never an Aug 22 blocker; the draft path
+  worked throughout.
+
 - **#75/#96 is the Sep 9 blocker.** `syncBoxScores` exists and no cron runs it, so `stat_lines`
   is empty and **every player scores zero**. #81's adapter defects are latent _only_ because
   nothing calls `getBoxScore` — land #81 first or in the same pass, or they go live together.
