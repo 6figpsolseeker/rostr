@@ -69,8 +69,17 @@ export function deriveOrderSeed(input: OrderSeedInput): string {
 /**
  * Instructions for checking a draft order by hand.
  *
- * Rendered in the UI next to the order. A verification nobody can perform is
- * indistinguishable from no verification.
+ * **Not rendered anywhere yet**, and this used to say it was. A verification
+ * nobody can perform is indistinguishable from no verification — which was
+ * written here as the reason to show it, and had become an accurate description
+ * of the shipped state instead. It is written, tested and exported, and no
+ * screen calls it. Filed separately; the sentence stays because it is the
+ * argument for fixing that.
+ *
+ * The text below is true as of migration `0028`. Before it, the closing claim —
+ * that nobody could have known the blockhash while teams were still joining —
+ * was false: the seed existed from the scheduled draft time and the field stayed
+ * open until the commissioner pressed the button.
  */
 export function explainOrderDraw(input: OrderSeedInput): string {
   return [

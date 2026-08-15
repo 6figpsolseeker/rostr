@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import {
   buildNflPprRules,
   CanonicalEncodingError,
+  draftDateProblem,
   NFL,
   NFL_DEFAULT_FEE_BPS,
   NFL_DEFAULT_PAYOUT,
@@ -190,6 +191,16 @@ export async function POST(request: Request): Promise<NextResponse> {
       { error: `Unknown payout shape: ${String(body.pot.payout)}` },
       { status: 400 },
     );
+  }
+
+  // The draft time is when the field locks, so a league created to draft in the
+  // past would refuse its own first join — the commissioner's included — and
+  // rules are immutable, so it could never be corrected, only recreated under a
+  // new id. `validateLeagueRules` cannot check this: it must stay a pure function
+  // of the frozen document so a league can be re-validated years later.
+  const draftProblem = draftDateProblem(body.draftAt, new Date());
+  if (draftProblem) {
+    return NextResponse.json({ error: draftProblem }, { status: 400 });
   }
 
   const pot: PotRules | null = body.pot

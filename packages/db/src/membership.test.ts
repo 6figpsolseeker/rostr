@@ -9,10 +9,11 @@ import {
   NFL_DEFAULT_PAYOUT,
 } from "@rostr/core";
 import type { DraftRules, LeagueRules, PotRules } from "@rostr/core";
-import { createLeague, recordChainAnchor } from "./leagues.js";
+import { createLeague, getLeagueRules, recordChainAnchor } from "./leagues.js";
 import { createUser, linkWallet } from "./identity.js";
 import {
   addBot,
+  getJoinMessage,
   getMembershipProofs,
   getOnChainDeposit,
   getOnChainJoin,
@@ -38,18 +39,32 @@ afterEach(async () => {
   db = undefined;
 });
 
+/**
+ * Thirty days out, relative rather than a literal date.
+ *
+ * The field locks at the scheduled draft time (migration `0028`), compared
+ * against the database clock — so a fixed date would pass until it arrived and
+ * then start failing every test here that adds a team. `0028` also requires
+ * `drafts.scheduled_at` to equal this exact number.
+ */
+const SCHEDULED = new Date(Math.floor(Date.now() / 1000) * 1000 + 30 * 24 * 3600 * 1000);
+const SCHEDULED_SECONDS = Math.floor(SCHEDULED.getTime() / 1000);
+
 const DRAFT: DraftRules = {
   type: "SNAKE",
   mode: "SLOW",
   pickSeconds: 14_400,
-  scheduledAt: 1_756_400_000,
+  scheduledAt: SCHEDULED_SECONDS,
 };
 
 const POT: PotRules = {
   tokenMint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
   buyInBaseUnits: "50000000",
   payout: NFL_DEFAULT_PAYOUT,
-  refundUnlockAt: 1_773_000_000,
+  // Derived, because the floor is derived. `earliestRefundUnlock` is roughly the
+  // draft plus 186 days, so a literal here silently became "376 days too early"
+  // the moment the draft date started moving with the clock.
+  refundUnlockAt: SCHEDULED_SECONDS + 200 * 24 * 3600,
   feeBps: NFL_DEFAULT_FEE_BPS,
   feeRecipient: "6dNUCTMTgoHhbfgDzKtiPvBpJ2LzMwGqBpKmUDgQtNMK",
 };
@@ -122,6 +137,233 @@ function signJoin(fx: Fixture, address: string, secret: Uint8Array): string {
   });
   return bs58.encode(ed25519.sign(new TextEncoder().encode(message), secret));
 }
+
+describe("the field locks when the seed exists", () => {
+  /**
+   * A free league whose scheduled draft time is already behind us.
+   *
+   * The rules carry the same past instant the `drafts` row does — `0028` requires
+   * that — and nothing refuses a past draft date at *this* layer: the create
+   * route does, through `draftDateProblem`, because `validateLeagueRules` has to
+   * stay a pure function of the frozen document.
+   */
+  async function draftTimePassed(minutesAgo = 5): Promise<Fixture> {
+    db = await createTestDatabase();
+    await seedSport(db, NFL);
+
+    // Truncated to whole seconds: the rules store `scheduledAt` in seconds, and
+    // `0028` compares the two exactly. The production route builds the date as
+    // `scheduledAt * 1000`, so it is exact there by construction.
+    const scheduled = new Date(Math.floor((Date.now() - minutesAgo * 60_000) / 1000) * 1000);
+    const commissioner = await createUser(db, "commish@example.com", "Commish");
+    const rules = buildNflPprRules({
+      seasonYear: 2026,
+      draft: { ...DRAFT, scheduledAt: Math.floor(scheduled.getTime() / 1000) },
+    }) as LeagueRules;
+
+    const league = await createLeague(db, NFL, {
+      name: "Late League",
+      commissionerId: commissioner.id,
+      rules,
+    });
+    await recordChainAnchor(db, league.id, {
+      signature: "5".repeat(88),
+      cluster: "localnet",
+    });
+
+    // The team is seated *before* the draft row exists, which is the only order
+    // that still works — and is how a real league fills.
+    await addTestTeam(db, league.id, "Early Bird");
+
+    await createDraftRecord(db, {
+      leagueId: league.id,
+      rounds: 14,
+      pickSeconds: 14_400,
+      scheduledAt: scheduled,
+    });
+
+    const stored = await getLeagueRules(db, league.id);
+    return {
+      client: db,
+      leagueId: league.id,
+      leagueName: "Late League",
+      rulesHash: stored!.hash,
+      rules: stored!.rules,
+    };
+  }
+
+  it("refuses a join once the scheduled draft time has passed", async () => {
+    const fx = await draftTimePassed();
+    const m = await member(fx, 9, "late@example.com");
+
+    await expect(
+      joinLeague(fx.client, {
+        leagueId: fx.leagueId,
+        userId: m.userId,
+        walletAddress: m.address,
+        signature: signJoin(fx, m.address, m.secret),
+        teamName: "Too Late",
+      }),
+    ).rejects.toSatisfy((e: unknown) => e instanceof JoinError && e.code === "FIELD_LOCKED");
+  });
+
+  it("refuses to hand out a join message it would then refuse to honour", async () => {
+    // A signature costs a wallet approval. Issuing one for a seat that cannot be
+    // taken is worse than saying no.
+    const fx = await draftTimePassed();
+
+    await expect(getJoinMessage(fx.client, fx.leagueId, keypair(9).address)).rejects.toSatisfy(
+      (e: unknown) => e instanceof JoinError && e.code === "FIELD_LOCKED",
+    );
+  });
+
+  it("refuses a team insert at the database, with no application check involved", async () => {
+    // **This is the test that pins the security property.** Everything else
+    // pins the error message. The application checks are a courtesy; the trigger
+    // is the guarantee, and it holds for any path that reaches the table.
+    const fx = await draftTimePassed();
+    const [user] = await fx.client.query<{ id: string }>(
+      "INSERT INTO users (email, display_name) VALUES ('raw@example.test', 'Raw') RETURNING id",
+    );
+
+    await expect(
+      fx.client.query(
+        `INSERT INTO teams (league_id, owner_id, is_bot, name, slot)
+         VALUES ($1, $2, false, 'Raw', 99)`,
+        [fx.leagueId, user!.id],
+      ),
+    ).rejects.toThrow(/field locked/i);
+  });
+
+  it("refuses a team delete at the database too", async () => {
+    // Removing a team changes the field exactly as adding one does, and
+    // delete-then-add is an unbounded re-roll rather than a single blind draw.
+    // `0010` guarded INSERT only.
+    const fx = await draftTimePassed();
+    const [team] = await fx.client.query<{ id: string }>(
+      "SELECT id FROM teams WHERE league_id = $1",
+      [fx.leagueId],
+    );
+
+    await expect(
+      fx.client.query("DELETE FROM teams WHERE id = $1", [team!.id]),
+    ).rejects.toThrow(/field locked/i);
+  });
+
+  it("still accepts a join before the scheduled time", async () => {
+    // The negative control. Without it, a trigger that refused every insert
+    // would pass every test above.
+    const fx = await setup();
+    const m = await member(fx, 8, "early@example.com");
+
+    const result = await joinLeague(fx.client, {
+      leagueId: fx.leagueId,
+      userId: m.userId,
+      walletAddress: m.address,
+      signature: signJoin(fx, m.address, m.secret),
+      teamName: "In Time",
+    });
+
+    expect(result.slot).toBe(1);
+  });
+
+  it("accepts a join into a league that has not scheduled a draft yet", async () => {
+    // `createLeague` and `createDraftRecord` are separate transactions, so a
+    // league with no `drafts` row is the ordinary state between them — not a
+    // locked field.
+    db = await createTestDatabase();
+    await seedSport(db, NFL);
+    const commissioner = await createUser(db, "c2@example.com", "Commish");
+    const rules = buildNflPprRules({ seasonYear: 2026, draft: DRAFT }) as LeagueRules;
+    const league = await createLeague(db, NFL, {
+      name: "Unscheduled",
+      commissionerId: commissioner.id,
+      rules,
+    });
+
+    await expect(addTestTeam(db, league.id, "Anybody")).resolves.toBeTruthy();
+  });
+
+  it("refuses removeBot once the scheduled time has passed", async () => {
+    // The residual grind, and the direction that matters most: shrinking the
+    // field and re-adding is a repeatable re-roll.
+    db = await createTestDatabase();
+    await seedSport(db, NFL);
+
+    const scheduled = new Date(Math.floor((Date.now() - 5 * 60_000) / 1000) * 1000);
+    const commissioner = await createUser(db, "c3@example.com", "Commish");
+    const rules = buildNflPprRules({
+      seasonYear: 2026,
+      draft: { ...DRAFT, scheduledAt: Math.floor(scheduled.getTime() / 1000) },
+    }) as LeagueRules;
+    const league = await createLeague(db, NFL, {
+      name: "Bot League",
+      commissionerId: commissioner.id,
+      rules,
+    });
+    await addTestTeam(db, league.id, "Human 1");
+    await addBot(db, league.id, "Robo");
+
+    await createDraftRecord(db, {
+      leagueId: league.id,
+      rounds: 14,
+      pickSeconds: 14_400,
+      scheduledAt: scheduled,
+    });
+
+    await expect(removeBot(db, league.id)).rejects.toSatisfy(
+      (e: unknown) => e instanceof JoinError && e.code === "FIELD_LOCKED",
+    );
+  });
+
+  it("refuses addBot once the scheduled time has passed", async () => {
+    const fx = await draftTimePassed();
+
+    await expect(addBot(fx.client, fx.leagueId, "Robo")).rejects.toSatisfy(
+      (e: unknown) => e instanceof JoinError && e.code === "FIELD_LOCKED",
+    );
+  });
+
+  it("refuses a drafts row whose time disagrees with the frozen rules", async () => {
+    // The lock instant has to be the number members signed. These two were a
+    // year apart in this repo's own fixtures, and nothing noticed.
+    db = await createTestDatabase();
+    await seedSport(db, NFL);
+    const commissioner = await createUser(db, "c4@example.com", "Commish");
+    const rules = buildNflPprRules({ seasonYear: 2026, draft: DRAFT }) as LeagueRules;
+    const league = await createLeague(db, NFL, {
+      name: "Mismatched",
+      commissionerId: commissioner.id,
+      rules,
+    });
+
+    await expect(
+      createDraftRecord(db, {
+        leagueId: league.id,
+        rounds: 14,
+        pickSeconds: 14_400,
+        scheduledAt: new Date(SCHEDULED.getTime() + 86_400_000),
+      }),
+    ).rejects.toThrow(/frozen rules/i);
+  });
+
+  it("refuses to move a scheduled draft time", async () => {
+    const fx = await setup();
+    await createDraftRecord(fx.client, {
+      leagueId: fx.leagueId,
+      rounds: 14,
+      pickSeconds: 14_400,
+      scheduledAt: SCHEDULED,
+    });
+
+    await expect(
+      fx.client.query("UPDATE drafts SET scheduled_at = $2 WHERE league_id = $1", [
+        fx.leagueId,
+        new Date(SCHEDULED.getTime() + 3_600_000),
+      ]),
+    ).rejects.toThrow(/cannot be moved/i);
+  });
+});
 
 describe("joinLeague", () => {
   it("joins with a valid signature and takes slot 1", async () => {
@@ -530,7 +772,7 @@ describe("bots", () => {
         leagueId: fx.leagueId,
         rounds: 14,
         pickSeconds: 90,
-        scheduledAt: new Date("2026-08-22T18:00:00Z"),
+        scheduledAt: SCHEDULED,
       });
       await drawDraftOrder(fx.client, {
         leagueId: fx.leagueId,
@@ -538,10 +780,10 @@ describe("bots", () => {
           {
             slot: 1,
             blockhash: "5xot9PVkphiX2adznghwrAuxGs2zeWisNSxMW6hU6Hkj",
-            blockTime: Math.floor(new Date("2026-08-22T18:00:01Z").getTime() / 1000),
+            blockTime: SCHEDULED_SECONDS + 1,
           },
         ]),
-        now: new Date("2026-08-22T18:00:05Z"),
+        now: new Date(SCHEDULED.getTime() + 5_000),
       });
 
       await expect(removeBot(fx.client, fx.leagueId)).rejects.toSatisfy(

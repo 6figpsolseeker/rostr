@@ -392,7 +392,36 @@ Four things close it, and removing any one reopens it:
    is no "try again a few slots later". `SolanaBeacon.verify` is what proves a recorded
    slot really is that one, in two RPC calls.
 3. A trigger rejects any second write to the draw or to any team's `draft_position`.
-4. A trigger locks the field: no team may join once the order is drawn.
+4. A trigger locks the field **at `scheduledAt`** — the instant the seed becomes
+   computable — on INSERT _and_ DELETE (migration `0028`).
+
+**Item 4 said "once the order is drawn" until 2026-08-14, and that was the wrong event.**
+The seed is the first block at or after `scheduledAt` mixed with the league id and the
+rules hash, all public and frozen, so anyone can compute it the moment that time passes —
+while the draw is a button the commissioner presses, with no upper bound, and `joinLeague`
+only checks the league is still FORMING. `0010`'s own header describes the right condition
+("after the seed is known") and gated on the other one. So there was a window of arbitrary
+length in which the seed was public and the field could still change.
+
+**And it is not the attack every comment here described.** Re-minting a bot with a fresh
+UUID does nothing: `generateDraftOrder` shuffles _positions_ and `seededIndex` takes no
+team id. Two things were measured rather than argued. For a team already holding a slot
+the grind is **one-directional** — growing the field only ever moves it to the last pick
+(12,268 changes over 3,000 seeds, zero improvements), so an honest commissioner and a
+grinding one both draw immediately. The real lever is that **`createLeague` seats nobody**,
+so a commissioner joins like anyone else and can choose _when_: inserting themselves last,
+after the seed is public, gives a mean pick of **1.64** against a fair 6.50, and pick 1
+fifty-seven percent of the time. That is what `0028` closes.
+
+`drafts.scheduled_at` is now the lock instant, so `0028` also makes it write-once and
+checks it against `league_rules.rule_json` — the lock has to be the number members signed,
+not a copy that happens to agree. They already disagreed by a year in the draft fixtures.
+
+**The cost, stated rather than discovered later:** a league that has not filled by its
+draft time can no longer add anyone. Two to eleven teams still draft and play; the one new
+dead end is a **one-member pot league**, which can never reach two and has no dissolve
+path. `docs/RULES.md` already promises auto-dissolve with refunds for exactly that case and
+nothing implements it — the program has five instructions and none is a dissolve.
 
 `SolanaBeacon.firstBlockAtOrAfter` is a binary search over block times, tolerating
 skipped slots. Roughly twenty RPC calls; a linear walk would be millions. **Verification

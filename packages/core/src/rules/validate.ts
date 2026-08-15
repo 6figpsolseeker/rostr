@@ -407,6 +407,53 @@ function validateTrades(rules: LeagueRules, out: string[]): void {
  * not immediately follow the regular season, and counting the array's length
  * would then finish early.
  */
+/**
+ * The shortest gap between creating a league and its draft.
+ *
+ * An hour. Enough to send the link round; short enough not to constrain anyone
+ * who genuinely wants to draft this afternoon.
+ */
+export const MIN_DRAFT_LEAD_SECONDS = 3600;
+
+/**
+ * Why this draft time cannot be used, or `null` if it can.
+ *
+ * **Separate from `validateLeagueRules`, and it has to be.** That function is
+ * pure in the strong sense — same rules, same answer, forever — which is what
+ * lets it be re-run against a frozen document years later to check the league was
+ * legal when it was made. A rule that consults the clock cannot live there: every
+ * league in the repository would start failing its own validation the day after
+ * it drafted, and the golden fixture's `scheduledAt` is in 2025.
+ *
+ * So the clock is the caller's, passed explicitly, and this is called at the one
+ * moment it makes sense — creation. The same shape as `earliestRefundUnlock`, and
+ * for the same reason: the form and the route share one definition, so the form
+ * cannot suggest a date the server refuses.
+ *
+ * **Why it matters now.** The draft time is when the field locks: the order's
+ * seed is the first Solana block at or after it, so anyone can compute the seed
+ * from that instant and a field that could still change afterwards is grindable.
+ * A league created with a draft time already past would therefore refuse its
+ * own first join — including the commissioner's — and rules are immutable, so it
+ * could never be corrected, only recreated under a new id. That was reachable by
+ * accepting the create form's default from 22 August 2026 onward.
+ */
+export function draftDateProblem(scheduledAt: number, now: Date): string | null {
+  if (!Number.isFinite(scheduledAt) || scheduledAt <= 0) {
+    return "draft scheduledAt must be set at creation";
+  }
+
+  const nowSeconds = Math.floor(now.getTime() / 1000);
+  if (scheduledAt <= nowSeconds) {
+    return "the draft time has already passed — a league cannot be created to draft in the past";
+  }
+  if (scheduledAt - nowSeconds < MIN_DRAFT_LEAD_SECONDS) {
+    return "the draft must be at least an hour away, so there is time for anyone to join";
+  }
+
+  return null;
+}
+
 export function earliestRefundUnlock(input: {
   readonly draftScheduledAt: number;
   readonly regularSeasonWeeks: number;

@@ -55,7 +55,8 @@ export class JoinError extends Error {
       | "BOT_LIMIT"
       | "EVEN_WITHOUT_BOT"
       | "BOT_NOT_FOUND"
-      | "DRAFT_ALREADY_DRAWN",
+      | "DRAFT_ALREADY_DRAWN"
+      | "FIELD_LOCKED",
   ) {
     super(message);
     this.name = "JoinError";
@@ -88,6 +89,12 @@ export async function getJoinMessage(
   );
   if (!league) throw new JoinError("League not found", "LEAGUE_NOT_FOUND");
 
+  // Refused here too, so nobody is asked to sign a message that `joinLeague`
+  // would then refuse. The signature is over the rules hash and costs a wallet
+  // approval; handing one out for a seat that cannot be taken is worse than
+  // saying no.
+  await requireOpenField(db, leagueId);
+
   const stored = await getLeagueRules(db, leagueId);
   if (!stored) throw new JoinError("League has no stored rules", "RULES_MISSING");
 
@@ -98,6 +105,42 @@ export async function getJoinMessage(
     walletAddress,
     seasonYear: stored.rules.seasonYear,
   });
+}
+
+/**
+ * Refuse to change the field once the draft order's seed exists.
+ *
+ * The seed is the first Solana block at or after `drafts.scheduled_at`, mixed
+ * with the league id and the rules hash — all public and frozen — so it is
+ * computable by anyone the instant that time passes. A field that can still
+ * change after that is the whole attack migration `0010` was written to close,
+ * reached by waiting rather than by redrawing.
+ *
+ * **The database is what enforces this** (`0028`, on INSERT and DELETE). This is
+ * the translation, so the ordinary path answers `FIELD_LOCKED` rather than
+ * letting a raw trigger exception surface as a 500. Do not remove it on the
+ * grounds that the trigger already refuses: the trigger is the guarantee, this is
+ * the error message.
+ */
+async function requireOpenField(db: SqlClient, leagueId: string): Promise<void> {
+  const [draft] = await db.query<{ order_drawn_at: string | null; scheduled_at: string }>(
+    "SELECT order_drawn_at, scheduled_at FROM drafts WHERE league_id = $1",
+    [leagueId],
+  );
+
+  // No draft scheduled yet, so there is no seed to be known and nothing to lock.
+  if (!draft) return;
+
+  if (draft.order_drawn_at) {
+    throw new JoinError("The draft order has been drawn", "DRAFT_ALREADY_DRAWN");
+  }
+
+  if (new Date(draft.scheduled_at) <= new Date()) {
+    throw new JoinError(
+      "This league's draft time has passed, so its field is locked",
+      "FIELD_LOCKED",
+    );
+  }
 }
 
 /**
@@ -122,6 +165,8 @@ export async function joinLeague(db: SqlClient, input: JoinLeagueInput): Promise
       "LEAGUE_CLOSED",
     );
   }
+
+  await requireOpenField(db, league.id);
 
   const stored = await getLeagueRules(db, league.id);
   if (!stored) {
@@ -266,6 +311,8 @@ export async function addBot(
   const { maxBots, maxTeams } = stored.rules.league;
 
   return withTransaction(db, async (tx) => {
+    await requireOpenField(tx, leagueId);
+
     const [counts] = await tx.query<{ taken: number; bots: number; humans: number }>(
       `SELECT count(*)::int AS taken,
               count(*) FILTER (WHERE is_bot)::int AS bots,
@@ -339,12 +386,21 @@ export async function teamForUser(
  * Remove the bot.
  *
  * The seat is a placeholder for a person, so when a sixth friend turns up it has
- * to be possible to give it back. Refused once the draft order is drawn — the
- * order is derived from the set of teams, and a trigger locks the field at that
- * moment precisely so nobody can change it afterwards.
+ * to be possible to give it back. Refused once the field locks, which is the
+ * league's scheduled draft time — the order is derived from the set of teams and
+ * the seed exists from that instant, so a removal afterwards re-rolls it.
+ *
+ * **Removing is not the harmless direction.** A single join after the seed is
+ * known is one blind, irreversible draw; remove-then-add is an unbounded re-roll,
+ * because `addBot` inserts a fresh row and the order is a function of the field.
+ * That is the attack `0010`'s header describes, and until `0028` the trigger
+ * guarded INSERT only — so this check was the only thing standing in its way, in
+ * a function with no production caller.
  */
 export async function removeBot(db: SqlClient, leagueId: string): Promise<{ removed: string }> {
   return withTransaction(db, async (tx) => {
+    // Kept ahead of the field check so a league whose order is already drawn
+    // still answers `DRAFT_ALREADY_DRAWN`, which is the more specific fact.
     const [draft] = await tx.query<{ order_drawn_at: string | null }>(
       "SELECT order_drawn_at FROM drafts WHERE league_id = $1",
       [leagueId],
@@ -355,6 +411,8 @@ export async function removeBot(db: SqlClient, leagueId: string): Promise<{ remo
         "DRAFT_ALREADY_DRAWN",
       );
     }
+
+    await requireOpenField(tx, leagueId);
 
     const [bot] = await tx.query<{ id: string }>(
       "SELECT id FROM teams WHERE league_id = $1 AND is_bot ORDER BY slot LIMIT 1",
