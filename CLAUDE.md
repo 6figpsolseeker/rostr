@@ -47,7 +47,7 @@ Do not build it in August.
 
 See [`docs/BUILD-PLAN.md`](docs/BUILD-PLAN.md) for the full commit-by-commit plan.
 
-**Done — 1222 tests, CI green:**
+**Done — 1269 tests, CI green:**
 
 - Full specification — rules, data model, live scoring, build plan
 - A1: pnpm monorepo, TS strict, vitest, eslint, prettier, CI
@@ -293,6 +293,49 @@ still needs Rust and a decision before Aug 22:
 - **The browser defaulted to mainnet — FIXED**, see "One declaration of which chain"
   below. Three independent sources of "which chain", no cross-check, and the most
   dangerous default sitting on the one that signs.
+
+### Handoff to the main PC, 2026-08-14 evening
+
+**State on arrival.** `main` is `a9c20cf`, CI green, working tree clean, **no open PRs**, and
+the Supabase database is at **`0028`**, in step. First commands, in this order:
+
+```bash
+git pull && CI=true corepack pnpm install
+pnpm db:status          # expect: everything applied through 0028
+pnpm test               # expect: 1269 passed, 2 skipped
+```
+
+**Six PRs landed this session**, all with the same shape — one finding, one PR, mutation-checked
+tests, and every docstring the change falsified rewritten in the same commit:
+
+| PR   | What it closed                                                                               |
+| ---- | -------------------------------------------------------------------------------------------- |
+| #123 | §6's Tuesday weekly waiver lock, which was implemented nowhere (#107)                        |
+| #124 | A team's own claims resolved by random UUID (#79 part 2)                                     |
+| #130 | "The most recent lock" computed as `now − 168h`, which is an hour short across the fall-back |
+| #133 | Six of seven trade state writes unguarded; an error could write `EXPIRED` (#77 part 4, #112) |
+| #135 | The draft field locked at the draw rather than when the seed exists (#78)                    |
+
+**Fourteen issues filed** with reproductions rather than titles: #125–#129, #131, #132, #134,
+#136–#138.
+
+**Read these three before picking anything up:**
+
+- **#136 is live on `main` and it bites the draft.** A one-team league draws, starts, and then
+  hangs **permanently** — the final pick calls `generateSeasonSchedule`, which throws below two
+  teams _inside the pick's own transaction_, so it rolls back forever, and `ScheduleError` is not
+  `DraftContextError` so the draft room 500s on every poll. `minHumans` is in the signed rules and
+  read by nothing. #135 removed the "wait for a second member" escape, so this is now the first
+  thing to fix on the draft path, and Aug 22 is the draft deadline.
+- **#75/#96 is the Sep 9 blocker.** `syncBoxScores` exists and no cron runs it, so `stat_lines`
+  is empty and **every player scores zero**. #81's adapter defects are latent _only_ because
+  nothing calls `getBoxScore` — land #81 first or in the same pass, or they go live together.
+- **#79 part 3 is deferred on purpose.** The analysis is banked in a comment on the issue,
+  including the two fixes that look right and are not. Do not "just" enumerate calendar dates.
+
+**A GitHub trap that has now cost this repo twice:** `Closes #79 part 2` closes **#79**. GitHub
+does not parse the qualifier. Both #106 and #124 swallowed a multi-part issue that way. For a
+partial fix write `Refs #79` and close it by hand when the last part lands.
 
 **Next, in order:**
 
@@ -1828,7 +1871,9 @@ nothing had ever been applied.
 **It is not automatically in sync with `main`.** Nothing in CI runs migrations against it
 — there is no Postgres service in `ci.yml`, and every test builds a fresh PGlite database
 — so it only moves when somebody runs `pnpm db:migrate` by hand. On 2026-08-14 it was at
-version 20 while `main` carried through 0027. Check with `pnpm db:status` before assuming.
+version 20 while `main` carried through 0027. **Migrated to 0028 on 2026-08-14 and verified in
+step with `main`.** Check with `pnpm db:status` before assuming — it is the first thing to run
+on arriving at a machine, and the answer has been wrong twice.
 
 Migrations are **forward-only** plain SQL. There are no down migrations: a league's rules
 are immutable and its history must stay auditable, so the answer to a bad migration is
@@ -2016,7 +2061,7 @@ Expect ~30–60 minutes; compiling AVM from source is the slow part.
 
 ```bash
 pnpm install
-pnpm test        # 1222 tests, all green
+pnpm test        # 1269 tests, all green
 pnpm typecheck
 pnpm lint
 ```
