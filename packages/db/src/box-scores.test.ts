@@ -387,3 +387,157 @@ describe("syncBoxScores", () => {
     expect(result.games).toBe(0);
   });
 });
+
+/**
+ * The work list is the only thing pacing a metered provider.
+ *
+ * The loop inside `syncBoxScores` has no delay in it, so a clause that can stay
+ * true indefinitely is a provider call every ten minutes until the season ends.
+ * Each of the three below was unbounded, and none of them had a test — which is
+ * how they stayed unbounded.
+ */
+describe("the work list bounds what one run can spend", () => {
+  /** A second game, so a fixture can express more than one due row. */
+  async function addGame(fx: Fixture, ref: string, columns: string): Promise<void> {
+    const [sport] = await fx.client.query<{ id: string }>(
+      "SELECT id FROM sports WHERE key = $1",
+      [NFL.key],
+    );
+    await fx.client.query(
+      `INSERT INTO games (sport_id, external_ref, season, week, home_team_ref, away_team_ref,
+                          kickoff_at, status, final_at)
+       VALUES ($1, $2, $3, $4, 'PHI', 'DAL', ${columns})`,
+      [sport!.id, ref, SEASON, WEEK],
+    );
+  }
+
+  it("stops treating a game as live once it is long over", async () => {
+    // An in-progress game is re-read every run, which is the point. What it must
+    // not do is run forever — and a status that never advances is not
+    // hypothetical, because `mapGameStatus` answers SCHEDULED for wording it
+    // does not recognise and only two of the five statuses have been observed.
+    const fx = await setup("IN_PROGRESS");
+    await fx.client.query(
+      "UPDATE games SET kickoff_at = now() - interval '30 hours', stats_synced_at = now()",
+    );
+
+    const result = await syncBoxScores(fx.client, fakeProvider(new Map()), NFL.key, SEASON);
+
+    expect(result.games).toBe(0);
+  });
+
+  it("still reads a game that is genuinely in progress", async () => {
+    // The control. Without it the test above passes just as well against a rule
+    // that never treats anything as live.
+    const fx = await setup("IN_PROGRESS");
+    await fx.client.query(
+      "UPDATE games SET kickoff_at = now() - interval '2 hours', stats_synced_at = now()",
+    );
+
+    const box = boxScore("g1", { qb1: [line("pass_yd", 120)], ...bothDefenses });
+    const result = await syncBoxScores(
+      fx.client,
+      fakeProvider(new Map([["g1", box]])),
+      NFL.key,
+      SEASON,
+    );
+
+    expect(result.games).toBe(1);
+  });
+
+  it("stops retrying a warning-bearing game once its window closes", async () => {
+    // `stats_error` is set by ordinary warnings, not only failures — a
+    // field-goal count that disagrees with the plays parsed from it, a defence
+    // missing from the box score. Those do not resolve on a re-read, so without
+    // a window bound one such game was fetched seventy-two times a day for the
+    // rest of the season, and sixteen of them would exceed the daily quota.
+    const fx = await setup();
+    await fx.client.query(
+      `UPDATE games SET stats_error = 'fgMade disagrees with the parsed plays',
+                       stats_synced_at = now() - interval '1 hour',
+                       final_at = now() - interval '9 days'`,
+    );
+
+    const result = await syncBoxScores(fx.client, fakeProvider(new Map()), NFL.key, SEASON);
+
+    expect(result.games).toBe(0);
+  });
+
+  it("still retries a warning-bearing game inside its window", async () => {
+    // The control for the bound above.
+    const fx = await setup();
+    await fx.client.query(
+      `UPDATE games SET stats_error = 'fgMade disagrees with the parsed plays',
+                       stats_synced_at = now() - interval '1 hour',
+                       final_at = now() - interval '2 hours'`,
+    );
+
+    const box = boxScore("g1", { qb1: [line("pass_yd", 300)], ...bothDefenses });
+    const result = await syncBoxScores(
+      fx.client,
+      fakeProvider(new Map([["g1", box]])),
+      NFL.key,
+      SEASON,
+    );
+
+    expect(result.games).toBe(1);
+  });
+
+  it("fetches at most MAX_GAMES_PER_RUN in one pass", async () => {
+    // A season backfill puts every game of a played season inside the correction
+    // window at once, because `final_at` is stamped when a game is first
+    // *observed* final rather than when it was played. `pnpm db:sync 2025` is a
+    // planned task, and without a ceiling its first run fetches hundreds of box
+    // scores in a tight loop against a metered provider.
+    // Twenty-five is a literal, not `MAX_GAMES_PER_RUN + 5`. Sizing the fixture
+    // from the constant under test makes the assertion move with it, so raising
+    // the ceiling — or deleting the LIMIT — would leave this green. The number
+    // is a spend bound; changing it should have to be deliberate and visible.
+    const DUE = 25;
+    const fx = await setup();
+    const boxes = new Map([["g1", boxScore("g1", { qb1: [line("pass_yd", 1)] })]]);
+    for (let i = 2; i <= DUE; i++) {
+      const ref = `g${i}`;
+      await addGame(fx, ref, "now() - interval '4 hours', 'FINAL', now() - interval '1 hour'");
+      boxes.set(ref, boxScore(ref, { qb1: [line("pass_yd", i)] }));
+    }
+
+    const result = await syncBoxScores(fx.client, fakeProvider(boxes), NFL.key, SEASON);
+
+    expect(result.games).toBe(20);
+    expect(result.games, "every due game was fetched — the LIMIT is not binding").toBeLessThan(
+      DUE,
+    );
+  });
+
+  it("reads a never-read game before re-reading one it already has", async () => {
+    // The ordering earns its keep only once there is a LIMIT: a game nobody has
+    // read scores its players zero *right now*, where a re-read only refines a
+    // number that already exists. Plain kickoff order would let a backlog of old
+    // games starve today's.
+    const fx = await setup();
+    await fx.client.query(
+      // The original game is old, already read, and due only for a recheck.
+      `UPDATE games SET kickoff_at = now() - interval '5 days',
+                       stats_synced_at = now() - interval '7 hours',
+                       final_at = now() - interval '5 days'`,
+    );
+    await addGame(fx, "g2", "now() - interval '3 hours', 'FINAL', now() - interval '1 hour'");
+
+    const boxes = new Map([
+      ["g1", boxScore("g1", { qb1: [line("pass_yd", 1)] })],
+      ["g2", boxScore("g2", { qb1: [line("pass_yd", 2)] })],
+    ]);
+
+    // Both are due; only one may be fetched.
+    const [first] = await fx.client.query<{ external_ref: string }>(
+      `SELECT external_ref FROM games
+        ORDER BY (stats_synced_at IS NULL) DESC, (status = 'IN_PROGRESS') DESC, kickoff_at
+        LIMIT 1`,
+    );
+    expect(first?.external_ref).toBe("g2");
+
+    const result = await syncBoxScores(fx.client, fakeProvider(boxes), NFL.key, SEASON);
+    expect(result.games).toBe(2);
+  });
+});

@@ -44,6 +44,42 @@ export const FINAL_RECHECK_HOURS = 6;
 /** How soon a game whose last read did not fully succeed is tried again. */
 export const FAILED_RETRY_MINUTES = 20;
 
+/**
+ * How long after kickoff a game may still be treated as live.
+ *
+ * An in-progress game is re-read on **every** run, which is the point — that is
+ * what live scoring is. What it must not do is run forever. A game whose status
+ * never advances past `IN_PROGRESS` would otherwise be fetched every ten minutes
+ * for the rest of the season, and that is not hypothetical: `mapGameStatus`
+ * answers `SCHEDULED` for wording it does not recognise, the three endpoints
+ * disagree about how they spell a finished game, and only two of the five
+ * statuses have ever been observed live.
+ *
+ * Eight hours is roughly two and a half times a real game, so it cannot end a
+ * game that is genuinely being played — including overtime and a weather delay
+ * — and it bounds the runaway at one afternoon instead of one season. Past it
+ * the game is still re-read by the correction sweep below, just on a six-hour
+ * cadence rather than a ten-minute one.
+ */
+export const LIVE_WINDOW_HOURS = 8;
+
+/**
+ * The most games one run will fetch.
+ *
+ * A bound on *spend*, not on work: the provider is metered, a run makes one call
+ * per game, and nothing else in this query limits how many games it can select
+ * at once. A season backfill — `pnpm db:sync 2025`, which is a planned task —
+ * puts every game of a played season inside the correction window at once,
+ * because `final_at` is stamped when a game is first *observed* final rather
+ * than when it was played. Without a ceiling the first run of that fetches
+ * hundreds of box scores in a tight loop and exhausts the daily quota.
+ *
+ * Twenty is comfortably above a full NFL week, so a normal Sunday never touches
+ * it, and the leftovers of an abnormal one are picked up on the next run ten
+ * minutes later rather than being dropped.
+ */
+export const MAX_GAMES_PER_RUN = 20;
+
 export interface BoxScoreSyncResult {
   readonly games: number;
   /** Stat lines seen for the first time — revision 0. */
@@ -118,15 +154,39 @@ export async function syncBoxScores(
         -- either, and RULES.md section 10 already scores those players 0 through
         -- the absence of a stat line.
         AND g.status IN ('IN_PROGRESS', 'FINAL')
+        -- **Every clause here needs a ceiling.** This query is the only thing
+        -- pacing a metered provider — the loop below has no delay in it — so a
+        -- clause that can stay true indefinitely is a call every ten minutes
+        -- until the season ends.
         AND (
               g.stats_synced_at IS NULL
-           OR g.status = 'IN_PROGRESS'
+           -- Live, and bounded by the clock rather than by the provider
+           -- agreeing to move the status on.
+           OR (g.status = 'IN_PROGRESS'
+               AND g.kickoff_at > now() - make_interval(hours => $7::int))
+           -- Retry, bounded by the same window as the sweep below. Without the
+           -- final_at bound this never expired: stats_error is set by
+           -- ordinary *warnings* as well as failures — a field-goal count that
+           -- disagrees with the plays parsed from it, a defence missing from the
+           -- box score — so one game with a permanent discrepancy was re-read
+           -- seventy-two times a day for the rest of the season, and sixteen of
+           -- them would have exceeded the daily quota outright.
            OR (g.stats_error IS NOT NULL
-               AND g.stats_synced_at < now() - make_interval(mins => $4::int))
+               AND g.stats_synced_at < now() - make_interval(mins => $4::int)
+               AND g.final_at > now() - make_interval(hours => $5::int))
+           -- The NFL stat-correction sweep.
            OR (g.final_at > now() - make_interval(hours => $5::int)
                AND g.stats_synced_at < now() - make_interval(hours => $6::int))
         )
-      ORDER BY g.kickoff_at`,
+      -- Never-read first, then live, then everything else oldest-first. The
+      -- order is doing real work now that there is a LIMIT: a game nobody has
+      -- read scores its players zero *right now*, where a re-read only refines a
+      -- number that already exists, and plain kickoff order would let a backlog
+      -- of old games starve today's.
+      ORDER BY (g.stats_synced_at IS NULL) DESC,
+               (g.status = 'IN_PROGRESS') DESC,
+               g.kickoff_at
+      LIMIT $8`,
     [
       ids.sportId,
       season,
@@ -134,6 +194,8 @@ export async function syncBoxScores(
       FAILED_RETRY_MINUTES,
       CORRECTION_WINDOW_HOURS,
       FINAL_RECHECK_HOURS,
+      LIVE_WINDOW_HOURS,
+      MAX_GAMES_PER_RUN,
     ],
   );
 
