@@ -21,26 +21,27 @@ node packages/stats/dist/cli.js verify 1,2,3   # hunt rare scoring events
 Confirmed by calling each. `getNFLTeamStats` returned 404 and does not appear to
 exist under that name.
 
-| Endpoint               | Returns                                      | We use it for                                  |
-| ---------------------- | -------------------------------------------- | ---------------------------------------------- |
-| `getNFLTeams`          | 32 teams; `rosters=true` embeds full rosters | Team refs, **bye weeks**, one-call roster sync |
-| `getNFLPlayerList`     | 4,295 players                                | Full player universe                           |
-| `getNFLPlayerInfo`     | One player, optionally with stats            | Targeted lookups                               |
-| `getNFLTeamRoster`     | `{team, roster}`                             | Per-team roster                                |
-| `getNFLDepthCharts`    | 32 teams, `RB1`/`RB2`…                       | Starter inference, smarter bots                |
-| **`getNFLADP`**        | `{adpDate, adpType, adpList}`                | **Draft rankings**                             |
-| `getNFLProjections`    | Player + team-defense projections            | Waiver guidance, bot drafting                  |
-| `getNFLGamesForWeek`   | 16 games with `gameID`, `gameTime_epoch`     | **Schedule and kickoff times**                 |
-| `getNFLGamesForDate`   | Games on a date                              | Daily job scoping                              |
-| `getNFLGamesForPlayer` | **A player's whole season, one call**        | Season-to-date averages, fixtures              |
-| `getNFLTeamSchedule`   | `{team, schedule}`                           | Team-level schedule                            |
-| `getNFLScoresOnly`     | Scores + line score, no player stats         | **Cheap game-watcher polling**                 |
-| `getNFLBoxScore`       | Full player stats, DST, scoring plays        | **Weekly scoring**                             |
-| `getNFLGameInfo`       | Game metadata                                | Venue, referees                                |
-| `getNFLNews`           | `{link, title}`                              | Injury/news feed                               |
-| `getNFLDFS`            | DraftKings, FanDuel, Yahoo salaries          | Ranking cross-check                            |
-| `getNFLBettingOdds`    | Many sportsbooks                             | Not used                                       |
-| `getNFLChangelog`      | Recent data corrections                      | **Stat-correction detection**                  |
+| Endpoint               | Returns                                      | We use it for                                    |
+| ---------------------- | -------------------------------------------- | ------------------------------------------------ |
+| `getNFLTeams`          | 32 teams; `rosters=true` embeds full rosters | Team refs, **bye weeks**, one-call roster sync   |
+| `getNFLPlayerList`     | 4,295 players                                | Full player universe                             |
+| `getNFLPlayerInfo`     | One player, optionally with stats            | Targeted lookups                                 |
+| `getNFLTeamRoster`     | `{team, roster}`                             | Per-team roster                                  |
+| `getNFLDepthCharts`    | 32 teams, `RB1`/`RB2`…                       | Starter inference, smarter bots                  |
+| **`getNFLADP`**        | `{adpDate, adpType, adpList}`                | **Draft rankings**                               |
+| `getNFLProjections`    | Player + team-defense projections            | Waiver guidance, bot drafting                    |
+| `getNFLGamesForWeek`   | 16 games with `gameID`, `gameTime_epoch`     | **Schedule and kickoff times**                   |
+| `getNFLGamesForDate`   | Games on a date                              | Daily job scoping                                |
+| `getNFLGamesForPlayer` | **A player's whole season, one call**        | Season-to-date averages, fixtures                |
+| `getNFLTeamSchedule`   | `{team, schedule}`                           | Team-level schedule                              |
+| `getNFLScoresOnly`     | Scores + line score, no player stats         | **Cheap game-watcher polling**                   |
+| `getNFLBoxScore`       | Full player stats, DST, scoring plays        | **Weekly scoring**                               |
+| `getNFLGameInfo`       | Game metadata                                | Venue, referees                                  |
+| `getNFLNews`           | `{link, title}`                              | Injury/news feed                                 |
+| `getNFLDFS`            | DraftKings, FanDuel, Yahoo salaries          | Ranking cross-check                              |
+| `getNFLBettingOdds`    | Many sportsbooks                             | Not used                                         |
+| `getNFLChangelog`      | Recent data corrections                      | **Stat-correction detection**                    |
+| `getNFLInactiveList`   | Whole season, per game, per team `players[]` | **Gameday inactives** — see docs/LIVE-SCORING.md |
 
 ---
 

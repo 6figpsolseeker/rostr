@@ -131,13 +131,53 @@ T-0    kickoff, lineup locks
 
 Users would get 25–90 minutes of warning, median ~55. ESPN and Sleeper get it at T-90.
 Tank01 also only _guarantees_ `teamID`, `teamAbv`, and `playerID` on the roster endpoint,
-with other metadata varying, and documents no dedicated inactives endpoint.
+with other metadata varying.
 
-**Mitigation, at no additional cost:** SportsDataIO documents an explicit `Inactive`
-field available ~90 minutes before kickoff — and is already budgeted as the independent
-second oracle source. One line item, two jobs. Additionally, poll Tank01's **news**
-endpoint through the pre-kickoff window: it refreshes multiple times an hour, and
+### Tank01 does have a dedicated inactives endpoint — `getNFLInactiveList`
+
+**This paragraph used to say it had none.** That was true of the documentation when this
+was written and is not true of the API. Probed live on 2026-08-15:
+
+```
+GET getNFLInactiveList?season=2026&seasonType=reg
+
+{ seasonType, season, weekList: [ { gameWeek, inactives: [
+    { gameID, home: { teamAbv, teamID, players[] },
+              away: { teamAbv, teamID, players[] } } ] } ] }
+```
+
+**One call returns the whole season** — 18 weeks, 272 games, keyed by `gameID` with a
+per-team `players` array. That is the shape this section wanted: per game, per team, and
+cheap enough to poll through the pre-kickoff window without a per-game fan-out. A `week`
+parameter is accepted and appears to be ignored; the response carries all eighteen either
+way.
+
+**Two things are unverified, and they are the two that decide whether it replaces
+SportsDataIO for this job:**
+
+1. **What a populated `players[]` entry contains.** All 272 are empty today because the
+   2026 season has not started, and `season=2025` answers _"no games returned"_ — the
+   endpoint appears to serve only the current season, so there is no history to inspect.
+   Whether an entry carries `playerID` (which is what the roster join needs) or only a
+   name is unknown.
+2. **When it fills.** The entire argument above is T-90 versus T-30. An endpoint that
+   exists but refreshes on the same hourly roster cycle solves nothing.
+
+Both are answerable on the first gameday and not before. Note the season opener is
+`20260909_NE@SEA` — **9 September 2026**, which is the live-scoring deadline itself, so
+this cannot be settled ahead of it with real data.
+
+**Mitigation, unchanged until those two are answered:** SportsDataIO documents an explicit
+`Inactive` field available ~90 minutes before kickoff — and is already budgeted as the
+independent second oracle source. One line item, two jobs. Additionally, poll Tank01's
+**news** endpoint through the pre-kickoff window: it refreshes multiple times an hour, and
 breaking "ruled out" reports land there before the roster reflects them.
+
+**What changes if `getNFLInactiveList` fills at T-90 with player ids:** it does that job on
+the plan already paid for, and SportsDataIO's justification narrows to the one it cannot
+shed — being the _independent second source_ the settlement oracle requires (`RULES.md` §7).
+That is a smaller claim than "one line item, two jobs", and the budget conversation should
+be had against the smaller one.
 
 ---
 
