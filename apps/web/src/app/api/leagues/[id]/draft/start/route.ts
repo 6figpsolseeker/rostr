@@ -4,9 +4,13 @@ import { BeaconError } from "@rostr/db";
 import { db } from "@/lib/db";
 import { draftContext, DraftContextError } from "@/lib/draft-context";
 
+// A code missing from this map falls through to 400 below, which ships a good
+// message under the wrong status — so a new `DraftPersistenceError` code belongs
+// here in the same change that introduces it.
 const STATUS: Record<string, number> = {
   DRAFT_NOT_FOUND: 404,
   NO_TEAMS: 409,
+  BELOW_MIN_HUMANS: 409,
   ORDER_ALREADY_DRAWN: 409,
   TOO_EARLY_TO_DRAW: 425,
   ORDER_NOT_DRAWN: 409,

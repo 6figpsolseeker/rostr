@@ -765,7 +765,15 @@ describe("bots", () => {
       // field at the draw precisely so nobody can change it afterwards. This is
       // the check that makes deleting a team safe at all — before the draw the
       // bot has no roster, no lineup and no matchup to orphan.
-      const fx = await freeLeague();
+      //
+      // Three humans, not the default one, because the draw now refuses a field
+      // below `minHumans` and a bot cannot make up the difference. Not two: a
+      // bot is only permitted at an *odd* human count, so `addBot` would refuse
+      // first and this test would never reach the draw it is about. Two humans
+      // and no bot would also pass, and vacuously — `removeBot` checks the draw
+      // before it checks whether a bot exists, so it would throw the right error
+      // for the wrong reason.
+      const fx = await freeLeague(3);
       await addBot(fx.client, fx.leagueId, "Robo");
 
       await createDraftRecord(fx.client, {

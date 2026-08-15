@@ -45,6 +45,46 @@ exist under that name.
 
 ---
 
+## `gameStatus` — three endpoints, two vocabularies
+
+Captured live on 2026-08-15, verbatim. `mapGameStatus` was written from
+documentation, and this is what the endpoints actually say.
+
+| endpoint             | `gameStatus`  | `gameStatusCode` | games seen |
+| -------------------- | ------------- | ---------------- | ---------- |
+| `getNFLGamesForWeek` | `"Final"`     | `"2"`            | 32         |
+| `getNFLGamesForWeek` | `"Scheduled"` | `"0"`            | 16         |
+| `getNFLScoresOnly`   | `"Completed"` | `"2"`            | 1 date     |
+| `getNFLBoxScore`     | `"Completed"` | `"2"`            | 1 game     |
+
+**`getNFLGamesForWeek` is the odd one out.** A finished game is `"Final"` there
+and `"Completed"` on the other two — and `getNFLScoresOnly` is the endpoint the
+game watcher is supposed to poll, so anything written against the schedule
+endpoint's vocabulary would read every finished game as unstarted. `mapGameStatus`
+survives it only because matching is by prefix, which was a hedge rather than a
+plan.
+
+**`gameStatusCode` is the stable half.** `"2"` means finished on all three;
+`"0"` means not started. It is the better discriminator and it is _not_ what the
+code keys on today — deliberately, because only two of its values have been
+observed and guessing the rest is how the field names in this document were wrong
+four times. Worth switching to once the in-progress and postponed codes are seen.
+
+**Not yet observed, and honestly outstanding:** `IN_PROGRESS`, `POSTPONED` and
+`CANCELLED`. None exists out of season, so these need a live Sunday. Until then
+`mapGameStatus`'s handling of them is documentation, not evidence — and its
+fallback warns loudly and answers `SCHEDULED`, which for a _finished_ game means
+finalisation falls to `RULES.md` §10's postponement path.
+
+Reproduce with `pnpm stats:probe`, or:
+
+```
+curl --url 'https://tank01-nfl-live-in-game-real-time-statistics-nfl.p.rapidapi.com/getNFLGamesForWeek?week=1&seasonType=reg&season=2025' \
+     --header 'x-rapidapi-key: <key>'
+```
+
+---
+
 ## The shape of a box score
 
 `getNFLBoxScore` returns one object with these parts:
