@@ -215,6 +215,7 @@ export {
   vetoTrade,
   withdrawTrade,
   type ProposeTradeInput,
+  type DueTradesOutcome,
   type TradeResolution,
   type TradeState,
   type TradeSummary,
