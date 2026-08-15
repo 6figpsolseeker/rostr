@@ -9,6 +9,7 @@ import { addTestTeam, createTestDatabase } from "./testing.js";
 import type { PGliteClient } from "./testing.js";
 import {
   finalizationHours,
+  generateSeasonSchedule,
   loadScheduledWeek,
   loadWeekResults,
   persistSchedule,
@@ -809,5 +810,41 @@ describe("standings from resolved weeks", () => {
     await schedule(fx);
 
     expect(await loadWeekResults(fx.client, fx.leagueId, WEEK)).toEqual([]);
+  });
+});
+
+/**
+ * The guard that decides what a too-small league does instead of crashing.
+ *
+ * `generateSchedule` in `@rostr/core` throws below two teams, and this wrapper
+ * is the only thing in the repo that calls it — from inside the final draft
+ * pick's transaction, where a throw would roll the pick back. It returns
+ * `{ written: 0 }` instead, which is why a short draft completes rather than
+ * hanging.
+ *
+ * Nothing pinned that, and it is load-bearing in both directions: remove the
+ * guard and the last pick of a one-team draft rolls back forever; widen it and a
+ * real league silently loses its fixtures. The draw now refuses a field this
+ * small (`drawDraftOrder`), so this is the second line rather than the first.
+ */
+describe("generateSeasonSchedule below two teams", () => {
+  it("writes nothing instead of throwing", async () => {
+    const fx = await setup(1);
+
+    await expect(generateSeasonSchedule(fx.client, fx.leagueId, "seed")).resolves.toEqual({
+      written: 0,
+    });
+
+    expect(await loadScheduledWeek(fx.client, fx.leagueId, 1)).toEqual([]);
+  });
+
+  it("writes a full season at two", async () => {
+    // The boundary is exactly two, and it is the generator's own bound —
+    // asserting it here keeps the wrapper honest if that bound ever moves.
+    const fx = await setup(2);
+
+    const { written } = await generateSeasonSchedule(fx.client, fx.leagueId, "seed");
+
+    expect(written).toBeGreaterThan(0);
   });
 });
