@@ -27,7 +27,8 @@
     "test:program": "anchor test",
     "idl:sync": "node scripts/sync-idl.mjs",
     "idl:check": "node scripts/sync-idl.mjs --check",
-    "test:web": "vitest run --config vitest.web.config.ts"
+    "test:web": "vitest run --config vitest.web.config.ts",
+    "corpus:build": "pnpm --filter @rostr/core build && node scripts/build-corpus.mjs"
   },
   "devDependencies": {
     "@coral-xyz/anchor": "^0.31.1",

@@ -33,6 +33,20 @@ use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
 
 declare_id!("FtXXoS8G6N3dmhijp2kZGpmX6GmNtDk6cGj9h7eoK5NC");
 
+/// Seeding, derived rather than declared — the first half of issue #28.
+///
+/// **No instruction calls it yet, deliberately.** `docs/RULES.md` § 7 requires
+/// the contract to derive the champion from posted scores, which needs the
+/// standings this computes; posting those scores needs the dual-source oracle
+/// (G4–G5) that does not exist. So the kernel lands first, alone, where it can
+/// be reviewed against the TypeScript that decides the same question today and
+/// nothing depends on it being right yet.
+///
+/// It changes no account, no instruction and no IDL, so it cannot move
+/// `potDepositGate` — mainnet stays shut until an instruction named `settle`
+/// exists, which is several commits away.
+pub mod derive;
+
 /// Number of prizes in a payout split. Fixed at five by the rule schema:
 /// champion, runner-up, regular season, consolation, third place.
 pub const PRIZE_COUNT: usize = 5;
