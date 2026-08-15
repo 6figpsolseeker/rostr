@@ -44,7 +44,7 @@
 import {
   generateSchedule,
   indexScoringRules,
-  nextWeekly,
+  latestWeekly,
   resolveWeek,
   winnerOf,
 } from "@rostr/core";
@@ -138,13 +138,10 @@ export async function transactionWeek(
   rules: LeagueRules,
   at: Date,
 ): Promise<number | null> {
-  // The most recent weekly lock at or before `at`. `nextWeekly` is
-  // strictly-after, so asking it from a week earlier yields this cycle's.
-  const since = nextWeekly(
-    new Date(at.getTime() - 7 * 24 * 60 * 60 * 1000),
-    rules.waivers.weeklyLock,
-    rules.waivers.timezone,
-  );
+  // The most recent weekly lock at or before `at`. This used to ask `nextWeekly`
+  // from exactly `at - 7 * 24h`, which is an hour short across the fall-back and
+  // named the *next* week for that hour — see `latestWeekly`.
+  const since = latestWeekly(at, rules.waivers.weeklyLock, rules.waivers.timezone);
 
   const [row] = await db.query<{ week: number }>(
     `SELECT g.week

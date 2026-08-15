@@ -139,6 +139,7 @@ export {
   availabilityAt,
   everyoneIsOnWaivers,
   dropDestination,
+  latestWeekly,
   nextProcessingAt,
   nextWeekly,
   nextWeeklyLockAt,

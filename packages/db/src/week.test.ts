@@ -14,6 +14,7 @@ import {
   persistSchedule,
   resolveLeagueWeek,
   resolveLeagueWeeksThrough,
+  transactionWeek,
 } from "./week.js";
 
 let db: PGliteClient | undefined;
@@ -168,6 +169,77 @@ async function addGame(fx: Fixture, ref: string, status: string, week = WEEK): P
 async function schedule(fx: Fixture): Promise<void> {
   await persistSchedule(fx.client, fx.leagueId, generateSchedule(fx.teamIds, 14, "seed"));
 }
+
+describe("transactionWeek across the November fall-back", () => {
+  // The 2026 clocks go back on Sunday 1 November, so the Tuesday locks either
+  // side are 169 hours apart. `transactionWeek` used to find "the most recent
+  // lock" by asking from exactly `at - 7 * 24h`, which lands *on* the earlier
+  // lock and is then skipped by a strictly-after search — so for one hour it
+  // named the lock a week ahead, and therefore the wrong week.
+  const OCT_LOCK = new Date("2026-10-27T04:00:00Z"); // Tue 00:00 EDT
+  const WEEK_9_SUNDAY = new Date("2026-11-01T18:00:00Z"); // Sun 1 Nov 13:00 EST
+  const WEEK_9_MNF = new Date("2026-11-03T01:15:00Z"); // Mon 2 Nov 20:15 EST
+  const WEEK_10_TNF = new Date("2026-11-06T01:15:00Z"); // Thu 5 Nov 20:15 EST
+
+  /** Monday 2 November, 23:30 ET — Monday Night Football is being played. */
+  const DURING_MNF = new Date("2026-11-03T04:30:00Z");
+
+  async function withNovemberGames(): Promise<Fixture> {
+    const fx = await setup();
+    const [sport] = await fx.client.query<{ id: string }>(
+      "SELECT id FROM sports WHERE key = $1",
+      [NFL.key],
+    );
+
+    for (const [ref, week, kickoff] of [
+      ["w9-sun", 9, WEEK_9_SUNDAY],
+      ["w9-mnf", 9, WEEK_9_MNF],
+      ["w10-tnf", 10, WEEK_10_TNF],
+    ] as const) {
+      await fx.client.query(
+        `INSERT INTO games (sport_id, external_ref, season, week, home_team_ref, away_team_ref, kickoff_at, status)
+         VALUES ($1, $2, $3, $4, 'CIN', 'BAL', $5, 'SCHEDULED')`,
+        [sport!.id, ref, SEASON, week, kickoff],
+      );
+    }
+
+    return fx;
+  }
+
+  it("names week 9 while week 9 is still being played", async () => {
+    const fx = await withNovemberGames();
+
+    // `at - 168h` lands past the October lock, which is what used to lose it.
+    expect(DURING_MNF.getTime() - 7 * 24 * 3600 * 1000).toBeGreaterThanOrEqual(
+      OCT_LOCK.getTime(),
+    );
+
+    expect(await transactionWeek(fx.client, fx.rules, DURING_MNF)).toBe(9);
+  });
+
+  it("keeps RULES.md §6's kickoff lock enforceable during Monday night", async () => {
+    // The consequence. Naming week 10 sends every kickoff check to week 10's
+    // games, none of which has started — so a manager could cut an injured
+    // player mid-game, which is the exact thing §6 forbids.
+    const fx = await withNovemberGames();
+    const week = await transactionWeek(fx.client, fx.rules, DURING_MNF);
+
+    const [game] = await fx.client.query<{ kickoff_at: string }>(
+      `SELECT kickoff_at FROM games WHERE season = $1 AND week = $2
+        ORDER BY kickoff_at DESC LIMIT 1`,
+      [SEASON, week],
+    );
+
+    expect(new Date(game!.kickoff_at).getTime()).toBeLessThanOrEqual(DURING_MNF.getTime());
+  });
+
+  it("moves to week 10 once the lock actually passes", async () => {
+    const fx = await withNovemberGames();
+    const afterLock = new Date("2026-11-03T05:00:00Z"); // Tue 00:00 EST
+
+    expect(await transactionWeek(fx.client, fx.rules, afterLock)).toBe(10);
+  });
+});
 
 describe("persistSchedule", () => {
   it("writes every matchup", async () => {
