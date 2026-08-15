@@ -5,9 +5,11 @@ import {
   enterPlayoffs,
   PlayoffError,
   resolveLeagueWeek,
+  recordCronRun,
   resolveLeagueWeeksThrough,
   WeekError,
 } from "@rostr/db";
+import type { SqlClient } from "@rostr/db";
 import { db } from "@/lib/db";
 import { cronForbidden } from "@/lib/cron";
 
@@ -36,6 +38,22 @@ export async function GET(request: Request): Promise<NextResponse> {
   const client = db();
   const now = new Date();
 
+  try {
+    return await run(client, now, request);
+  } catch (error) {
+    // Stamped and rethrown, so the response is exactly what it was before. A
+    // route that throws on every invocation is worse than one that never fires,
+    // and without this both read as a stale row.
+    await recordCronRun(
+      client,
+      "score-week",
+      error instanceof Error ? error.message : String(error),
+    );
+    throw error;
+  }
+}
+
+async function run(client: SqlClient, now: Date, request: Request): Promise<NextResponse> {
   const requestedWeek = Number.parseInt(
     new URL(request.url).searchParams.get("week") ?? "",
     10,
@@ -178,6 +196,20 @@ export async function GET(request: Request): Promise<NextResponse> {
       });
     }
   }
+
+  // The outcome, not merely the fact of running. A league is counted as failed
+  // if it was skipped entirely, if any week in its sweep failed, or if its
+  // bracket could not be built — all three are already in the JSON, and a row
+  // saying "ran, all fine" over them would be the healthy face this record
+  // exists to remove.
+  const failed = scored.filter(
+    (entry) => entry.skipped || entry.failedWeeks?.length || entry.bracketProblem,
+  ).length;
+  await recordCronRun(
+    client,
+    "score-week",
+    failed > 0 ? `${failed} of ${scored.length} leagues had a problem` : null,
+  );
 
   return NextResponse.json({ at: now.toISOString(), week, leagues: scored });
 }

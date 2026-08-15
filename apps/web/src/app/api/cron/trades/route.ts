@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { leaguesWithDueTrades, resolveDueTrades, TradeError } from "@rostr/db";
+import { leaguesWithDueTrades, recordCronRun, resolveDueTrades, TradeError } from "@rostr/db";
+import type { SqlClient } from "@rostr/db";
 import { db } from "@/lib/db";
 import { cronForbidden } from "@/lib/cron";
 
@@ -28,6 +29,23 @@ export async function GET(request: Request): Promise<NextResponse> {
 
   const client = db();
   const now = new Date();
+
+  try {
+    return await run(client, now);
+  } catch (error) {
+    // Stamped and rethrown, so the response is exactly what it was before. A
+    // route that throws on every invocation is worse than one that never fires,
+    // and without this both read as a stale row.
+    await recordCronRun(
+      client,
+      "trades",
+      error instanceof Error ? error.message : String(error),
+    );
+    throw error;
+  }
+}
+
+async function run(client: SqlClient, now: Date): Promise<NextResponse> {
   const due = await leaguesWithDueTrades(client, now);
 
   const runs: {
@@ -67,6 +85,16 @@ export async function GET(request: Request): Promise<NextResponse> {
       });
     }
   }
+
+  // The outcome, not merely the fact of running: a league that failed is
+  // already reported in `runs`, and a row saying "ran, all fine" while three
+  // leagues threw would be the healthy face this record exists to remove.
+  const failed = runs.filter((entry) => entry.error).length;
+  await recordCronRun(
+    client,
+    "trades",
+    failed > 0 ? `${failed} of ${due.length} leagues failed` : null,
+  );
 
   return NextResponse.json({ at: now.toISOString(), due: due.length, runs });
 }

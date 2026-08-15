@@ -6,7 +6,9 @@ import {
   getLeagueRules,
   purgeExpiredSessions,
   purgeIdleRateLimits,
+  recordCronRun,
 } from "@rostr/db";
+import type { SqlClient } from "@rostr/db";
 import { db } from "@/lib/db";
 import { cronForbidden } from "@/lib/cron";
 import { draftBoard } from "@/lib/draft-context";
@@ -48,6 +50,23 @@ export async function GET(request: Request): Promise<NextResponse> {
 
   const client = db();
   const now = new Date();
+
+  try {
+    return await run(client, now);
+  } catch (error) {
+    // Stamped and rethrown, so the response is exactly what it was before. A
+    // route that throws on every invocation is worse than one that never fires,
+    // and without this both read as a stale row.
+    await recordCronRun(
+      client,
+      "draft-tick",
+      error instanceof Error ? error.message : String(error),
+    );
+    throw error;
+  }
+}
+
+async function run(client: SqlClient, now: Date): Promise<NextResponse> {
   const overdue = await draftsWithExpiredPicks(client, now);
 
   const advanced: { leagueId: string; picks: number; error?: string }[] = [];
@@ -92,6 +111,16 @@ export async function GET(request: Request): Promise<NextResponse> {
   const buckets = await purgeIdleRateLimits(
     client,
     new Date(now.getTime() - 24 * 60 * 60 * 1000),
+  );
+
+  // The outcome, not merely the fact of running: a draft that failed is
+  // already reported in `advanced`, and a row saying "ran, all fine" while
+  // three drafts threw would be the healthy face this record exists to remove.
+  const failed = advanced.filter((entry) => entry.error).length;
+  await recordCronRun(
+    client,
+    "draft-tick",
+    failed > 0 ? `${failed} of ${overdue.length} drafts failed` : null,
   );
 
   return NextResponse.json({
