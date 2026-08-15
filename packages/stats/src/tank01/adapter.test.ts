@@ -199,9 +199,16 @@ describe("listGames", () => {
     // unrecognised status there means `syncGames` writes a finished game as
     // unstarted, and every week in the season finalises down the postponement
     // fallback.
+    // The first four are *observed*, not typed: probed live on 2026-08-15 and
+    // recorded in `docs/TANK01.md`. The endpoints disagree with each other — a
+    // finished game is `Final` from `getNFLGamesForWeek` and `Completed` from
+    // both `getNFLScoresOnly` and `getNFLBoxScore` — and the scores endpoint is
+    // the one the game watcher polls, so dropping either form is enough to read
+    // every finished game as unstarted. The rest below remain documentation.
     const statuses = [
       ["Completed", "FINAL"],
       ["Final", "FINAL"],
+      ["Scheduled", "SCHEDULED"],
       ["Final/OT", "FINAL"],
       ["Live - In Progress", "IN_PROGRESS"],
       ["In Progress", "IN_PROGRESS"],
