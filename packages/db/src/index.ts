@@ -151,6 +151,8 @@ export {
   CORRECTION_WINDOW_HOURS,
   FAILED_RETRY_MINUTES,
   FINAL_RECHECK_HOURS,
+  LIVE_WINDOW_HOURS,
+  MAX_GAMES_PER_RUN,
   syncBoxScores,
   type BoxScoreSyncResult,
 } from "./box-scores.js";
