@@ -121,6 +121,26 @@ interface RawGame {
  * vocabulary is inconsistent (`"Completed"`, and `docs/TANK01.md` records
  * `"Final/OT"` elsewhere), and treat an unrecognised value as `SCHEDULED` **but
  * say so** — a silent default is what hid this.
+ *
+ * ## The prefix hedge earned its keep, measured 2026-08-15
+ *
+ * Probed live, and the endpoints do not agree with each other. A finished game
+ * is `"Final"` from `getNFLGamesForWeek` and `"Completed"` from both
+ * `getNFLScoresOnly` and `getNFLBoxScore` — and the scores endpoint is the one
+ * the game watcher polls, so a mapping written against the schedule endpoint
+ * alone would have read every finished game as unstarted. Full table in
+ * `docs/TANK01.md`.
+ *
+ * **`gameStatusCode` is the stable half and this deliberately does not use it.**
+ * `"2"` means finished on all three endpoints and `"0"` means not started, which
+ * is a better discriminator than any string. Only those two values have been
+ * seen: no game is in progress, postponed or cancelled in August, so the rest of
+ * the code vocabulary is unknown. Switching to it now would mean guessing the
+ * remaining values, which is exactly how four field names in this file were
+ * wrong. Switch after a live Sunday, not before.
+ *
+ * For the same reason `IN_PROGRESS`, `POSTPONED` and `CANCELLED` below are still
+ * documentation rather than evidence.
  */
 function mapGameStatus(status: string | undefined): ProviderGame["status"] {
   const raw = (status ?? "").trim().toLowerCase();
