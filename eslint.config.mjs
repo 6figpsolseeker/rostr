@@ -31,10 +31,11 @@ export default tseslint.config(
   {
     // Build scripts run under Node directly, not through the bundler, so they
     // have Node's globals. Declared explicitly rather than pulling in a globals
-    // package for two names.
+    // package for three names — `URL` is here because resolving a path relative
+    // to the script is how these find the repo, and `import.meta.url` needs it.
     files: ["scripts/**/*.mjs"],
     languageOptions: {
-      globals: { process: "readonly", console: "readonly" },
+      globals: { process: "readonly", console: "readonly", URL: "readonly" },
     },
     // Same reasoning as a CLI: the output is how the script reports what it did.
     rules: { "no-console": "off" },

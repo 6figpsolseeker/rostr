@@ -1,0 +1,1314 @@
+{
+  "cases": [
+    {
+      "name": "win percentage separates before anything else",
+      "why": "The base case. If this fails nothing below is meaningful.",
+      "teamIds": [
+        "00000000-0000-4000-8000-000000000001",
+        "00000000-0000-4000-8000-000000000002",
+        "00000000-0000-4000-8000-000000000003",
+        "00000000-0000-4000-8000-000000000004"
+      ],
+      "results": [
+        {
+          "week": 1,
+          "homeTeamId": "00000000-0000-4000-8000-000000000001",
+          "awayTeamId": "00000000-0000-4000-8000-000000000002",
+          "homeMilliPoints": 120000,
+          "awayMilliPoints": 100000
+        },
+        {
+          "week": 1,
+          "homeTeamId": "00000000-0000-4000-8000-000000000003",
+          "awayTeamId": "00000000-0000-4000-8000-000000000004",
+          "homeMilliPoints": 110000,
+          "awayMilliPoints": 90000
+        },
+        {
+          "week": 2,
+          "homeTeamId": "00000000-0000-4000-8000-000000000001",
+          "awayTeamId": "00000000-0000-4000-8000-000000000003",
+          "homeMilliPoints": 130000,
+          "awayMilliPoints": 95000
+        },
+        {
+          "week": 2,
+          "homeTeamId": "00000000-0000-4000-8000-000000000002",
+          "awayTeamId": "00000000-0000-4000-8000-000000000004",
+          "homeMilliPoints": 105000,
+          "awayMilliPoints": 99000
+        }
+      ],
+      "tiebreakers": [
+        "WIN_PCT",
+        "POINTS_FOR",
+        "HEAD_TO_HEAD",
+        "POINTS_AGAINST",
+        "LOWEST_TEAM_ID"
+      ],
+      "seeds": [
+        {
+          "teamId": "00000000-0000-4000-8000-000000000001",
+          "seed": 1,
+          "wins": 2,
+          "losses": 0,
+          "ties": 0,
+          "milliPointsFor": 250000,
+          "milliPointsAgainst": 195000,
+          "games": 2,
+          "winPctBasisPoints": 10000,
+          "decidedBy": null
+        },
+        {
+          "teamId": "00000000-0000-4000-8000-000000000002",
+          "seed": 2,
+          "wins": 1,
+          "losses": 1,
+          "ties": 0,
+          "milliPointsFor": 205000,
+          "milliPointsAgainst": 219000,
+          "games": 2,
+          "winPctBasisPoints": 5000,
+          "decidedBy": "WIN_PCT"
+        },
+        {
+          "teamId": "00000000-0000-4000-8000-000000000003",
+          "seed": 3,
+          "wins": 1,
+          "losses": 1,
+          "ties": 0,
+          "milliPointsFor": 205000,
+          "milliPointsAgainst": 220000,
+          "games": 2,
+          "winPctBasisPoints": 5000,
+          "decidedBy": "POINTS_AGAINST"
+        },
+        {
+          "teamId": "00000000-0000-4000-8000-000000000004",
+          "seed": 4,
+          "wins": 0,
+          "losses": 2,
+          "ties": 0,
+          "milliPointsFor": 189000,
+          "milliPointsAgainst": 215000,
+          "games": 2,
+          "winPctBasisPoints": 0,
+          "decidedBy": "WIN_PCT"
+        }
+      ]
+    },
+    {
+      "name": "a tie counts as half a win",
+      "why": "`winPercentageBasisPoints` weights a tie 0.5. A port that ignores ties ranks these two apart when they are level.",
+      "teamIds": [
+        "00000000-0000-4000-8000-000000000001",
+        "00000000-0000-4000-8000-000000000002",
+        "00000000-0000-4000-8000-000000000003",
+        "00000000-0000-4000-8000-000000000004"
+      ],
+      "results": [
+        {
+          "week": 1,
+          "homeTeamId": "00000000-0000-4000-8000-000000000001",
+          "awayTeamId": "00000000-0000-4000-8000-000000000002",
+          "homeMilliPoints": 100000,
+          "awayMilliPoints": 100000
+        },
+        {
+          "week": 1,
+          "homeTeamId": "00000000-0000-4000-8000-000000000003",
+          "awayTeamId": "00000000-0000-4000-8000-000000000004",
+          "homeMilliPoints": 120000,
+          "awayMilliPoints": 80000
+        },
+        {
+          "week": 2,
+          "homeTeamId": "00000000-0000-4000-8000-000000000001",
+          "awayTeamId": "00000000-0000-4000-8000-000000000003",
+          "homeMilliPoints": 90000,
+          "awayMilliPoints": 110000
+        },
+        {
+          "week": 2,
+          "homeTeamId": "00000000-0000-4000-8000-000000000002",
+          "awayTeamId": "00000000-0000-4000-8000-000000000004",
+          "homeMilliPoints": 95000,
+          "awayMilliPoints": 85000
+        }
+      ],
+      "tiebreakers": [
+        "WIN_PCT",
+        "POINTS_FOR",
+        "HEAD_TO_HEAD",
+        "POINTS_AGAINST",
+        "LOWEST_TEAM_ID"
+      ],
+      "seeds": [
+        {
+          "teamId": "00000000-0000-4000-8000-000000000003",
+          "seed": 1,
+          "wins": 2,
+          "losses": 0,
+          "ties": 0,
+          "milliPointsFor": 230000,
+          "milliPointsAgainst": 170000,
+          "games": 2,
+          "winPctBasisPoints": 10000,
+          "decidedBy": null
+        },
+        {
+          "teamId": "00000000-0000-4000-8000-000000000002",
+          "seed": 2,
+          "wins": 1,
+          "losses": 0,
+          "ties": 1,
+          "milliPointsFor": 195000,
+          "milliPointsAgainst": 185000,
+          "games": 2,
+          "winPctBasisPoints": 7500,
+          "decidedBy": "WIN_PCT"
+        },
+        {
+          "teamId": "00000000-0000-4000-8000-000000000001",
+          "seed": 3,
+          "wins": 0,
+          "losses": 1,
+          "ties": 1,
+          "milliPointsFor": 190000,
+          "milliPointsAgainst": 210000,
+          "games": 2,
+          "winPctBasisPoints": 2500,
+          "decidedBy": "WIN_PCT"
+        },
+        {
+          "teamId": "00000000-0000-4000-8000-000000000004",
+          "seed": 4,
+          "wins": 0,
+          "losses": 2,
+          "ties": 0,
+          "milliPointsFor": 165000,
+          "milliPointsAgainst": 215000,
+          "games": 2,
+          "winPctBasisPoints": 0,
+          "decidedBy": "WIN_PCT"
+        }
+      ]
+    },
+    {
+      "name": "win percentage rounds half up",
+      "why": "A 0-2-1 record over three games is 1 * 10000 / 6 = 1666.67 basis points. `Math.round` gives 1667; integer division truncating gives 1666. The difference does not move a seed at any league size anyone plays — every win percentage is a multiple of 5000/games, so two teams cannot straddle a half — which is exactly why the corpus records the number itself rather than trusting the order to expose it.",
+      "teamIds": [
+        "00000000-0000-4000-8000-000000000001",
+        "00000000-0000-4000-8000-000000000002",
+        "00000000-0000-4000-8000-000000000003",
+        "00000000-0000-4000-8000-000000000004"
+      ],
+      "results": [
+        {
+          "week": 1,
+          "homeTeamId": "00000000-0000-4000-8000-000000000001",
+          "awayTeamId": "00000000-0000-4000-8000-000000000002",
+          "homeMilliPoints": 100000,
+          "awayMilliPoints": 100000
+        },
+        {
+          "week": 1,
+          "homeTeamId": "00000000-0000-4000-8000-000000000003",
+          "awayTeamId": "00000000-0000-4000-8000-000000000004",
+          "homeMilliPoints": 120000,
+          "awayMilliPoints": 80000
+        },
+        {
+          "week": 2,
+          "homeTeamId": "00000000-0000-4000-8000-000000000001",
+          "awayTeamId": "00000000-0000-4000-8000-000000000003",
+          "homeMilliPoints": 90000,
+          "awayMilliPoints": 110000
+        },
+        {
+          "week": 2,
+          "homeTeamId": "00000000-0000-4000-8000-000000000002",
+          "awayTeamId": "00000000-0000-4000-8000-000000000004",
+          "homeMilliPoints": 105000,
+          "awayMilliPoints": 95000
+        },
+        {
+          "week": 3,
+          "homeTeamId": "00000000-0000-4000-8000-000000000001",
+          "awayTeamId": "00000000-0000-4000-8000-000000000004",
+          "homeMilliPoints": 90000,
+          "awayMilliPoints": 110000
+        },
+        {
+          "week": 3,
+          "homeTeamId": "00000000-0000-4000-8000-000000000002",
+          "awayTeamId": "00000000-0000-4000-8000-000000000003",
+          "homeMilliPoints": 100000,
+          "awayMilliPoints": 100000
+        }
+      ],
+      "tiebreakers": [
+        "WIN_PCT",
+        "POINTS_FOR",
+        "HEAD_TO_HEAD",
+        "POINTS_AGAINST",
+        "LOWEST_TEAM_ID"
+      ],
+      "seeds": [
+        {
+          "teamId": "00000000-0000-4000-8000-000000000003",
+          "seed": 1,
+          "wins": 2,
+          "losses": 0,
+          "ties": 1,
+          "milliPointsFor": 330000,
+          "milliPointsAgainst": 270000,
+          "games": 3,
+          "winPctBasisPoints": 8333,
+          "decidedBy": null
+        },
+        {
+          "teamId": "00000000-0000-4000-8000-000000000002",
+          "seed": 2,
+          "wins": 1,
+          "losses": 0,
+          "ties": 2,
+          "milliPointsFor": 305000,
+          "milliPointsAgainst": 295000,
+          "games": 3,
+          "winPctBasisPoints": 6667,
+          "decidedBy": "WIN_PCT"
+        },
+        {
+          "teamId": "00000000-0000-4000-8000-000000000004",
+          "seed": 3,
+          "wins": 1,
+          "losses": 2,
+          "ties": 0,
+          "milliPointsFor": 285000,
+          "milliPointsAgainst": 315000,
+          "games": 3,
+          "winPctBasisPoints": 3333,
+          "decidedBy": "WIN_PCT"
+        },
+        {
+          "teamId": "00000000-0000-4000-8000-000000000001",
+          "seed": 4,
+          "wins": 0,
+          "losses": 2,
+          "ties": 1,
+          "milliPointsFor": 280000,
+          "milliPointsAgainst": 320000,
+          "games": 3,
+          "winPctBasisPoints": 1667,
+          "decidedBy": "WIN_PCT"
+        }
+      ]
+    },
+    {
+      "name": "a bye is not a game",
+      "why": "A bye must contribute no record, no points and no games played — otherwise win percentage is computed over a different denominator for the team that had one.",
+      "teamIds": [
+        "00000000-0000-4000-8000-000000000001",
+        "00000000-0000-4000-8000-000000000002",
+        "00000000-0000-4000-8000-000000000003"
+      ],
+      "results": [
+        {
+          "week": 1,
+          "homeTeamId": "00000000-0000-4000-8000-000000000001",
+          "awayTeamId": "00000000-0000-4000-8000-000000000002",
+          "homeMilliPoints": 120000,
+          "awayMilliPoints": 100000
+        },
+        {
+          "week": 1,
+          "homeTeamId": "00000000-0000-4000-8000-000000000003",
+          "awayTeamId": null,
+          "homeMilliPoints": 0,
+          "awayMilliPoints": 0
+        },
+        {
+          "week": 2,
+          "homeTeamId": "00000000-0000-4000-8000-000000000002",
+          "awayTeamId": "00000000-0000-4000-8000-000000000003",
+          "homeMilliPoints": 100000,
+          "awayMilliPoints": 130000
+        },
+        {
+          "week": 2,
+          "homeTeamId": "00000000-0000-4000-8000-000000000001",
+          "awayTeamId": null,
+          "homeMilliPoints": 0,
+          "awayMilliPoints": 0
+        }
+      ],
+      "tiebreakers": [
+        "WIN_PCT",
+        "POINTS_FOR",
+        "HEAD_TO_HEAD",
+        "POINTS_AGAINST",
+        "LOWEST_TEAM_ID"
+      ],
+      "seeds": [
+        {
+          "teamId": "00000000-0000-4000-8000-000000000003",
+          "seed": 1,
+          "wins": 1,
+          "losses": 0,
+          "ties": 0,
+          "milliPointsFor": 130000,
+          "milliPointsAgainst": 100000,
+          "games": 1,
+          "winPctBasisPoints": 10000,
+          "decidedBy": null
+        },
+        {
+          "teamId": "00000000-0000-4000-8000-000000000001",
+          "seed": 2,
+          "wins": 1,
+          "losses": 0,
+          "ties": 0,
+          "milliPointsFor": 120000,
+          "milliPointsAgainst": 100000,
+          "games": 1,
+          "winPctBasisPoints": 10000,
+          "decidedBy": "POINTS_FOR"
+        },
+        {
+          "teamId": "00000000-0000-4000-8000-000000000002",
+          "seed": 3,
+          "wins": 0,
+          "losses": 2,
+          "ties": 0,
+          "milliPointsFor": 200000,
+          "milliPointsAgainst": 250000,
+          "games": 2,
+          "winPctBasisPoints": 0,
+          "decidedBy": "WIN_PCT"
+        }
+      ]
+    },
+    {
+      "name": "points for breaks a win-percentage tie",
+      "why": "Second link in the chain, and the first that reads an accumulator rather than a record.",
+      "teamIds": [
+        "00000000-0000-4000-8000-000000000001",
+        "00000000-0000-4000-8000-000000000002",
+        "00000000-0000-4000-8000-000000000003",
+        "00000000-0000-4000-8000-000000000004"
+      ],
+      "results": [
+        {
+          "week": 1,
+          "homeTeamId": "00000000-0000-4000-8000-000000000001",
+          "awayTeamId": "00000000-0000-4000-8000-000000000002",
+          "homeMilliPoints": 150000,
+          "awayMilliPoints": 100000
+        },
+        {
+          "week": 1,
+          "homeTeamId": "00000000-0000-4000-8000-000000000003",
+          "awayTeamId": "00000000-0000-4000-8000-000000000004",
+          "homeMilliPoints": 120000,
+          "awayMilliPoints": 110000
+        },
+        {
+          "week": 2,
+          "homeTeamId": "00000000-0000-4000-8000-000000000002",
+          "awayTeamId": "00000000-0000-4000-8000-000000000004",
+          "homeMilliPoints": 100000,
+          "awayMilliPoints": 90000
+        },
+        {
+          "week": 2,
+          "homeTeamId": "00000000-0000-4000-8000-000000000001",
+          "awayTeamId": "00000000-0000-4000-8000-000000000003",
+          "homeMilliPoints": 80000,
+          "awayMilliPoints": 140000
+        }
+      ],
+      "tiebreakers": [
+        "WIN_PCT",
+        "POINTS_FOR",
+        "HEAD_TO_HEAD",
+        "POINTS_AGAINST",
+        "LOWEST_TEAM_ID"
+      ],
+      "seeds": [
+        {
+          "teamId": "00000000-0000-4000-8000-000000000003",
+          "seed": 1,
+          "wins": 2,
+          "losses": 0,
+          "ties": 0,
+          "milliPointsFor": 260000,
+          "milliPointsAgainst": 190000,
+          "games": 2,
+          "winPctBasisPoints": 10000,
+          "decidedBy": null
+        },
+        {
+          "teamId": "00000000-0000-4000-8000-000000000001",
+          "seed": 2,
+          "wins": 1,
+          "losses": 1,
+          "ties": 0,
+          "milliPointsFor": 230000,
+          "milliPointsAgainst": 240000,
+          "games": 2,
+          "winPctBasisPoints": 5000,
+          "decidedBy": "WIN_PCT"
+        },
+        {
+          "teamId": "00000000-0000-4000-8000-000000000002",
+          "seed": 3,
+          "wins": 1,
+          "losses": 1,
+          "ties": 0,
+          "milliPointsFor": 200000,
+          "milliPointsAgainst": 240000,
+          "games": 2,
+          "winPctBasisPoints": 5000,
+          "decidedBy": "POINTS_FOR"
+        },
+        {
+          "teamId": "00000000-0000-4000-8000-000000000004",
+          "seed": 4,
+          "wins": 0,
+          "losses": 2,
+          "ties": 0,
+          "milliPointsFor": 200000,
+          "milliPointsAgainst": 220000,
+          "games": 2,
+          "winPctBasisPoints": 0,
+          "decidedBy": "WIN_PCT"
+        }
+      ]
+    },
+    {
+      "name": "fewer points against is better",
+      "why": "`POINTS_AGAINST` is negated so that higher is better for every tiebreaker. Getting the sign backwards inverts a seed and nothing else complains.",
+      "teamIds": [
+        "00000000-0000-4000-8000-000000000001",
+        "00000000-0000-4000-8000-000000000002",
+        "00000000-0000-4000-8000-000000000003",
+        "00000000-0000-4000-8000-000000000004"
+      ],
+      "results": [
+        {
+          "week": 1,
+          "homeTeamId": "00000000-0000-4000-8000-000000000001",
+          "awayTeamId": "00000000-0000-4000-8000-000000000003",
+          "homeMilliPoints": 100000,
+          "awayMilliPoints": 60000
+        },
+        {
+          "week": 1,
+          "homeTeamId": "00000000-0000-4000-8000-000000000002",
+          "awayTeamId": "00000000-0000-4000-8000-000000000004",
+          "homeMilliPoints": 100000,
+          "awayMilliPoints": 90000
+        },
+        {
+          "week": 2,
+          "homeTeamId": "00000000-0000-4000-8000-000000000003",
+          "awayTeamId": "00000000-0000-4000-8000-000000000001",
+          "homeMilliPoints": 100000,
+          "awayMilliPoints": 99999
+        },
+        {
+          "week": 2,
+          "homeTeamId": "00000000-0000-4000-8000-000000000004",
+          "awayTeamId": "00000000-0000-4000-8000-000000000002",
+          "homeMilliPoints": 100000,
+          "awayMilliPoints": 99999
+        }
+      ],
+      "tiebreakers": [
+        "WIN_PCT",
+        "POINTS_AGAINST",
+        "LOWEST_TEAM_ID"
+      ],
+      "seeds": [
+        {
+          "teamId": "00000000-0000-4000-8000-000000000001",
+          "seed": 1,
+          "wins": 1,
+          "losses": 1,
+          "ties": 0,
+          "milliPointsFor": 199999,
+          "milliPointsAgainst": 160000,
+          "games": 2,
+          "winPctBasisPoints": 5000,
+          "decidedBy": null
+        },
+        {
+          "teamId": "00000000-0000-4000-8000-000000000002",
+          "seed": 2,
+          "wins": 1,
+          "losses": 1,
+          "ties": 0,
+          "milliPointsFor": 199999,
+          "milliPointsAgainst": 190000,
+          "games": 2,
+          "winPctBasisPoints": 5000,
+          "decidedBy": "POINTS_AGAINST"
+        },
+        {
+          "teamId": "00000000-0000-4000-8000-000000000003",
+          "seed": 3,
+          "wins": 1,
+          "losses": 1,
+          "ties": 0,
+          "milliPointsFor": 160000,
+          "milliPointsAgainst": 199999,
+          "games": 2,
+          "winPctBasisPoints": 5000,
+          "decidedBy": "POINTS_AGAINST"
+        },
+        {
+          "teamId": "00000000-0000-4000-8000-000000000004",
+          "seed": 4,
+          "wins": 1,
+          "losses": 1,
+          "ties": 0,
+          "milliPointsFor": 190000,
+          "milliPointsAgainst": 199999,
+          "games": 2,
+          "winPctBasisPoints": 5000,
+          "decidedBy": "LOWEST_TEAM_ID"
+        }
+      ]
+    },
+    {
+      "name": "head to head decides a group that all met once",
+      "why": "Third link, and the only one that reads the schedule rather than a tally.",
+      "teamIds": [
+        "00000000-0000-4000-8000-000000000001",
+        "00000000-0000-4000-8000-000000000002",
+        "00000000-0000-4000-8000-000000000003"
+      ],
+      "results": [
+        {
+          "week": 1,
+          "homeTeamId": "00000000-0000-4000-8000-000000000001",
+          "awayTeamId": "00000000-0000-4000-8000-000000000002",
+          "homeMilliPoints": 120000,
+          "awayMilliPoints": 100000
+        },
+        {
+          "week": 2,
+          "homeTeamId": "00000000-0000-4000-8000-000000000002",
+          "awayTeamId": "00000000-0000-4000-8000-000000000003",
+          "homeMilliPoints": 120000,
+          "awayMilliPoints": 100000
+        },
+        {
+          "week": 3,
+          "homeTeamId": "00000000-0000-4000-8000-000000000003",
+          "awayTeamId": "00000000-0000-4000-8000-000000000001",
+          "homeMilliPoints": 120000,
+          "awayMilliPoints": 100000
+        }
+      ],
+      "tiebreakers": [
+        "WIN_PCT",
+        "HEAD_TO_HEAD",
+        "LOWEST_TEAM_ID"
+      ],
+      "seeds": [
+        {
+          "teamId": "00000000-0000-4000-8000-000000000001",
+          "seed": 1,
+          "wins": 1,
+          "losses": 1,
+          "ties": 0,
+          "milliPointsFor": 220000,
+          "milliPointsAgainst": 220000,
+          "games": 2,
+          "winPctBasisPoints": 5000,
+          "decidedBy": null
+        },
+        {
+          "teamId": "00000000-0000-4000-8000-000000000002",
+          "seed": 2,
+          "wins": 1,
+          "losses": 1,
+          "ties": 0,
+          "milliPointsFor": 220000,
+          "milliPointsAgainst": 220000,
+          "games": 2,
+          "winPctBasisPoints": 5000,
+          "decidedBy": "LOWEST_TEAM_ID"
+        },
+        {
+          "teamId": "00000000-0000-4000-8000-000000000003",
+          "seed": 3,
+          "wins": 1,
+          "losses": 1,
+          "ties": 0,
+          "milliPointsFor": 220000,
+          "milliPointsAgainst": 220000,
+          "games": 2,
+          "winPctBasisPoints": 5000,
+          "decidedBy": "LOWEST_TEAM_ID"
+        }
+      ]
+    },
+    {
+      "name": "a head-to-head cycle resolves without a pairwise comparator",
+      "why": "a beats b, b beats c, c beats a. A pairwise comparator is not a total order here and sorts differently depending on input order; scoring the group and partitioning does not.",
+      "teamIds": [
+        "00000000-0000-4000-8000-000000000001",
+        "00000000-0000-4000-8000-000000000002",
+        "00000000-0000-4000-8000-000000000003"
+      ],
+      "results": [
+        {
+          "week": 1,
+          "homeTeamId": "00000000-0000-4000-8000-000000000001",
+          "awayTeamId": "00000000-0000-4000-8000-000000000002",
+          "homeMilliPoints": 110000,
+          "awayMilliPoints": 100000
+        },
+        {
+          "week": 2,
+          "homeTeamId": "00000000-0000-4000-8000-000000000002",
+          "awayTeamId": "00000000-0000-4000-8000-000000000003",
+          "homeMilliPoints": 110000,
+          "awayMilliPoints": 100000
+        },
+        {
+          "week": 3,
+          "homeTeamId": "00000000-0000-4000-8000-000000000003",
+          "awayTeamId": "00000000-0000-4000-8000-000000000001",
+          "homeMilliPoints": 110000,
+          "awayMilliPoints": 100000
+        }
+      ],
+      "tiebreakers": [
+        "WIN_PCT",
+        "HEAD_TO_HEAD",
+        "POINTS_FOR",
+        "LOWEST_TEAM_ID"
+      ],
+      "seeds": [
+        {
+          "teamId": "00000000-0000-4000-8000-000000000001",
+          "seed": 1,
+          "wins": 1,
+          "losses": 1,
+          "ties": 0,
+          "milliPointsFor": 210000,
+          "milliPointsAgainst": 210000,
+          "games": 2,
+          "winPctBasisPoints": 5000,
+          "decidedBy": null
+        },
+        {
+          "teamId": "00000000-0000-4000-8000-000000000002",
+          "seed": 2,
+          "wins": 1,
+          "losses": 1,
+          "ties": 0,
+          "milliPointsFor": 210000,
+          "milliPointsAgainst": 210000,
+          "games": 2,
+          "winPctBasisPoints": 5000,
+          "decidedBy": "LOWEST_TEAM_ID"
+        },
+        {
+          "teamId": "00000000-0000-4000-8000-000000000003",
+          "seed": 3,
+          "wins": 1,
+          "losses": 1,
+          "ties": 0,
+          "milliPointsFor": 210000,
+          "milliPointsAgainst": 210000,
+          "games": 2,
+          "winPctBasisPoints": 5000,
+          "decidedBy": "LOWEST_TEAM_ID"
+        }
+      ]
+    },
+    {
+      "name": "head to head is skipped when the group did not meet evenly",
+      "why": "Comparing records against each other compares different schedules when the pairs met a different number of times. The tiebreaker must be skipped whole, not applied unevenly — and the chain must then fall through to the next link.",
+      "teamIds": [
+        "00000000-0000-4000-8000-000000000001",
+        "00000000-0000-4000-8000-000000000002",
+        "00000000-0000-4000-8000-000000000003"
+      ],
+      "results": [
+        {
+          "week": 1,
+          "homeTeamId": "00000000-0000-4000-8000-000000000001",
+          "awayTeamId": "00000000-0000-4000-8000-000000000002",
+          "homeMilliPoints": 110000,
+          "awayMilliPoints": 100000
+        },
+        {
+          "week": 2,
+          "homeTeamId": "00000000-0000-4000-8000-000000000002",
+          "awayTeamId": "00000000-0000-4000-8000-000000000001",
+          "homeMilliPoints": 110000,
+          "awayMilliPoints": 100000
+        },
+        {
+          "week": 3,
+          "homeTeamId": "00000000-0000-4000-8000-000000000001",
+          "awayTeamId": "00000000-0000-4000-8000-000000000003",
+          "homeMilliPoints": 100000,
+          "awayMilliPoints": 110000
+        },
+        {
+          "week": 4,
+          "homeTeamId": "00000000-0000-4000-8000-000000000002",
+          "awayTeamId": "00000000-0000-4000-8000-000000000003",
+          "homeMilliPoints": 110000,
+          "awayMilliPoints": 100000
+        }
+      ],
+      "tiebreakers": [
+        "WIN_PCT",
+        "HEAD_TO_HEAD",
+        "POINTS_FOR",
+        "LOWEST_TEAM_ID"
+      ],
+      "seeds": [
+        {
+          "teamId": "00000000-0000-4000-8000-000000000002",
+          "seed": 1,
+          "wins": 2,
+          "losses": 1,
+          "ties": 0,
+          "milliPointsFor": 320000,
+          "milliPointsAgainst": 310000,
+          "games": 3,
+          "winPctBasisPoints": 6667,
+          "decidedBy": null
+        },
+        {
+          "teamId": "00000000-0000-4000-8000-000000000003",
+          "seed": 2,
+          "wins": 1,
+          "losses": 1,
+          "ties": 0,
+          "milliPointsFor": 210000,
+          "milliPointsAgainst": 210000,
+          "games": 2,
+          "winPctBasisPoints": 5000,
+          "decidedBy": "WIN_PCT"
+        },
+        {
+          "teamId": "00000000-0000-4000-8000-000000000001",
+          "seed": 3,
+          "wins": 1,
+          "losses": 2,
+          "ties": 0,
+          "milliPointsFor": 310000,
+          "milliPointsAgainst": 320000,
+          "games": 3,
+          "winPctBasisPoints": 3333,
+          "decidedBy": "WIN_PCT"
+        }
+      ]
+    },
+    {
+      "name": "head to head is skipped when a pair never met",
+      "why": "The other half of the evenness rule: every pair must have met at all, not merely met the same number of times.",
+      "teamIds": [
+        "00000000-0000-4000-8000-000000000001",
+        "00000000-0000-4000-8000-000000000002",
+        "00000000-0000-4000-8000-000000000003"
+      ],
+      "results": [
+        {
+          "week": 1,
+          "homeTeamId": "00000000-0000-4000-8000-000000000001",
+          "awayTeamId": "00000000-0000-4000-8000-000000000002",
+          "homeMilliPoints": 110000,
+          "awayMilliPoints": 100000
+        },
+        {
+          "week": 2,
+          "homeTeamId": "00000000-0000-4000-8000-000000000002",
+          "awayTeamId": "00000000-0000-4000-8000-000000000001",
+          "homeMilliPoints": 110000,
+          "awayMilliPoints": 100000
+        },
+        {
+          "week": 3,
+          "homeTeamId": "00000000-0000-4000-8000-000000000003",
+          "awayTeamId": "00000000-0000-4000-8000-000000000001",
+          "homeMilliPoints": 105000,
+          "awayMilliPoints": 105000
+        },
+        {
+          "week": 4,
+          "homeTeamId": "00000000-0000-4000-8000-000000000003",
+          "awayTeamId": "00000000-0000-4000-8000-000000000002",
+          "homeMilliPoints": 105000,
+          "awayMilliPoints": 105000
+        }
+      ],
+      "tiebreakers": [
+        "WIN_PCT",
+        "HEAD_TO_HEAD",
+        "POINTS_FOR",
+        "LOWEST_TEAM_ID"
+      ],
+      "seeds": [
+        {
+          "teamId": "00000000-0000-4000-8000-000000000001",
+          "seed": 1,
+          "wins": 1,
+          "losses": 1,
+          "ties": 1,
+          "milliPointsFor": 315000,
+          "milliPointsAgainst": 315000,
+          "games": 3,
+          "winPctBasisPoints": 5000,
+          "decidedBy": null
+        },
+        {
+          "teamId": "00000000-0000-4000-8000-000000000002",
+          "seed": 2,
+          "wins": 1,
+          "losses": 1,
+          "ties": 1,
+          "milliPointsFor": 315000,
+          "milliPointsAgainst": 315000,
+          "games": 3,
+          "winPctBasisPoints": 5000,
+          "decidedBy": "LOWEST_TEAM_ID"
+        },
+        {
+          "teamId": "00000000-0000-4000-8000-000000000003",
+          "seed": 3,
+          "wins": 0,
+          "losses": 0,
+          "ties": 2,
+          "milliPointsFor": 210000,
+          "milliPointsAgainst": 210000,
+          "games": 2,
+          "winPctBasisPoints": 5000,
+          "decidedBy": "POINTS_FOR"
+        }
+      ]
+    },
+    {
+      "name": "the chain is re-applied within each tied group, not once globally",
+      "why": "The subtlest property. After a link splits the field, the *remaining* links apply inside each group separately — a global sort by the whole chain gives a different order.",
+      "teamIds": [
+        "00000000-0000-4000-8000-000000000001",
+        "00000000-0000-4000-8000-000000000002",
+        "00000000-0000-4000-8000-000000000003",
+        "00000000-0000-4000-8000-000000000004"
+      ],
+      "results": [
+        {
+          "week": 1,
+          "homeTeamId": "00000000-0000-4000-8000-000000000001",
+          "awayTeamId": "00000000-0000-4000-8000-000000000003",
+          "homeMilliPoints": 150000,
+          "awayMilliPoints": 60000
+        },
+        {
+          "week": 1,
+          "homeTeamId": "00000000-0000-4000-8000-000000000002",
+          "awayTeamId": "00000000-0000-4000-8000-000000000004",
+          "homeMilliPoints": 140000,
+          "awayMilliPoints": 70000
+        },
+        {
+          "week": 2,
+          "homeTeamId": "00000000-0000-4000-8000-000000000003",
+          "awayTeamId": "00000000-0000-4000-8000-000000000001",
+          "homeMilliPoints": 100000,
+          "awayMilliPoints": 90000
+        },
+        {
+          "week": 2,
+          "homeTeamId": "00000000-0000-4000-8000-000000000004",
+          "awayTeamId": "00000000-0000-4000-8000-000000000002",
+          "homeMilliPoints": 100000,
+          "awayMilliPoints": 90000
+        }
+      ],
+      "tiebreakers": [
+        "WIN_PCT",
+        "POINTS_FOR",
+        "HEAD_TO_HEAD",
+        "POINTS_AGAINST",
+        "LOWEST_TEAM_ID"
+      ],
+      "seeds": [
+        {
+          "teamId": "00000000-0000-4000-8000-000000000001",
+          "seed": 1,
+          "wins": 1,
+          "losses": 1,
+          "ties": 0,
+          "milliPointsFor": 240000,
+          "milliPointsAgainst": 160000,
+          "games": 2,
+          "winPctBasisPoints": 5000,
+          "decidedBy": null
+        },
+        {
+          "teamId": "00000000-0000-4000-8000-000000000002",
+          "seed": 2,
+          "wins": 1,
+          "losses": 1,
+          "ties": 0,
+          "milliPointsFor": 230000,
+          "milliPointsAgainst": 170000,
+          "games": 2,
+          "winPctBasisPoints": 5000,
+          "decidedBy": "POINTS_FOR"
+        },
+        {
+          "teamId": "00000000-0000-4000-8000-000000000004",
+          "seed": 3,
+          "wins": 1,
+          "losses": 1,
+          "ties": 0,
+          "milliPointsFor": 170000,
+          "milliPointsAgainst": 230000,
+          "games": 2,
+          "winPctBasisPoints": 5000,
+          "decidedBy": "POINTS_FOR"
+        },
+        {
+          "teamId": "00000000-0000-4000-8000-000000000003",
+          "seed": 4,
+          "wins": 1,
+          "losses": 1,
+          "ties": 0,
+          "milliPointsFor": 160000,
+          "milliPointsAgainst": 240000,
+          "games": 2,
+          "winPctBasisPoints": 5000,
+          "decidedBy": "POINTS_FOR"
+        }
+      ]
+    },
+    {
+      "name": "the chain shortens as it descends",
+      "why": "`orderGroup` recurses on `tiebreakers.slice(i + 1)`, so a link cannot run again below itself. That is only observable through head-to-head, because it is the one link whose *applicability* depends on the group: skipped here for the four (they did not all meet), it would apply inside a pair. Every team is 1-1; points-for splits them 2-2; and within the top pair head-to-head would order them one way while the remaining chain orders them the other. A port that restarts the chain per subgroup seeds the wrong team first.",
+      "teamIds": [
+        "00000000-0000-4000-8000-000000000001",
+        "00000000-0000-4000-8000-000000000002",
+        "00000000-0000-4000-8000-000000000003",
+        "00000000-0000-4000-8000-000000000004"
+      ],
+      "results": [
+        {
+          "week": 1,
+          "homeTeamId": "00000000-0000-4000-8000-000000000001",
+          "awayTeamId": "00000000-0000-4000-8000-000000000002",
+          "homeMilliPoints": 100000,
+          "awayMilliPoints": 120000
+        },
+        {
+          "week": 2,
+          "homeTeamId": "00000000-0000-4000-8000-000000000002",
+          "awayTeamId": "00000000-0000-4000-8000-000000000003",
+          "homeMilliPoints": 90000,
+          "awayMilliPoints": 100000
+        },
+        {
+          "week": 3,
+          "homeTeamId": "00000000-0000-4000-8000-000000000003",
+          "awayTeamId": "00000000-0000-4000-8000-000000000004",
+          "homeMilliPoints": 80000,
+          "awayMilliPoints": 90000
+        },
+        {
+          "week": 4,
+          "homeTeamId": "00000000-0000-4000-8000-000000000004",
+          "awayTeamId": "00000000-0000-4000-8000-000000000001",
+          "homeMilliPoints": 90000,
+          "awayMilliPoints": 110000
+        }
+      ],
+      "tiebreakers": [
+        "WIN_PCT",
+        "HEAD_TO_HEAD",
+        "POINTS_FOR",
+        "LOWEST_TEAM_ID"
+      ],
+      "seeds": [
+        {
+          "teamId": "00000000-0000-4000-8000-000000000001",
+          "seed": 1,
+          "wins": 1,
+          "losses": 1,
+          "ties": 0,
+          "milliPointsFor": 210000,
+          "milliPointsAgainst": 210000,
+          "games": 2,
+          "winPctBasisPoints": 5000,
+          "decidedBy": null
+        },
+        {
+          "teamId": "00000000-0000-4000-8000-000000000002",
+          "seed": 2,
+          "wins": 1,
+          "losses": 1,
+          "ties": 0,
+          "milliPointsFor": 210000,
+          "milliPointsAgainst": 200000,
+          "games": 2,
+          "winPctBasisPoints": 5000,
+          "decidedBy": "LOWEST_TEAM_ID"
+        },
+        {
+          "teamId": "00000000-0000-4000-8000-000000000003",
+          "seed": 3,
+          "wins": 1,
+          "losses": 1,
+          "ties": 0,
+          "milliPointsFor": 180000,
+          "milliPointsAgainst": 180000,
+          "games": 2,
+          "winPctBasisPoints": 5000,
+          "decidedBy": "POINTS_FOR"
+        },
+        {
+          "teamId": "00000000-0000-4000-8000-000000000004",
+          "seed": 4,
+          "wins": 1,
+          "losses": 1,
+          "ties": 0,
+          "milliPointsFor": 180000,
+          "milliPointsAgainst": 190000,
+          "games": 2,
+          "winPctBasisPoints": 5000,
+          "decidedBy": "LOWEST_TEAM_ID"
+        }
+      ]
+    },
+    {
+      "name": "lowest team id is the terminal backstop",
+      "why": "Every real criterion has come up equal. The result must still be total and reproducible by anyone holding the published standings.",
+      "teamIds": [
+        "00000000-0000-4000-8000-000000000003",
+        "00000000-0000-4000-8000-000000000001",
+        "00000000-0000-4000-8000-000000000002"
+      ],
+      "results": [
+        {
+          "week": 1,
+          "homeTeamId": "00000000-0000-4000-8000-000000000001",
+          "awayTeamId": "00000000-0000-4000-8000-000000000002",
+          "homeMilliPoints": 100000,
+          "awayMilliPoints": 100000
+        },
+        {
+          "week": 2,
+          "homeTeamId": "00000000-0000-4000-8000-000000000002",
+          "awayTeamId": "00000000-0000-4000-8000-000000000003",
+          "homeMilliPoints": 100000,
+          "awayMilliPoints": 100000
+        },
+        {
+          "week": 3,
+          "homeTeamId": "00000000-0000-4000-8000-000000000003",
+          "awayTeamId": "00000000-0000-4000-8000-000000000001",
+          "homeMilliPoints": 100000,
+          "awayMilliPoints": 100000
+        }
+      ],
+      "tiebreakers": [
+        "WIN_PCT",
+        "POINTS_FOR",
+        "HEAD_TO_HEAD",
+        "POINTS_AGAINST",
+        "LOWEST_TEAM_ID"
+      ],
+      "seeds": [
+        {
+          "teamId": "00000000-0000-4000-8000-000000000001",
+          "seed": 1,
+          "wins": 0,
+          "losses": 0,
+          "ties": 2,
+          "milliPointsFor": 200000,
+          "milliPointsAgainst": 200000,
+          "games": 2,
+          "winPctBasisPoints": 5000,
+          "decidedBy": null
+        },
+        {
+          "teamId": "00000000-0000-4000-8000-000000000002",
+          "seed": 2,
+          "wins": 0,
+          "losses": 0,
+          "ties": 2,
+          "milliPointsFor": 200000,
+          "milliPointsAgainst": 200000,
+          "games": 2,
+          "winPctBasisPoints": 5000,
+          "decidedBy": "LOWEST_TEAM_ID"
+        },
+        {
+          "teamId": "00000000-0000-4000-8000-000000000003",
+          "seed": 3,
+          "wins": 0,
+          "losses": 0,
+          "ties": 2,
+          "milliPointsFor": 200000,
+          "milliPointsAgainst": 200000,
+          "games": 2,
+          "winPctBasisPoints": 5000,
+          "decidedBy": "LOWEST_TEAM_ID"
+        }
+      ]
+    },
+    {
+      "name": "input order does not decide a seed",
+      "why": "The same league with the team list shuffled must seed identically. This is what makes the standings reproducible from published data rather than from whatever order Postgres returned.",
+      "teamIds": [
+        "00000000-0000-4000-8000-000000000002",
+        "00000000-0000-4000-8000-000000000003",
+        "00000000-0000-4000-8000-000000000001"
+      ],
+      "results": [
+        {
+          "week": 1,
+          "homeTeamId": "00000000-0000-4000-8000-000000000001",
+          "awayTeamId": "00000000-0000-4000-8000-000000000002",
+          "homeMilliPoints": 100000,
+          "awayMilliPoints": 100000
+        },
+        {
+          "week": 2,
+          "homeTeamId": "00000000-0000-4000-8000-000000000002",
+          "awayTeamId": "00000000-0000-4000-8000-000000000003",
+          "homeMilliPoints": 100000,
+          "awayMilliPoints": 100000
+        },
+        {
+          "week": 3,
+          "homeTeamId": "00000000-0000-4000-8000-000000000003",
+          "awayTeamId": "00000000-0000-4000-8000-000000000001",
+          "homeMilliPoints": 100000,
+          "awayMilliPoints": 100000
+        }
+      ],
+      "tiebreakers": [
+        "WIN_PCT",
+        "POINTS_FOR",
+        "HEAD_TO_HEAD",
+        "POINTS_AGAINST",
+        "LOWEST_TEAM_ID"
+      ],
+      "seeds": [
+        {
+          "teamId": "00000000-0000-4000-8000-000000000001",
+          "seed": 1,
+          "wins": 0,
+          "losses": 0,
+          "ties": 2,
+          "milliPointsFor": 200000,
+          "milliPointsAgainst": 200000,
+          "games": 2,
+          "winPctBasisPoints": 5000,
+          "decidedBy": null
+        },
+        {
+          "teamId": "00000000-0000-4000-8000-000000000002",
+          "seed": 2,
+          "wins": 0,
+          "losses": 0,
+          "ties": 2,
+          "milliPointsFor": 200000,
+          "milliPointsAgainst": 200000,
+          "games": 2,
+          "winPctBasisPoints": 5000,
+          "decidedBy": "LOWEST_TEAM_ID"
+        },
+        {
+          "teamId": "00000000-0000-4000-8000-000000000003",
+          "seed": 3,
+          "wins": 0,
+          "losses": 0,
+          "ties": 2,
+          "milliPointsFor": 200000,
+          "milliPointsAgainst": 200000,
+          "games": 2,
+          "winPctBasisPoints": 5000,
+          "decidedBy": "LOWEST_TEAM_ID"
+        }
+      ]
+    },
+    {
+      "name": "an exhausted chain is an error, not an order",
+      "why": "The highest-value assertion here. Falling through to input order would make a seed depend on row order, silently. Rust has no exceptions, so this must come back as a refusal rather than a plausible answer.",
+      "teamIds": [
+        "00000000-0000-4000-8000-000000000001",
+        "00000000-0000-4000-8000-000000000002"
+      ],
+      "results": [
+        {
+          "week": 1,
+          "homeTeamId": "00000000-0000-4000-8000-000000000001",
+          "awayTeamId": "00000000-0000-4000-8000-000000000002",
+          "homeMilliPoints": 100000,
+          "awayMilliPoints": 100000
+        }
+      ],
+      "tiebreakers": [
+        "WIN_PCT"
+      ],
+      "refusal": "TIEBREAKERS_EXHAUSTED"
+    },
+    {
+      "name": "no tiebreakers at all is an error",
+      "why": "An empty chain cannot seed anything, and returning input order would be the same silent failure as above.",
+      "teamIds": [
+        "00000000-0000-4000-8000-000000000001",
+        "00000000-0000-4000-8000-000000000002"
+      ],
+      "results": [
+        {
+          "week": 1,
+          "homeTeamId": "00000000-0000-4000-8000-000000000001",
+          "awayTeamId": "00000000-0000-4000-8000-000000000002",
+          "homeMilliPoints": 100000,
+          "awayMilliPoints": 100000
+        }
+      ],
+      "tiebreakers": [],
+      "refusal": "NO_TIEBREAKERS"
+    },
+    {
+      "name": "a matchup naming an unknown team is an error",
+      "why": "The result set and the team list must agree. Silently ignoring the row would drop real games from the record.",
+      "teamIds": [
+        "00000000-0000-4000-8000-000000000001",
+        "00000000-0000-4000-8000-000000000002"
+      ],
+      "results": [
+        {
+          "week": 1,
+          "homeTeamId": "00000000-0000-4000-8000-000000000001",
+          "awayTeamId": "00000000-0000-4000-8000-000000000008",
+          "homeMilliPoints": 100000,
+          "awayMilliPoints": 90000
+        }
+      ],
+      "tiebreakers": [
+        "WIN_PCT",
+        "POINTS_FOR",
+        "HEAD_TO_HEAD",
+        "POINTS_AGAINST",
+        "LOWEST_TEAM_ID"
+      ],
+      "refusal": "UNKNOWN_TEAM"
+    }
+  ]
+}
