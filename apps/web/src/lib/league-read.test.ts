@@ -63,20 +63,47 @@ const OPEN: Record<string, string> = {
   "leagues/[id]/page.tsx": "the league page renders the rules a prospective member signs",
 };
 
-function filesUnder(dir: string, name: string): string[] {
-  const found: string[] = [];
-  for (const entry of readdirSync(dir)) {
-    const path = join(dir, entry);
-    if (statSync(path).isDirectory()) found.push(...filesUnder(path, name));
-    else if (entry === name) found.push(path);
-  }
+/**
+ * A route group — `(app)` — organises files and contributes no URL segment.
+ *
+ * Both the sweep and the `OPEN` keys are written in **URL** terms rather than
+ * directory terms, so moving a page between groups does not silently empty the
+ * sweep or strand an `OPEN` entry. It moved once already, when the marketing
+ * page arrived and the signed-in chrome went into `(app)`, and the floor
+ * assertion below is what caught it.
+ */
+const withoutGroups = (path: string): string =>
+  path
+    .split("/")
+    .filter((segment) => !(segment.startsWith("(") && segment.endsWith(")")))
+    .join("/");
+
+/** Every file named `name` whose URL path sits under `urlPrefix`. */
+function filesUnder(name: string, urlPrefix: string): { key: string; path: string }[] {
+  const found: { key: string; path: string }[] = [];
+
+  const walk = (dir: string): void => {
+    for (const entry of readdirSync(dir)) {
+      const path = join(dir, entry);
+      if (statSync(path).isDirectory()) {
+        walk(path);
+        continue;
+      }
+      if (entry !== name) continue;
+      const key = withoutGroups(relative(APP, path).replaceAll("\\", "/"));
+      if (key.startsWith(urlPrefix)) found.push({ key, path });
+    }
+  };
+
+  walk(APP);
   return found;
 }
 
 const leagueScoped = [
-  ...filesUnder(join(APP, "api/leagues/[id]"), "route.ts"),
-  ...filesUnder(join(APP, "leagues/[id]"), "page.tsx"),
-].map((path) => relative(APP, path).replaceAll("\\", "/"));
+  ...filesUnder("route.ts", "api/leagues/[id]/"),
+  // Anchored, or every `api/leagues/[id]/…/page.tsx` would match here too.
+  ...filesUnder("page.tsx", "leagues/[id]/"),
+];
 
 describe("league-scoped routes and pages are gated", () => {
   it("finds the files at all", () => {
@@ -87,15 +114,15 @@ describe("league-scoped routes and pages are gated", () => {
     expect(leagueScoped.length).toBeGreaterThanOrEqual(20);
   });
 
-  it.each(leagueScoped)("%s", (path) => {
-    if (path in OPEN) return;
+  it.each(leagueScoped.map((file) => [file.key, file.path] as const))("%s", (key, path) => {
+    if (key in OPEN) return;
 
-    const source = readFileSync(join(APP, path), "utf8");
+    const source = readFileSync(path, "utf8");
     const gate = GATES.find((g) => g.test(source));
 
     expect(
       gate,
-      `${path} reads a league by id and asks nobody who is looking. Call ` +
+      `${key} reads a league by id and asks nobody who is looking. Call ` +
         `leagueReadForbidden (routes) or leagueReadAccess (pages), or require ` +
         `membership — or add it to OPEN with a reason.`,
     ).toBeDefined();
@@ -104,8 +131,9 @@ describe("league-scoped routes and pages are gated", () => {
   it("has a reason recorded for every open file, and no stale entries", () => {
     // A file deleted or renamed must not leave a permanent hole behind that the
     // next file at that path silently inherits.
-    for (const [path, reason] of Object.entries(OPEN)) {
-      expect(leagueScoped, `${path} is in OPEN but does not exist`).toContain(path);
+    const keys = leagueScoped.map((file) => file.key);
+    for (const [key, reason] of Object.entries(OPEN)) {
+      expect(keys, `${key} is in OPEN but does not exist`).toContain(key);
       expect(reason.length).toBeGreaterThan(20);
     }
   });

@@ -1,55 +1,577 @@
-export default function HomePage() {
+import type { ReactNode } from "react";
+import { HeroThrow } from "@/components/landing/HeroThrow";
+
+/**
+ * The marketing page.
+ *
+ * Nine bands on the Nocturne ground. Almost every word is lifted verbatim from
+ * `README.md` — the four differentiators, the format table and the multi-sport
+ * statement are the repo's own sentences rather than marketing rewrites of them,
+ * so the page cannot drift from what the product claims. When the README's
+ * wording changes, this should follow it.
+ *
+ * Three rules from the design system govern the whole page and are worth knowing
+ * before editing it:
+ *
+ *   - The accent is a line, an edge and a glow, never a flood. There is exactly
+ *     one saturated field on the page, the closing band.
+ *   - Buttons are outlined, never filled.
+ *   - Rules fade to transparent at both ends. That is why every divider is a
+ *     gradient rather than a `border-top`.
+ *
+ * The page is a server component. The only client code is the hero animation,
+ * which is imperative by necessity.
+ */
+
+const CONTAINER = "mx-auto w-full max-w-[1180px] px-10";
+
+export default function LandingPage() {
   return (
-    <div className="space-y-10">
-      <section className="space-y-4">
-        <h1 className="text-4xl font-semibold tracking-tight">
-          Fantasy football that needs no commissioner.
-        </h1>
-        <p className="max-w-2xl text-white/70">
-          League rules are frozen when the league is created, shown in full before you join, and
-          hashed on-chain. Joining signs that hash. Nobody — not even the commissioner — can
-          change the rules afterwards.
-        </p>
+    <div className="nocturne min-h-screen">
+      <SiteHeader />
+
+      <section className="mx-auto w-full max-w-[1180px] overflow-hidden">
+        <HeroThrow
+          headline={
+            <>
+              <Tag>Pre-alpha · 2026 NFL season</Tag>
+              <h1 className="mt-6 text-[clamp(46px,6.2vw,86px)] font-medium leading-[1.02] tracking-[-0.035em]">
+                Your roster
+                <br />
+                is yours.
+              </h1>
+            </>
+          }
+        >
+          <p className="mt-8 max-w-[560px] text-[18.5px] leading-[1.62] text-nocturne-neutral-400">
+            Drafted players are held in your wallet, not on a platform&rsquo;s server. League
+            rules are frozen at creation and hashed on-chain. The champion is derived from the
+            Week 17 result, not declared by an administrator.
+          </p>
+
+          <div className="mt-9 flex flex-wrap items-center gap-3">
+            <PrimaryButton href="/leagues/new">Create a free league</PrimaryButton>
+            <GhostButton href="#how">See how a season runs</GhostButton>
+          </div>
+
+          <ul className="mt-9 flex flex-wrap gap-x-[22px] gap-y-2 text-[13px] text-nocturne-neutral-600">
+            <li>Open source, MIT</li>
+            <li>Full PPR, 12 teams</li>
+            <li>Built for the Solana Seeker</li>
+          </ul>
+        </HeroThrow>
       </section>
 
-      <section className="grid gap-4 sm:grid-cols-3">
-        <Feature title="Rules that cannot move">
-          Scoring, roster, payouts, and deadlines are set once. The database rejects an update;
-          the chain holds the hash you signed.
-        </Feature>
-        <Feature title="A pot nobody can take">
-          Optional buy-ins sit in escrow until the season resolves. An unconditional timelock
-          means funds can never be stuck.
-        </Feature>
-        <Feature title="No one declares a winner">
-          The contract derives the champion from the Week 17 result. There is no sign-off step
-          to corrupt.
-        </Feature>
-      </section>
-
-      <section className="rounded border border-white/10 p-6">
-        <h2 className="mb-2 text-lg font-medium">Pre-alpha</h2>
-        <p className="text-sm text-white/60">
-          Targeting the 2026 NFL season, kickoff September 9. The escrow contract is not
-          audited. Read the{" "}
-          <a
-            className="underline"
-            href="https://github.com/6figpsolseeker/rostr/blob/main/docs/RULES.md"
-          >
-            league rules
-          </a>{" "}
-          before anything else.
-        </p>
-      </section>
+      <LeaguePanel />
+      <Differentiators />
+      <HowItWorks />
+      <Format />
+      <MultiSport />
+      <ClosingBand />
+      <SiteFooter />
     </div>
   );
 }
 
-function Feature({ title, children }: { title: string; children: React.ReactNode }) {
+/* ------------------------------------------------------------------ shared */
+
+function Tag({ children, accent }: { children: ReactNode; accent?: boolean }) {
   return (
-    <div className="rounded border border-white/10 p-4">
-      <h3 className="mb-2 font-medium">{title}</h3>
-      <p className="text-sm text-white/60">{children}</p>
+    <span
+      className={`inline-block rounded-[4px] border px-2 py-1 text-[11px] uppercase tracking-[0.12em] ${
+        accent
+          ? "border-nocturne-accent/40 text-nocturne-accent-300"
+          : "border-nocturne-neutral-800 text-nocturne-neutral-500"
+      }`}
+    >
+      {children}
+    </span>
+  );
+}
+
+/** Outlined, never filled — the design system permits no solid buttons. */
+function PrimaryButton({ href, children }: { href: string; children: ReactNode }) {
+  return (
+    <a
+      href={href}
+      className="rounded-[4px] border border-nocturne-accent px-[22px] py-3 text-[14.5px] text-nocturne-accent-200 transition-colors hover:bg-nocturne-accent/10"
+    >
+      {children}
+    </a>
+  );
+}
+
+function GhostButton({ href, children }: { href: string; children: ReactNode }) {
+  return (
+    <a
+      href={href}
+      className="rounded-[4px] border border-nocturne-neutral-800 px-[18px] py-3 text-[14.5px] text-nocturne-neutral-400 transition-colors hover:text-nocturne-text"
+    >
+      {children}
+    </a>
+  );
+}
+
+function Kicker({ children }: { children: ReactNode }) {
+  return (
+    <p className="text-[11px] uppercase tracking-[0.14em] text-nocturne-accent-500">
+      {children}
+    </p>
+  );
+}
+
+/* -------------------------------------------------------------------- 1 */
+
+function SiteHeader() {
+  return (
+    <header className="sticky top-0 z-40 border-b border-nocturne-neutral-900 bg-[rgba(22,24,38,0.86)] backdrop-blur-[10px]">
+      <nav className="mx-auto flex w-full max-w-[1180px] items-center justify-between px-10 py-[14px]">
+        <a href="/" className="flex items-baseline gap-[10px]">
+          <span className="text-[19px] font-semibold tracking-[-0.02em]">rostr</span>
+          <span className="text-[11px] uppercase tracking-[0.14em] text-nocturne-neutral-600">
+            fantasy football
+          </span>
+        </a>
+        <div className="flex items-center gap-7">
+          <a
+            href="#how"
+            className="text-[13.5px] text-nocturne-neutral-400 hover:text-nocturne-text"
+          >
+            How it works
+          </a>
+          <a
+            href="#format"
+            className="text-[13.5px] text-nocturne-neutral-400 hover:text-nocturne-text"
+          >
+            Format
+          </a>
+          <a
+            href="#trust"
+            className="text-[13.5px] text-nocturne-neutral-400 hover:text-nocturne-text"
+          >
+            Why it&rsquo;s different
+          </a>
+          <a
+            href="https://github.com/6figpsolseeker/rostr"
+            className="text-[13.5px] text-nocturne-neutral-400 hover:text-nocturne-text"
+          >
+            GitHub
+          </a>
+          <a
+            href="/leagues/new"
+            className="rounded-[4px] border border-nocturne-accent px-4 py-2 text-[13px] text-nocturne-accent-200 transition-colors hover:bg-nocturne-accent/10"
+          >
+            Create a league
+          </a>
+        </div>
+      </nav>
+    </header>
+  );
+}
+
+/* -------------------------------------------------------------------- 3 */
+
+/**
+ * A league's week, as it actually reads.
+ *
+ * The numbers are illustrative and the players invented. This wants real data
+ * once the stats pipeline has a producer — `stat_lines` is empty today, so there
+ * is nothing truthful to render here yet.
+ */
+function LeaguePanel() {
+  const lineup: readonly [string, string, string, string, boolean][] = [
+    ["QB", "J. Barrow", "18.4", "21.2", false],
+    ["RB", "A. Villanueva", "14.1", "16.8", false],
+    ["RB", "D. Okonkwo", "11.7", "9.3", false],
+    ["WR", "T. Mackey", "13.2", "17.5", false],
+    ["FLEX", "R. Silva", "10.9", "—", true],
+  ];
+
+  return (
+    <section className={`${CONTAINER} py-[84px]`}>
+      <div className="grid gap-14 lg:grid-cols-[minmax(0,0.72fr)_minmax(0,1fr)] lg:items-start">
+        <div>
+          <Kicker>Inside a league</Kicker>
+          <h2 className="mt-4 text-[34px] font-medium leading-[1.14] tracking-[-0.025em]">
+            The week you already know how to read.
+          </h2>
+          <p className="mt-5 max-w-[440px] text-[16px] leading-[1.65] text-nocturne-neutral-400">
+            Head-to-head matchups, a waiver wire, a trade deadline, a playoff bracket. The
+            format is the one every manager already has in muscle memory — what changes is who
+            can alter it afterwards.
+          </p>
+          <ul className="mt-7 space-y-3 text-[15px] text-nocturne-neutral-400">
+            {[
+              "Weeks 1–14 head-to-head, 15–17 playoffs",
+              "Rolling waiver priority — win a claim, go to the back",
+              "Consolation bracket is played, so nobody is left with nothing",
+            ].map((line) => (
+              <li key={line} className="flex gap-3">
+                <span className="text-nocturne-accent-500">&mdash;</span>
+                <span>{line}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div className="overflow-hidden rounded-lg bg-nocturne-surface shadow-[0_0_0_1px_#595d6c,0_6px_18px_rgba(0,0,0,0.55)]">
+          <div className="flex items-center justify-between border-b border-nocturne-neutral-900 px-[18px] py-[14px]">
+            <span className="text-[14.5px] font-medium">Route 66</span>
+            <div className="flex items-center gap-3">
+              <span className="text-[11.5px] text-nocturne-neutral-600">Week 3</span>
+              <Tag accent>Rules locked</Tag>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 border-b border-nocturne-neutral-900 px-[18px] py-5">
+            <div>
+              <p className="text-[14px]">Route 66</p>
+              <p className="text-[11.5px] text-nocturne-neutral-600">2-0 · proj 118.4</p>
+            </div>
+            <div className="flex items-center gap-3 tabular-nums">
+              <span className="text-[27px] text-nocturne-accent-300">68.4</span>
+              <span className="text-[12px] text-nocturne-neutral-600">vs</span>
+              <span className="text-[27px] text-nocturne-neutral-400">61.9</span>
+            </div>
+            <div className="text-right">
+              <p className="text-[14px]">Fourth &amp; Long</p>
+              <p className="text-[11.5px] text-nocturne-neutral-600">1-1 · proj 112.0</p>
+            </div>
+          </div>
+
+          <table className="w-full border-b border-nocturne-neutral-900 text-[13px]">
+            <thead>
+              <tr className="text-nocturne-neutral-600">
+                <th className="px-[18px] py-2 text-left font-normal">Slot</th>
+                <th className="py-2 text-left font-normal">Starter</th>
+                <th className="py-2 text-right font-normal">Proj</th>
+                <th className="px-[18px] py-2 text-right font-normal">Pts</th>
+              </tr>
+            </thead>
+            <tbody className="tabular-nums">
+              {lineup.map(([slot, player, proj, pts, flex]) => (
+                <tr key={`${slot}-${player}`} className="border-t border-nocturne-neutral-900">
+                  <td className="px-[18px] py-[9px]">
+                    <span
+                      className={`rounded-[4px] border px-[7px] py-[2px] text-[10px] ${
+                        flex
+                          ? "border-nocturne-accent/40 text-nocturne-accent-300"
+                          : "border-nocturne-neutral-800 text-nocturne-neutral-500"
+                      }`}
+                    >
+                      {slot}
+                    </span>
+                  </td>
+                  <td className="py-[9px]">{player}</td>
+                  <td className="py-[9px] text-right text-nocturne-neutral-400">{proj}</td>
+                  <td className="px-[18px] py-[9px] text-right">{pts}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <div className="flex items-center justify-between px-[18px] py-[13px] text-[11.5px] text-nocturne-neutral-600">
+            <span>Autolineup on · waiver priority 7 of 12</span>
+            <span className="font-mono">0x7f3a…c19d</span>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* -------------------------------------------------------------------- 4 */
+
+function Differentiators() {
+  return (
+    <section id="trust" className={`${CONTAINER} scroll-mt-[60px] py-[84px]`}>
+      <div className="max-w-[640px]">
+        <Kicker>Why it&rsquo;s different</Kicker>
+        <h2 className="mt-4 text-[40px] font-medium leading-[1.1] tracking-[-0.028em]">
+          Every other platform asks you to trust an administrator.
+        </h2>
+        <p className="mt-5 text-[16px] leading-[1.65] text-nocturne-neutral-400">
+          This one doesn&rsquo;t. Four things are true of a rostr league that are not true
+          anywhere else.
+        </p>
+      </div>
+
+      <div className="mt-12 grid gap-5 sm:grid-cols-2">
+        <Card
+          index="01"
+          title="Rules are immutable"
+          closing="No commissioner can rewrite scoring in Week 10 because their team is losing."
+          closingAccent
+        >
+          A league&rsquo;s scoring, roster, payout split, and deadlines are frozen at creation
+          and shown in full before anyone joins. The rule set is hashed on-chain and joining is
+          a signed transaction referencing that hash — so consent is cryptographic, not a
+          checkbox.
+        </Card>
+
+        <Card
+          index="02"
+          title="The pot is escrowed"
+          closing="Deposits are refused until the program can pay a pot back out — the gate is the code, not a promise."
+        >
+          Optional per league. Everyone deposits the same amount of the same token; funds unlock
+          only when the season resolves.
+        </Card>
+
+        <Card index="03" title="Nobody declares a winner">
+          The contract holds the bracket, the scores, and the rules, and derives the champion
+          from the Week 17 result. There is no sign-off step to corrupt.
+        </Card>
+
+        <Card index="04" title="Your roster is yours">
+          Drafted players mint as Token-2022 NFTs held in your wallet. Trades move through an
+          escrow with a 48-hour league veto window — they can&rsquo;t be front-run on a
+          marketplace, and they can&rsquo;t be forced through by a commissioner.
+        </Card>
+      </div>
+    </section>
+  );
+}
+
+function Card({
+  index,
+  title,
+  children,
+  closing,
+  closingAccent,
+}: {
+  index: string;
+  title: string;
+  children: ReactNode;
+  closing?: string;
+  closingAccent?: boolean;
+}) {
+  return (
+    <div className="rounded-lg bg-nocturne-surface p-[26px] shadow-[0_0_0_1px_#292b31]">
+      <p className="font-mono text-[11.5px] text-nocturne-accent-600">{index}</p>
+      <h3 className="mt-4 text-[21px] font-medium tracking-[-0.018em]">{title}</h3>
+      <p className="mt-3 text-[14.5px] leading-[1.6] text-nocturne-neutral-400">{children}</p>
+      {closing ? (
+        <p
+          className={`mt-4 text-[14.5px] leading-[1.6] ${
+            closingAccent ? "text-nocturne-accent-300" : "text-nocturne-neutral-600"
+          }`}
+        >
+          {closing}
+        </p>
+      ) : null}
     </div>
+  );
+}
+
+/* -------------------------------------------------------------------- 5 */
+
+function HowItWorks() {
+  const steps: readonly [string, string][] = [
+    [
+      "Create and freeze",
+      "Pick a format or take the default. The rule set is hashed and written on-chain before anyone joins.",
+    ],
+    [
+      "Draw the order",
+      "The draft order comes from a Solana block produced after the field locks — nobody can grind it, and anyone can recompute it.",
+    ],
+    [
+      "Draft and play",
+      "A snake draft, then head-to-head weeks. Each pick is a signed transaction against the frozen rules.",
+    ],
+    [
+      "Settle",
+      "The champion derives from the Week 17 result. Nothing is signed off, because there is nothing to sign off.",
+    ],
+  ];
+
+  return (
+    <section id="how" className={`${CONTAINER} scroll-mt-[60px] py-[84px]`}>
+      <div className="max-w-[640px]">
+        <Kicker>How it works</Kicker>
+        <h2 className="mt-4 text-[40px] font-medium leading-[1.1] tracking-[-0.028em]">
+          A season, end to end.
+        </h2>
+      </div>
+
+      {/*
+        Fixed 4-up rather than `auto-fit`, which orphans step 4 onto its own row
+        at intermediate widths. 2×2 below the large breakpoint, 1-up on small.
+      */}
+      <ol className="mt-12 grid gap-[30px] sm:grid-cols-2 lg:grid-cols-4">
+        {steps.map(([title, body], i) => (
+          <li key={title}>
+            <div className="h-px w-full bg-gradient-to-r from-nocturne-accent to-nocturne-accent-800" />
+            <p className="mt-4 font-mono text-[11.5px] text-nocturne-neutral-500">
+              Step {i + 1}
+            </p>
+            <h3 className="mt-3 text-[19px] font-medium">{title}</h3>
+            <p className="mt-3 text-[14.5px] leading-[1.6] text-nocturne-neutral-400">{body}</p>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
+/* -------------------------------------------------------------------- 6 */
+
+function Format() {
+  const rows: readonly [string, ReactNode][] = [
+    [
+      "Scoring",
+      "Full PPR. 4pt passing TD, 6pt rushing/receiving TD, 1pt per 25 passing yards, 1pt per 10 rushing/receiving yards, −2 per interception and lost fumble.",
+    ],
+    ["Teams", "12 teams, minimum 2 humans, bots fill the rest."],
+    ["Draft", "Snake draft, fast (90s minimum) or slow (up to 24h per pick)."],
+    [
+      "Season",
+      "Weeks 1–14 regular season, 15–17 playoffs, championship Week 17. Week 18 is excluded — NFL starters rest once seeding is settled.",
+    ],
+    ["Matchups", "Head-to-head weekly. Schedule luck is retained deliberately."],
+    ["Waivers", "Rolling priority. Win a claim, go to the back of the order."],
+    [
+      "Consolation",
+      "The consolation bracket is played, so eliminated teams still have something to play for. This is the anti-abandonment mechanism — punishment doesn't work on someone already guaranteed nothing.",
+    ],
+  ];
+
+  return (
+    <section id="format" className={`${CONTAINER} scroll-mt-[60px] py-[84px]`}>
+      <div className="grid gap-14 lg:grid-cols-[minmax(0,0.6fr)_minmax(0,1fr)]">
+        <div>
+          <Kicker>Format</Kicker>
+          <h2 className="mt-4 text-[34px] font-medium leading-[1.14] tracking-[-0.025em]">
+            The default league, in full.
+          </h2>
+          <p className="mt-5 text-[15px] leading-[1.65] text-nocturne-neutral-400">
+            Every value below is frozen when a league is created. The complete rule set lives in{" "}
+            <a
+              href="https://github.com/6figpsolseeker/rostr/blob/main/docs/RULES.md"
+              className="text-nocturne-accent-300 underline underline-offset-4"
+            >
+              docs/RULES.md
+            </a>
+            .
+          </p>
+        </div>
+
+        <table className="w-full text-[14.5px]">
+          <tbody>
+            {rows.map(([label, value]) => (
+              <tr key={label} className="border-t border-nocturne-neutral-900 first:border-t-0">
+                <th className="w-[150px] py-4 pr-6 text-left align-top font-normal text-nocturne-neutral-500">
+                  {label}
+                </th>
+                <td className="py-4 align-top leading-[1.6] text-nocturne-neutral-400">
+                  {value}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+/* -------------------------------------------------------------------- 7 */
+
+function MultiSport() {
+  return (
+    <section className={`${CONTAINER} py-[84px]`}>
+      <Kicker>Multi-sport</Kicker>
+      <p className="mt-6 max-w-[860px] text-[clamp(24px,3.1vw,36px)] font-medium leading-[1.26] tracking-[-0.024em]">
+        Football ships first, but the schema does not know what football is. Sports are data — a
+        registry of stat keys, positions, and lineup slots — never structure or code branches.
+      </p>
+      <p className="mt-6 max-w-[560px] text-[15px] leading-[1.65] text-nocturne-neutral-400">
+        Adding a sport should insert rows and write one provider adapter, with no migration and
+        no change to scoring, drafting, trading, or settlement.
+      </p>
+    </section>
+  );
+}
+
+/* -------------------------------------------------------------------- 8 */
+
+/** The page's one saturated field. Everything else is a line or an edge. */
+function ClosingBand() {
+  return (
+    <section
+      id="start"
+      className="mx-5 mt-10 scroll-mt-[60px] rounded-[14px] px-12 py-[84px]"
+      style={{
+        background:
+          "radial-gradient(120% 140% at 12% 0%, var(--color-nocturne-section-glow) 0%, var(--color-nocturne-section) 46%, #1d2048 100%)",
+      }}
+    >
+      <div className="mx-auto grid w-full max-w-[1100px] gap-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.72fr)] lg:items-end">
+        <div>
+          <h2 className="text-[clamp(34px,4.4vw,54px)] font-medium leading-[1.06] tracking-[-0.03em]">
+            Start a league nobody can rewrite.
+          </h2>
+          <p className="mt-6 max-w-[520px] text-[16px] leading-[1.65] text-nocturne-accent-200">
+            Free leagues are open now. Create one, invite eleven people, and the rules you agree
+            on are the rules the season runs on.
+          </p>
+          <div className="mt-9 flex flex-wrap items-center gap-3">
+            <a
+              href="/leagues/new"
+              className="rounded-[4px] border border-nocturne-accent-300 px-[22px] py-3 text-[14.5px] text-nocturne-accent-100 transition-colors hover:bg-white/5"
+            >
+              Create a free league
+            </a>
+            <a
+              href="https://github.com/6figpsolseeker/rostr"
+              className="rounded-[4px] border border-white/20 px-[18px] py-3 text-[14.5px] text-nocturne-accent-200 transition-colors hover:border-white/40"
+            >
+              Read the source
+            </a>
+          </div>
+        </div>
+
+        <div className="border-l border-[rgba(210,206,253,0.22)] pl-[22px] text-[13.5px] leading-[1.7] text-nocturne-accent-300">
+          <p>Open source under MIT. Every rule this page describes is in the repository.</p>
+          <p className="mt-4">
+            Pre-alpha, targeting the 2026 season. The escrow program is not audited.
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* -------------------------------------------------------------------- 9 */
+
+function SiteFooter() {
+  const links: readonly [string, string][] = [
+    ["Rules", "docs/RULES.md"],
+    ["Data model", "docs/DATA-MODEL.md"],
+    ["Scoring", "docs/LIVE-SCORING.md"],
+    ["Decisions", "docs/DECISIONS.md"],
+  ];
+
+  return (
+    <footer className="mx-auto w-full max-w-[1180px] px-10 py-10">
+      <div className="flex flex-wrap items-center justify-between gap-6 text-[13px] text-nocturne-neutral-600">
+        <span className="text-[15px] font-semibold tracking-[-0.02em] text-nocturne-neutral-400">
+          rostr
+        </span>
+        <div className="flex flex-wrap gap-6">
+          {links.map(([label, path]) => (
+            <a
+              key={path}
+              href={`https://github.com/6figpsolseeker/rostr/blob/main/${path}`}
+              className="hover:text-nocturne-neutral-400"
+            >
+              {label}
+            </a>
+          ))}
+        </div>
+        <span>Pre-alpha. Not audited.</span>
+      </div>
+    </footer>
   );
 }
