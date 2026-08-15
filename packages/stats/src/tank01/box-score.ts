@@ -215,17 +215,36 @@ function translatePlayer(
  * team", which credited the second shape's two points to the team whose kick was
  * blocked — a four-point swing between two defenses, usually on two different
  * rosters, with no warning.
+ *
+ * **And the two shapes compose**, which is what the first fix missed: a return
+ * touchdown whose own extra point is blocked is both at once. Deciding on the
+ * presence of "return" anywhere in the text put that case back where it started.
  */
 function blockingTeamOf(play: ScoringPlay, teamAbvs: readonly string[]): string | null {
   const scoringTeam = play.team ?? "";
   if (!scoringTeam) return null;
 
   const text = play.score ?? "";
-  // A return or a recovery means the team on the play is the one that blocked it.
-  const scoredByTheBlocker = /\brecover(?:ed|y)\b/i.test(text) || /\breturn\b/i.test(text);
 
-  if (scoredByTheBlocker) return scoringTeam;
-  return teamAbvs.find((abv) => abv !== scoringTeam) ?? null;
+  // **Where the word sits, not whether the play mentions a return.**
+  //
+  // Reading the whole text for "return" or "recovered" looks equivalent and is
+  // not, because the two shapes compose: a punt-return touchdown whose own extra
+  // point is then blocked — `"Jahan Dotson 70 Yd punt return (Jake Elliott PAT
+  // blocked)"` — is a return *and* a trailing parenthetical, and the block
+  // belongs to the opponent. Matching on "return" credits it to the team that
+  // got blocked, which is the same four-point swing this function was written to
+  // fix, surviving in the one case where both forms appear at once.
+  //
+  // The parenthetical is the reliable discriminator because it is what the
+  // bracket means: it annotates the *conversion attempt* on somebody else's
+  // score, so a block noted there was made by the other team. A block in the
+  // play body is the play itself, and the team on the play is the one that made
+  // it.
+  const blockedInParenthetical = /\([^)]*\bblock(?:ed|s)?\b[^)]*\)/i.test(text);
+
+  if (blockedInParenthetical) return teamAbvs.find((abv) => abv !== scoringTeam) ?? null;
+  return scoringTeam;
 }
 
 function translateTeamDefense(
