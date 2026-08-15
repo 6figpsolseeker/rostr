@@ -14,6 +14,13 @@ import { cronForbidden } from "@/lib/cron";
  * Hourly is enough for a 48-hour window, and running more often is harmless:
  * `resolveDueTrades` skips open windows and a resolved trade leaves the
  * `ACCEPTED` state, so it is never settled twice.
+ *
+ * That last clause was true of one run at a time and false under overlap, which
+ * is what a sentence inviting more frequent runs ought not to be. Two runs could
+ * both select the same trade; one executed it and the other, finding the assets
+ * moved, recorded it `EXPIRED` over the top — "rosters untouched", written about
+ * rosters that had just moved. Every state write is now conditional on the state
+ * it expects, so the loser of that race writes nothing.
  */
 export async function GET(request: Request): Promise<NextResponse> {
   const forbidden = cronForbidden(request);
@@ -28,17 +35,24 @@ export async function GET(request: Request): Promise<NextResponse> {
     executed?: number;
     vetoed?: number;
     expired?: number;
+    /**
+     * Trades this run could not settle. They are still ACCEPTED and will be
+     * retried next hour — reported because a trade that can never execute would
+     * otherwise look healthy forever, the same reason `bracketProblem` exists.
+     */
+    failures?: { tradeId: string; reason: string }[];
     error?: string;
   }[] = [];
 
   for (const leagueId of due) {
     try {
-      const resolutions = await resolveDueTrades(client, leagueId, now);
+      const { resolutions, failures } = await resolveDueTrades(client, leagueId, now);
       runs.push({
         leagueId,
         executed: resolutions.filter((r) => r.outcome === "EXECUTED").length,
         vetoed: resolutions.filter((r) => r.outcome === "VETOED").length,
         expired: resolutions.filter((r) => r.outcome === "EXPIRED").length,
+        ...(failures.length > 0 ? { failures: [...failures] } : {}),
       });
     } catch (error) {
       // One league's bad state must not hold up everyone else's trades.

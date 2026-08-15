@@ -281,6 +281,17 @@ async function propose(fx: Fixture, now = MONDAY): Promise<string> {
   return tradeId;
 }
 
+/**
+ * `resolveDueTrades`, keeping only the resolutions.
+ *
+ * It returns `{resolutions, failures}` — failures being trades this run could
+ * not settle, for which **nothing was written**. Tests that care about those
+ * call `resolveDueTrades` directly; everything else wants the list it used to
+ * return.
+ */
+const settle = async (...args: Parameters<typeof resolveDueTrades>) =>
+  (await resolveDueTrades(...args)).resolutions;
+
 describe("proposing", () => {
   it("records both sides", async () => {
     const fx = await setup();
@@ -528,7 +539,7 @@ describe("the freeze between acceptance and execution", () => {
     const fx = await setup();
     const tradeId = await propose(fx);
     await acceptTrade(fx.client, tradeId, fx.teams[1]!, MONDAY);
-    await resolveDueTrades(fx.client, fx.leagueId, new Date(MONDAY.getTime() + 49 * HOUR));
+    await settle(fx.client, fx.leagueId, new Date(MONDAY.getTime() + 49 * HOUR));
 
     expect(await lockedByTrade(fx.client, fx.leagueId)).toEqual(new Set());
   });
@@ -701,7 +712,7 @@ describe("the freeze between acceptance and execution", () => {
     await acceptTrade(fx.client, tradeId, fx.teams[1]!, MONDAY);
     await vetoTrade(fx.client, tradeId, fx.teams[2]!, MONDAY);
     await vetoTrade(fx.client, tradeId, fx.teams[3]!, MONDAY);
-    await resolveDueTrades(fx.client, fx.leagueId, AFTER_WINDOW);
+    await settle(fx.client, fx.leagueId, AFTER_WINDOW);
 
     await expect(
       dropPlayer(fx.client, fx.leagueId, fx.teams[0]!, p1, QUIET),
@@ -749,7 +760,7 @@ describe("no double-spend across trades", () => {
     const trades = await listTrades(fx.client, fx.leagueId);
     expect(trades.find((t) => t.tradeId === b.tradeId)?.state).toBe("PROPOSED");
 
-    await resolveDueTrades(fx.client, fx.leagueId, AFTER_WINDOW);
+    await settle(fx.client, fx.leagueId, AFTER_WINDOW);
 
     const owners = await fx.client.query<{ team_id: string }>(
       "SELECT team_id FROM roster_entries WHERE player_id = $1 AND released_at IS NULL",
@@ -783,7 +794,7 @@ describe("no double-spend across trades", () => {
       [fx.teams[0]!, p1],
     );
 
-    const [resolution] = await resolveDueTrades(fx.client, fx.leagueId, AFTER_WINDOW);
+    const [resolution] = await settle(fx.client, fx.leagueId, AFTER_WINDOW);
 
     // Recorded, not retried hourly for the rest of the season, and not executed.
     expect(resolution?.outcome).toBe("EXPIRED");
@@ -834,7 +845,7 @@ describe("no double-spend across trades", () => {
       [fx.teams[0]!, p1],
     );
 
-    const resolutions = await resolveDueTrades(fx.client, fx.leagueId, AFTER_WINDOW);
+    const resolutions = await settle(fx.client, fx.leagueId, AFTER_WINDOW);
 
     expect(resolutions.find((r) => r.tradeId === broken.tradeId)?.outcome).toBe("EXPIRED");
     expect(resolutions.find((r) => r.tradeId === healthy.tradeId)?.outcome).toBe("EXECUTED");
@@ -930,7 +941,7 @@ describe("vetoing", () => {
     expect(trade?.vetoes).toBe(0);
 
     // And the trade the outsider tried to block still goes through.
-    const [resolution] = await resolveDueTrades(fx.client, fx.leagueId, AFTER_WINDOW);
+    const [resolution] = await settle(fx.client, fx.leagueId, AFTER_WINDOW);
     expect(resolution?.outcome).toBe("EXECUTED");
   });
 
@@ -1072,7 +1083,7 @@ describe("vetoing", () => {
     const tradeId = await propose(fx);
     await acceptTrade(fx.client, tradeId, fx.teams[1]!, MONDAY);
 
-    const [resolution] = await resolveDueTrades(fx.client, fx.leagueId, AFTER_WINDOW);
+    const [resolution] = await settle(fx.client, fx.leagueId, AFTER_WINDOW);
     expect(resolution?.outcome).toBe("EXECUTED");
 
     expect(await ownerOf(fx, fx.players.get("p1")!)).toBe(fx.teams[1]);
@@ -1104,7 +1115,7 @@ describe("vetoing", () => {
     const [trade] = await listTrades(fx.client, fx.leagueId);
     expect(trade?.vetoes).toBe(0);
 
-    const [resolution] = await resolveDueTrades(fx.client, fx.leagueId, AFTER_WINDOW);
+    const [resolution] = await settle(fx.client, fx.leagueId, AFTER_WINDOW);
     expect(resolution?.outcome).toBe("EXECUTED");
   });
 
@@ -1121,7 +1132,7 @@ describe("vetoing", () => {
     const [trade] = await listTrades(fx.client, fx.leagueId);
     expect(trade?.vetoes).toBe(2);
 
-    const [resolution] = await resolveDueTrades(fx.client, fx.leagueId, AFTER_WINDOW);
+    const [resolution] = await settle(fx.client, fx.leagueId, AFTER_WINDOW);
     expect(resolution?.outcome).toBe("VETOED");
   });
 
@@ -1161,7 +1172,7 @@ describe("vetoing", () => {
     await acceptTrade(fx.client, tradeId, fx.teams[1]!, MONDAY);
     await vetoTrade(fx.client, tradeId, fx.teams[2]!, MONDAY);
 
-    const [resolution] = await resolveDueTrades(
+    const [resolution] = await settle(
       fx.client,
       fx.leagueId,
       new Date(MONDAY.getTime() + 49 * HOUR),
@@ -1178,7 +1189,7 @@ describe("resolution", () => {
     const tradeId = await propose(fx);
     await acceptTrade(fx.client, tradeId, fx.teams[1]!, MONDAY);
 
-    const resolved = await resolveDueTrades(
+    const resolved = await settle(
       fx.client,
       fx.leagueId,
       new Date(MONDAY.getTime() + 47 * HOUR),
@@ -1194,7 +1205,7 @@ describe("resolution", () => {
     const tradeId = await propose(fx);
     await acceptTrade(fx.client, tradeId, fx.teams[1]!, MONDAY);
 
-    const [resolution] = await resolveDueTrades(
+    const [resolution] = await settle(
       fx.client,
       fx.leagueId,
       new Date(MONDAY.getTime() + 48 * HOUR),
@@ -1207,7 +1218,7 @@ describe("resolution", () => {
     const fx = await setup();
     const tradeId = await propose(fx);
     await acceptTrade(fx.client, tradeId, fx.teams[1]!, MONDAY);
-    await resolveDueTrades(fx.client, fx.leagueId, AFTER);
+    await settle(fx.client, fx.leagueId, AFTER);
 
     const owners = await fx.client.query<{ player_id: string; team_id: string }>(
       `SELECT player_id, team_id FROM roster_entries
@@ -1230,7 +1241,7 @@ describe("resolution", () => {
     const fx = await setup();
     const tradeId = await propose(fx);
     await acceptTrade(fx.client, tradeId, fx.teams[1]!, MONDAY);
-    await resolveDueTrades(fx.client, fx.leagueId, AFTER);
+    await settle(fx.client, fx.leagueId, AFTER);
 
     const history = await fx.client.query<{ team_id: string; released_at: string | null }>(
       "SELECT team_id, released_at FROM roster_entries WHERE player_id = $1 ORDER BY acquired_at",
@@ -1250,7 +1261,7 @@ describe("resolution", () => {
     const fx = await setup();
     const tradeId = await propose(fx);
     await acceptTrade(fx.client, tradeId, fx.teams[1]!, MONDAY);
-    await resolveDueTrades(fx.client, fx.leagueId, AFTER);
+    await settle(fx.client, fx.leagueId, AFTER);
 
     expect(await availabilityOf(fx.client, fx.leagueId, fx.players.get("p1")!, AFTER)).toBe(
       "ROSTERED",
@@ -1264,7 +1275,7 @@ describe("resolution", () => {
     await vetoTrade(fx.client, tradeId, fx.teams[2]!, MONDAY);
     await vetoTrade(fx.client, tradeId, fx.teams[3]!, MONDAY);
 
-    const [resolution] = await resolveDueTrades(fx.client, fx.leagueId, AFTER);
+    const [resolution] = await settle(fx.client, fx.leagueId, AFTER);
 
     expect(resolution?.outcome).toBe("VETOED");
     expect(resolution?.vetoes).toBe(2);
@@ -1277,7 +1288,7 @@ describe("resolution", () => {
     await acceptTrade(fx.client, tradeId, fx.teams[1]!, MONDAY);
     await vetoTrade(fx.client, tradeId, fx.teams[2]!, MONDAY);
 
-    const [resolution] = await resolveDueTrades(fx.client, fx.leagueId, AFTER);
+    const [resolution] = await settle(fx.client, fx.leagueId, AFTER);
 
     expect(resolution?.outcome).toBe("EXECUTED");
   });
@@ -1288,7 +1299,7 @@ describe("resolution", () => {
     await acceptTrade(fx.client, tradeId, fx.teams[1]!, MONDAY);
     await vetoTrade(fx.client, tradeId, fx.teams[2]!, MONDAY);
     await vetoTrade(fx.client, tradeId, fx.teams[3]!, MONDAY);
-    await resolveDueTrades(fx.client, fx.leagueId, AFTER);
+    await settle(fx.client, fx.leagueId, AFTER);
 
     const [row] = await fx.client.query<{ team_id: string }>(
       "SELECT team_id FROM roster_entries WHERE player_id = $1 AND released_at IS NULL",
@@ -1303,13 +1314,9 @@ describe("resolution", () => {
     const fx = await setup();
     const tradeId = await propose(fx);
     await acceptTrade(fx.client, tradeId, fx.teams[1]!, MONDAY);
-    await resolveDueTrades(fx.client, fx.leagueId, AFTER);
+    await settle(fx.client, fx.leagueId, AFTER);
 
-    const again = await resolveDueTrades(
-      fx.client,
-      fx.leagueId,
-      new Date(AFTER.getTime() + HOUR),
-    );
+    const again = await settle(fx.client, fx.leagueId, new Date(AFTER.getTime() + HOUR));
 
     expect(again).toEqual([]);
     const owners = await fx.client.query<{ team_id: string }>(
@@ -1330,7 +1337,7 @@ describe("resolution", () => {
     const tradeId = await propose(fx, WEEK11_FRIDAY);
     await acceptTrade(fx.client, tradeId, fx.teams[1]!, WEEK11_FRIDAY);
 
-    const [resolution] = await resolveDueTrades(fx.client, fx.leagueId, AFTER_WEEK12_LOCK);
+    const [resolution] = await settle(fx.client, fx.leagueId, AFTER_WEEK12_LOCK);
 
     expect(resolution?.outcome).toBe("EXPIRED");
 
@@ -1349,7 +1356,7 @@ describe("resolution", () => {
     const tradeId = await propose(fx, WEEK11_FRIDAY);
     await acceptTrade(fx.client, tradeId, fx.teams[1]!, WEEK11_FRIDAY);
 
-    const [resolution] = await resolveDueTrades(fx.client, fx.leagueId, BEFORE_WEEK12_LOCK);
+    const [resolution] = await settle(fx.client, fx.leagueId, BEFORE_WEEK12_LOCK);
 
     expect(resolution?.outcome).toBe("EXECUTED");
   });
@@ -1366,11 +1373,7 @@ describe("resolution", () => {
     const tradeId = await propose(fx, WEEK11_FRIDAY);
     await acceptTrade(fx.client, tradeId, fx.teams[1]!, WEEK11_FRIDAY);
 
-    const [resolution] = await resolveDueTrades(
-      fx.client,
-      fx.leagueId,
-      new Date("2027-01-20T12:00:00Z"),
-    );
+    const [resolution] = await settle(fx.client, fx.leagueId, new Date("2027-01-20T12:00:00Z"));
 
     expect(resolution?.outcome).toBe("EXPIRED");
   });
@@ -1389,7 +1392,7 @@ describe("resolution", () => {
       now: MONDAY,
     });
     await acceptTrade(fx.client, tradeId, fx.teams[1]!, MONDAY);
-    await resolveDueTrades(fx.client, fx.leagueId, AFTER);
+    await settle(fx.client, fx.leagueId, AFTER);
 
     const sizes = await fx.client.query<{ team_id: string; n: number }>(
       `SELECT team_id, count(*)::int AS n FROM roster_entries

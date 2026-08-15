@@ -477,7 +477,10 @@ export async function acceptTrade(
     // different trades sharing two players could take them in opposite orders
     // and deadlock. An unordered `SELECT` is not a stable order, it is whatever
     // the plan produces. Sorting on the same key in every caller makes the cycle
-    // unconstructible.
+    // unconstructible — and that is only true once **every** caller sorts.
+    // `resolveTrade` did not when this comment was first written, so the cycle it
+    // claims to have removed was still constructible between these two functions;
+    // it sorts on the same key now.
     const assets = await tx.query<{ from_team_id: string; player_id: string }>(
       "SELECT from_team_id, player_id FROM trade_assets WHERE trade_id = $1 ORDER BY player_id",
       [tradeId],
@@ -511,10 +514,20 @@ export async function acceptTrade(
       }
     }
 
-    await tx.query(
-      "UPDATE trades SET state = 'ACCEPTED', veto_deadline = $2 WHERE id = $1 AND state = 'PROPOSED'",
+    // `RETURNING id` is what makes the predicate observable. `SqlClient.query`
+    // hands back rows and discards `rowCount`, so without it a refused write and
+    // a successful one are the same empty array — the guard would be real and
+    // its result unreadable, and this function would report an acceptance it did
+    // not perform.
+    const accepted = await tx.query<{ id: string }>(
+      `UPDATE trades SET state = 'ACCEPTED', veto_deadline = $2
+        WHERE id = $1 AND state = 'PROPOSED'
+      RETURNING id`,
       [tradeId, deadline.toISOString()],
     );
+    if (accepted.length === 0) {
+      throw new TradeError("This trade is no longer open", "WRONG_STATE");
+    }
 
     return loadTrade(tx, tradeId);
   });
@@ -545,10 +558,21 @@ export async function declineTrade(
     throw new TradeError("Only the team offered a trade can decline it", "NOT_YOUR_TRADE");
   }
 
-  await db.query("UPDATE trades SET state = 'WITHDRAWN', resolved_at = $2 WHERE id = $1", [
-    tradeId,
-    now.toISOString(),
-  ]);
+  // The state test above reads a snapshot taken before this statement, so it
+  // cannot be the guard — it is the error message. This is the guard.
+  //
+  // Reachable from one manager and one browser, which is why it matters more
+  // than the withdraw race: `TradeBlock` renders Accept and Decline side by side
+  // on a PROPOSED trade, so two in-flight requests need no second person.
+  const declined = await db.query<{ id: string }>(
+    `UPDATE trades SET state = 'WITHDRAWN', resolved_at = $2
+      WHERE id = $1 AND state = 'PROPOSED'
+    RETURNING id`,
+    [tradeId, now.toISOString()],
+  );
+  if (declined.length === 0) {
+    throw new TradeError("This trade is no longer open", "WRONG_STATE");
+  }
 }
 
 /**
@@ -579,10 +603,27 @@ export async function withdrawTrade(
     throw new TradeError("Only the proposing team can withdraw", "NOT_YOUR_TRADE");
   }
 
-  await db.query("UPDATE trades SET state = 'WITHDRAWN', resolved_at = $2 WHERE id = $1", [
-    tradeId,
-    now.toISOString(),
-  ]);
+  // This function opens no transaction, so the read above and this write are two
+  // autocommit statements with an acceptance able to commit between them. That
+  // is not theoretical — it is reproduced in `trades.race.test.ts`.
+  //
+  // The stomping write did not merely mislabel the row. `lockedByTrade` counts
+  // only ACCEPTED trades, so overwriting the state **unfroze both players in the
+  // same statement**, and the proposer could then drop the player they had
+  // promised. With no rate limit on the route, a proposer wanting out could fire
+  // withdrawals until one landed on the accept.
+  const withdrawn = await db.query<{ id: string }>(
+    `UPDATE trades SET state = 'WITHDRAWN', resolved_at = $2
+      WHERE id = $1 AND state = 'PROPOSED'
+    RETURNING id`,
+    [tradeId, now.toISOString()],
+  );
+  if (withdrawn.length === 0) {
+    throw new TradeError(
+      "This trade has been accepted — it is now up to the league.",
+      "WRONG_STATE",
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -656,6 +697,19 @@ export interface TradeResolution {
   readonly required: number;
 }
 
+export interface DueTradesOutcome {
+  readonly resolutions: readonly TradeResolution[];
+  /**
+   * Trades this run could not settle, and why. **Nothing was written for these.**
+   *
+   * Surfaced rather than swallowed, and surfaced *here* rather than recorded in
+   * the database — the distinction `resolveLeagueWeeksThrough` already draws.
+   * A trade that cannot execute must not be given a terminal state by an error
+   * handler; see the comment on the catch that fills this.
+   */
+  readonly failures: readonly { tradeId: string; reason: string }[];
+}
+
 /**
  * Settle every accepted trade whose window has closed.
  *
@@ -667,16 +721,20 @@ export async function resolveDueTrades(
   db: SqlClient,
   leagueId: string,
   now: Date,
-): Promise<readonly TradeResolution[]> {
+): Promise<DueTradesOutcome> {
   const stored = await getLeagueRules(db, leagueId);
   if (!stored) throw new TradeError("League has no rules", "LEAGUE_NOT_FOUND");
 
+  // No `ORDER BY`, deliberately. Every due trade is now attempted whatever
+  // happens to the ones before it, and their inputs are disjoint, so the order
+  // cannot change the outcome — the same conclusion `score-week`'s league query
+  // reached, and it still has none either.
   const pending = await db.query<{ id: string; veto_deadline: string }>(
     `SELECT id, veto_deadline FROM trades
       WHERE league_id = $1 AND state = 'ACCEPTED' AND veto_deadline IS NOT NULL`,
     [leagueId],
   );
-  if (pending.length === 0) return [];
+  if (pending.length === 0) return { resolutions: [], failures: [] };
 
   // The deadline binds on the week a trade *executes*, which is this one — the
   // proposal check can only bound the earliest week it might land in, and a
@@ -692,6 +750,7 @@ export async function resolveDueTrades(
   );
 
   const out: TradeResolution[] = [];
+  const failures: { tradeId: string; reason: string }[] = [];
 
   for (const row of pending) {
     // The window is stored, but the *rule* about when it closes lives in core —
@@ -707,24 +766,60 @@ export async function resolveDueTrades(
       continue;
     }
 
-    // One trade that cannot execute must not stop the rest from settling —
-    // the same rule as every other loop over leagues or weeks in this repo.
-    //
-    // An asset that has left its roster is not recoverable: the trade can never
-    // execute, and rosters are untouched. That is exactly what EXPIRED means, so
-    // it is recorded as that rather than left ACCEPTED to be retried hourly for
+    // One trade that cannot execute must not stop the rest from settling — the
+    // same rule as every other loop over leagues or weeks in this repo. This
+    // used to rethrow anything that was not `ASSET_GONE`, which is the
+    // allowlist-inside-a-loop shape `CLAUDE.md` names as itself the defect: the
+    // offending trade stayed ACCEPTED forever, every trade queued behind it
+    // stayed ACCEPTED too, and uninvolved managers' players stayed frozen for
     // the rest of the season.
+    //
+    // **But widening the catch must not widen what gets written.** The obvious
+    // reading — record and continue, marking the trade EXPIRED — is a worse bug
+    // than the one it fixes. `withTransaction` calls `db.connect()` before
+    // `BEGIN` and the pool has a connect timeout, so one saturated pool during
+    // an hourly run would expire *every due trade in every league*, in one pass,
+    // permanently: nothing revisits EXPIRED. The same goes for a 40P01 deadlock,
+    // a 57014 statement timeout, or any bug of ours.
+    //
+    // `RULES.md` defines EXPIRED as the deadline case — "rosters untouched,
+    // nobody's fault" — and §9 forbids forcing or reversing trades. Expiring on
+    // an infrastructure blip is the system reversing a trade the league
+    // approved, wearing a legitimate expiry's costume.
+    //
+    // So: `ASSET_GONE` is the only error that writes a terminal state, because
+    // it is the only one that establishes the trade can *never* execute — the
+    // asset is gone and no retry brings it back. Everything else is recorded in
+    // the return value and the trade stays ACCEPTED to be retried next hour,
+    // which is what `resolveLeagueWeeksThrough` means by record-and-continue.
     try {
-      out.push(await resolveTrade(db, row.id, stored.rules, now, pastDeadline));
+      const resolution = await resolveTrade(db, row.id, stored.rules, now, pastDeadline);
+      // `null` is a trade another run settled between our select and our write.
+      // Not a failure, and not ours to report.
+      if (resolution) out.push(resolution);
     } catch (error) {
-      if (!(error instanceof TradeError) || error.code !== "ASSET_GONE") throw error;
+      const reason =
+        error instanceof TradeError
+          ? error.code
+          : error instanceof Error
+            ? error.message
+            : String(error);
 
-      await tradeCannotExecute(db, row.id, now);
-      out.push({ tradeId: row.id, outcome: "EXPIRED", vetoes: 0, required: 0 });
+      if (error instanceof TradeError && error.code === "ASSET_GONE") {
+        // Guarded, so an overlapping run that already executed this trade does
+        // not get it relabelled EXPIRED over the top of a completed swap — which
+        // is how "rosters untouched" came to be reported for moved rosters.
+        if (await tradeCannotExecute(db, row.id, now)) {
+          out.push({ tradeId: row.id, outcome: "EXPIRED", vetoes: 0, required: 0 });
+        }
+        continue;
+      }
+
+      failures.push({ tradeId: row.id, reason });
     }
   }
 
-  return out;
+  return { resolutions: out, failures };
 }
 
 /**
@@ -734,11 +829,19 @@ export async function resolveDueTrades(
  * reader should be able to tell them apart, even though the state is the same:
  * nothing moved, and nothing will.
  */
-async function tradeCannotExecute(db: SqlClient, tradeId: string, now: Date): Promise<void> {
-  await db.query("UPDATE trades SET state = 'EXPIRED', resolved_at = $2 WHERE id = $1", [
-    tradeId,
-    now.toISOString(),
-  ]);
+async function tradeCannotExecute(db: SqlClient, tradeId: string, now: Date): Promise<boolean> {
+  // Guarded, and deliberately silent when it matches nothing. This runs from a
+  // `catch` on an autocommit connection with no transaction to roll back, and
+  // zero rows here means another run already settled the trade — which is the
+  // benign outcome, not an error to raise on top of the one being handled.
+  const expired = await db.query<{ id: string }>(
+    `UPDATE trades SET state = 'EXPIRED', resolved_at = $2
+      WHERE id = $1 AND state = 'ACCEPTED'
+    RETURNING id`,
+    [tradeId, now.toISOString()],
+  );
+
+  return expired.length > 0;
 }
 
 async function resolveTrade(
@@ -747,30 +850,48 @@ async function resolveTrade(
   rules: LeagueRules,
   now: Date,
   pastDeadline: boolean,
-): Promise<TradeResolution> {
+): Promise<TradeResolution | null> {
   const trade = await loadTrade(db, tradeId);
   const electorate = await uninvolvedManagersFor(db, tradeId);
   const required = vetoesRequired(electorate, rules.trades);
 
+  // Neither of these two may throw on a refusal. Both run on `db` in autocommit
+  // with no transaction open, so there is nothing to roll back and nothing was
+  // written — zero rows means another run settled this trade first, and the
+  // caller reports one fewer resolution rather than an error. `null` says "not
+  // mine to report", which is different from "it failed".
   if (pastDeadline) {
-    await db.query("UPDATE trades SET state = 'EXPIRED', resolved_at = $2 WHERE id = $1", [
-      tradeId,
-      now.toISOString(),
-    ]);
+    const expired = await db.query<{ id: string }>(
+      `UPDATE trades SET state = 'EXPIRED', resolved_at = $2
+        WHERE id = $1 AND state = 'ACCEPTED'
+      RETURNING id`,
+      [tradeId, now.toISOString()],
+    );
+    if (expired.length === 0) return null;
+
     return { tradeId, outcome: "EXPIRED", vetoes: trade.vetoes, required };
   }
 
   if (isVetoed(trade.vetoes, electorate, rules.trades)) {
-    await db.query("UPDATE trades SET state = 'VETOED', resolved_at = $2 WHERE id = $1", [
-      tradeId,
-      now.toISOString(),
-    ]);
+    const vetoed = await db.query<{ id: string }>(
+      `UPDATE trades SET state = 'VETOED', resolved_at = $2
+        WHERE id = $1 AND state = 'ACCEPTED'
+      RETURNING id`,
+      [tradeId, now.toISOString()],
+    );
+    if (vetoed.length === 0) return null;
+
     return { tradeId, outcome: "VETOED", vetoes: trade.vetoes, required };
   }
 
   await withTransaction(db, async (tx) => {
+    // `ORDER BY player_id`, the same key `acceptTrade` takes its locks in. Two
+    // functions that lock the same rows in different orders can deadlock, and
+    // this one used to take them in whatever order the plan produced — so the
+    // cycle `acceptTrade`'s comment claims to have removed was still
+    // constructible between the two of them.
     const assets = await tx.query<{ from_team_id: string; player_id: string }>(
-      "SELECT from_team_id, player_id FROM trade_assets WHERE trade_id = $1",
+      "SELECT from_team_id, player_id FROM trade_assets WHERE trade_id = $1 ORDER BY player_id",
       [tradeId],
     );
 
@@ -818,10 +939,27 @@ async function resolveTrade(
       );
     }
 
-    await tx.query("UPDATE trades SET state = 'EXECUTED', resolved_at = $2 WHERE id = $1", [
-      tradeId,
-      now.toISOString(),
-    ]);
+    // **This one must throw**, and it is the only one of the six that must.
+    //
+    // It sits inside the transaction that has already swapped both rosters. If
+    // another run settled the trade first, answering "somebody got there
+    // ahead of me" would return normally and **commit the swap** with the trade
+    // still ACCEPTED — so the next hourly run would select it again and execute
+    // it a second time, releasing the player from the team that just received
+    // him. Throwing rolls the swap back, which is the whole reason it is in a
+    // transaction.
+    const executed = await tx.query<{ id: string }>(
+      `UPDATE trades SET state = 'EXECUTED', resolved_at = $2
+        WHERE id = $1 AND state = 'ACCEPTED'
+      RETURNING id`,
+      [tradeId, now.toISOString()],
+    );
+    if (executed.length === 0) {
+      throw new TradeError(
+        "This trade was settled by another run while it was executing",
+        "WRONG_STATE",
+      );
+    }
   });
 
   return { tradeId, outcome: "EXECUTED", vetoes: trade.vetoes, required };
