@@ -27,3 +27,10 @@ anchor-debug = []
 [dependencies]
 anchor-lang = "0.31.1"
 anchor-spl = "0.31.1"
+
+# Test-only, so none of this reaches the deployed program. The conformance
+# suite in src/derive.rs reads the corpus generated from @rostr/core, which is
+# the only thing keeping two implementations of the seeding rule in step.
+[dev-dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
