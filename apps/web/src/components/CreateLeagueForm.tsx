@@ -94,8 +94,24 @@ const MAX_BUY_IN_USDC = MAX_BUY_IN_BASE_UNITS / 1_000_000;
  */
 const TRADE_DEADLINE_WEEKS = [8, 9, 10, 11, 12, 13, 14];
 
-/** The Aug 22 deadline: leagues must be draftable by then. */
-const DEFAULT_DRAFT_AT = "2026-08-22T14:00";
+/**
+ * A week out, at 2pm local.
+ *
+ * **Derived from `now`, not typed out**, for the same reason `defaultRefundUnlock`
+ * below is. It was the constant `"2026-08-22T14:00"`, with a comment naming the
+ * deadline it was written for — which was fine until that date passed, and then
+ * it would have proposed a draft in the past to every creator. Harmless before
+ * the field locked at the draft time; league-destroying afterwards, because such
+ * a league refuses its own first join and its rules can never be corrected.
+ *
+ * A week gives people time to be invited and join, which is the thing the draft
+ * date now bounds.
+ */
+function defaultDraftAt(now: Date): string {
+  const at = new Date(now.getTime() + 7 * 24 * 3600 * 1000);
+  at.setHours(14, 0, 0, 0);
+  return unixToLocalInput(Math.floor(at.getTime() / 1000));
+}
 
 function localToUnix(value: string): number {
   return Math.floor(new Date(value).getTime() / 1000);
@@ -144,7 +160,9 @@ export function CreateLeagueForm() {
 
   const [name, setName] = useState("");
   const [visibility, setVisibility] = useState<"PRIVATE" | "PUBLIC">("PRIVATE");
-  const [draftAt, setDraftAt] = useState(DEFAULT_DRAFT_AT);
+  // Computed once, on mount. A module-level constant would be evaluated at
+  // import time and shared by every render of a long-lived server process.
+  const [draftAt, setDraftAt] = useState(() => defaultDraftAt(new Date()));
   const [mode, setMode] = useState<"FAST" | "SLOW">("SLOW");
   const [pickSeconds, setPickSeconds] = useState(14_400);
   const [tradeDeadlineWeek, setTradeDeadlineWeek] = useState(11);
@@ -154,7 +172,9 @@ export function CreateLeagueForm() {
   // Seeded from the draft date, and follows it until the commissioner sets one
   // themselves. Moving the draft back a fortnight would otherwise leave a refund
   // date the server refuses, and the error would name a field they never touched.
-  const [refundUnlock, setRefundUnlock] = useState(() => defaultRefundUnlock(DEFAULT_DRAFT_AT));
+  const [refundUnlock, setRefundUnlock] = useState(() =>
+    defaultRefundUnlock(defaultDraftAt(new Date())),
+  );
   const [refundTouched, setRefundTouched] = useState(false);
 
   const [submitting, setSubmitting] = useState(false);

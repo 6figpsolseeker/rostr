@@ -40,16 +40,33 @@ afterEach(async () => {
   db = undefined;
 });
 
+/**
+ * The scheduled draft time, thirty days out — and **relative**, not a literal.
+ *
+ * The field now locks at this instant (migration `0028`), and the trigger
+ * compares it against the database's own clock. A fixed date would therefore
+ * pass until it arrived and then fail every test in this file that adds a team,
+ * on a day nobody would connect to a change made months earlier. It used to be
+ * `2026-08-22T18:00:00Z`.
+ */
+const SCHEDULED = new Date(Math.floor(Date.now() / 1000) * 1000 + 30 * 24 * 3600 * 1000);
+const SCHEDULED_SECONDS = Math.floor(SCHEDULED.getTime() / 1000);
+
+/**
+ * `scheduledAt` matches `SCHEDULED` exactly, and `0028` requires it to.
+ *
+ * These were a year apart — the frozen rules said 2025 and the `drafts` row said
+ * 2026 — because nothing compared them. Now that the row decides when the field
+ * locks, it has to be the number members actually signed.
+ */
 const DRAFT: DraftRules = {
   type: "SNAKE",
   mode: "FAST",
   pickSeconds: 90,
-  scheduledAt: 1_756_400_000,
+  scheduledAt: SCHEDULED_SECONDS,
 };
 
 const SHAPE = buildRosterShape(NFL_PPR_ROSTER, NFL);
-const SCHEDULED = new Date("2026-08-22T18:00:00Z");
-const SCHEDULED_SECONDS = Math.floor(SCHEDULED.getTime() / 1000);
 
 /**
  * A stand-in chain: one block just before the scheduled time and one just after.

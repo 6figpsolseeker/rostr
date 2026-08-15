@@ -12,7 +12,13 @@ import {
   NFL_WINNER_TAKE_ALL_PAYOUT,
 } from "./nfl-ppr.js";
 import type { LeagueRules, PotRules } from "./types.js";
-import { earliestRefundUnlock, latestRefundUnlock, validateLeagueRules } from "./validate.js";
+import {
+  draftDateProblem,
+  earliestRefundUnlock,
+  latestRefundUnlock,
+  MIN_DRAFT_LEAD_SECONDS,
+  validateLeagueRules,
+} from "./validate.js";
 
 /**
  * A fully-specified rule set with every free variable pinned. Its hash is a
@@ -650,6 +656,47 @@ describe("validateLeagueRules", () => {
     expect(validateLeagueRules(bad, NFL)).toContainEqual(
       expect.stringContaining("at least 2 humans"),
     );
+  });
+});
+
+describe("draftDateProblem", () => {
+  // The draft time is when the field locks, so a league created to draft in the
+  // past would refuse its own first join — the commissioner's included — and its
+  // rules are immutable, so it could never be corrected, only recreated under a
+  // new id. That became reachable by accepting the create form's default from
+  // 22 August 2026 onward, when its hardcoded date passed.
+  const NOW = new Date("2026-08-14T12:00:00Z");
+  const at = (offsetSeconds: number): number =>
+    Math.floor(NOW.getTime() / 1000) + offsetSeconds;
+
+  it("accepts a draft comfortably in the future", () => {
+    expect(draftDateProblem(at(7 * 24 * 3600), NOW)).toBeNull();
+  });
+
+  it("refuses a draft in the past, and one at this very instant", () => {
+    expect(draftDateProblem(at(-1), NOW)).toMatch(/already passed/);
+    expect(draftDateProblem(at(0), NOW)).toMatch(/already passed/);
+  });
+
+  it("refuses a draft too soon for anyone to join", () => {
+    // The field closes at the draft time, so a league scheduled minutes out is
+    // born locked around whoever happened to be in it.
+    expect(draftDateProblem(at(MIN_DRAFT_LEAD_SECONDS - 1), NOW)).toMatch(/at least an hour/);
+    expect(draftDateProblem(at(MIN_DRAFT_LEAD_SECONDS), NOW)).toBeNull();
+  });
+
+  it("refuses an unset or nonsensical time", () => {
+    expect(draftDateProblem(0, NOW)).toMatch(/must be set/);
+    expect(draftDateProblem(Number.NaN, NOW)).toMatch(/must be set/);
+  });
+
+  it("is deliberately not part of validateLeagueRules", () => {
+    // That function has to stay a pure function of the frozen document, so a
+    // league can be re-validated years later to check it was legal when it was
+    // made. A clock in there would fail every league in the repository the day
+    // after it drafted — and this fixture's own draft is in 2025.
+    expect(validateLeagueRules(FIXTURE, NFL)).toEqual([]);
+    expect(draftDateProblem(FIXTURE.draft.scheduledAt, NOW)).toMatch(/already passed/);
   });
 });
 

@@ -46,8 +46,16 @@ function seededIndex(seed: string, counter: number, max: number): number {
  * A Solana slot hash at or after the frozen `draft.scheduledAt` satisfies both
  * halves: nobody can know it in advance, and anyone can verify it afterwards.
  *
- * Until that is wired up (it needs the chain integration), callers should treat
- * the order as fair only for leagues without a pot.
+ * **That is wired up.** `SolanaBeacon` in `@rostr/db` fetches the block and
+ * `drawDraftOrder` records the slot, so the order is drawn from the chain in
+ * every league, pot or not. This paragraph used to end "until that is wired up
+ * … treat the order as fair only for leagues without a pot", which stopped being
+ * true when the beacon landed and then told readers the opposite of the truth
+ * about exactly the leagues where it matters most.
+ *
+ * The other half — that the field cannot change once the seed exists — is
+ * migration `0028`. It was `0010`, which described that condition and gated on a
+ * different one.
  */
 export function generateDraftOrder(
   teamIds: readonly string[],
