@@ -64,3 +64,27 @@ invariants this repo already enforces — the bracket recomputed rather than
 stored, the veto denominator counting managers rather than teams, per-player
 kickoff locks rather than a league-wide deadline — and a screen that restates
 one of them will drift from the code that owns it.
+
+## Changed from the designer's original
+
+One deliberate divergence, recorded here because everything else in this
+directory is verbatim.
+
+**`screens/Rostr Create League.dc.html` — the scoring table on the freeze
+screen.** The design was drawn before the ESPN alignment of 2026-08-16 and
+printed the table this repo used until that day: a shutout worth 10, field goals
+stopping at 50+, no penalty for a miss, no yards-allowed ladder. Those numbers
+were already wrong when the handoff arrived, and the freeze screen is precisely
+where a member reads the rules before signing them.
+
+The values were updated to match `NFL_PPR_SCORING`. Nothing else in the file
+changed — not layout, not copy, not the other ten sections.
+
+`packages/core/src/rules/design-scoring.test.ts` now pins the two together, so
+the next divergence fails a test rather than reaching a member's screen. If a
+new drop lands carrying the old table, that test will fail: fix the file and
+tell the designer, because the drop was authored against stale values.
+
+**This does not make the screen safe to build from.** When the freeze screen is
+implemented it must render from the rule set, the way `/scoring` already does.
+The test guards the reference; only deriving guards the product.
