@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="_ds/nocturne-2cbfcdf4-7e1c-4bfa-8626-a61405078160/styles.css">
+<script src="_ds/nocturne-2cbfcdf4-7e1c-4bfa-8626-a61405078160/_ds_bundle.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
+<style>
+  html, body { margin: 0; padding: 0; background: var(--color-bg); }
+  body { font-family: var(--font-body); color: var(--color-text); -webkit-font-smoothing: antialiased; }
+  * { box-sizing: border-box; }
+  a { color: var(--color-accent); text-decoration: none; }
+  a:hover { color: var(--color-accent-400); }
+  a:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+</style>
+</helmet>
+
+<div style="background: var(--color-bg); min-width: 1280px;">
+
+  <div style="display: flex; align-items: baseline; gap: 14px; padding: 30px 28px 14px;">
+    <span style="font-family: ui-monospace, monospace; font-size: 11px; letter-spacing: 0.1em; color: var(--color-accent-500);">STATE 1</span>
+    <span style="font-family: var(--font-heading); font-size: 17px; font-weight: 500; letter-spacing: -0.02em;">Create a league</span>
+    <span style="font-size: 13px; color: var(--color-neutral-600);">Ten values are yours · everything else is disclosed, not configured</span>
+  </div>
+
+  <div data-screen-label="Create a league" style="background: var(--color-bg); min-height: 100vh; min-width: 1280px; padding-bottom: 56px;">
+
+    <header style="display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 12px 28px; border-bottom: 1px solid var(--color-neutral-900);">
+      <div style="display: flex; align-items: center; gap: 18px;">
+        <span style="font-family: var(--font-heading); font-size: 17px; font-weight: 600; letter-spacing: -0.02em;">rostr</span>
+        <span style="width: 1px; height: 18px; background: var(--color-neutral-800);"></span>
+        <span style="font-size: 14.5px;">Create a league</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <span class="tag tag-outline" style="font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase;">Not yet frozen</span>
+        <span style="width: 1px; height: 18px; background: var(--color-neutral-800);"></span>
+        <span style="font-family: ui-monospace, monospace; font-size: 12px; color: var(--color-neutral-400);">7xKq…4vNb</span>
+      </div>
+    </header>
+
+    <div style="display: grid; grid-template-columns: minmax(0, 1fr) 424px; gap: 34px; padding: 30px 28px 0; max-width: 1500px;">
+
+      <div style="min-width: 0; display: flex; flex-direction: column; gap: 34px;">
+
+        <div>
+          <h1 style="font-family: var(--font-heading); font-size: 34px; font-weight: 500; line-height: 1.12; letter-spacing: -0.028em; margin: 0; max-width: 560px;">Ten choices, then the rules stop moving.</h1>
+          <p style="font-size: 15px; line-height: 1.62; color: var(--color-neutral-400); margin: 14px 0 0; max-width: 560px; text-wrap: pretty;">Everything you set here is hashed and frozen at creation. Every member sees the whole document before they join, and joining is a signed transaction against that hash. Nothing below can be amended afterwards without the unanimous signed consent of every member holding a stake.</p>
+        </div>
+
+        <div>
+          <div style="display: flex; align-items: baseline; gap: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--color-neutral-900);">
+            <span style="font-family: ui-monospace, monospace; font-size: 11.5px; color: var(--color-accent-600);">01</span>
+            <span style="font-family: var(--font-heading); font-size: 19px; font-weight: 500; letter-spacing: -0.018em;">League</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 22px; margin-top: 18px;">
+            <div class="field">
+              <label for="cl-name">League name</label>
+              <input class="input" id="cl-name" value="Dynasty of Dropped Passes">
+              <span style="display: block; font-size: 11.5px; color: var(--color-neutral-600); margin-top: 6px;">Renameable until Week 1, then frozen with everything else.</span>
+            </div>
+            <div class="field">
+              <label id="cl-vis">Visibility</label>
+              <div class="seg" role="radiogroup" aria-labelledby="cl-vis">
+                <label class="seg-opt"><input type="radio" name="cl-visibility" checked="checked">Private</label>
+                <label class="seg-opt"><input type="radio" name="cl-visibility">Public</label>
+              </div>
+              <span style="display: block; font-size: 11.5px; color: var(--color-neutral-600); margin-top: 6px;">Private is invite only. Public is open join.</span>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div style="display: flex; align-items: baseline; gap: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--color-neutral-900);">
+            <span style="font-family: ui-monospace, monospace; font-size: 11.5px; color: var(--color-accent-600);">02</span>
+            <span style="font-family: var(--font-heading); font-size: 19px; font-weight: 500; letter-spacing: -0.018em;">Draft</span>
+            <span style="font-size: 12.5px; color: var(--color-neutral-600);">Snake, and the order is not yours to draw</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 22px; margin-top: 18px;">
+            <div class="field">
+              <label for="cl-date">Scheduled draft time</label>
+              <input class="input" id="cl-date" value="Sat 22 Aug 2026 · 8:00 PM ET">
+              <span style="display: block; font-size: 11.5px; color: var(--color-neutral-600); margin-top: 6px;">Late August — drafts happen before the 10 September kickoff.</span>
+            </div>
+            <div class="field">
+              <label id="cl-mode">Pace</label>
+              <div class="seg" role="radiogroup" aria-labelledby="cl-mode">
+                <label class="seg-opt"><input type="radio" name="cl-pace" checked="checked">Fast</label>
+                <label class="seg-opt"><input type="radio" name="cl-pace">Slow</label>
+              </div>
+              <span style="display: block; font-size: 11.5px; color: var(--color-neutral-600); margin-top: 6px;">Fast runs in one sitting. Slow runs over days.</span>
+            </div>
+          </div>
+          <div class="field" style="margin-top: 20px;">
+            <label id="cl-clock">Pick clock</label>
+            <div class="seg" role="radiogroup" aria-labelledby="cl-clock" style="max-width: 380px;">
+              <label class="seg-opt"><input type="radio" name="cl-clock-opt" checked="checked">90s</label>
+              <label class="seg-opt"><input type="radio" name="cl-clock-opt">2m</label>
+              <label class="seg-opt"><input type="radio" name="cl-clock-opt">5m</label>
+              <label class="seg-opt"><input type="radio" name="cl-clock-opt">10m</label>
+            </div>
+            <span style="display: block; font-size: 11.5px; color: var(--color-neutral-600); margin-top: 6px;">90 seconds is the floor. The clock is hard — expiry always results in a pick, so a draft never stalls.</span>
+          </div>
+
+          <div style="display: flex; gap: 12px; margin-top: 20px; padding: 14px 16px; border-radius: var(--radius-md); background: color-mix(in srgb, var(--color-accent) 8%, transparent); border: 1px solid var(--color-accent-800);">
+            <span style="flex: 0 0 auto; width: 5px; height: 5px; margin-top: 7px; border-radius: 50%; background: var(--color-accent);"></span>
+            <p style="font-size: 13px; line-height: 1.6; color: var(--color-accent-200); margin: 0;">The draft order is drawn from the first Solana block at or after your scheduled time — not at creation, and not by you. That block does not exist while teams are still joining, so nobody can know the order in advance. It is drawn once, the field locks at the draw, and anyone can recompute it from the slot and blockhash.</p>
+          </div>
+        </div>
+
+        <div>
+          <div style="display: flex; align-items: baseline; gap: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--color-neutral-900);">
+            <span style="font-family: ui-monospace, monospace; font-size: 11.5px; color: var(--color-accent-600);">03</span>
+            <span style="font-family: var(--font-heading); font-size: 19px; font-weight: 500; letter-spacing: -0.018em;">Field</span>
+            <span style="font-size: 12.5px; color: var(--color-neutral-600);">Up to 12 teams, minimum 2 humans</span>
+          </div>
+          <div class="field" style="margin-top: 18px; max-width: 480px;">
+            <label class="radio"><input type="checkbox" name="cl-bot"><span class="dot"></span>Add one bot to square an odd field</label>
+            <span style="display: block; font-size: 12px; line-height: 1.55; color: var(--color-neutral-400); margin-top: 8px;">Available because this league has no pot and the field is currently odd. At most one, and only when the number of managers is odd — adding one to an even league would create the bye it exists to prevent. Removable right up until the draft order is drawn.</span>
+            <span style="display: block; font-size: 12px; line-height: 1.55; color: var(--color-neutral-600); margin-top: 8px;">Turning the pot on removes this option: a bot has no wallet, so a bot in a paying position would leave a share with no recipient. Creation refuses the combination outright.</span>
+          </div>
+        </div>
+
+        <div>
+          <div style="display: flex; align-items: baseline; gap: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--color-neutral-900);">
+            <span style="font-family: ui-monospace, monospace; font-size: 11.5px; color: var(--color-accent-600);">04</span>
+            <span style="font-family: var(--font-heading); font-size: 19px; font-weight: 500; letter-spacing: -0.018em;">Transactions and lineups</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 22px; margin-top: 18px;">
+            <div class="field">
+              <label for="cl-deadline">Trade deadline</label>
+              <select class="input" id="cl-deadline">
+                <option>End of Week 11 (default)</option>
+                <option>End of Week 8</option>
+                <option>End of Week 9</option>
+                <option>End of Week 10</option>
+                <option>End of Week 12</option>
+                <option>End of Week 13</option>
+                <option>End of Week 14</option>
+              </select>
+              <span style="display: block; font-size: 11.5px; color: var(--color-neutral-600); margin-top: 6px;">Weeks 8–14. Without a deadline an eliminated team can hand its roster to a contender.</span>
+            </div>
+            <div class="field">
+              <label id="cl-autofill">Autofill ranking</label>
+              <div style="display: grid; gap: 4px;" role="radiogroup" aria-labelledby="cl-autofill">
+                <label class="radio"><input type="radio" name="cl-af" checked="checked"><span class="dot"></span>This week's projection</label>
+                <label class="radio"><input type="radio" name="cl-af"><span class="dot"></span>Season-to-date average</label>
+              </div>
+              <span style="display: block; font-size: 11.5px; color: var(--color-neutral-600); margin-top: 6px;">How an empty slot is filled at lock, scored under this league's own rules.</span>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--color-neutral-900);">
+            <div style="display: flex; align-items: baseline; gap: 12px;">
+              <span style="font-family: ui-monospace, monospace; font-size: 11.5px; color: var(--color-accent-600);">05</span>
+              <span style="font-family: var(--font-heading); font-size: 19px; font-weight: 500; letter-spacing: -0.018em;">The pot</span>
+              <span style="font-size: 12.5px; color: var(--color-neutral-600);">Optional</span>
+            </div>
+            <span class="tag tag-outline" style="font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-neutral-500);">Not live yet</span>
+          </div>
+
+          <div style="position: relative; margin-top: 18px;">
+            <div class="field" style="max-width: 420px;">
+              <label id="cl-pot" style="color: var(--color-neutral-400);">Play for a pot</label>
+              <div class="seg" role="radiogroup" aria-labelledby="cl-pot" style="opacity: 0.55; pointer-events: none;">
+                <label class="seg-opt"><input type="radio" name="cl-pot-opt" checked="checked">No pot</label>
+                <label class="seg-opt"><input type="radio" name="cl-pot-opt">Pot</label>
+              </div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 22px; margin-top: 20px;">
+              <div class="field">
+                <label for="cl-buyin" style="color: var(--color-neutral-400);">Buy-in per member</label>
+                <input class="input" id="cl-buyin" value="$25.00 USDC" style="opacity: 0.55; pointer-events: none;">
+                <span style="display: block; font-size: 12px; color: var(--color-neutral-400); margin-top: 8px;">$5 to $50 while the escrow contract is young — the ceiling is a limit, not a price. The token is set per network, not by you.</span>
+              </div>
+              <div class="field">
+                <label id="cl-payout" style="color: var(--color-neutral-400);">Payout shape</label>
+                <div style="display: grid; gap: 4px; opacity: 0.55; pointer-events: none;" role="radiogroup" aria-labelledby="cl-payout">
+                  <label class="radio"><input type="radio" name="cl-po" checked="checked"><span class="dot"></span>Split — 70% champion, 20% runner-up, 10% best record</label>
+                  <label class="radio"><input type="radio" name="cl-po"><span class="dot"></span>Winner takes all</label>
+                </div>
+                <span style="display: block; font-size: 12px; color: var(--color-neutral-400); margin-top: 8px;">The champion holds the largest single share either way. A 1% fee is taken once, at settlement.</span>
+              </div>
+            </div>
+            <div style="margin-top: 18px; padding: 14px 16px; border-radius: var(--radius-md); border: 1px dashed var(--color-neutral-800);">
+              <p style="font-size: 13px; line-height: 1.6; color: var(--color-neutral-400); margin: 0;">The escrow program is not written, so pot leagues cannot take a deposit today. A league that plays for nothing is still a league — its rules are hashed on-chain and members sign that hash to join. Only the escrow is skipped.</p>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div style="display: flex; align-items: baseline; gap: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--color-neutral-900);">
+            <span style="font-family: ui-monospace, monospace; font-size: 11.5px; color: var(--color-neutral-600);">—</span>
+            <span style="font-family: var(--font-heading); font-size: 19px; font-weight: 500; letter-spacing: -0.018em; color: var(--color-neutral-400);">Not yours to set</span>
+          </div>
+          <p style="font-size: 14px; line-height: 1.62; color: var(--color-neutral-500); margin: 14px 0 0; max-width: 620px;">These are fixed for every rostr league. They are part of the document you freeze and every member reads them before joining — you simply do not choose them. That is the point: a commissioner who can set scoring can also change it.</p>
+          <table class="table" style="width: 100%; font-size: 14px; margin-top: 18px;">
+            <tbody>
+              <tr>
+                <td style="width: 168px; color: var(--color-neutral-500); vertical-align: top;">Scoring</td>
+                <td style="color: var(--color-neutral-400);">Full PPR, set by the project. 4pt passing TD, 6pt rushing and receiving TD, 1pt per 25 passing yards, 1pt per 10 rushing or receiving yards, 1pt per reception, −2 interception and lost fumble, 2pt conversions, tiered field goals, tiered points allowed.</td>
+              </tr>
+              <tr>
+                <td style="color: var(--color-neutral-500); vertical-align: top;">Roster</td>
+                <td style="color: var(--color-neutral-400);">QB, 2 RB, 2 WR, TE, FLEX, K, DEF. Nine starters, five bench, two IR.</td>
+              </tr>
+              <tr>
+                <td style="color: var(--color-neutral-500); vertical-align: top;">Season</td>
+                <td style="color: var(--color-neutral-400);">Weeks 1–14 regular, 15–17 playoffs, championship Week 17. Week 18 unused. Top 6 of 12 qualify, seeds 1–2 bye. Consolation bracket played.</td>
+              </tr>
+              <tr>
+                <td style="color: var(--color-neutral-500); vertical-align: top;">Tiebreakers</td>
+                <td style="color: var(--color-neutral-400);">Win percentage, points for, head-to-head, points against, lowest team ID. No coin flips — settlement cannot depend on randomness.</td>
+              </tr>
+              <tr>
+                <td style="color: var(--color-neutral-500); vertical-align: top;">Waivers</td>
+                <td style="color: var(--color-neutral-400);">Rolling priority, one-day waiver period, blind claims Wednesday 03:00 ET. Starting order is the reverse of the draft order.</td>
+              </tr>
+              <tr>
+                <td style="color: var(--color-neutral-500); vertical-align: top;">Trade veto</td>
+                <td style="color: var(--color-neutral-400);">48-hour window, one third of uninvolved managers. You get no override — not now, not later.</td>
+              </tr>
+              <tr>
+                <td style="color: var(--color-neutral-500); vertical-align: top;">Fee</td>
+                <td style="color: var(--color-neutral-400);">1% of the pot, once, at settlement. Nothing on deposit, nothing on a refund. The program caps any league at 5%.</td>
+              </tr>
+              <tr>
+                <td style="color: var(--color-neutral-500); vertical-align: top;">Your powers</td>
+                <td style="color: var(--color-neutral-400);">Before Week 1: name the league, schedule the draft, add or remove bots, invite and remove members. After that, nothing that touches a roster, a score, a standing, or the pot. Ever.</td>
+              </tr>
+            </tbody>
+          </table>
+          <p style="font-size: 13px; margin: 16px 0 0;"><a href="https://github.com/6figpsolseeker/rostr/blob/main/docs/RULES.md">Read the full rule set</a> <span style="color: var(--color-neutral-600);">— 621 lines, and all of it is shown before anyone joins.</span></p>
+        </div>
+      </div>
+
+      <aside style="position: sticky; top: 22px; align-self: start;">
+        <div class="card elev-md" style="padding: 0; overflow: hidden; background: var(--color-surface);">
+          <div style="padding: 16px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <span style="font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-600);">Rule set</span>
+              <span style="font-size: 11.5px; color: var(--color-neutral-600);">8 set · 2 unavailable</span>
+            </div>
+            <p style="font-size: 12.5px; line-height: 1.5; color: var(--color-neutral-500); margin: 9px 0 0;">This is the document that gets hashed. Members read it in full before joining.</p>
+          </div>
+
+          <div style="display: flex; flex-direction: column;">
+            <div style="display: grid; grid-template-columns: 1fr auto; gap: 14px; padding: 9px 18px; border-bottom: 1px solid var(--color-neutral-900); font-size: 13px;">
+              <span style="color: var(--color-neutral-500);">Name</span>
+              <span>Dynasty of Dropped Passes</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr auto; gap: 14px; padding: 9px 18px; border-bottom: 1px solid var(--color-neutral-900); font-size: 13px;">
+              <span style="color: var(--color-neutral-500);">Visibility</span>
+              <span>Private</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr auto; gap: 14px; padding: 9px 18px; border-bottom: 1px solid var(--color-neutral-900); font-size: 13px;">
+              <span style="color: var(--color-neutral-500);">Draft</span>
+              <span>22 Aug 2026, 8:00 PM ET</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr auto; gap: 14px; padding: 9px 18px; border-bottom: 1px solid var(--color-neutral-900); font-size: 13px;">
+              <span style="color: var(--color-neutral-500);">Pace and clock</span>
+              <span>Fast · 90s</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr auto; gap: 14px; padding: 9px 18px; border-bottom: 1px solid var(--color-neutral-900); font-size: 13px;">
+              <span style="color: var(--color-neutral-500);">Bots</span>
+              <span>None</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr auto; gap: 14px; padding: 9px 18px; border-bottom: 1px solid var(--color-neutral-900); font-size: 13px;">
+              <span style="color: var(--color-neutral-500);">Trade deadline</span>
+              <span>End of Week 11</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr auto; gap: 14px; padding: 9px 18px; border-bottom: 1px solid var(--color-neutral-900); font-size: 13px;">
+              <span style="color: var(--color-neutral-500);">Autofill</span>
+              <span>Weekly projection</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr auto; gap: 14px; padding: 9px 18px; border-bottom: 1px solid var(--color-neutral-900); font-size: 13px;">
+              <span style="color: var(--color-neutral-500);">Pot</span>
+              <span style="color: var(--color-neutral-500);">None</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr auto; gap: 14px; padding: 9px 18px; font-size: 13px;">
+              <span style="color: var(--color-neutral-500);">Fixed by rostr</span>
+              <span style="color: var(--color-neutral-500);">8 sections</span>
+            </div>
+          </div>
+
+          <div style="padding: 16px 18px; border-top: 1px solid var(--color-neutral-900); background: color-mix(in srgb, var(--color-accent) 5%, transparent);">
+            <div style="display: flex; align-items: center; justify-content: space-between; font-size: 11.5px;">
+              <span style="color: var(--color-neutral-600);">Rules hash</span>
+              <span style="font-family: ui-monospace, monospace; color: var(--color-neutral-600);">computed at freeze</span>
+            </div>
+            <button type="button" class="btn btn-primary btn-block" style="margin-top: 14px; font-size: 14px; padding: 11px 0;">Review and freeze</button>
+            <p style="font-size: 11.5px; line-height: 1.5; color: var(--color-neutral-600); margin: 10px 0 0;">You will read the whole document before you sign. After that it cannot be amended without unanimous signed consent.</p>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <div style="height: 1px; margin: 46px 28px; background: linear-gradient(90deg, transparent, var(--color-neutral-800) 12%, var(--color-neutral-800) 88%, transparent);"></div>
+
+  <div style="display: flex; align-items: baseline; gap: 14px; padding: 30px 28px 14px;">
+    <span style="font-family: ui-monospace, monospace; font-size: 11px; letter-spacing: 0.1em; color: var(--color-accent-500);">STATE 2</span>
+    <span style="font-family: var(--font-heading); font-size: 17px; font-weight: 500; letter-spacing: -0.02em;">The freeze</span>
+    <span style="font-size: 13px; color: var(--color-neutral-600);">Where consent becomes cryptographic — read to the end, then sign</span>
+  </div>
+
+  <div data-screen-label="The freeze" style="position: relative; min-width: 1280px; height: 900px; overflow: hidden; background: var(--color-bg);">
+    <div style="position: absolute; inset: 0; opacity: 0.25; padding: 30px 28px;">
+      <div style="height: 34px; width: 420px; border-radius: var(--radius-sm); background: var(--color-surface);"></div>
+      <div style="height: 16px; width: 560px; margin-top: 16px; border-radius: var(--radius-sm); background: var(--color-surface);"></div>
+      <div style="height: 16px; width: 500px; margin-top: 9px; border-radius: var(--radius-sm); background: var(--color-surface);"></div>
+    </div>
+
+    <div style="position: absolute; inset: 0; z-index: 40; background: rgba(12,13,22,0.86); backdrop-filter: blur(3px); display: flex; align-items: stretch; justify-content: center; padding: 40px 28px;">
+      <div class="card elev-lg" style="width: 880px; display: flex; flex-direction: column; padding: 0; overflow: hidden; background: var(--color-surface);">
+
+        <div style="padding: 22px 30px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px;">
+            <div>
+              <span style="font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-accent-500);">Step 1 of 2 · read</span>
+              <h2 style="font-family: var(--font-heading); font-size: 26px; font-weight: 500; letter-spacing: -0.026em; margin: 9px 0 0;">Dynasty of Dropped Passes</h2>
+            </div>
+            <span class="tag tag-outline" style="font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase;">621 lines</span>
+          </div>
+          <p style="font-size: 13.5px; line-height: 1.6; color: var(--color-neutral-400); margin: 14px 0 0; max-width: 640px;">This is the entire rule set. Once you sign it, no commissioner — including you — can change a value in it for the life of this league. Every member sees this same document before they join.</p>
+        </div>
+
+        <div style="flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 22px 30px;">
+          <div style="font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-600);">1 · Scoring — full PPR</div>
+          <table class="table" style="width: 100%; font-size: 13.5px; margin-top: 12px;">
+            <tbody style="font-variant-numeric: tabular-nums;">
+              <tr><td style="color: var(--color-neutral-500);">Passing touchdown</td><td style="text-align: right;">4</td><td style="color: var(--color-neutral-500);">Rushing, receiving touchdown</td><td style="text-align: right;">6</td></tr>
+              <tr><td style="color: var(--color-neutral-500);">Passing yards</td><td style="text-align: right;">0.04</td><td style="color: var(--color-neutral-500);">Rushing, receiving yards</td><td style="text-align: right;">0.1</td></tr>
+              <tr><td style="color: var(--color-neutral-500);">Reception</td><td style="text-align: right;">1.0</td><td style="color: var(--color-neutral-500);">2-point conversion</td><td style="text-align: right;">2</td></tr>
+              <tr><td style="color: var(--color-neutral-500);">Interception thrown</td><td style="text-align: right;">−2</td><td style="color: var(--color-neutral-500);">Fumble lost</td><td style="text-align: right;">−2</td></tr>
+              <tr><td style="color: var(--color-neutral-500);">Return touchdown</td><td style="text-align: right;">6</td><td style="color: var(--color-neutral-500);">Field goal 0–39 / 40–49 / 50+</td><td style="text-align: right;">3 / 4 / 5</td></tr>
+              <tr><td style="color: var(--color-neutral-500);">Sack</td><td style="text-align: right;">1</td><td style="color: var(--color-neutral-500);">D/ST interception, fumble, safety</td><td style="text-align: right;">2</td></tr>
+              <tr><td style="color: var(--color-neutral-500);">Points allowed 0 / 1–6 / 7–13</td><td style="text-align: right;">10 / 7 / 4</td><td style="color: var(--color-neutral-500);">14–20 / 21–27 / 28–34 / 35+</td><td style="text-align: right;">1 / 0 / −1 / −4</td></tr>
+            </tbody>
+          </table>
+
+          <div style="font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-600); margin-top: 26px;">2 · Roster</div>
+          <p style="font-size: 13.5px; line-height: 1.62; color: var(--color-neutral-400); margin: 10px 0 0;">QB 1, RB 2, WR 2, TE 1, FLEX 1, K 1, DEF 1 — nine starters. Bench 5, IR 2. Each slot locks individually at the kickoff of that player's game.</p>
+
+          <div style="font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-600); margin-top: 26px;">3 · League</div>
+          <p style="font-size: 13.5px; line-height: 1.62; color: var(--color-neutral-400); margin: 10px 0 0;">Maximum 12 teams, minimum 2 humans. Private, invite only. No bots. At most one bot is ever permitted, only to square an odd field, and never in a league with a pot.</p>
+
+          <div style="font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-600); margin-top: 26px;">4 · Draft</div>
+          <p style="font-size: 13.5px; line-height: 1.62; color: var(--color-neutral-400); margin: 10px 0 0;">Snake, order reversing each round. Scheduled 22 August 2026, 8:00 PM ET. Fast pace, 90-second pick clock. The order is drawn once from the first Solana block at or after the scheduled time; the field locks at the draw and no team may join afterwards. Auto-pick takes the highest available player on your queue, then the best available at your most-needed position.</p>
+
+          <div style="margin-top: 20px; padding: 13px 15px; border-radius: var(--radius-md); background: color-mix(in srgb, var(--color-accent) 7%, transparent); border: 1px solid var(--color-accent-800); font-family: ui-monospace, monospace; font-size: 11.5px; line-height: 1.7; color: var(--color-accent-200);">seed = sha256("rostr:draft-order:v1:&lt;leagueId&gt;:&lt;rulesHash&gt;:&lt;slot&gt;:&lt;blockhash&gt;")</div>
+
+          <div style="font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-600); margin-top: 26px;">5 · Season</div>
+          <p style="font-size: 13.5px; line-height: 1.62; color: var(--color-neutral-400); margin: 10px 0 0;">Weeks 1–14 regular season, 15 quarterfinals, 16 semifinals, 17 championship. Week 18 unused. Head-to-head, higher PPR total wins, equal totals tie. The schedule is a seeded round robin generated from the rules hash, so anyone holding it can recompute the fixtures. Top 6 of 12 qualify; seeds 1–2 bye. Every round reseeds. Third place is played, not awarded. Consolation bracket played across Weeks 15–17.</p>
+
+          <div style="font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-600); margin-top: 26px;">6 · Tiebreakers</div>
+          <p style="font-size: 13.5px; line-height: 1.62; color: var(--color-neutral-400); margin: 10px 0 0;">Win percentage, then points for, then head-to-head where the tied teams played an equal number of times, then points against, then lowest team ID. Deterministic on purpose — no coin flips, because the contract must settle without randomness.</p>
+
+          <div style="font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-600); margin-top: 26px;">7 · Transactions</div>
+          <p style="font-size: 13.5px; line-height: 1.62; color: var(--color-neutral-400); margin: 10px 0 0;">Unrostered players return to waivers Tuesday 00:00 ET; blind claims resolve by priority Wednesday 03:00 ET; free agency between. Rolling priority, starting in reverse draft order — a failed claim costs nothing. One-day waiver period. Trades move through escrow with a 48-hour veto window and pass unless one third of uninvolved managers vote against. Trade deadline: end of Week 11. The commissioner has no veto override.</p>
+
+          <div style="font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-600); margin-top: 26px;">8 · The pot</div>
+          <p style="font-size: 13.5px; line-height: 1.62; color: var(--color-neutral-400); margin: 10px 0 0;">None. This league plays for nothing. Its rules are still hashed on-chain and members still sign that hash to join — only the escrow is skipped.</p>
+
+          <div style="font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-600); margin-top: 26px;">9 · Autofill</div>
+          <p style="font-size: 13.5px; line-height: 1.62; color: var(--color-neutral-400); margin: 10px 0 0;">A slot left empty is filled at lock, ranked by this week's projection scored under these rules, ties broken by ascending player ID, scarce slots filled first. There is no abandonment rule, no strikes, and no forfeiture. Any manager may turn autofill off for their own team.</p>
+
+          <div style="font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-600); margin-top: 26px;">10 · Commissioner</div>
+          <p style="font-size: 13.5px; line-height: 1.62; color: var(--color-neutral-400); margin: 10px 0 0;">Before Week 1 only: name the league, schedule the draft within the creation-time window, add and remove bots, invite and remove members. Never: edit rules, force or reverse trades, override vetoes, set another team's lineup, adjust waiver order, or move funds.</p>
+
+          <div style="font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-600); margin-top: 26px;">11 · Contingencies</div>
+          <p style="font-size: 13.5px; line-height: 1.62; color: var(--color-neutral-400); margin: 10px 0 0;">A cancelled NFL game scores 0 for affected players and the matchup stands. Oracle disagreement freezes the week pending review. Stat revisions are absorbed by the finalisation window — 48 hours for non-paying weeks, seven days for Weeks 14 and 17 — and do not reopen a finalised week. A championship tie goes to the higher seed. A league that never reaches two humans by the draft date auto-dissolves with full refunds. A disputed result goes to a league vote; no commissioner discretion exists.</p>
+
+          <div style="display: flex; align-items: center; gap: 12px; margin-top: 30px; padding-top: 18px; border-top: 1px solid var(--color-neutral-900); font-size: 12.5px; color: var(--color-neutral-600);">
+            <span>End of the rule set.</span>
+            <span style="flex: 1 1 auto; height: 1px; background: linear-gradient(90deg, var(--color-neutral-800), transparent);"></span>
+          </div>
+        </div>
+
+        <div style="padding: 18px 30px 20px; border-top: 1px solid var(--color-neutral-800); background: color-mix(in srgb, var(--color-accent) 6%, transparent);">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 20px;">
+            <label class="radio" style="font-size: 13.5px;"><input type="checkbox" name="cl-ack"><span class="dot"></span>I have read the rule set and understand it cannot be changed</label>
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <button type="button" class="btn btn-ghost" style="font-size: 13.5px; padding: 9px 16px; color: var(--color-neutral-400);">Back to settings</button>
+              <button type="button" class="btn btn-primary" style="font-size: 13.5px; padding: 9px 20px;" disabled="disabled">Freeze and sign</button>
+            </div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 9px; margin-top: 13px; font-size: 11.5px; color: var(--color-neutral-600);">
+            <span style="width: 5px; height: 5px; border-radius: 50%; background: var(--color-accent);"></span>
+            <span>Signing hashes this document, pins it to IPFS, and creates the league. The hash becomes the league's identity — every join references it.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:2600}}"></script>
+</body>
+</html>

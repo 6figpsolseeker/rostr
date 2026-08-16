@@ -11,6 +11,11 @@ export default tseslint.config(
       "**/coverage/**",
       "**/target/**",
       "apps/web/**",
+      // The design handoff. `support.js` is a prototyping runtime that ships
+      // with the `.dc.html` references and is deliberately never imported by
+      // anything — linting a generated artifact nothing runs is noise, and it
+      // would have to be re-fixed on every drop. See docs/design/STATUS.md.
+      "docs/design/**",
     ],
   },
   eslint.configs.recommended,

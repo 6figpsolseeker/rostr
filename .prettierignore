@@ -13,3 +13,9 @@ packages/escrow/src/types.ts
 # fail forever — and the comparison is what stops the Rust derivation kernel
 # drifting from the TypeScript that decides the same question.
 packages/core/src/season/conformance/standings-corpus.json
+
+# The design handoff. `.dc.html` files and their prototyping runtime are
+# generated artifacts from a design tool, not source — reformatting them would
+# make the diff against the next drop unreadable, and there is nothing to gain
+# since nothing here is imported. See docs/design/STATUS.md.
+docs/design/

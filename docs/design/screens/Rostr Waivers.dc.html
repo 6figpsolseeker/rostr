@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="_ds/nocturne-2cbfcdf4-7e1c-4bfa-8626-a61405078160/styles.css">
+<script src="_ds/nocturne-2cbfcdf4-7e1c-4bfa-8626-a61405078160/_ds_bundle.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
+<style>
+  html, body { margin: 0; padding: 0; background: var(--color-bg); }
+  body { font-family: var(--font-body); color: var(--color-text); -webkit-font-smoothing: antialiased; }
+  * { box-sizing: border-box; }
+  a { color: var(--color-accent); text-decoration: none; }
+  a:hover { color: var(--color-accent-400); }
+  a:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+</style>
+</helmet>
+
+<div style="background: var(--color-bg); min-width: 1280px;">
+
+  <div style="display: flex; align-items: baseline; gap: 14px; padding: 30px 28px 14px;">
+    <span style="font-family: ui-monospace, monospace; font-size: 11px; letter-spacing: 0.1em; color: var(--color-accent-500);">STATE 1</span>
+    <span style="font-family: var(--font-heading); font-size: 17px; font-weight: 500; letter-spacing: -0.02em;">Filing claims</span>
+    <span style="font-size: 13px; color: var(--color-neutral-600);">Tuesday night · blind claims, and filing order is the only lever you hold</span>
+  </div>
+  <div data-screen-label="File claims" style="background: var(--color-bg); min-height: 100vh; min-width: 1280px; padding-bottom: 56px;">
+    <header style="border-bottom: 1px solid var(--color-neutral-900);">
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 12px 28px;">
+        <div style="display: flex; align-items: center; gap: 18px;">
+          <span style="font-family: var(--font-heading); font-size: 17px; font-weight: 600; letter-spacing: -0.02em;">rostr</span>
+          <span style="width: 1px; height: 18px; background: var(--color-neutral-800);"></span>
+          <span style="font-size: 14.5px;">Route 66</span>
+          <span style="font-size: 12px; color: var(--color-neutral-600);">Tue 9:40 PM ET · claims process Wed 03:00</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <span style="font-family: ui-monospace, monospace; font-size: 11.5px; color: var(--color-neutral-600);">0x7f3a…c19d</span>
+          <span style="width: 1px; height: 18px; background: var(--color-neutral-800);"></span>
+          <span style="font-family: ui-monospace, monospace; font-size: 12px; color: var(--color-neutral-400);">7xKq…4vNb</span>
+        </div>
+      </div>
+      <nav style="display: flex; align-items: center; gap: 26px; padding: 0 28px 11px;">
+        <a href="#" style="font-size: 13.5px; color: var(--color-neutral-500); padding-bottom: 3px;" style-hover="color: var(--color-text);">Home</a>
+        <a href="#" style="font-size: 13.5px; color: var(--color-neutral-500); padding-bottom: 3px;" style-hover="color: var(--color-text);">Matchup</a>
+        <a href="#" style="font-size: 13.5px; color: var(--color-neutral-500); padding-bottom: 3px;" style-hover="color: var(--color-text);">My team</a>
+        <a href="#" style="font-size: 13.5px; color: var(--color-text); box-shadow: inset 0 -1px 0 var(--color-accent); padding-bottom: 3px;" style-hover="color: var(--color-text);">Players</a>
+        <a href="#" style="font-size: 13.5px; color: var(--color-neutral-500); padding-bottom: 3px;" style-hover="color: var(--color-text);">Trades</a>
+        <a href="#" style="font-size: 13.5px; color: var(--color-neutral-500); padding-bottom: 3px;" style-hover="color: var(--color-text);">Standings</a>
+      </nav>
+    </header>
+
+    <div style="display: grid; grid-template-columns: minmax(0, 1fr) 420px; gap: 28px; padding: 30px 28px 0; max-width: 1500px; margin: 0 auto;">
+
+      <div style="min-width: 0;">
+        <h1 style="font-family: var(--font-heading); font-size: 28px; font-weight: 500; letter-spacing: -0.026em; margin: 0;">Everyone unrostered is back on waivers.</h1>
+        <p style="font-size: 14px; line-height: 1.6; color: var(--color-neutral-400); margin: 10px 0 0; max-width: 640px; text-wrap: pretty;">Tuesday at midnight every unrostered player froze. Claims are blind — nobody sees who else filed — and they all resolve together by priority at 3:00 AM Wednesday. After that, whoever is left is a free agent and it is first come, first served until next Tuesday.</p>
+
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 24px;">
+          <div style="display: flex; gap: 5px;">
+            <button type="button" class="btn" style="font-size: 12.5px; padding: 6px 13px; border-color: var(--color-accent); background: color-mix(in srgb, var(--color-accent) 16%, transparent); color: var(--color-accent-200);">All</button>
+            <button type="button" class="btn btn-ghost" style="font-size: 12.5px; padding: 6px 13px; color: var(--color-neutral-400);">On waivers</button>
+            <button type="button" class="btn btn-ghost" style="font-size: 12.5px; padding: 6px 13px; color: var(--color-neutral-400);">Free agents</button>
+            <button type="button" class="btn btn-ghost" style="font-size: 12.5px; padding: 6px 13px; color: var(--color-neutral-400);">WR</button>
+          </div>
+          <input class="input" type="search" placeholder="Search players" style="width: 200px; min-width: 0; flex: 0 1 200px; font-size: 13px; padding: 7px 12px;">
+        </div>
+
+        <div class="card" style="margin-top: 14px; padding: 0; overflow: hidden; background: var(--color-surface);">
+          <div style="display: grid; grid-template-columns: 48px 1fr 118px 60px 104px; gap: 12px; padding: 9px 18px; border-bottom: 1px solid var(--color-neutral-900); font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-600); font-size: 10px;">
+            <span>Pos</span><span>Player</span><span>Status</span><span style="text-align: right;">Proj</span><span></span>
+          </div>
+            <div style="display: grid; grid-template-columns: 48px 1fr 118px 60px 104px; align-items: center; gap: 12px; padding: 11px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+              <span class="tag tag-neutral" style="font-size: 10px; padding: 2px 7px; justify-self: start;">WR</span>
+              <span style="font-size: 13.5px;">C. Nwosu <span style="font-size: 11.5px; color: var(--color-neutral-600);">MIA</span></span>
+              <span style="font-size: 11.5px; color: var(--color-accent-300);">On waivers · clears Wed 03:00</span>
+              <span style="text-align: right; font-size: 13px; color: var(--color-neutral-400); font-variant-numeric: tabular-nums;">13.8</span>
+              <span style="text-align: right;"><button type="button" class="btn btn-primary" style="font-size: 11.5px; padding: 4px 11px;">Claim</button></span>
+            </div>
+            <div style="display: grid; grid-template-columns: 48px 1fr 118px 60px 104px; align-items: center; gap: 12px; padding: 11px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+              <span class="tag tag-neutral" style="font-size: 10px; padding: 2px 7px; justify-self: start;">RB</span>
+              <span style="font-size: 13.5px;">R. Anselmo <span style="font-size: 11.5px; color: var(--color-neutral-600);">CHI</span></span>
+              <span style="font-size: 11.5px; color: var(--color-accent-300);">On waivers · clears Wed 03:00</span>
+              <span style="text-align: right; font-size: 13px; color: var(--color-neutral-400); font-variant-numeric: tabular-nums;">12.4</span>
+              <span style="text-align: right;"><button type="button" class="btn btn-primary" style="font-size: 11.5px; padding: 4px 11px;">Claim</button></span>
+            </div>
+            <div style="display: grid; grid-template-columns: 48px 1fr 118px 60px 104px; align-items: center; gap: 12px; padding: 11px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+              <span class="tag tag-neutral" style="font-size: 10px; padding: 2px 7px; justify-self: start;">WR</span>
+              <span style="font-size: 13.5px;">D. Fontaine <span style="font-size: 11.5px; color: var(--color-neutral-600);">DAL</span></span>
+              <span style="font-size: 11.5px; color: var(--color-accent-300);">On waivers · clears Wed 03:00</span>
+              <span style="text-align: right; font-size: 13px; color: var(--color-neutral-400); font-variant-numeric: tabular-nums;">11.6</span>
+              <span style="text-align: right;"><button type="button" class="btn btn-primary" style="font-size: 11.5px; padding: 4px 11px;">Claim</button></span>
+            </div>
+            <div style="display: grid; grid-template-columns: 48px 1fr 118px 60px 104px; align-items: center; gap: 12px; padding: 11px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+              <span class="tag tag-neutral" style="font-size: 10px; padding: 2px 7px; justify-self: start;">RB</span>
+              <span style="font-size: 13.5px;">L. Kasprzak <span style="font-size: 11.5px; color: var(--color-neutral-600);">PHI</span></span>
+              <span style="font-size: 11.5px; color: var(--color-accent-300);">On waivers · clears Wed 03:00</span>
+              <span style="text-align: right; font-size: 13px; color: var(--color-neutral-400); font-variant-numeric: tabular-nums;">10.9</span>
+              <span style="text-align: right;"><button type="button" class="btn btn-primary" style="font-size: 11.5px; padding: 4px 11px;">Claim</button></span>
+            </div>
+            <div style="display: grid; grid-template-columns: 48px 1fr 118px 60px 104px; align-items: center; gap: 12px; padding: 11px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+              <span class="tag tag-neutral" style="font-size: 10px; padding: 2px 7px; justify-self: start;">QB</span>
+              <span style="font-size: 13.5px;">G. Halvorsen <span style="font-size: 11.5px; color: var(--color-neutral-600);">NYJ</span></span>
+              <span style="font-size: 11.5px; color: var(--color-accent-300);">On waivers · clears Thu 03:00</span>
+              <span style="text-align: right; font-size: 13px; color: var(--color-neutral-400); font-variant-numeric: tabular-nums;">17.2</span>
+              <span style="text-align: right;"><button type="button" class="btn btn-primary" style="font-size: 11.5px; padding: 4px 11px;">Claim</button></span>
+            </div>
+            <div style="display: grid; grid-template-columns: 48px 1fr 118px 60px 104px; align-items: center; gap: 12px; padding: 11px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+              <span class="tag tag-neutral" style="font-size: 10px; padding: 2px 7px; justify-self: start;">TE</span>
+              <span style="font-size: 13.5px;">T. Okonkwo <span style="font-size: 11.5px; color: var(--color-neutral-600);">SEA</span></span>
+              <span style="font-size: 11.5px; color: var(--color-accent-300);">On waivers · clears Wed 03:00</span>
+              <span style="text-align: right; font-size: 13px; color: var(--color-neutral-400); font-variant-numeric: tabular-nums;">7.4</span>
+              <span style="text-align: right;"><button type="button" class="btn btn-primary" style="font-size: 11.5px; padding: 4px 11px;">Claim</button></span>
+            </div>
+            <div style="display: grid; grid-template-columns: 48px 1fr 118px 60px 104px; align-items: center; gap: 12px; padding: 11px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+              <span class="tag tag-neutral" style="font-size: 10px; padding: 2px 7px; justify-self: start;">K</span>
+              <span style="font-size: 13.5px;">B. Rasmussen <span style="font-size: 11.5px; color: var(--color-neutral-600);">CHI</span></span>
+              <span style="font-size: 11.5px; color: var(--color-neutral-500);">Free agent</span>
+              <span style="text-align: right; font-size: 13px; color: var(--color-neutral-400); font-variant-numeric: tabular-nums;">8.0</span>
+              <span style="text-align: right;"><button type="button" class="btn" style="font-size: 11.5px; padding: 4px 11px; border-color: var(--color-neutral-800); color: var(--color-neutral-300);">Add now</button></span>
+            </div>
+            <div style="display: grid; grid-template-columns: 48px 1fr 118px 60px 104px; align-items: center; gap: 12px; padding: 11px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+              <span class="tag tag-neutral" style="font-size: 10px; padding: 2px 7px; justify-self: start;">DEF</span>
+              <span style="font-size: 13.5px;">Cleveland <span style="font-size: 11.5px; color: var(--color-neutral-600);"></span></span>
+              <span style="font-size: 11.5px; color: var(--color-neutral-500);">Free agent</span>
+              <span style="text-align: right; font-size: 13px; color: var(--color-neutral-400); font-variant-numeric: tabular-nums;">9.2</span>
+              <span style="text-align: right;"><button type="button" class="btn" style="font-size: 11.5px; padding: 4px 11px; border-color: var(--color-neutral-800); color: var(--color-neutral-300);">Add now</button></span>
+            </div>
+          <div style="padding: 11px 18px; font-size: 11.5px; line-height: 1.55; color: var(--color-neutral-600);">Halvorsen clears a day later than the rest — he landed on waivers Tuesday evening, and a player only clears at the first run a full day after he arrives. Otherwise the league would get no real chance to claim him.</div>
+        </div>
+
+        <div style="display: flex; gap: 12px; margin-top: 22px; padding: 16px 18px; border-radius: var(--radius-md); background: color-mix(in srgb, var(--color-accent) 8%, transparent); border: 1px solid var(--color-accent-800); max-width: 760px;">
+          <span style="flex: 0 0 auto; width: 5px; height: 5px; margin-top: 7px; border-radius: 50%; background: var(--color-accent);"></span>
+          <p style="font-size: 13px; line-height: 1.6; color: var(--color-accent-200); margin: 0;">A backup who breaks out on Sunday goes to whoever holds priority on Wednesday morning — not to whoever happens to be refreshing on Sunday night. That is the whole point of the system.</p>
+        </div>
+
+        <p style="font-size: 12.5px; line-height: 1.6; color: var(--color-neutral-600); margin: 18px 0 0; max-width: 760px;">A player you have held for a day or more goes to waivers when you drop him. One held less than that goes straight to free agency — which stops anyone adding a player, cutting him hours later, and re-adding him to sidestep the queue. Nobody can be added or dropped once his own game has kicked off.</p>
+      </div>
+
+      <aside style="display: flex; flex-direction: column; gap: 18px;">
+        <div class="card elev-md" style="padding: 20px; background: var(--color-surface);">
+          <span style="font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-600);">Your priority</span>
+          <div style="display: flex; align-items: baseline; gap: 10px; margin-top: 9px;">
+            <span style="font-family: var(--font-heading); font-size: 34px; font-weight: 500; letter-spacing: -0.028em; font-variant-numeric: tabular-nums;">12</span>
+            <span style="font-size: 13px; color: var(--color-neutral-500);">of 12 · last in line</span>
+          </div>
+          <p style="font-size: 12px; line-height: 1.55; color: var(--color-neutral-400); margin: 11px 0 0;">You won a claim last week, so you went to the back. Every contested claim below will go to someone else — file anyway, because a failed claim costs nothing at all.</p>
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 14px; padding-top: 13px; border-top: 1px solid var(--color-neutral-900); font-size: 12px;">
+            <span style="color: var(--color-neutral-500);">Claims process</span>
+            <span style="color: var(--color-neutral-300);">Wed 03:00 ET</span>
+          </div>
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 9px; font-size: 12px;">
+            <span style="color: var(--color-neutral-500);">Roster</span>
+            <span style="color: var(--color-neutral-300);">14 of 14 · a drop is required</span>
+          </div>
+        </div>
+
+        <div class="card" style="padding: 0; overflow: hidden; background: var(--color-surface);">
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 13px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+            <span style="font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-600);">Claims filed</span>
+            <span style="font-size: 11.5px; color: var(--color-neutral-600);">3 · drag to reorder</span>
+          </div>
+            <div style="display: grid; grid-template-columns: 22px 1fr auto; align-items: start; gap: 12px; padding: 12px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+              <span style="font-family: ui-monospace, monospace; font-size: 11.5px; color: var(--color-accent-400); margin-top: 2px;">1</span>
+              <div style="display: flex; flex-direction: column; gap: 4px;">
+                <span style="font-size: 13.5px;">C. Nwosu <span class="tag tag-neutral" style="font-size: 9.5px; padding: 1px 6px;">WR</span> <span style="font-size: 11.5px; color: var(--color-neutral-600);">MIA</span></span>
+                <span style="font-size: 11.5px; color: var(--color-neutral-500);">Drop E. Nwachukwu</span>
+                
+              </div>
+              <button type="button" class="btn btn-ghost" style="font-size: 11.5px; padding: 4px 10px; color: var(--color-neutral-400);">Remove</button>
+            </div>
+            <div style="display: grid; grid-template-columns: 22px 1fr auto; align-items: start; gap: 12px; padding: 12px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+              <span style="font-family: ui-monospace, monospace; font-size: 11.5px; color: var(--color-accent-400); margin-top: 2px;">2</span>
+              <div style="display: flex; flex-direction: column; gap: 4px;">
+                <span style="font-size: 13.5px;">R. Anselmo <span class="tag tag-neutral" style="font-size: 9.5px; padding: 1px 6px;">RB</span> <span style="font-size: 11.5px; color: var(--color-neutral-600);">CHI</span></span>
+                <span style="font-size: 11.5px; color: var(--color-neutral-500);">Drop T. Bergström</span>
+                
+              </div>
+              <button type="button" class="btn btn-ghost" style="font-size: 11.5px; padding: 4px 10px; color: var(--color-neutral-400);">Remove</button>
+            </div>
+            <div style="display: grid; grid-template-columns: 22px 1fr auto; align-items: start; gap: 12px; padding: 12px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+              <span style="font-family: ui-monospace, monospace; font-size: 11.5px; color: var(--color-accent-400); margin-top: 2px;">3</span>
+              <div style="display: flex; flex-direction: column; gap: 4px;">
+                <span style="font-size: 13.5px;">D. Fontaine <span class="tag tag-neutral" style="font-size: 9.5px; padding: 1px 6px;">WR</span> <span style="font-size: 11.5px; color: var(--color-neutral-600);">DAL</span></span>
+                <span style="font-size: 11.5px; color: var(--color-neutral-500);">Drop E. Nwachukwu</span>
+                <span style="font-size: 11px; color: var(--color-accent-400);">Also needs Nwachukwu&#39;s spot — only wins it if claim 1 fails</span>
+              </div>
+              <button type="button" class="btn btn-ghost" style="font-size: 11.5px; padding: 4px 10px; color: var(--color-neutral-400);">Remove</button>
+            </div>
+          <div style="padding: 12px 18px; font-size: 11.5px; line-height: 1.55; color: var(--color-neutral-600);">Priority decides every contest with another manager. Your own filing order only decides which of <em>your</em> claims gets your last roster spot — so file the player you want most first.</div>
+        </div>
+
+        <div class="card" style="padding: 18px 20px; background: transparent; box-shadow: 0 0 0 1px var(--color-neutral-900);">
+          <span style="font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-600);">The weekly cycle</span>
+          <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 12px; font-size: 12.5px;">
+            <div style="display: flex; justify-content: space-between; gap: 14px;"><span style="color: var(--color-neutral-500);">Tue 00:00</span><span style="color: var(--color-neutral-300); text-align: right;">Everyone unrostered returns to waivers</span></div>
+            <div style="display: flex; justify-content: space-between; gap: 14px;"><span style="color: var(--color-accent-400);">Wed 03:00</span><span style="color: var(--color-accent-200); text-align: right;">Claims process, blind, by priority</span></div>
+            <div style="display: flex; justify-content: space-between; gap: 14px;"><span style="color: var(--color-neutral-500);">Wed–Tue</span><span style="color: var(--color-neutral-300); text-align: right;">Free agency, first come first served</span></div>
+          </div>
+          <p style="font-size: 11px; line-height: 1.5; color: var(--color-neutral-600); margin: 13px 0 0;">Times are Eastern, stored as a timezone rather than a fixed offset — the season crosses the daylight-saving change in November.</p>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <div style="height: 1px; margin: 46px 28px; background: linear-gradient(90deg, transparent, var(--color-neutral-800) 12%, var(--color-neutral-800) 88%, transparent);"></div>
+
+  <div style="display: flex; align-items: baseline; gap: 14px; padding: 30px 28px 14px;">
+    <span style="font-family: ui-monospace, monospace; font-size: 11px; letter-spacing: 0.1em; color: var(--color-accent-500);">STATE 2</span>
+    <span style="font-family: var(--font-heading); font-size: 17px; font-weight: 500; letter-spacing: -0.02em;">The run</span>
+    <span style="font-size: 13px; color: var(--color-neutral-600);">Wednesday 3am · priority settles every contest, and a loss costs nothing</span>
+  </div>
+  <div data-screen-label="Claims processed" style="background: var(--color-bg); min-height: 100vh; min-width: 1280px; padding-bottom: 56px;">
+    <header style="border-bottom: 1px solid var(--color-neutral-900);">
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 12px 28px;">
+        <div style="display: flex; align-items: center; gap: 18px;">
+          <span style="font-family: var(--font-heading); font-size: 17px; font-weight: 600; letter-spacing: -0.02em;">rostr</span>
+          <span style="width: 1px; height: 18px; background: var(--color-neutral-800);"></span>
+          <span style="font-size: 14.5px;">Route 66</span>
+          <span style="font-size: 12px; color: var(--color-neutral-600);">Wed 03:00 ET · claims processed</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <span style="font-family: ui-monospace, monospace; font-size: 11.5px; color: var(--color-neutral-600);">0x7f3a…c19d</span>
+          <span style="width: 1px; height: 18px; background: var(--color-neutral-800);"></span>
+          <span style="font-family: ui-monospace, monospace; font-size: 12px; color: var(--color-neutral-400);">7xKq…4vNb</span>
+        </div>
+      </div>
+      <nav style="display: flex; align-items: center; gap: 26px; padding: 0 28px 11px;">
+        <a href="#" style="font-size: 13.5px; color: var(--color-neutral-500); padding-bottom: 3px;" style-hover="color: var(--color-text);">Home</a>
+        <a href="#" style="font-size: 13.5px; color: var(--color-neutral-500); padding-bottom: 3px;" style-hover="color: var(--color-text);">Matchup</a>
+        <a href="#" style="font-size: 13.5px; color: var(--color-neutral-500); padding-bottom: 3px;" style-hover="color: var(--color-text);">My team</a>
+        <a href="#" style="font-size: 13.5px; color: var(--color-text); box-shadow: inset 0 -1px 0 var(--color-accent); padding-bottom: 3px;" style-hover="color: var(--color-text);">Players</a>
+        <a href="#" style="font-size: 13.5px; color: var(--color-neutral-500); padding-bottom: 3px;" style-hover="color: var(--color-text);">Trades</a>
+        <a href="#" style="font-size: 13.5px; color: var(--color-neutral-500); padding-bottom: 3px;" style-hover="color: var(--color-text);">Standings</a>
+      </nav>
+    </header>
+
+    <div style="display: grid; grid-template-columns: minmax(0, 1fr) 420px; gap: 28px; padding: 34px 28px 0; max-width: 1500px; margin: 0 auto;">
+
+      <div style="min-width: 0;">
+        <span style="font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-600); color: var(--color-accent-500);">Two of three</span>
+        <h1 style="font-family: var(--font-heading); font-size: 28px; font-weight: 500; letter-spacing: -0.026em; margin: 11px 0 0;">You got Anselmo and Fontaine.</h1>
+        <p style="font-size: 14px; line-height: 1.6; color: var(--color-neutral-400); margin: 10px 0 0; max-width: 640px; text-wrap: pretty;">Nwosu went to Backfield Ballers, who hold priority 3. You were last in line, so any player two managers wanted was never going to be yours — and losing him cost you nothing.</p>
+
+        <div class="card elev-md" style="margin-top: 26px; padding: 0; overflow: hidden; background: var(--color-surface);">
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 13px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+            <span style="font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-600);">Your claims, in the order you filed them</span>
+            <span style="font-size: 11.5px; color: var(--color-neutral-600);">Priority 12 of 12</span>
+          </div>
+            <div style="display: grid; grid-template-columns: 22px 1fr 128px; align-items: start; gap: 14px; padding: 14px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+              <span style="font-family: ui-monospace, monospace; font-size: 11.5px; color: var(--color-neutral-600); margin-top: 3px;">1</span>
+              <div style="display: flex; flex-direction: column; gap: 5px;">
+                <span style="font-size: 14px; color: var(--color-neutral-400);">C. Nwosu <span class="tag tag-neutral" style="font-size: 9.5px; padding: 1px 6px;">WR</span> <span style="font-size: 11.5px; color: var(--color-neutral-600);">MIA</span></span>
+                <span style="font-size: 12px; line-height: 1.5; color: var(--color-neutral-500);">Also claimed by Backfield Ballers (priority 3) and Cover Two (priority 5). Priority decided it; you were third of three.</span>
+                
+              </div>
+              <span style="text-align: right; font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-neutral-500);">Lost</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 22px 1fr 128px; align-items: start; gap: 14px; padding: 14px 18px; border-bottom: 1px solid var(--color-neutral-900); background: color-mix(in srgb, var(--color-accent) 8%, transparent);">
+              <span style="font-family: ui-monospace, monospace; font-size: 11.5px; color: var(--color-accent-400); margin-top: 3px;">2</span>
+              <div style="display: flex; flex-direction: column; gap: 5px;">
+                <span style="font-size: 14px; color: var(--color-accent-200);">R. Anselmo <span class="tag tag-accent" style="font-size: 9.5px; padding: 1px 6px;">RB</span> <span style="font-size: 11.5px; color: var(--color-neutral-600);">CHI</span></span>
+                <span style="font-size: 12px; line-height: 1.5; color: var(--color-neutral-500);">No other manager filed for him. Uncontested claims go through regardless of priority.</span>
+                <span style="font-size: 11.5px; color: var(--color-neutral-600);">Dropped T. Bergström — held 19 days, so he goes to waivers</span>
+              </div>
+              <span style="text-align: right; font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-accent-300);">Won</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 22px 1fr 128px; align-items: start; gap: 14px; padding: 14px 18px; border-bottom: 1px solid var(--color-neutral-900); background: color-mix(in srgb, var(--color-accent) 8%, transparent);">
+              <span style="font-family: ui-monospace, monospace; font-size: 11.5px; color: var(--color-accent-400); margin-top: 3px;">3</span>
+              <div style="display: flex; flex-direction: column; gap: 5px;">
+                <span style="font-size: 14px; color: var(--color-accent-200);">D. Fontaine <span class="tag tag-accent" style="font-size: 9.5px; padding: 1px 6px;">WR</span> <span style="font-size: 11.5px; color: var(--color-neutral-600);">DAL</span></span>
+                <span style="font-size: 12px; line-height: 1.5; color: var(--color-neutral-500);">Claim 1 failed, which freed the roster spot this claim also needed. Filed third, and it mattered.</span>
+                <span style="font-size: 11.5px; color: var(--color-neutral-600);">Dropped E. Nwachukwu — held 26 days, so he goes to waivers</span>
+              </div>
+              <span style="text-align: right; font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-accent-300);">Won</span>
+            </div>
+          <div style="padding: 12px 18px; font-size: 11.5px; line-height: 1.55; color: var(--color-neutral-600);">Had you filed Fontaine first, he would have taken Nwachukwu's spot and claim 3 would have been Nwosu — which you would have lost anyway. Filing order only ever decides between your own claims.</div>
+        </div>
+
+        <div class="card" style="margin-top: 24px; padding: 0; overflow: hidden; background: var(--color-surface);">
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 13px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+            <span style="font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-600);">The whole run</span>
+            <span style="font-size: 11.5px; color: var(--color-neutral-600);">7 claims filed · 5 succeeded</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 30px 1fr 1fr; gap: 12px; padding: 8px 18px; border-bottom: 1px solid var(--color-neutral-900); font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-600); font-size: 10px;">
+            <span>Pri</span><span>Manager</span><span>Player</span>
+          </div>
+            <div style="display: grid; grid-template-columns: 30px 1fr 1fr; align-items: center; gap: 12px; padding: 10px 18px; border-bottom: 1px solid var(--color-neutral-900); font-size: 13px;">
+              <span style="font-family: ui-monospace, monospace; font-size: 11px; color: var(--color-neutral-600);">3</span>
+              <span>Backfield Ballers</span>
+              <span style="color: var(--color-neutral-400);">C. Nwosu <span class="tag tag-neutral" style="font-size: 9.5px; padding: 1px 6px;">WR</span></span>
+            </div>
+            <div style="display: grid; grid-template-columns: 30px 1fr 1fr; align-items: center; gap: 12px; padding: 10px 18px; border-bottom: 1px solid var(--color-neutral-900); font-size: 13px;">
+              <span style="font-family: ui-monospace, monospace; font-size: 11px; color: var(--color-neutral-600);">4</span>
+              <span>Fourth and Long</span>
+              <span style="color: var(--color-neutral-400);">L. Kasprzak <span class="tag tag-neutral" style="font-size: 9.5px; padding: 1px 6px;">RB</span></span>
+            </div>
+            <div style="display: grid; grid-template-columns: 30px 1fr 1fr; align-items: center; gap: 12px; padding: 10px 18px; border-bottom: 1px solid var(--color-neutral-900); font-size: 13px;">
+              <span style="font-family: ui-monospace, monospace; font-size: 11px; color: var(--color-neutral-600);">8</span>
+              <span>Pylon Co.</span>
+              <span style="color: var(--color-neutral-400);">T. Okonkwo <span class="tag tag-neutral" style="font-size: 9.5px; padding: 1px 6px;">TE</span></span>
+            </div>
+            <div style="display: grid; grid-template-columns: 30px 1fr 1fr; align-items: center; gap: 12px; padding: 10px 18px; border-bottom: 1px solid var(--color-neutral-900); font-size: 13px;">
+              <span style="font-family: ui-monospace, monospace; font-size: 11px; color: var(--color-neutral-600);">12</span>
+              <span>Route 66</span>
+              <span style="color: var(--color-neutral-400);">R. Anselmo <span class="tag tag-neutral" style="font-size: 9.5px; padding: 1px 6px;">RB</span></span>
+            </div>
+            <div style="display: grid; grid-template-columns: 30px 1fr 1fr; align-items: center; gap: 12px; padding: 10px 18px; border-bottom: 1px solid var(--color-neutral-900); font-size: 13px;">
+              <span style="font-family: ui-monospace, monospace; font-size: 11px; color: var(--color-neutral-600);">12</span>
+              <span>Route 66</span>
+              <span style="color: var(--color-neutral-400);">D. Fontaine <span class="tag tag-neutral" style="font-size: 9.5px; padding: 1px 6px;">WR</span></span>
+            </div>
+          <div style="padding: 12px 18px; font-size: 11.5px; line-height: 1.55; color: var(--color-neutral-600);">Two failed: Cover Two's claim on Nwosu, and yours. Halvorsen was not in this run — he clears Thursday.</div>
+        </div>
+
+        <div style="display: flex; gap: 12px; margin-top: 24px; padding: 16px 18px; border-radius: var(--radius-md); background: color-mix(in srgb, var(--color-accent) 8%, transparent); border: 1px solid var(--color-accent-800); max-width: 760px;">
+          <span style="flex: 0 0 auto; width: 5px; height: 5px; margin-top: 7px; border-radius: 50%; background: var(--color-accent);"></span>
+          <p style="font-size: 13px; line-height: 1.6; color: var(--color-accent-200); margin: 0;">Priority moves only on success, and a manager who wins several claims in one run moves once — not once per player. You won two and you move a single place. You were already last, so in practice you have not moved at all.</p>
+        </div>
+      </div>
+
+      <aside style="display: flex; flex-direction: column; gap: 18px;">
+        <div class="card elev-md" style="padding: 20px; background: var(--color-surface);">
+          <span style="font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-600);">Your priority</span>
+          <div style="display: flex; align-items: baseline; gap: 12px; margin-top: 9px;">
+            <span style="font-family: var(--font-heading); font-size: 34px; font-weight: 500; letter-spacing: -0.028em; font-variant-numeric: tabular-nums;">12</span>
+            <span style="font-size: 13px; color: var(--color-neutral-500);">of 12 · unchanged</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 9px; margin-top: 12px; font-size: 12px; color: var(--color-neutral-400);">
+            <span>Before</span>
+            <span style="font-variant-numeric: tabular-nums; color: var(--color-neutral-300);">12</span>
+            <span style="color: var(--color-accent-400);">→</span>
+            <span>After</span>
+            <span style="font-variant-numeric: tabular-nums; color: var(--color-neutral-300);">12</span>
+          </div>
+          <p style="font-size: 12px; line-height: 1.55; color: var(--color-neutral-600); margin: 12px 0 0;">Rolling priority sends a winner to the back. You were at the back already.</p>
+        </div>
+
+        <div class="card" style="padding: 0; overflow: hidden; background: var(--color-surface);">
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 13px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+            <span style="font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-600);">Your roster now</span>
+            <span style="font-size: 11.5px; color: var(--color-neutral-600);">14 of 14</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 46px 1fr auto; align-items: center; gap: 10px; padding: 10px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+            <span class="tag tag-accent" style="font-size: 10px; padding: 2px 7px; justify-self: start;">WR</span>
+            <span style="font-size: 13px; color: var(--color-accent-200);">D. Fontaine <span style="font-size: 11px; color: var(--color-neutral-600);">DAL</span></span>
+            <span style="font-size: 11px; color: var(--color-accent-400);">Added</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 46px 1fr auto; align-items: center; gap: 10px; padding: 10px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+            <span class="tag tag-accent" style="font-size: 10px; padding: 2px 7px; justify-self: start;">RB</span>
+            <span style="font-size: 13px; color: var(--color-accent-200);">R. Anselmo <span style="font-size: 11px; color: var(--color-neutral-600);">CHI</span></span>
+            <span style="font-size: 11px; color: var(--color-accent-400);">Added</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 46px 1fr auto; align-items: center; gap: 10px; padding: 10px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+            <span class="tag tag-neutral" style="font-size: 10px; padding: 2px 7px; justify-self: start;">WR</span>
+            <span style="font-size: 13px; color: var(--color-neutral-500);">E. Nwachukwu <span style="font-size: 11px; color: var(--color-neutral-600);">JAX</span></span>
+            <span style="font-size: 11px; color: var(--color-neutral-600);">Dropped</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 46px 1fr auto; align-items: center; gap: 10px; padding: 10px 18px;">
+            <span class="tag tag-neutral" style="font-size: 10px; padding: 2px 7px; justify-self: start;">RB</span>
+            <span style="font-size: 13px; color: var(--color-neutral-500);">T. Bergström <span style="font-size: 11px; color: var(--color-neutral-600);">HOU</span></span>
+            <span style="font-size: 11px; color: var(--color-neutral-600);">Dropped</span>
+          </div>
+        </div>
+
+        <div class="card" style="padding: 18px 20px; background: transparent; box-shadow: 0 0 0 1px var(--color-neutral-900);">
+          <span style="font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-600);">Next</span>
+          <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 12px; font-size: 12.5px;">
+            <div style="display: flex; justify-content: space-between; gap: 14px;"><span style="color: var(--color-neutral-500);">Free agency</span><span style="color: var(--color-accent-200); text-align: right;">Open now</span></div>
+            <div style="display: flex; justify-content: space-between; gap: 14px;"><span style="color: var(--color-neutral-500);">Halvorsen clears</span><span style="color: var(--color-neutral-300); text-align: right;">Thu 03:00 ET</span></div>
+            <div style="display: flex; justify-content: space-between; gap: 14px;"><span style="color: var(--color-neutral-500);">Next run</span><span style="color: var(--color-neutral-300); text-align: right;">Wed 03:00, next week</span></div>
+          </div>
+          <button type="button" class="btn btn-primary btn-block" style="margin-top: 16px; font-size: 13.5px; padding: 10px 0;">Set your Week 5 lineup</button>
+        </div>
+      </aside>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:2300}}"></script>
+</body>
+</html>

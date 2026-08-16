@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="_ds/nocturne-2cbfcdf4-7e1c-4bfa-8626-a61405078160/styles.css">
+<script src="_ds/nocturne-2cbfcdf4-7e1c-4bfa-8626-a61405078160/_ds_bundle.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
+<style>
+  html, body { margin: 0; padding: 0; background: var(--color-bg); }
+  body { font-family: var(--font-body); color: var(--color-text); -webkit-font-smoothing: antialiased; }
+  * { box-sizing: border-box; }
+  a { color: var(--color-accent); text-decoration: none; }
+  a:hover { color: var(--color-accent-400); }
+  a:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+</style>
+</helmet>
+
+<div style="background: var(--color-bg); min-width: 1280px;">
+
+  <div style="display: flex; align-items: baseline; gap: 14px; padding: 30px 28px 14px;">
+    <span style="font-family: ui-monospace, monospace; font-size: 11px; letter-spacing: 0.1em; color: var(--color-accent-500);">STATE 1</span>
+    <span style="font-family: var(--font-heading); font-size: 17px; font-weight: 500; letter-spacing: -0.02em;">Proposing an amendment</span>
+    <span style="font-size: 13px; color: var(--color-neutral-600);">The only way a frozen rule ever moves &mdash; and it needs all twelve signatures</span>
+  </div>
+
+  <div data-screen-label="Amend propose" style="background: var(--color-bg); min-height: 100vh; min-width: 1280px; padding-bottom: 56px;">
+    <header style="border-bottom: 1px solid var(--color-neutral-900);">
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 12px 28px;">
+        <div style="display: flex; align-items: center; gap: 18px;">
+          <span style="font-family: var(--font-heading); font-size: 17px; font-weight: 600; letter-spacing: -0.02em;">rostr</span>
+          <span style="width: 1px; height: 18px; background: var(--color-neutral-800);"></span>
+          <span style="font-size: 14.5px;">Dynasty of Dropped Passes</span>
+          <span style="font-size: 12px; color: var(--color-neutral-600);">Week 10 &middot; Tue 17 Nov, 11:40 AM ET</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <span style="font-family: ui-monospace, monospace; font-size: 11.5px; color: var(--color-neutral-600);">0x7f3a&hellip;c19d</span>
+          <span style="width: 1px; height: 18px; background: var(--color-neutral-800);"></span>
+          <span style="font-family: ui-monospace, monospace; font-size: 12px; color: var(--color-neutral-400);">7xKq&hellip;4vNb</span>
+        </div>
+      </div>
+      <nav style="display: flex; align-items: center; gap: 26px; padding: 0 28px 11px;">
+        <a href="#" style="font-size: 13.5px; color: var(--color-neutral-500); padding-bottom: 3px;" style-hover="color: var(--color-text);">Home</a>
+        <a href="#" style="font-size: 13.5px; color: var(--color-neutral-500); padding-bottom: 3px;" style-hover="color: var(--color-text);">Matchup</a>
+        <a href="#" style="font-size: 13.5px; color: var(--color-neutral-500); padding-bottom: 3px;" style-hover="color: var(--color-text);">My team</a>
+        <a href="#" style="font-size: 13.5px; color: var(--color-neutral-500); padding-bottom: 3px;" style-hover="color: var(--color-text);">Trades</a>
+        <a href="#" style="font-size: 13.5px; color: var(--color-text); box-shadow: inset 0 -1px 0 var(--color-accent); padding-bottom: 3px;" style-hover="color: var(--color-text);">League</a>
+      </nav>
+    </header>
+
+    <div style="display: grid; grid-template-columns: minmax(0, 1fr) 420px; gap: 28px; padding: 30px 28px 0; max-width: 1500px; margin: 0 auto;">
+
+      <div style="min-width: 0;">
+        <h1 style="font-family: var(--font-heading); font-size: 28px; font-weight: 500; letter-spacing: -0.026em; margin: 0;">Propose an amendment</h1>
+        <p style="font-size: 14px; line-height: 1.6; color: var(--color-neutral-400); margin: 10px 0 0; max-width: 680px; text-wrap: pretty;">Rules were frozen when this league was created, and an amendment is the only thing that moves one. It takes a signature from every one of the twelve managers. Not a majority, not a quorum &mdash; all twelve, and any single refusal ends it.</p>
+
+        <div class="card" style="margin-top: 22px; padding: 0; overflow: hidden; background: var(--color-surface);">
+          <div style="padding: 11px 18px; border-bottom: 1px solid var(--color-neutral-900); font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-500);">What you're changing</div>
+          <div style="display: grid; grid-template-columns: 148px minmax(0, 1fr); gap: 16px; padding: 14px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+            <span style="font-size: 12.5px; color: var(--color-neutral-500);">Rule</span>
+            <span style="font-size: 13.5px;">Trade deadline</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 148px minmax(0, 1fr); gap: 16px; padding: 14px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+            <span style="font-size: 12.5px; color: var(--color-neutral-500);">Currently</span>
+            <span style="font-size: 13.5px; color: var(--color-neutral-300);">End of Week 11 &mdash; Mon 23 Nov</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 148px minmax(0, 1fr); gap: 16px; padding: 14px 18px; background: color-mix(in srgb, var(--color-accent) 9%, transparent);">
+            <span style="font-size: 12.5px; color: var(--color-accent-400);">Proposed</span>
+            <span style="font-size: 13.5px; color: var(--color-accent-200);">End of Week 13 &mdash; Mon 7 Dec</span>
+          </div>
+          <div style="padding: 11px 18px; border-top: 1px solid var(--color-neutral-900); font-size: 11.5px; line-height: 1.55; color: var(--color-neutral-500);">Any week from 8 to the end of the regular season is permitted, so Week 13 is a legal value. An amendment cannot propose an illegal one.</div>
+        </div>
+
+        <div class="card" style="margin-top: 16px; padding: 15px 18px; background: var(--color-surface);">
+          <label for="amend-reason" style="font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-500);">Why (shown to everyone before they sign)</label>
+          <textarea id="amend-reason" class="input" rows="3" style="width: 100%; margin-top: 9px; font-size: 13.5px; line-height: 1.55; resize: vertical;">Four of us are out of it by Week 11 and there's nothing left to do but watch. Two more weeks of trading keeps the bottom half interested.</textarea>
+        </div>
+
+        <div class="card" style="margin-top: 16px; padding: 0; overflow: hidden; background: var(--color-surface);">
+          <div style="padding: 11px 18px; border-bottom: 1px solid var(--color-neutral-900); font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-500);">What an amendment cannot do</div>
+          <div style="display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 13px; align-items: baseline; padding: 12px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+            <span style="color: var(--color-neutral-600);">&mdash;</span>
+            <span style="font-size: 13px; line-height: 1.55;">Touch anything that already happened. Results, rosters, standings, waiver order and trade history are league state, not rules, and no signature count rewrites them.</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 13px; align-items: baseline; padding: 12px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+            <span style="color: var(--color-neutral-600);">&mdash;</span>
+            <span style="font-size: 13px; line-height: 1.55;">Apply retroactively. If this passes on Friday, trades already expired under the old deadline stay expired.</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 13px; align-items: baseline; padding: 12px 18px;">
+            <span style="color: var(--color-neutral-600);">&mdash;</span>
+            <span style="font-size: 13px; line-height: 1.55;">Be pushed through by you. You are the commissioner and it makes no difference here &mdash; your signature is one of twelve.</span>
+          </div>
+        </div>
+      </div>
+
+      <aside style="position: sticky; top: 22px; align-self: start; display: flex; flex-direction: column; gap: 16px;">
+        <div class="card" style="padding: 15px 16px; background: color-mix(in srgb, var(--color-accent) 8%, transparent); border-color: var(--color-accent-800);">
+          <div style="font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--color-accent-400);">Before you send this</div>
+          <p style="font-size: 12.5px; line-height: 1.6; color: var(--color-neutral-300); margin: 9px 0 0; text-wrap: pretty;">Twelve signatures is a high bar on purpose. Anyone who benefits from the rule as it stands can end this by doing nothing at all, and there is no deadline forcing them to answer.</p>
+          <p style="font-size: 12.5px; line-height: 1.6; color: var(--color-neutral-400); margin: 9px 0 0; text-wrap: pretty;">Most amendments fail. That is the design working, not a bug in it &mdash; the alternative is rules that move when someone is losing.</p>
+        </div>
+
+        <div class="card" style="padding: 0; overflow: hidden; background: var(--color-surface);">
+          <div style="padding: 11px 16px; border-bottom: 1px solid var(--color-neutral-900); font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-500);">Who has to sign</div>
+          <div style="padding: 13px 16px; border-bottom: 1px solid var(--color-neutral-900);">
+            <div style="display: flex; align-items: baseline; gap: 9px;">
+              <span style="font-family: var(--font-heading); font-size: 30px; font-weight: 500; letter-spacing: -0.03em; color: var(--color-accent-200); font-variant-numeric: tabular-nums;">12</span>
+              <span style="font-size: 12.5px; color: var(--color-neutral-400);">of 12 managers, including you</span>
+            </div>
+            <p style="font-size: 12px; line-height: 1.55; color: var(--color-neutral-500); margin: 9px 0 0; text-wrap: pretty;">Every member holding a stake &mdash; and a bot holds none. It has no wallet and paid no buy-in, so a bot seat neither signs nor blocks, exactly as it is left out of the veto denominator. Twelve here because all twelve seats are human.</p>
+          </div>
+          <div style="padding: 12px 16px; font-size: 12px; line-height: 1.55; color: var(--color-neutral-500);">Signatures are visible to the league as they arrive, and so is a refusal. There is no private vote here.</div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <button type="button" class="btn btn-primary btn-block" style="font-size: 14.5px; min-height: 48px;">Sign and propose</button>
+          <button type="button" class="btn btn-ghost btn-block" style="font-size: 14.5px; min-height: 48px; color: var(--color-neutral-400);">Discard</button>
+          <span style="font-size: 11.5px; line-height: 1.5; color: var(--color-neutral-500); text-align: center;">Your signature is the first of the twelve.</span>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <div style="height: 1px; margin: 46px 28px 0; background: linear-gradient(90deg, transparent, var(--color-neutral-800) 12%, var(--color-neutral-800) 88%, transparent);"></div>
+
+  <div style="display: flex; align-items: baseline; gap: 14px; padding: 30px 28px 14px;">
+    <span style="font-family: ui-monospace, monospace; font-size: 11px; letter-spacing: 0.1em; color: var(--color-accent-500);">STATE 2</span>
+    <span style="font-family: var(--font-heading); font-size: 17px; font-weight: 500; letter-spacing: -0.02em;">Nine of twelve, and stuck</span>
+    <span style="font-size: 13px; color: var(--color-neutral-600);">The honest state &mdash; a progress bar here would be a lie about what nine signatures mean</span>
+  </div>
+
+  <div data-screen-label="Amend in flight" style="background: var(--color-bg); min-height: 100vh; min-width: 1280px; padding-bottom: 56px;">
+    <header style="border-bottom: 1px solid var(--color-neutral-900);">
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 12px 28px;">
+        <div style="display: flex; align-items: center; gap: 18px;">
+          <span style="font-family: var(--font-heading); font-size: 17px; font-weight: 600; letter-spacing: -0.02em;">rostr</span>
+          <span style="width: 1px; height: 18px; background: var(--color-neutral-800);"></span>
+          <span style="font-size: 14.5px;">Dynasty of Dropped Passes</span>
+          <span style="font-size: 12px; color: var(--color-neutral-600);">Week 11 &middot; Fri 20 Nov, 9:05 AM ET</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <span style="font-family: ui-monospace, monospace; font-size: 11.5px; color: var(--color-neutral-600);">0x7f3a&hellip;c19d</span>
+          <span style="width: 1px; height: 18px; background: var(--color-neutral-800);"></span>
+          <span style="font-family: ui-monospace, monospace; font-size: 12px; color: var(--color-neutral-400);">7xKq&hellip;4vNb</span>
+        </div>
+      </div>
+      <nav style="display: flex; align-items: center; gap: 26px; padding: 0 28px 11px;">
+        <a href="#" style="font-size: 13.5px; color: var(--color-neutral-500); padding-bottom: 3px;" style-hover="color: var(--color-text);">Home</a>
+        <a href="#" style="font-size: 13.5px; color: var(--color-neutral-500); padding-bottom: 3px;" style-hover="color: var(--color-text);">Matchup</a>
+        <a href="#" style="font-size: 13.5px; color: var(--color-neutral-500); padding-bottom: 3px;" style-hover="color: var(--color-text);">My team</a>
+        <a href="#" style="font-size: 13.5px; color: var(--color-neutral-500); padding-bottom: 3px;" style-hover="color: var(--color-text);">Trades</a>
+        <a href="#" style="font-size: 13.5px; color: var(--color-text); box-shadow: inset 0 -1px 0 var(--color-accent); padding-bottom: 3px;" style-hover="color: var(--color-text);">League</a>
+      </nav>
+    </header>
+
+    <div style="display: grid; grid-template-columns: minmax(0, 1fr) 420px; gap: 28px; padding: 30px 28px 0; max-width: 1500px; margin: 0 auto;">
+
+      <div style="min-width: 0;">
+        <span style="font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-accent-400);">Amendment &middot; trade deadline</span>
+        <h1 style="font-family: var(--font-heading); font-size: 28px; font-weight: 500; letter-spacing: -0.026em; margin: 11px 0 0;">Nine signatures change nothing.</h1>
+        <p style="font-size: 14px; line-height: 1.6; color: var(--color-neutral-400); margin: 10px 0 0; max-width: 680px; text-wrap: pretty;">Twelve change the rule. Until the twelfth arrives the deadline is still the end of Week 11, which is Monday &mdash; so trades have to be proposed by Saturday night to execute in time, exactly as before. Three managers have not answered in three days.</p>
+
+        <div class="card" style="margin-top: 22px; padding: 0; overflow: hidden; background: var(--color-surface);">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+            <span style="font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-500);">Signatures</span>
+            <span style="font-size: 12px; color: var(--color-neutral-500);">9 signed &middot; 3 outstanding &middot; 0 refused</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 20px minmax(0, 1fr) 132px 108px; gap: 12px; align-items: center; padding: 10px 18px; border-bottom: 1px solid var(--color-neutral-900); background: color-mix(in srgb, var(--color-accent) 9%, transparent);">
+            <span style="color: var(--color-accent-400); font-size: 12px;">&check;</span>
+            <span style="font-size: 13px; color: var(--color-accent-200);">Route 66 <span style="color: var(--color-accent-400);">&middot; you, commissioner</span></span>
+            <span style="font-size: 11.5px; color: var(--color-accent-300);">Tue 17 Nov, 11:41 AM</span>
+            <span style="font-family: ui-monospace, monospace; font-size: 11px; color: var(--color-accent-400); text-align: right;">9pQw&hellip;3kTz</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 20px minmax(0, 1fr) 132px 108px; gap: 12px; align-items: center; padding: 10px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+            <span style="color: var(--color-accent-500); font-size: 12px;">&check;</span>
+            <span style="font-size: 13px;">Bye Week Blues</span>
+            <span style="font-size: 11.5px; color: var(--color-neutral-500);">Tue 17 Nov, 11:58 AM</span>
+            <span style="font-family: ui-monospace, monospace; font-size: 11px; color: var(--color-neutral-500); text-align: right;">2vBn&hellip;7mXd</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 20px minmax(0, 1fr) 132px 108px; gap: 12px; align-items: center; padding: 10px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+            <span style="color: var(--color-accent-500); font-size: 12px;">&check;</span>
+            <span style="font-size: 13px;">Play Action Only</span>
+            <span style="font-size: 11.5px; color: var(--color-neutral-500);">Tue 17 Nov, 12:16 PM</span>
+            <span style="font-family: ui-monospace, monospace; font-size: 11px; color: var(--color-neutral-500); text-align: right;">6cRk&hellip;1jWp</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 20px minmax(0, 1fr) 132px 108px; gap: 12px; align-items: center; padding: 10px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+            <span style="color: var(--color-accent-500); font-size: 12px;">&check;</span>
+            <span style="font-size: 13px;">Red Zone Rentals</span>
+            <span style="font-size: 11.5px; color: var(--color-neutral-500);">Tue 17 Nov, 3:02 PM</span>
+            <span style="font-family: ui-monospace, monospace; font-size: 11px; color: var(--color-neutral-500); text-align: right;">8tLm&hellip;5hVc</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 20px minmax(0, 1fr) 132px 108px; gap: 12px; align-items: center; padding: 10px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+            <span style="color: var(--color-accent-500); font-size: 12px;">&check;</span>
+            <span style="font-size: 13px;">Fourth and Long</span>
+            <span style="font-size: 11.5px; color: var(--color-neutral-500);">Tue 17 Nov, 7:44 PM</span>
+            <span style="font-family: ui-monospace, monospace; font-size: 11px; color: var(--color-neutral-500); text-align: right;">4gYr&hellip;9nQs</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 20px minmax(0, 1fr) 132px 108px; gap: 12px; align-items: center; padding: 10px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+            <span style="color: var(--color-accent-500); font-size: 12px;">&check;</span>
+            <span style="font-size: 13px;">Tuesday Night Regrets</span>
+            <span style="font-size: 11.5px; color: var(--color-neutral-500);">Wed 18 Nov, 8:31 AM</span>
+            <span style="font-family: ui-monospace, monospace; font-size: 11px; color: var(--color-neutral-500); text-align: right;">3wKp&hellip;6bFn</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 20px minmax(0, 1fr) 132px 108px; gap: 12px; align-items: center; padding: 10px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+            <span style="color: var(--color-accent-500); font-size: 12px;">&check;</span>
+            <span style="font-size: 13px;">Audibles</span>
+            <span style="font-size: 11.5px; color: var(--color-neutral-500);">Wed 18 Nov, 10:12 AM</span>
+            <span style="font-family: ui-monospace, monospace; font-size: 11px; color: var(--color-neutral-500); text-align: right;">7dHt&hellip;2xRm</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 20px minmax(0, 1fr) 132px 108px; gap: 12px; align-items: center; padding: 10px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+            <span style="color: var(--color-accent-500); font-size: 12px;">&check;</span>
+            <span style="font-size: 13px;">Gridiron Heresy</span>
+            <span style="font-size: 11.5px; color: var(--color-neutral-500);">Wed 18 Nov, 6:57 PM</span>
+            <span style="font-family: ui-monospace, monospace; font-size: 11px; color: var(--color-neutral-500); text-align: right;">5nZc&hellip;8pKw</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 20px minmax(0, 1fr) 132px 108px; gap: 12px; align-items: center; padding: 10px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+            <span style="color: var(--color-accent-500); font-size: 12px;">&check;</span>
+            <span style="font-size: 13px;">Hail Mary Inc.</span>
+            <span style="font-size: 11.5px; color: var(--color-neutral-500);">Thu 19 Nov, 9:20 AM</span>
+            <span style="font-family: ui-monospace, monospace; font-size: 11px; color: var(--color-neutral-500); text-align: right;">1mFq&hellip;4vBt</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 20px minmax(0, 1fr) 132px 108px; gap: 12px; align-items: center; padding: 10px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+            <span style="color: var(--color-neutral-600); font-size: 12px;">&mdash;</span>
+            <span style="font-size: 13px; color: var(--color-neutral-300);">Backfield Ballers</span>
+            <span style="font-size: 11.5px; color: var(--color-neutral-500);">No answer, 3 days</span>
+            <span style="text-align: right;"><button type="button" class="btn btn-ghost" style="font-size: 11.5px; padding: 5px 10px; min-height: 44px; color: var(--color-neutral-400);">Nudge</button></span>
+          </div>
+          <div style="display: grid; grid-template-columns: 20px minmax(0, 1fr) 132px 108px; gap: 12px; align-items: center; padding: 10px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+            <span style="color: var(--color-neutral-600); font-size: 12px;">&mdash;</span>
+            <span style="font-size: 13px; color: var(--color-neutral-300);">Pylon Co.</span>
+            <span style="font-size: 11.5px; color: var(--color-neutral-500);">No answer, 3 days</span>
+            <span style="text-align: right;"><button type="button" class="btn btn-ghost" style="font-size: 11.5px; padding: 5px 10px; min-height: 44px; color: var(--color-neutral-400);">Nudge</button></span>
+          </div>
+          <div style="display: grid; grid-template-columns: 20px minmax(0, 1fr) 132px 108px; gap: 12px; align-items: center; padding: 10px 18px;">
+            <span style="color: var(--color-neutral-600); font-size: 12px;">&mdash;</span>
+            <span style="font-size: 13px; color: var(--color-neutral-300);">Cover Two</span>
+            <span style="font-size: 11.5px; color: var(--color-neutral-500);">No answer, 3 days</span>
+            <span style="text-align: right;"><button type="button" class="btn btn-ghost" style="font-size: 11.5px; padding: 5px 10px; min-height: 44px; color: var(--color-neutral-400);">Nudge</button></span>
+          </div>
+        </div>
+
+        <sc-if value="{{ showLifecycleNotes }}" hint-placeholder-val="{{ true }}">
+        <div class="card" style="margin-top: 16px; padding: 15px 18px; background: var(--color-surface);">
+          <div style="font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-500);">Nobody has to answer</div>
+          <p style="font-size: 13px; line-height: 1.6; color: var(--color-neutral-400); margin: 8px 0 0; max-width: 760px; text-wrap: pretty;">There is no clock on an amendment and no penalty for ignoring one. Silence is not consent and never becomes consent &mdash; a rule that could pass by default would not be frozen, and an absent manager would be the easiest signature to collect.</p>
+          <p style="font-size: 13px; line-height: 1.6; color: var(--color-neutral-400); margin: 9px 0 0; max-width: 760px; text-wrap: pretty;">The three outstanding managers are the top two seeds and one mid-table team, and the proposal helps the bottom half trade. Whatever their reasons, the product should not editorialise: it shows who has not signed and leaves the reading to the league.</p>
+        </div>
+        </sc-if>
+      </div>
+
+      <aside style="position: sticky; top: 22px; align-self: start; display: flex; flex-direction: column; gap: 16px;">
+        <div class="card" style="padding: 0; overflow: hidden; background: var(--color-surface);">
+          <div style="padding: 13px 16px; border-bottom: 1px solid var(--color-neutral-900);">
+            <div style="display: flex; align-items: baseline; gap: 9px;">
+              <span style="font-family: var(--font-heading); font-size: 34px; font-weight: 500; letter-spacing: -0.03em; color: var(--color-neutral-300); font-variant-numeric: tabular-nums;">9</span>
+              <span style="font-family: var(--font-heading); font-size: 20px; font-weight: 500; color: var(--color-neutral-600);">/ 12</span>
+            </div>
+            <p style="font-size: 12px; line-height: 1.55; color: var(--color-neutral-500); margin: 9px 0 0;">No progress bar. Nine of twelve is not three quarters of the way to anything &mdash; it is the same as zero until it is twelve.</p>
+          </div>
+          <div style="padding: 12px 16px; font-size: 12px; line-height: 1.55; color: var(--color-neutral-500);">Any one refusal ends this immediately and permanently. The same proposal can be raised again, from scratch.</div>
+        </div>
+
+        <div class="card" style="padding: 0; overflow: hidden; background: var(--color-surface);">
+          <div style="padding: 11px 16px; border-bottom: 1px solid var(--color-neutral-900); font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-500);">Still in force</div>
+          <table class="table" style="width: 100%; font-size: 12.5px;">
+            <tbody>
+              <tr><td style="width: 132px; color: var(--color-neutral-500);">Trade deadline</td><td>End of Week 11, Mon 23 Nov</td></tr>
+              <tr><td style="color: var(--color-neutral-500);">Propose trades by</td><td>Sat 21 Nov, 11:30 PM</td></tr>
+              <tr><td style="color: var(--color-neutral-500);">Rules hash</td><td><span style="font-family: ui-monospace, monospace; font-size: 12px;">0x7f3a&hellip;c19d</span></td></tr>
+            </tbody>
+          </table>
+          <div style="padding: 10px 16px; border-top: 1px solid var(--color-neutral-900); font-size: 11.5px; line-height: 1.55; color: var(--color-neutral-500);">If this passes, the hash changes and every member's consent is re-recorded against the new one.</div>
+        </div>
+
+        <div class="card" style="padding: 15px 16px; background: var(--color-surface);">
+          <div style="font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-500);">Your options</div>
+          <p style="font-size: 12.5px; line-height: 1.6; color: var(--color-neutral-400); margin: 8px 0 0; text-wrap: pretty;">You proposed it and you have signed. You can withdraw the proposal, which releases everyone's signature, or leave it open indefinitely.</p>
+          <button type="button" class="btn btn-ghost btn-block" style="font-size: 13.5px; min-height: 44px; margin-top: 12px; color: var(--color-neutral-400);">Withdraw proposal</button>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <div style="height: 1px; margin: 46px 28px 0; background: linear-gradient(90deg, transparent, var(--color-neutral-800) 12%, var(--color-neutral-800) 88%, transparent);"></div>
+
+  <div style="display: flex; align-items: baseline; gap: 14px; padding: 30px 28px 14px;">
+    <span style="font-family: ui-monospace, monospace; font-size: 11px; letter-spacing: 0.1em; color: var(--color-accent-500);">STATE 3</span>
+    <span style="font-family: var(--font-heading); font-size: 17px; font-weight: 500; letter-spacing: -0.02em;">Dissolving a league</span>
+    <span style="font-size: 13px; color: var(--color-neutral-600);">Also unanimous &mdash; and the copy has to be specific about what is lost</span>
+  </div>
+
+  <div data-screen-label="Dissolve" style="background: var(--color-bg); min-height: 100vh; min-width: 1280px; padding-bottom: 56px;">
+    <header style="border-bottom: 1px solid var(--color-neutral-900);">
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 12px 28px;">
+        <div style="display: flex; align-items: center; gap: 18px;">
+          <span style="font-family: var(--font-heading); font-size: 17px; font-weight: 600; letter-spacing: -0.02em;">rostr</span>
+          <span style="width: 1px; height: 18px; background: var(--color-neutral-800);"></span>
+          <span style="font-size: 14.5px;">Dynasty of Dropped Passes</span>
+          <span style="font-size: 12px; color: var(--color-neutral-600);">Week 11 &middot; Fri 20 Nov, 9:05 AM ET</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <span style="font-family: ui-monospace, monospace; font-size: 11.5px; color: var(--color-neutral-600);">0x7f3a&hellip;c19d</span>
+          <span style="width: 1px; height: 18px; background: var(--color-neutral-800);"></span>
+          <span style="font-family: ui-monospace, monospace; font-size: 12px; color: var(--color-neutral-400);">7xKq&hellip;4vNb</span>
+        </div>
+      </div>
+      <nav style="display: flex; align-items: center; gap: 26px; padding: 0 28px 11px;">
+        <a href="#" style="font-size: 13.5px; color: var(--color-neutral-500); padding-bottom: 3px;" style-hover="color: var(--color-text);">Home</a>
+        <a href="#" style="font-size: 13.5px; color: var(--color-neutral-500); padding-bottom: 3px;" style-hover="color: var(--color-text);">Matchup</a>
+        <a href="#" style="font-size: 13.5px; color: var(--color-neutral-500); padding-bottom: 3px;" style-hover="color: var(--color-text);">My team</a>
+        <a href="#" style="font-size: 13.5px; color: var(--color-neutral-500); padding-bottom: 3px;" style-hover="color: var(--color-text);">Trades</a>
+        <a href="#" style="font-size: 13.5px; color: var(--color-text); box-shadow: inset 0 -1px 0 var(--color-accent); padding-bottom: 3px;" style-hover="color: var(--color-text);">League</a>
+      </nav>
+    </header>
+
+    <div style="display: grid; grid-template-columns: minmax(0, 1fr) 420px; gap: 28px; padding: 30px 28px 0; max-width: 1500px; margin: 0 auto;">
+
+      <div style="min-width: 0;">
+        <span style="font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-500);">Proposed by Bye Week Blues</span>
+        <h1 style="font-family: var(--font-heading); font-size: 28px; font-weight: 500; letter-spacing: -0.026em; margin: 11px 0 0;">End this league now, with ten weeks played.</h1>
+        <p style="font-size: 14px; line-height: 1.6; color: var(--color-neutral-400); margin: 10px 0 0; max-width: 680px; text-wrap: pretty;">Dissolving takes all twelve signatures, the same as an amendment. Four have signed. If it completes, the season stops where it is: no playoffs, no champion, and nothing recorded against anyone's name for the 2026 season.</p>
+
+        <div class="card" style="margin-top: 22px; padding: 0; overflow: hidden; background: var(--color-surface);">
+          <div style="padding: 11px 18px; border-bottom: 1px solid var(--color-neutral-900); font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-500);">Exactly what happens</div>
+          <div style="display: grid; grid-template-columns: 140px minmax(0, 1fr); gap: 16px; align-items: baseline; padding: 12px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+            <span style="font-size: 12.5px; color: var(--color-neutral-500);">The season</span>
+            <span style="font-size: 13px; line-height: 1.55;">Stops at Week 10. Weeks 11&ndash;17 are never played, and there is no champion, runner-up or consolation winner.</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 140px minmax(0, 1fr); gap: 16px; align-items: baseline; padding: 12px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+            <span style="font-size: 12.5px; color: var(--color-neutral-500);">Your roster</span>
+            <span style="font-size: 13px; line-height: 1.55;">The fourteen NFTs stay in your wallet and their transfer restriction relaxes, the same as it would at settlement. They stop being a lineup and become just tokens.</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 140px minmax(0, 1fr); gap: 16px; align-items: baseline; padding: 12px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+            <span style="font-size: 12.5px; color: var(--color-neutral-500);">The record</span>
+            <span style="font-size: 13px; line-height: 1.55;">Ten weeks of results stay on chain and stay readable. Dissolving ends a league; it does not erase what happened in it.</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 140px minmax(0, 1fr); gap: 16px; align-items: baseline; padding: 12px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+            <span style="font-size: 12.5px; color: var(--color-neutral-500);">The pot</span>
+            <span style="font-size: 13px; line-height: 1.55;">This league has none. In a pot league every member gets their full stake back and no fee is taken, because a refund is not a settlement.</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 140px minmax(0, 1fr); gap: 16px; align-items: baseline; padding: 12px 18px;">
+            <span style="font-size: 12.5px; color: var(--color-accent-400);">Afterwards</span>
+            <span style="font-size: 13px; line-height: 1.55; color: var(--color-accent-200);">Nothing. A dissolved league cannot be restarted, unfrozen or copied forward. Next season is a new league, created from scratch and frozen again.</span>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top: 16px; padding: 0; overflow: hidden; background: var(--color-surface);">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+            <span style="font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-500);">Signatures</span>
+            <span style="font-size: 12px; color: var(--color-neutral-500);">4 signed &middot; 8 outstanding</span>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0;">
+            <div style="display: flex; align-items: center; gap: 10px; padding: 11px 18px; border-bottom: 1px solid var(--color-neutral-900); border-right: 1px solid var(--color-neutral-900);"><span style="color: var(--color-accent-500); font-size: 12px;">&check;</span><span style="font-size: 12.5px;">Bye Week Blues</span></div>
+            <div style="display: flex; align-items: center; gap: 10px; padding: 11px 18px; border-bottom: 1px solid var(--color-neutral-900); border-right: 1px solid var(--color-neutral-900);"><span style="color: var(--color-accent-500); font-size: 12px;">&check;</span><span style="font-size: 12.5px;">Play Action Only</span></div>
+            <div style="display: flex; align-items: center; gap: 10px; padding: 11px 18px; border-bottom: 1px solid var(--color-neutral-900);"><span style="color: var(--color-accent-500); font-size: 12px;">&check;</span><span style="font-size: 12.5px;">Red Zone Rentals</span></div>
+            <div style="display: flex; align-items: center; gap: 10px; padding: 11px 18px; border-bottom: 1px solid var(--color-neutral-900); border-right: 1px solid var(--color-neutral-900);"><span style="color: var(--color-accent-500); font-size: 12px;">&check;</span><span style="font-size: 12.5px;">Fourth and Long</span></div>
+            <div style="display: flex; align-items: center; gap: 10px; padding: 11px 18px; border-bottom: 1px solid var(--color-neutral-900); border-right: 1px solid var(--color-neutral-900);"><span style="color: var(--color-neutral-600); font-size: 12px;">&mdash;</span><span style="font-size: 12.5px; color: var(--color-neutral-300);">Route 66 <span style="color: var(--color-neutral-600);">&middot; you</span></span></div>
+            <div style="display: flex; align-items: center; gap: 10px; padding: 11px 18px; border-bottom: 1px solid var(--color-neutral-900);"><span style="color: var(--color-neutral-600); font-size: 12px;">&mdash;</span><span style="font-size: 12.5px; color: var(--color-neutral-300);">Pylon Co.</span></div>
+            <div style="display: flex; align-items: center; gap: 10px; padding: 11px 18px; border-bottom: 1px solid var(--color-neutral-900); border-right: 1px solid var(--color-neutral-900);"><span style="color: var(--color-neutral-600); font-size: 12px;">&mdash;</span><span style="font-size: 12.5px; color: var(--color-neutral-300);">Cover Two</span></div>
+            <div style="display: flex; align-items: center; gap: 10px; padding: 11px 18px; border-bottom: 1px solid var(--color-neutral-900); border-right: 1px solid var(--color-neutral-900);"><span style="color: var(--color-neutral-600); font-size: 12px;">&mdash;</span><span style="font-size: 12.5px; color: var(--color-neutral-300);">Hail Mary Inc.</span></div>
+            <div style="display: flex; align-items: center; gap: 10px; padding: 11px 18px; border-bottom: 1px solid var(--color-neutral-900);"><span style="color: var(--color-neutral-600); font-size: 12px;">&mdash;</span><span style="font-size: 12.5px; color: var(--color-neutral-300);">Audibles</span></div>
+            <div style="display: flex; align-items: center; gap: 10px; padding: 11px 18px; border-right: 1px solid var(--color-neutral-900);"><span style="color: var(--color-neutral-600); font-size: 12px;">&mdash;</span><span style="font-size: 12.5px; color: var(--color-neutral-300);">Gridiron Heresy</span></div>
+            <div style="display: flex; align-items: center; gap: 10px; padding: 11px 18px; border-right: 1px solid var(--color-neutral-900);"><span style="color: var(--color-neutral-600); font-size: 12px;">&mdash;</span><span style="font-size: 12.5px; color: var(--color-neutral-300);">Tuesday Night Regrets</span></div>
+            <div style="display: flex; align-items: center; gap: 10px; padding: 11px 18px;"><span style="color: var(--color-neutral-600); font-size: 12px;">&mdash;</span><span style="font-size: 12.5px; color: var(--color-neutral-300);">Backfield Ballers</span></div>
+          </div>
+        </div>
+
+        <sc-if value="{{ showLifecycleNotes }}" hint-placeholder-val="{{ true }}">
+        <div class="card" style="margin-top: 16px; padding: 15px 18px; background: var(--color-surface);">
+          <div style="font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-500);">Why unanimity, when four people want out</div>
+          <p style="font-size: 13px; line-height: 1.6; color: var(--color-neutral-400); margin: 8px 0 0; max-width: 760px; text-wrap: pretty;">The four who signed are the bottom four. A majority rule would let a losing half end a season a winning half is enjoying, and in a pot league it would let them claw back a stake they were about to lose. So the team in first can refuse, and one refusal is enough &mdash; the same property that stops eleven people ending a league to spite the twelfth.</p>
+        </div>
+        </sc-if>
+      </div>
+
+      <aside style="position: sticky; top: 22px; align-self: start; display: flex; flex-direction: column; gap: 16px;">
+        <div class="card" style="padding: 15px 16px; background: color-mix(in srgb, var(--color-accent) 8%, transparent); border-color: var(--color-accent-800);">
+          <div style="font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--color-accent-400);">This cannot be undone</div>
+          <p style="font-size: 12.5px; line-height: 1.6; color: var(--color-neutral-300); margin: 9px 0 0; text-wrap: pretty;">A dissolved league is final on chain. There is nobody to appeal to, including us. If you are unsure, not signing costs nothing &mdash; the proposal simply sits there.</p>
+        </div>
+
+        <div class="card" style="padding: 0; overflow: hidden; background: var(--color-surface);">
+          <div style="padding: 11px 16px; border-bottom: 1px solid var(--color-neutral-900); font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-500);">Where the season stands</div>
+          <table class="table" style="width: 100%; font-size: 12.5px;">
+            <tbody style="font-variant-numeric: tabular-nums;">
+              <tr><td style="width: 128px; color: var(--color-neutral-500);">Weeks played</td><td>10 of 14</td></tr>
+              <tr><td style="color: var(--color-neutral-500);">Your record</td><td>7&ndash;3, 3rd of 12</td></tr>
+              <tr><td style="color: var(--color-neutral-500);">Playoff position</td><td>Inside the cut</td></tr>
+              <tr><td style="color: var(--color-neutral-500);">Pot</td><td>None</td></tr>
+            </tbody>
+          </table>
+          <div style="padding: 10px 16px; border-top: 1px solid var(--color-neutral-900); font-size: 11.5px; line-height: 1.55; color: var(--color-neutral-500);">You are third and would make the playoffs. That is shown here deliberately: a decision this final should be made with your own position in front of you.</div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <label style="display: flex; align-items: flex-start; gap: 10px; min-height: 44px; padding: 4px 0; cursor: pointer;">
+            <input type="checkbox" style="width: 18px; height: 18px; margin-top: 2px; flex: 0 0 auto; accent-color: var(--color-accent);">
+            <span style="font-size: 12px; line-height: 1.5; color: var(--color-neutral-300);">I understand this ends the season permanently, with no champion and no way back.</span>
+          </label>
+          <button type="button" class="btn btn-primary btn-block" disabled="disabled" style="font-size: 14.5px; min-height: 48px;">Sign to dissolve</button>
+          <button type="button" class="btn btn-ghost btn-block" style="font-size: 14.5px; min-height: 48px; color: var(--color-neutral-400);">Refuse and end this proposal</button>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <div style="height: 1px; margin: 46px 28px 0; background: linear-gradient(90deg, transparent, var(--color-neutral-800) 12%, var(--color-neutral-800) 88%, transparent);"></div>
+
+  <div style="display: flex; align-items: baseline; gap: 14px; padding: 30px 28px 14px;">
+    <span style="font-family: ui-monospace, monospace; font-size: 11px; letter-spacing: 0.1em; color: var(--color-accent-500);">STATE 4</span>
+    <span style="font-family: var(--font-heading); font-size: 17px; font-weight: 500; letter-spacing: -0.02em;">Auto-dissolved &mdash; nobody came</span>
+    <span style="font-size: 13px; color: var(--color-neutral-600);">A different league, with a pot &mdash; the only screen in the set where money actually moves</span>
+  </div>
+
+  <div data-screen-label="Auto-dissolve" style="background: var(--color-bg); min-height: 100vh; min-width: 1280px; padding-bottom: 56px;">
+    <header style="border-bottom: 1px solid var(--color-neutral-900);">
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 12px 28px;">
+        <div style="display: flex; align-items: center; gap: 18px;">
+          <span style="font-family: var(--font-heading); font-size: 17px; font-weight: 600; letter-spacing: -0.02em;">rostr</span>
+          <span style="width: 1px; height: 18px; background: var(--color-neutral-800);"></span>
+          <span style="font-size: 14.5px;">Sunday Scaries</span>
+          <span style="font-size: 12px; color: var(--color-neutral-600);">Sat 22 Aug, 8:00 PM ET &middot; league closed</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <span style="font-family: ui-monospace, monospace; font-size: 11.5px; color: var(--color-neutral-600);">0x4b81&hellip;7e2a</span>
+          <span style="width: 1px; height: 18px; background: var(--color-neutral-800);"></span>
+          <span style="font-family: ui-monospace, monospace; font-size: 12px; color: var(--color-neutral-400);">7xKq&hellip;4vNb</span>
+        </div>
+      </div>
+    </header>
+
+    <div style="max-width: 1500px; margin: 0 auto; padding: 30px 28px 0;">
+      <div style="display: grid; grid-template-columns: minmax(0, 1fr) 420px; gap: 28px;">
+
+        <div style="min-width: 0;">
+          <span style="font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-500);">Auto-dissolved &middot; Sat 22 Aug, 8:00 PM ET</span>
+          <h1 style="font-family: var(--font-heading); font-size: 30px; font-weight: 500; letter-spacing: -0.028em; line-height: 1.1; margin: 11px 0 0; text-wrap: pretty;">You were the only one who joined, so the league closed itself.</h1>
+          <p style="font-size: 14.5px; line-height: 1.6; color: var(--color-neutral-400); margin: 12px 0 0; max-width: 680px; text-wrap: pretty;">A league needs two humans by its draft time. Yours had one at 8:00 PM, so it dissolved automatically and your 25 USDC went back to your wallet. No signatures were needed and nothing was charged.</p>
+
+          <div class="card" style="margin-top: 22px; padding: 0; overflow: hidden; background: var(--color-surface);">
+            <div style="padding: 11px 18px; border-bottom: 1px solid var(--color-neutral-900); font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-500);">Your refund</div>
+            <table class="table" style="width: 100%; font-size: 13px;">
+              <tbody style="font-variant-numeric: tabular-nums;">
+                <tr><td style="width: 168px; color: var(--color-neutral-500);">Deposited</td><td>25.00 USDC <span style="color: var(--color-neutral-500);">&middot; Thu 20 Aug, 4:12 PM</span></td></tr>
+                <tr><td style="color: var(--color-neutral-500);">Returned</td><td>25.00 USDC <span style="color: var(--color-neutral-500);">&middot; Sat 22 Aug, 8:00 PM</span></td></tr>
+                <tr><td style="color: var(--color-neutral-500);">Protocol fee</td><td>None <span style="color: var(--color-neutral-500);">&middot; the 1% is charged at settlement, and this never settled</span></td></tr>
+                <tr><td style="color: var(--color-neutral-500);">Network fee</td><td>0.000005 SOL, paid by the program</td></tr>
+                <tr><td style="color: var(--color-neutral-500);">Transaction</td><td><span style="font-family: ui-monospace, monospace; font-size: 12.5px;">Kv7m&hellip;3nQd</span></td></tr>
+              </tbody>
+            </table>
+            <div style="padding: 10px 18px; border-top: 1px solid var(--color-neutral-900); font-size: 11.5px; line-height: 1.55; color: var(--color-neutral-500);">Full stake, always. Withdrawing your own money out of a league that never started is not something to take a cut of.</div>
+          </div>
+
+          <div class="card" style="margin-top: 16px; padding: 0; overflow: hidden; background: var(--color-surface);">
+            <div style="padding: 11px 18px; border-bottom: 1px solid var(--color-neutral-900); font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-500);">What happened to the invitations</div>
+            <div style="display: grid; grid-template-columns: minmax(0, 1fr) 150px 120px; gap: 14px; align-items: center; padding: 11px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+              <span style="font-size: 13px;">7 invitations sent</span>
+              <span style="font-size: 12px; color: var(--color-neutral-500);">Thu 20 Aug</span>
+              <span style="font-size: 12px; color: var(--color-neutral-500); text-align: right;">2 opened</span>
+            </div>
+            <div style="display: grid; grid-template-columns: minmax(0, 1fr) 150px 120px; gap: 14px; align-items: center; padding: 11px 18px;">
+              <span style="font-size: 13px;">Invitation link</span>
+              <span style="font-size: 12px; color: var(--color-neutral-500);">Now expired</span>
+              <span style="font-size: 12px; color: var(--color-neutral-500); text-align: right;">4 opened</span>
+            </div>
+            <div style="padding: 11px 18px; border-top: 1px solid var(--color-neutral-900); font-size: 11.5px; line-height: 1.55; color: var(--color-neutral-500);">Six people opened an invitation and none finished joining. If you try again, that is the number worth thinking about &mdash; not the seven emails.</div>
+          </div>
+        </div>
+
+        <aside style="display: flex; flex-direction: column; gap: 16px;">
+          <div class="card" style="padding: 15px 16px; background: var(--color-surface);">
+            <div style="font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-500);">Try again</div>
+            <p style="font-size: 12.5px; line-height: 1.6; color: var(--color-neutral-400); margin: 8px 0 0; text-wrap: pretty;">A new league starts from scratch: new rules, frozen again, new invitations. Nothing carries over, including the settings &mdash; though we can pre-fill them from this one.</p>
+            <div style="display: flex; flex-direction: column; gap: 9px; margin-top: 13px;">
+              <button type="button" class="btn btn-primary btn-block" style="font-size: 13.5px; min-height: 44px;">Create a league with these settings</button>
+              <button type="button" class="btn btn-ghost btn-block" style="font-size: 13.5px; min-height: 44px; color: var(--color-neutral-400);">Start fresh</button>
+            </div>
+          </div>
+
+          <div class="card" style="padding: 15px 16px; background: var(--color-surface);">
+            <div style="font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-500);">Two humans, not twelve</div>
+            <p style="font-size: 12.5px; line-height: 1.6; color: var(--color-neutral-400); margin: 8px 0 0; text-wrap: pretty;">Bots fill any empty seat, so a league runs with two people. Next time, get one friend committed before you send eleven invitations.</p>
+          </div>
+
+          <div class="card" style="padding: 15px 16px; background: var(--color-surface);">
+            <div style="font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-500);">A note on the timelock</div>
+            <p style="font-size: 12.5px; line-height: 1.6; color: var(--color-neutral-400); margin: 8px 0 0; text-wrap: pretty;">Auto-dissolve is why a deposit can never be permanently stuck: if a league does not fill, the refund path runs on its own, without anyone signing anything.</p>
+          </div>
+        </aside>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:4600},&quot;showLifecycleNotes&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Content&quot;}}"></script>
+</body>
+</html>
