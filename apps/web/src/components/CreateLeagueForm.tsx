@@ -610,7 +610,7 @@ export function CreateLeagueForm() {
             </p>
             <dl className="mt-4 space-y-3 text-[13.5px] leading-[1.55]">
               {[
-                ["Scoring", "Full PPR, matching ESPN exactly."],
+                ["Scoring", "Full PPR. Frozen at creation, like everything here."],
                 [
                   "Roster",
                   "QB, 2 RB, 2 WR, TE, FLEX, K, DEF. Nine starters, five bench, two IR.",
