@@ -21,6 +21,21 @@ export interface SyncResult {
   readonly skipped: number;
 }
 
+/**
+ * A provider that can supply bye weeks. Optional, like ADP and projections.
+ *
+ * `syncByeWeeks` takes the map rather than the provider, so this interface had
+ * no reason to exist while `cli.ts` was the only caller — it holds a concrete
+ * `Tank01Provider` and could simply call the method. `/api/cron/season-sync`
+ * cannot: naming the concrete class there would undo the property that makes
+ * every other sync provider-agnostic, which is what keeps swapping providers a
+ * one-file change.
+ */
+export interface ByeCapableProvider {
+  readonly name: string;
+  listByeWeeks(season: number): Promise<ReadonlyMap<string, number>>;
+}
+
 /** A provider that can also supply a draft board. Optional on the interface. */
 export interface AdpCapableProvider extends StatsProvider {
   listAdp(rankingType?: string): Promise<{
@@ -505,4 +520,66 @@ export async function loadDraftBoard(
     // itself does not need to survive — but the ordering does.
     rank: index + 1,
   }));
+}
+
+/**
+ * The seasons the scheduled jobs have to cover.
+ *
+ * ## Why this is not `new Date().getFullYear()`
+ *
+ * That is what `cli.ts` does, and it is defensible there because an operator can
+ * pass the season as an argument. In a cron there is no argument, and the
+ * calendar answer is **wrong for the weeks that matter most**: the 2026 season's
+ * championship is Week 17, played on 3 January 2027, inside a 168-hour
+ * correction window that closes on the 10th. `getFullYear()` says 2027 for every
+ * one of those days, so the stats job would query a season with no games,
+ * ingest nothing, and the championship week would finalise on whatever was last
+ * written — in a league that pays out on it.
+ *
+ * A calendar rule ("September to February belongs to the earlier year") would
+ * fix that case and is still a rule about football sitting outside
+ * `sports/nfl.ts`, invented here, with a boundary nobody has checked against a
+ * real schedule.
+ *
+ * ## So it is read from the leagues themselves
+ *
+ * `leagues.season` is written at creation from the frozen, member-signed rule
+ * set. A season is in play if some league is playing it. That needs no calendar
+ * knowledge, is right on 3 January by construction, and — the part worth having
+ * — costs nothing when no league exists: the answer is empty and the caller
+ * makes no provider call at all. A metered API polled every ten minutes for a
+ * season nobody is playing is a bill with no reader.
+ *
+ * ## Which states count, and why `FORMING` does
+ *
+ * Everything up to `SETTLED`. A league that has not drafted still needs its
+ * schedule ingested — `weekHasSchedule` is false without `games` rows, so
+ * `setLineup` refuses every lineup with `SCHEDULE_MISSING`, and the rows have to
+ * exist *before* anyone tries. Waiting for `IN_SEASON` would mean the schedule
+ * arrives after the first person needs it.
+ *
+ * `SETTLED` and `DISSOLVED` are excluded: nothing reads a settled league's
+ * stats, and a finalised week is never rescored, so continuing to poll one is
+ * spend with no effect. Note this means the correction sweep for a league's last
+ * week stops when that league settles — which is the same instant its results
+ * stop being able to change.
+ *
+ * Ordered, so a caller iterating them is deterministic and a failure in one
+ * season does not reorder the next run's work.
+ */
+export async function seasonsInPlay(
+  db: SqlClient,
+  sportKey: string,
+): Promise<readonly number[]> {
+  const rows = await db.query<{ season: number }>(
+    `SELECT DISTINCT l.season
+       FROM leagues l
+       JOIN sports s ON s.id = l.sport_id
+      WHERE s.key = $1
+        AND l.state IN ('FORMING', 'DRAFTING', 'IN_SEASON', 'PLAYOFFS')
+      ORDER BY l.season`,
+    [sportKey],
+  );
+
+  return rows.map((row) => Number(row.season));
 }

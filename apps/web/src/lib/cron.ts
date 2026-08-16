@@ -4,7 +4,7 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 
 /**
- * The shared guard on the four cron routes.
+ * The shared guard on the six cron routes.
  *
  * Extracted because it was four identical copies, and a guard that exists four
  * times is a guard that will be tightened three times.
@@ -20,6 +20,19 @@ import { NextResponse } from "next/server";
  * unauthorised call cannot produce a wrong pick, a wrong score, or an early
  * settlement. **The guard is about database load**, and about not handing
  * anonymous callers a lever on every league at once.
+ *
+ * ## `stats` and `season-sync` are the exception, and it is a real one
+ *
+ * They call a **metered** third-party API. The reasoning above says an
+ * unauthorised call is merely load; for these two it is money, and it does not
+ * take many requests a second to exhaust a daily quota — after which live
+ * scoring stops for everyone until the quota resets. Their per-run ceilings
+ * (`MAX_GAMES_PER_RUN`, and the work list only covering seasons some league is
+ * actually playing) bound one run, not the number of runs.
+ *
+ * So on those two the secret is the only thing standing between an anonymous
+ * caller and the provider bill. Do not describe it there as being about
+ * database load.
  *
  * That middle clause used to read "scoring is idempotent and rewrites the same
  * numbers", which was the whole justification for the guard being deliberately
