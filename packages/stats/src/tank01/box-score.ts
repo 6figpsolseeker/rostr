@@ -28,6 +28,7 @@ import {
   isSuccessfulTwoPointConversion,
   parseFieldGoalYards,
   parseStatValue,
+  scoredInMainClause,
   TANK01_DST_MAP,
   TANK01_STAT_MAP,
 } from "./stat-map.js";
@@ -162,8 +163,14 @@ function translatePlayer(
     }
 
     if (play.scoreType === "TD") {
-      // The returner is named first, so only credit the primary scorer.
-      if (isSpecialTeamsReturnTouchdown(text) && play.playerIDs?.[0] === playerID) {
+      // The scorer is whoever the main clause names — not `playerIDs[0]`, which
+      // is the conversion passer when the parenthetical holds a successful
+      // two-pointer. See `scoredInMainClause`.
+      if (
+        isSpecialTeamsReturnTouchdown(text) &&
+        player.longName &&
+        scoredInMainClause(text, player.longName)
+      ) {
         accumulate(totals, "ret_td", 1);
       }
       if (player.longName && twoPointCredit(text, player.longName)) {
