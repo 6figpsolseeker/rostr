@@ -409,3 +409,42 @@ describe("return touchdowns are credited from the main clause", () => {
     expect(scorePlayer(shaheed, RULES)).toBeGreaterThanOrEqual(6000);
   });
 });
+
+describe("the D/ST unit is paid for a special teams return touchdown", () => {
+  /**
+   * Same play as the `ret_td` case above, from the other side.
+   *
+   * `RULES.md` pays the returner 6 for the return *and* the unit 6 for a
+   * "defensive or special teams touchdown" — deliberately, because they are
+   * different roster spots. We paid only the returner: `def_td` came solely
+   * from `DST.defTD`, which counts defensive scores, and Tank01 reports it as
+   * **0** for Seattle in this game despite the punt return.
+   */
+  const seaDst = new Map(
+    (returnGame.teamDefense.get("SEA") ?? []).map((line) => [line.statKey, line.value]),
+  );
+  const larDst = new Map(
+    (returnGame.teamDefense.get("LAR") ?? []).map((line) => [line.statKey, line.value]),
+  );
+
+  it("credits the returning unit, which the DST block reports as zero", () => {
+    expect(rawReturnGame.DST.home.defTD).toBe("0");
+    expect(seaDst.get("def_td")).toBe(1);
+  });
+
+  it("does not credit the opponent", () => {
+    expect(larDst.get("def_td")).toBeUndefined();
+  });
+
+  it("still pays the returner his own six", () => {
+    // Both halves of the same play. Losing either is six points.
+    expect(returnStats(SHAHEED).get("ret_td")).toBe(1);
+  });
+
+  it("leaves a game with no return touchdown alone", () => {
+    // The Cowboys-Eagles fixture has none, so neither unit may gain one.
+    for (const lines of box.teamDefense.values()) {
+      expect(lines.find((l) => l.statKey === "def_td")).toBeUndefined();
+    }
+  });
+});

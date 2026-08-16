@@ -321,8 +321,37 @@ function translateTeamDefense(
     }
 
     for (const play of scoringPlays) {
-      if (!isBlockedKick(play.score ?? "")) continue;
-      if (blockingTeamOf(play, teamAbvs) === teamAbv) accumulate(totals, "def_blk_kick", 1);
+      const text = play.score ?? "";
+
+      if (isBlockedKick(text) && blockingTeamOf(play, teamAbvs) === teamAbv) {
+        accumulate(totals, "def_blk_kick", 1);
+      }
+
+      // A kickoff or punt return pays the **unit** as well as the returner.
+      //
+      // `RULES.md` §1 pays the D/ST for a "defensive or special teams
+      // touchdown", and §1 also says the returner keeps his own `ret_td` for the
+      // same play — different roster spots, usually different managers, so this
+      // is not double-counting. We were paying only the returner, because
+      // `def_td` came solely from `DST.defTD`, which counts *defensive* scores.
+      // Ten times in weeks 1-6 of 2025 alone, at 6 points each.
+      //
+      // `play.team` is the team that scored, which for a return is the returning
+      // team — the opposite of the blocked-kick case above, where the block is
+      // usually noted on the opponent's score. That is why this cannot reuse
+      // `blockingTeamOf`.
+      //
+      // Gated on `scoreType` so a non-scoring play that merely mentions a return
+      // cannot pay six points, and `isSpecialTeamsReturnTouchdown` already
+      // refuses interception and fumble returns, which `DST.defTD` has counted
+      // already.
+      if (
+        play.scoreType === "TD" &&
+        isSpecialTeamsReturnTouchdown(text) &&
+        play.team === teamAbv
+      ) {
+        accumulate(totals, "def_td", 1);
+      }
     }
 
     result.set(teamAbv, toStatLines(totals));
