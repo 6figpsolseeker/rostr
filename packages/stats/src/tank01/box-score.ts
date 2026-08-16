@@ -86,6 +86,18 @@ function accumulate(into: Map<string, number>, statKey: string, value: number): 
   into.set(statKey, (into.get(statKey) ?? 0) + value);
 }
 
+/**
+ * The team-defence rules scored from a tier table rather than per unit.
+ *
+ * These are the ones where **absent is not zero**. The scoring engine reads a
+ * missing stat as "did not play", so a unit that pitched a shutout and reported
+ * nothing would forfeit the bonus rather than earn it. `def_pts_allowed` was
+ * the only member until `def_yds_allowed` arrived with the ESPN alignment; the
+ * comments here used to say "the sport's only tiered rule" and that is why this
+ * is a set rather than a comparison.
+ */
+const TIERED_DST_KEYS: ReadonlySet<string> = new Set(["def_pts_allowed", "def_yds_allowed"]);
+
 function toStatLines(totals: ReadonlyMap<string, number>): StatLine[] {
   return [...totals].map(([statKey, value]) => ({ statKey, value }));
 }
@@ -182,6 +194,12 @@ function translatePlayer(
   // 3. Cross-check parsed field goals against the count Tank01 reports.
   //    Text parsing in a scoring path fails quietly; this is what makes it fail
   //    loudly instead.
+  //
+  //    Missed field goals are *not* derived here. `Kicking.fgMissed` is a real
+  //    field — verified in the captured fixture — so it is mapped directly in
+  //    `TANK01_STAT_MAP` like any other count. Computing `fgAttempts - fgMade`
+  //    instead would have been a second definition of the same number, free to
+  //    disagree with the first.
   const kicking = player["Kicking"] as Record<string, unknown> | undefined;
   const fgMade = parseStatValue(kicking?.["fgMade"]) ?? 0;
   if (fgMade !== fieldGoalsParsed) {
@@ -276,26 +294,28 @@ function translateTeamDefense(
       if (parsed === null) {
         // This translator used to be the only one with no `warnings` array, so a
         // missing or unparseable field vanished in silence. That matters most
-        // for `def_pts_allowed`: it is the sport's only TIERED rule, absent is
-        // not zero, and a unit that still emits a sack looks like it played and
-        // scored 2 rather than 12. The rest are worth reporting too — a field
-        // the provider renamed should not read as a quiet zero.
+        // for the tiered rules: absent is not zero, and a unit that still emits
+        // a sack looks like it played and scored 2 rather than 12. The rest are
+        // worth reporting too — a field the provider renamed should not read as
+        // a quiet zero.
         if (unit[field] !== undefined) {
           warnings.push(
             `${teamAbv}: ${field} is ${JSON.stringify(unit[field])}, which is not a number — ` +
               `${statKey} was dropped`,
           );
-        } else if (statKey === "def_pts_allowed") {
+        } else if (TIERED_DST_KEYS.has(statKey)) {
           warnings.push(
             `${teamAbv}: the box score carries no ${field}, so ${statKey} was dropped — ` +
-              `this is the only tiered rule in the sport and absent is not zero`,
+              `it is a tiered rule and absent is not zero`,
           );
         }
         continue;
       }
 
-      // Points allowed is meaningful at zero; the rest are not worth emitting.
-      if (parsed !== 0 || statKey === "def_pts_allowed") {
+      // The tiered rules are meaningful at zero; the rest are not worth
+      // emitting. A shutout that reported nothing would silently forfeit its
+      // bonus, and so would a defence that allowed no yards.
+      if (parsed !== 0 || TIERED_DST_KEYS.has(statKey)) {
         accumulate(totals, statKey, parsed);
       }
     }

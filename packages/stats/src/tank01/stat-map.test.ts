@@ -52,8 +52,8 @@ describe("parseFieldGoalYards", () => {
 describe("bucketFieldGoal", () => {
   it("buckets the real distances correctly", () => {
     expect(bucketFieldGoal(41)).toBe("fg_40_49");
-    expect(bucketFieldGoal(53)).toBe("fg_50_plus");
-    expect(bucketFieldGoal(58)).toBe("fg_50_plus");
+    expect(bucketFieldGoal(53)).toBe("fg_50_59");
+    expect(bucketFieldGoal(58)).toBe("fg_50_59");
   });
 
   it("is right at every boundary", () => {
@@ -61,7 +61,13 @@ describe("bucketFieldGoal", () => {
     expect(bucketFieldGoal(39)).toBe("fg_0_39");
     expect(bucketFieldGoal(40)).toBe("fg_40_49");
     expect(bucketFieldGoal(49)).toBe("fg_40_49");
-    expect(bucketFieldGoal(50)).toBe("fg_50_plus");
+    expect(bucketFieldGoal(50)).toBe("fg_50_59");
+    // 59/60 is the boundary the ESPN alignment added, and the only one worth a
+    // point on its own: a 59-yarder pays 5 and a 60-yarder pays 6. Twelve were
+    // kicked in 2025, so it is reachable rather than theoretical.
+    expect(bucketFieldGoal(59)).toBe("fg_50_59");
+    expect(bucketFieldGoal(60)).toBe("fg_60_plus");
+    expect(bucketFieldGoal(66)).toBe("fg_60_plus");
   });
 });
 
@@ -255,7 +261,9 @@ describe("mapping integrity", () => {
     "two_pt",
     "fg_0_39",
     "fg_40_49",
-    "fg_50_plus",
+    "fg_50_59",
+    "fg_60_plus",
+    "fg_missed",
     "xp_made",
     "def_sack",
     "def_int",
@@ -264,6 +272,7 @@ describe("mapping integrity", () => {
     "def_td",
     "def_blk_kick",
     "def_pts_allowed",
+    "def_yds_allowed",
   ]);
 
   it("maps only to registry stat keys", () => {
@@ -290,7 +299,7 @@ describe("mapping integrity", () => {
     const mapped = Object.values(TANK01_STAT_MAP);
     expect(mapped).not.toContain("fg_0_39");
     expect(mapped).not.toContain("fg_40_49");
-    expect(mapped).not.toContain("fg_50_plus");
+    expect(mapped).not.toContain("fg_50_59");
     expect(mapped).not.toContain("two_pt");
   });
 

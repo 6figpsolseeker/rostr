@@ -349,7 +349,7 @@ export type LeagueRules = {
    * one does, a schema change means supporting both versions — the rules of a
    * created league can never be re-encoded.
    */
-  readonly schemaVersion: 5;
+  readonly schemaVersion: 6;
   readonly sportKey: string;
   readonly seasonYear: number;
   readonly scoring: readonly ScoringRule[];

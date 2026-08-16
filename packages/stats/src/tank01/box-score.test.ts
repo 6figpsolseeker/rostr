@@ -73,8 +73,9 @@ describe("kicking", () => {
     // sub-40, which is exactly the bug distance parsing exists to prevent.
     const aubrey = statsFor(AUBREY);
     expect(aubrey.get("fg_40_49")).toBe(1);
-    expect(aubrey.get("fg_50_plus")).toBe(1);
+    expect(aubrey.get("fg_50_59")).toBe(1);
     expect(aubrey.get("fg_0_39")).toBeUndefined();
+    expect(aubrey.get("fg_60_plus")).toBeUndefined();
   });
 
   it("reads extra points from the direct field", () => {
@@ -82,7 +83,12 @@ describe("kicking", () => {
   });
 
   it("scores Aubrey correctly end to end", () => {
-    // 1 x 40-49 FG (4) + 1 x 50+ FG (5) + 2 XP (2) = 11.00 points
+    // 1 x 40-49 (4) + 1 x 50-59 (5) + 2 XP (2) = 11.00. He went 2 for 2, so the
+    // new miss penalty does not bite — kept as the control case. `fgMissed` is
+    // present in the fixture reading "0", so this also pins that a zero count
+    // is not emitted as a stat line.
+    expect(statsFor(AUBREY).get("fg_missed")).toBeUndefined();
+
     const lines = box.players.get(AUBREY) as StatLine[];
     expect(scorePlayer(lines, RULES)).toBe(11_000);
   });
@@ -111,13 +117,17 @@ describe("team defense", () => {
   });
 
   it("scores the Philadelphia defense end to end", () => {
-    // PHI allowed 20 points (the 14-20 tier = 1.00) and recovered 1 fumble (2.00).
+    // PHI allowed 20 points (18-27 = 0.00) and 307 yards (300-349 = 0.00), and
+    // recovered 1 fumble (2.00). The same game scored 3.00 under the old table,
+    // whose ladder paid 1 for 20 points allowed and had no yards rung at all.
     const lines = box.teamDefense.get("PHI") as StatLine[];
-    expect(scorePlayer(lines, RULES)).toBe(3000);
+    expect(scorePlayer(lines, RULES)).toBe(2000);
   });
 
   it("scores the Dallas defense end to end", () => {
-    // DAL allowed 24 (the 21-27 tier = 0.00) with 1 sack (1.00).
+    // DAL allowed 24 (18-27 = 0.00) and 302 yards (300-349 = 0.00), with 1 sack
+    // (1.00). Unchanged at 1.00 — both new ladders happen to pay zero here,
+    // which is why this one is worth keeping beside Philadelphia's.
     const lines = box.teamDefense.get("DAL") as StatLine[];
     expect(scorePlayer(lines, RULES)).toBe(1000);
   });

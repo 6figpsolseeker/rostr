@@ -41,6 +41,15 @@ export const TANK01_STAT_MAP: Readonly<Record<string, string>> = {
   "Defense.fumblesRecovered": "def_fum_rec",
 
   "Kicking.xpMade": "xp_made",
+  // Missed field goals cost a point each under ESPN's table. `fgMissed` is a
+  // real field — confirmed in the captured fixture — so it is read rather than
+  // derived from `fgAttempts - fgMade`, which would be a second definition of
+  // the same number and free to disagree with the first.
+  //
+  // Distance is deliberately not consulted: a miss is not a scoring play, so it
+  // never appears in the text the made distances are parsed from. ESPN charging
+  // a flat -1 is what makes the category computable from this feed at all.
+  "Kicking.fgMissed": "fg_missed",
 };
 
 /**
@@ -56,6 +65,10 @@ export const TANK01_STAT_MAP: Readonly<Record<string, string>> = {
  */
 export const TANK01_DST_MAP: Readonly<Record<string, string>> = {
   ptsAllowed: "def_pts_allowed",
+  // Added 2026-08-16 with the ESPN alignment. ESPN scores the unit on yards as
+  // well as points, and this is the only place the figure appears. Like
+  // `ptsAllowed` it must be emitted even at zero, for the same reason.
+  ydsAllowed: "def_yds_allowed",
   sacks: "def_sack",
   defensiveInterceptions: "def_int",
   fumblesRecovered: "def_fum_rec",
@@ -240,9 +253,19 @@ export function isDefensiveReturnTouchdown(scoreText: string): boolean {
   return DEFENSIVE_RETURN.test(scoreText);
 }
 
-/** Bucket a made field goal into the three keys the scoring table uses. */
-export function bucketFieldGoal(yards: number): "fg_0_39" | "fg_40_49" | "fg_50_plus" {
-  if (yards >= 50) return "fg_50_plus";
+/**
+ * Bucket a made field goal into the four keys the scoring table uses.
+ *
+ * `fg_50_plus` became `fg_50_59` and `fg_60_plus` on 2026-08-16, because ESPN
+ * pays 6 for a 60-yarder and 5 for a 55-yarder. Twelve 60+ field goals were
+ * kicked in the 2025 season, so the bucket is real rather than theoretical, and
+ * a kicker who hits one is worth a point more than this used to say.
+ */
+export function bucketFieldGoal(
+  yards: number,
+): "fg_0_39" | "fg_40_49" | "fg_50_59" | "fg_60_plus" {
+  if (yards >= 60) return "fg_60_plus";
+  if (yards >= 50) return "fg_50_59";
   if (yards >= 40) return "fg_40_49";
   return "fg_0_39";
 }
