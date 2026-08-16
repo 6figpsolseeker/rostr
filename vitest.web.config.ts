@@ -1,5 +1,5 @@
-import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
+import { webAliases } from "./vitest.alias.js";
 
 /**
  * `apps/web` tests — the project this repo has never had.
@@ -14,31 +14,16 @@ import { defineConfig } from "vitest/config";
  * PGlite is not that. `pnpm test` must keep needing no credentials.
  *
  * Run with `pnpm test:web`, which requires `DATABASE_URL`.
+ *
+ * Its aliases used to be a second hand-maintained copy of the main project's,
+ * and had drifted: `@rostr/db/testing` was missing, so `visibility.test.ts`
+ * failed to collect here while passing under `pnpm test`. The `@/` entry also
+ * read `"@/"` with a trailing slash rather than the regex the main project uses,
+ * which matches a different set of specifiers. Both lists are now one list.
  */
 export default defineConfig({
   resolve: {
-    alias: {
-      // `server-only` is a build-time guard for the Next bundler. Under vitest
-      // its default export throws, so it is stubbed rather than worked around
-      // by deleting the import — the import is correct and should stay.
-      "server-only": fileURLToPath(new URL("./apps/web/test/server-only.ts", import.meta.url)),
-      "@/": fileURLToPath(new URL("./apps/web/src/", import.meta.url)),
-      // Workspace packages resolved to **source**, like the program config.
-      //
-      // Without this they resolve to `dist/`, and `dist/` is whatever was last
-      // built — so a test can silently exercise stale or newer code than the
-      // source in the tree. That is not a hypothetical: a check of this very
-      // suite against reverted source passed, because `dist/` still held the
-      // fix. Order matters, vite prefix-matches.
-      "@rostr/db/postgres": fileURLToPath(
-        new URL("./packages/db/src/postgres.ts", import.meta.url),
-      ),
-      "@rostr/db": fileURLToPath(new URL("./packages/db/src/index.ts", import.meta.url)),
-      "@rostr/core": fileURLToPath(new URL("./packages/core/src/index.ts", import.meta.url)),
-      "@rostr/escrow": fileURLToPath(
-        new URL("./packages/escrow/src/index.ts", import.meta.url),
-      ),
-    },
+    alias: [...webAliases],
   },
   test: {
     include: ["apps/web/src/**/*.test.ts"],
