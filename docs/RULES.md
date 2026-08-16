@@ -58,13 +58,20 @@ roster spots, usually owned by different managers.
 | ---------------------- | ------ |
 | Field goal 0–39 yards  | **3**  |
 | Field goal 40–49 yards | **4**  |
-| Field goal 50+ yards   | **5**  |
+| Field goal 50–59 yards | **5**  |
+| Field goal 60+ yards   | **6**  |
 | Extra point            | **1**  |
-| Missed field goal      | **0**  |
+| Missed field goal      | **−1** |
 | Missed extra point     | **0**  |
 
-Misses are not penalised. Penalising them is a common house rule but punishes the
-kicker for his coach's decision to attempt a long field goal.
+A missed field goal costs a point whatever its distance. This reversed an earlier
+decision — misses used to score nothing, on the argument that penalising them punishes
+the kicker for his coach's decision to attempt a 55-yarder. That argument still holds;
+matching ESPN exactly won anyway, and a distance-independent penalty is also the only
+form this data can support, because a miss is not a scoring play and no distance for it
+reaches us.
+
+Missed extra points are unpenalised, which is ESPN's default too.
 
 ### Defense / Special Teams
 
@@ -83,16 +90,38 @@ Scored as a single unit.
 
 | Points allowed | Points |
 | -------------- | ------ |
-| 0              | **10** |
-| 1–6            | **7**  |
-| 7–13           | **4**  |
-| 14–20          | **1**  |
-| 21–27          | **0**  |
+| 0              | **5**  |
+| 1–6            | **4**  |
+| 7–13           | **3**  |
+| 14–17          | **1**  |
+| 18–27          | **0**  |
 | 28–34          | **−1** |
-| 35+            | **−4** |
+| 35–45          | **−3** |
+| 46+            | **−5** |
 
-Points allowed counts every point the opposing team scores, including points scored by
-their defense and special teams.
+**Yards allowed**, on the same unit and the same week:
+
+| Yards allowed | Points |
+| ------------- | ------ |
+| Under 100     | **5**  |
+| 100–199       | **3**  |
+| 200–299       | **2**  |
+| 300–349       | **0**  |
+| 350–399       | **−1** |
+| 400–449       | **−3** |
+| 450–499       | **−5** |
+| 500–549       | **−6** |
+| 550+          | **−7** |
+
+Both ladders are ESPN's. This table previously paid 10 for a shutout and bottomed out
+at −4, and carried no yards ladder at all — so a unit that bent without breaking scored
+identically to one that did not.
+
+An earlier version of this section said points allowed "counts every point the opposing
+team scores, including points scored by their defense and special teams". That was our
+own rule and is not ESPN's; the sentence has been removed rather than reworded, because
+the exact definition is ESPN's and is recorded with the alignment work in
+`docs/TANK01.md`.
 
 ---
 

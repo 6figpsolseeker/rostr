@@ -49,10 +49,16 @@ export const NFL_PPR_SCORING: readonly ScoringRule[] = [
   // are different roster spots, usually owned by different managers.
   { statKey: "ret_td", kind: "LINEAR", milliPointsPerUnit: pts(6) },
 
-  // Kicking — by distance, misses unpenalised
+  // Kicking — by distance, and a miss costs a point.
+  //
+  // Misses used to be unpenalised, on the argument that they punish a kicker for
+  // his coach's decision to attempt a 55-yarder. ESPN charges -1 regardless of
+  // distance, and matching ESPN is the point of this table.
   { statKey: "fg_0_39", kind: "LINEAR", milliPointsPerUnit: pts(3) },
   { statKey: "fg_40_49", kind: "LINEAR", milliPointsPerUnit: pts(4) },
-  { statKey: "fg_50_plus", kind: "LINEAR", milliPointsPerUnit: pts(5) },
+  { statKey: "fg_50_59", kind: "LINEAR", milliPointsPerUnit: pts(5) },
+  { statKey: "fg_60_plus", kind: "LINEAR", milliPointsPerUnit: pts(6) },
+  { statKey: "fg_missed", kind: "LINEAR", milliPointsPerUnit: pts(-1) },
   { statKey: "xp_made", kind: "LINEAR", milliPointsPerUnit: pts(1) },
 
   // Defense / special teams
@@ -62,17 +68,43 @@ export const NFL_PPR_SCORING: readonly ScoringRule[] = [
   { statKey: "def_safety", kind: "LINEAR", milliPointsPerUnit: pts(2) },
   { statKey: "def_td", kind: "LINEAR", milliPointsPerUnit: pts(6) },
   { statKey: "def_blk_kick", kind: "LINEAR", milliPointsPerUnit: pts(2) },
+  // Both defensive tiers are ESPN's, decoded from their own published data
+  // rather than from documentation: their scoring API returns values keyed by
+  // numeric stat id with no names, so the boundaries were pinned by recomputing
+  // every player's weekly total and checking it against the total ESPN itself
+  // published. 11,507 player-weeks of the 2025 season reconcile exactly. See
+  // `docs/TANK01.md` for the method.
+  //
+  // The previous points-allowed table paid 10 for a shutout against ESPN's 5 —
+  // roughly twice as generous at the top, and short of ESPN's -5 floor at the
+  // bottom. It appears to have been transcribed from an out-of-date page.
   {
     statKey: "def_pts_allowed",
     kind: "TIERED",
     tiers: [
-      { min: 0, max: 0, milliPoints: pts(10) },
-      { min: 1, max: 6, milliPoints: pts(7) },
-      { min: 7, max: 13, milliPoints: pts(4) },
-      { min: 14, max: 20, milliPoints: pts(1) },
-      { min: 21, max: 27, milliPoints: pts(0) },
+      { min: 0, max: 0, milliPoints: pts(5) },
+      { min: 1, max: 6, milliPoints: pts(4) },
+      { min: 7, max: 13, milliPoints: pts(3) },
+      { min: 14, max: 17, milliPoints: pts(1) },
+      { min: 18, max: 27, milliPoints: pts(0) },
       { min: 28, max: 34, milliPoints: pts(-1) },
-      { min: 35, max: null, milliPoints: pts(-4) },
+      { min: 35, max: 45, milliPoints: pts(-3) },
+      { min: 46, max: null, milliPoints: pts(-5) },
+    ],
+  },
+  {
+    statKey: "def_yds_allowed",
+    kind: "TIERED",
+    tiers: [
+      { min: 0, max: 99, milliPoints: pts(5) },
+      { min: 100, max: 199, milliPoints: pts(3) },
+      { min: 200, max: 299, milliPoints: pts(2) },
+      { min: 300, max: 349, milliPoints: pts(0) },
+      { min: 350, max: 399, milliPoints: pts(-1) },
+      { min: 400, max: 449, milliPoints: pts(-3) },
+      { min: 450, max: 499, milliPoints: pts(-5) },
+      { min: 500, max: 549, milliPoints: pts(-6) },
+      { min: 550, max: null, milliPoints: pts(-7) },
     ],
   },
 ];
@@ -224,7 +256,7 @@ export function buildNflPprRules(overrides: NflPprOverrides): LeagueRules {
   const pot = overrides.pot ?? null;
 
   return structuredClone({
-    schemaVersion: 5,
+    schemaVersion: 6,
     sportKey: "nfl",
     seasonYear: overrides.seasonYear,
     scoring: NFL_PPR_SCORING,

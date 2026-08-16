@@ -43,10 +43,14 @@ export const NFL_STAT_KEYS = [
   // unit's touchdown: an interception or fumble return is not this.
   { key: "ret_td", displayName: "Return Touchdowns", kind: "LINEAR" },
 
-  // Kicking
+  // Kicking. `fg_50_plus` was split into 50-59 and 60+ on 2026-08-16 to match
+  // ESPN, which pays 6 for a 60-yarder — twelve of them were kicked in 2025, so
+  // it is a real bucket rather than a theoretical one.
   { key: "fg_0_39", displayName: "Field Goals 0-39 Yards", kind: "LINEAR" },
   { key: "fg_40_49", displayName: "Field Goals 40-49 Yards", kind: "LINEAR" },
-  { key: "fg_50_plus", displayName: "Field Goals 50+ Yards", kind: "LINEAR" },
+  { key: "fg_50_59", displayName: "Field Goals 50-59 Yards", kind: "LINEAR" },
+  { key: "fg_60_plus", displayName: "Field Goals 60+ Yards", kind: "LINEAR" },
+  { key: "fg_missed", displayName: "Field Goals Missed", kind: "LINEAR" },
   { key: "xp_made", displayName: "Extra Points Made", kind: "LINEAR" },
 
   // Defense / special teams
@@ -57,6 +61,10 @@ export const NFL_STAT_KEYS = [
   { key: "def_td", displayName: "Defensive/Special Teams Touchdowns", kind: "LINEAR" },
   { key: "def_blk_kick", displayName: "Blocked Kicks", kind: "LINEAR" },
   { key: "def_pts_allowed", displayName: "Points Allowed", kind: "TIERED" },
+  // Yards allowed, added 2026-08-16. ESPN scores the defensive unit on both
+  // points and yards; we had only points, which meant a unit that bent without
+  // breaking scored identically to one that did not.
+  { key: "def_yds_allowed", displayName: "Yards Allowed", kind: "TIERED" },
 ] as const satisfies SportDef["statKeys"];
 
 export const NFL_POSITIONS = [

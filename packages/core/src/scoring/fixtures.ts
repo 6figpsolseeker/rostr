@@ -88,15 +88,19 @@ export const SCORING_FIXTURES: readonly ScoringFixture[] = [
     stats: [
       { statKey: "fg_0_39", value: 2 },
       { statKey: "fg_40_49", value: 1 },
-      { statKey: "fg_50_plus", value: 1 },
+      { statKey: "fg_50_59", value: 1 },
+      { statKey: "fg_60_plus", value: 1 },
+      { statKey: "fg_missed", value: 2 },
       { statKey: "xp_made", value: 3 },
     ],
-    // 2 x 3000 = 6000
-    // 1 x 4000 = 4000
-    // 1 x 5000 = 5000
-    // 3 x 1000 = 3000
-    expected: 6000 + 4000 + 5000 + 3000,
-    workedOut: "6000 + 4000 + 5000 + 3000 = 18000 (18.00 pts)",
+    // 2 x 3000  = 6000
+    // 1 x 4000  = 4000
+    // 1 x 5000  = 5000
+    // 1 x 6000  = 6000   (the 60+ bucket, new with the ESPN alignment)
+    // 2 x -1000 = -2000  (misses, which used to be free)
+    // 3 x 1000  = 3000
+    expected: 6000 + 4000 + 5000 + 6000 - 2000 + 3000,
+    workedOut: "6000 + 4000 + 5000 + 6000 - 2000 + 3000 = 22000 (22.00 pts)",
   },
   {
     name: "defense, shutout",
@@ -106,33 +110,38 @@ export const SCORING_FIXTURES: readonly ScoringFixture[] = [
       { statKey: "def_int", value: 2 },
       { statKey: "def_fum_rec", value: 1 },
       { statKey: "def_td", value: 1 },
+      { statKey: "def_yds_allowed", value: 180 },
     ],
-    // tier 0        = 10000
-    // 4 x 1000      = 4000
-    // 2 x 2000      = 4000
-    // 1 x 2000      = 2000
-    // 1 x 6000      = 6000
-    expected: 10_000 + 4000 + 4000 + 2000 + 6000,
-    workedOut: "10000 + 4000 + 4000 + 2000 + 6000 = 26000 (26.00 pts)",
+    // pts tier 0      = 5000   (ESPN pays 5 for a shutout, not 10)
+    // yds tier 100-199 = 3000
+    // 4 x 1000        = 4000
+    // 2 x 2000        = 4000
+    // 1 x 2000        = 2000
+    // 1 x 6000        = 6000
+    expected: 5000 + 3000 + 4000 + 4000 + 2000 + 6000,
+    workedOut: "5000 + 3000 + 4000 + 4000 + 2000 + 6000 = 24000 (24.00 pts)",
   },
   {
     name: "defense, blown out",
     stats: [
       { statKey: "def_pts_allowed", value: 41 },
       { statKey: "def_sack", value: 1 },
+      { statKey: "def_yds_allowed", value: 470 },
     ],
-    // tier 35+   = -4000
-    // 1 x 1000   = 1000
-    expected: -4000 + 1000,
-    workedOut: "-4000 + 1000 = -3000 (-3.00 pts)",
+    // pts tier 35-45  = -3000
+    // yds tier 450-499 = -5000
+    // 1 x 1000        = 1000
+    expected: -3000 - 5000 + 1000,
+    workedOut: "-3000 - 5000 + 1000 = -7000 (-7.00 pts)",
   },
   {
     name: "defense, exactly on a tier boundary",
-    stats: [{ statKey: "def_pts_allowed", value: 21 }],
-    // The 21–27 tier scores nothing. A boundary that lands on the zero tier is
-    // the easiest one to get wrong by an off-by-one.
+    stats: [{ statKey: "def_pts_allowed", value: 18 }],
+    // The 18–27 tier scores nothing. A boundary that lands on the zero tier is
+    // the easiest one to get wrong by an off-by-one, and 18 is the first value
+    // in it — under the old table it was worth a point.
     expected: 0,
-    workedOut: "tier 21-27 = 0",
+    workedOut: "tier 18-27 = 0",
   },
   {
     name: "player who did not appear",

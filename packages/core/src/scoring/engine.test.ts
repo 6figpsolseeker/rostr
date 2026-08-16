@@ -116,19 +116,23 @@ describe("scorePlayer — tiered rules", () => {
     scorePlayer([{ statKey: "def_pts_allowed", value }], RULES);
 
   it("scores every boundary of the points-allowed ladder", () => {
-    // Both edges of every bucket. Off-by-one here silently changes results.
-    expect(tier(0)).toBe(10_000);
-    expect(tier(1)).toBe(7000);
-    expect(tier(6)).toBe(7000);
-    expect(tier(7)).toBe(4000);
-    expect(tier(13)).toBe(4000);
+    // Both edges of every bucket. Off-by-one here silently changes results,
+    // and this ladder moved wholesale on 2026-08-16 to match ESPN — the values
+    // below are theirs, decoded from their own published totals.
+    expect(tier(0)).toBe(5000);
+    expect(tier(1)).toBe(4000);
+    expect(tier(6)).toBe(4000);
+    expect(tier(7)).toBe(3000);
+    expect(tier(13)).toBe(3000);
     expect(tier(14)).toBe(1000);
-    expect(tier(20)).toBe(1000);
-    expect(tier(21)).toBe(0);
+    expect(tier(17)).toBe(1000);
+    expect(tier(18)).toBe(0);
     expect(tier(27)).toBe(0);
     expect(tier(28)).toBe(-1000);
     expect(tier(34)).toBe(-1000);
-    expect(tier(35)).toBe(-4000);
+    expect(tier(35)).toBe(-3000);
+    expect(tier(45)).toBe(-3000);
+    expect(tier(46)).toBe(-5000);
   });
 
   it("has no gaps across the whole plausible range", () => {
@@ -138,7 +142,7 @@ describe("scorePlayer — tiered rules", () => {
   });
 
   it("keeps scoring above the last bounded tier", () => {
-    expect(tier(99)).toBe(-4000);
+    expect(tier(99)).toBe(-5000);
   });
 
   it("throws rather than silently scoring zero for an uncovered value", () => {

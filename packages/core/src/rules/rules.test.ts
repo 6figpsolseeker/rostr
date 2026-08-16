@@ -45,9 +45,13 @@ describe("NFL sport registry", () => {
     expect(validateSport(NFL)).toEqual([]);
   });
 
-  it("marks only points allowed as tiered", () => {
+  it("marks both defensive ladders as tiered, and nothing else", () => {
+    // Two since the ESPN alignment. Pinned as a list rather than a count: the
+    // translator has to emit a tiered stat even at zero, because absent means
+    // "did not play" to the engine — so a new one appearing here and nowhere
+    // else is a silent forfeit of whatever bonus it carries.
     const tiered = NFL.statKeys.filter((s) => s.kind === "TIERED").map((s) => s.key);
-    expect(tiered).toEqual(["def_pts_allowed"]);
+    expect(tiered).toEqual(["def_pts_allowed", "def_yds_allowed"]);
   });
 
   it("lets FLEX take RB, WR, or TE", () => {
@@ -92,17 +96,60 @@ describe("NFL PPR defaults", () => {
     expect(100 + 200).toBe(300);
   });
 
-  it("covers every points-allowed bucket contiguously and unbounded at the top", () => {
+  it.each(["def_pts_allowed", "def_yds_allowed"])(
+    "covers every %s bucket contiguously and unbounded at the top",
+    (statKey) => {
+      const rule = NFL_PPR_SCORING.find((r) => r.statKey === statKey);
+      if (rule?.kind !== "TIERED") throw new Error("expected a tiered rule");
+
+      // A gap throws at score time rather than scoring zero — deliberate,
+      // because a hole in the ladder means the feed or the table is wrong, and
+      // burying it is how a defence silently scores nothing.
+      expect(rule.tiers[0]?.min).toBe(0);
+      expect(rule.tiers.at(-1)?.max).toBeNull();
+
+      for (const [i, tier] of rule.tiers.entries()) {
+        const prev = rule.tiers[i - 1];
+        if (prev) expect(tier.min).toBe((prev.max ?? -1) + 1);
+      }
+    },
+  );
+
+  it("matches ESPN's points-allowed ladder exactly", () => {
+    // Decoded from ESPN's own published player totals rather than from any
+    // documentation — see the note in `nfl-ppr.ts`. The top of this ladder used
+    // to pay 10 and now pays 5, which is the single largest scoring change in
+    // the alignment.
     const rule = NFL_PPR_SCORING.find((r) => r.statKey === "def_pts_allowed");
     if (rule?.kind !== "TIERED") throw new Error("expected a tiered rule");
 
-    expect(rule.tiers[0]).toEqual({ min: 0, max: 0, milliPoints: 10_000 });
-    expect(rule.tiers.at(-1)).toEqual({ min: 35, max: null, milliPoints: -4000 });
+    expect(rule.tiers.map((t) => [t.min, t.max, t.milliPoints / 1000])).toEqual([
+      [0, 0, 5],
+      [1, 6, 4],
+      [7, 13, 3],
+      [14, 17, 1],
+      [18, 27, 0],
+      [28, 34, -1],
+      [35, 45, -3],
+      [46, null, -5],
+    ]);
+  });
 
-    for (const [i, tier] of rule.tiers.entries()) {
-      const prev = rule.tiers[i - 1];
-      if (prev) expect(tier.min).toBe((prev.max ?? -1) + 1);
-    }
+  it("matches ESPN's yards-allowed ladder exactly", () => {
+    const rule = NFL_PPR_SCORING.find((r) => r.statKey === "def_yds_allowed");
+    if (rule?.kind !== "TIERED") throw new Error("expected a tiered rule");
+
+    expect(rule.tiers.map((t) => [t.min, t.max, t.milliPoints / 1000])).toEqual([
+      [0, 99, 5],
+      [100, 199, 3],
+      [200, 299, 2],
+      [300, 349, 0],
+      [350, 399, -1],
+      [400, 449, -3],
+      [450, 499, -5],
+      [500, 549, -6],
+      [550, null, -7],
+    ]);
   });
 
   it("pays the champion the largest share, summing to 100%", () => {
@@ -781,9 +828,27 @@ describe("hashLeagueRules", () => {
     //   be able to award meant `championship().complete` could never become
     //   true, so the pot never settled and frozen rules made it uncorrectable.
     //   The consolation bracket is still played; it just carries no share.
+    // Moved 2026-08-16: schemaVersion 5 -> 6, aligning the scoring table with
+    //   ESPN's PPR defaults. Both a *schema* change (two new stat keys and a new
+    //   tiered rule) and a *defaults* change, and the largest single move this
+    //   constant has made. What changed:
+    //     - `fg_50_plus` split into `fg_50_59` (5) and `fg_60_plus` (6)
+    //     - `fg_missed` added at -1. Misses used to be unpenalised, on the
+    //       argument that they punish a kicker for his coach's decision to try a
+    //       55-yarder. ESPN charges for them, and matching ESPN won.
+    //     - `def_yds_allowed` added, a second tiered ladder. We scored the
+    //       defensive unit on points alone, so a unit that bent without breaking
+    //       scored the same as one that did not.
+    //     - the points-allowed ladder replaced wholesale. It paid 10 for a
+    //       shutout against ESPN's 5, and stopped at -4 where ESPN reaches -5.
+    //       The old table appears to have been transcribed from a stale page.
+    //   Every value is ESPN's own, decoded from their published player totals
+    //   rather than from documentation, and checked by recomputing all 11,507
+    //   player-weeks of the 2025 season against the totals ESPN itself
+    //   published. See `docs/TANK01.md`.
     // No leagues existed on any of these occasions.
     expect(hashLeagueRules(FIXTURE)).toBe(
-      "8fa9b46a9dfd0d0939d0736b3e6db32a73e8a6b5aff547351a8ed2291f60bcf2",
+      "78f352c59a0716f3a333fcd5eb641e4f1c32dbe7c31033cb4450535f96275ec3",
     );
   });
 });
