@@ -1,5 +1,5 @@
-import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
+import { workspaceAliases } from "./vitest.alias.js";
 
 /**
  * Program tests — a separate project from `pnpm test` on purpose.
@@ -15,27 +15,21 @@ import { defineConfig } from "vitest/config";
  */
 export default defineConfig({
   resolve: {
-    // Resolved to source, like the main config. The point of aliasing it here
-    // is that the program suite can then check the client's address derivation
-    // against the program's own — the only place those two can be compared.
+    // Resolved to source, like the other two projects. The point of aliasing
+    // `@rostr/escrow` here is that the program suite can then check the client's
+    // address derivation against the program's own — the only place those two
+    // can be compared.
     //
     // `@rostr/db` and `@rostr/core` are here for the same reason, and for one
     // more: `anchor.test.ts` drives create → anchor → join across both halves,
-    // which is the only place the database's gate and the chain's account can
-    // be checked against each other rather than each against a stand-in.
+    // which is the only place the database's gate and the chain's account can be
+    // checked against each other rather than each against a stand-in.
     //
-    // Order matters — vite prefix-matches, so `@rostr/db/testing` has to come
-    // before `@rostr/db` or it would resolve to the main entry.
-    alias: {
-      "@rostr/escrow": fileURLToPath(
-        new URL("./packages/escrow/src/index.ts", import.meta.url),
-      ),
-      "@rostr/db/testing": fileURLToPath(
-        new URL("./packages/db/src/testing.ts", import.meta.url),
-      ),
-      "@rostr/db": fileURLToPath(new URL("./packages/db/src/index.ts", import.meta.url)),
-      "@rostr/core": fileURLToPath(new URL("./packages/core/src/index.ts", import.meta.url)),
-    },
+    // The shared list, not a curated subset — a package this suite never imports
+    // costs nothing, and curating the subsets is what let the web project drift.
+    // The web entries are omitted because nothing under `programs/` loads
+    // `apps/web`, and `server-only` is a Next marker with no meaning here.
+    alias: [...workspaceAliases],
   },
   test: {
     include: ["programs/*/tests/**/*.test.ts"],

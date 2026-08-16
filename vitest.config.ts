@@ -1,48 +1,12 @@
-import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
-
-const pkgFile = (pkg: string, file: string): string =>
-  fileURLToPath(new URL(`./packages/${pkg}/src/${file}`, import.meta.url));
-
-const src = (pkg: string): string => pkgFile(pkg, "index.ts");
+import { webAliases } from "./vitest.alias.js";
 
 export default defineConfig({
   resolve: {
-    // Resolve workspace packages to source rather than dist. Tests then never
-    // depend on build order, and a stale dist cannot produce a passing or
-    // failing run that disagrees with the code in front of you.
-    // The array form, not the object one: object keys match exactly, and two of
-    // these need to match a prefix.
-    alias: [
-      // Subpath exports, before the bare name. `@rostr/db` is an exact match and
-      // would not cover `@rostr/db/postgres`, which would then fall through to
-      // node resolution and load `dist` — the stale-build problem these aliases
-      // exist to remove, reappearing only for the subpaths.
-      { find: "@rostr/db/postgres", replacement: pkgFile("db", "postgres.ts") },
-      { find: "@rostr/db/migrate", replacement: pkgFile("db", "migrate.ts") },
-      { find: "@rostr/db/testing", replacement: pkgFile("db", "testing.ts") },
-
-      { find: "@rostr/core", replacement: src("core") },
-      { find: "@rostr/db", replacement: src("db") },
-      { find: "@rostr/escrow", replacement: src("escrow") },
-      { find: "@rostr/pinning", replacement: src("pinning") },
-      { find: "@rostr/stats", replacement: src("stats") },
-
-      // The web app's own path alias, mirroring `apps/web/tsconfig.json`. A
-      // route test importing `./route.js` pulls in `@/lib/db` transitively, so
-      // without this the file cannot even be collected, let alone skipped.
-      {
-        find: /^@\/(.*)$/,
-        replacement: `${fileURLToPath(new URL("./apps/web/src/", import.meta.url))}$1`,
-      },
-
-      // See the stub for why this is a stub rather than a change to the five
-      // files that import it.
-      {
-        find: "server-only",
-        replacement: fileURLToPath(new URL("./test-stubs/server-only.ts", import.meta.url)),
-      },
-    ],
+    // Shared with the web and program projects — see `vitest.alias.ts` for why
+    // they are one list and why the order in it is load-bearing. This project
+    // collects `apps/web` as well as `packages`, so it takes the web set.
+    alias: [...webAliases],
   },
   test: {
     /**
