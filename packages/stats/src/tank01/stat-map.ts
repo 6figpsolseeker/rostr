@@ -193,6 +193,48 @@ export function isSpecialTeamsReturnTouchdown(scoreText: string): boolean {
   return SPECIAL_TEAMS_RETURN.test(scoreText);
 }
 
+/**
+ * A play's text with every parenthetical removed.
+ *
+ * Tank01 splits a scoring play into two parts, and **which part a name appears
+ * in is what identifies the player's role**:
+ *
+ *     Rashid Shaheed 58 Yd Punt Return (Sam Darnold Pass to Cooper Kupp for …)
+ *     └─ main clause: who scored ────┘ └─ parenthetical: the PAT or conversion ┘
+ *
+ * So this is the complement of the window {@link isSuccessfulTwoPointConversion}
+ * is matched in: conversions are read from inside the parenthetical, the score
+ * itself from outside it.
+ *
+ * **This replaces `playerIDs[0]`.** The returner is *usually* first in that
+ * array, and the comment that said so held for 26 of the 27 return touchdowns
+ * in the 2025 season — but on the play above Tank01 orders it
+ * `[Darnold, Shaheed, Kupp]`, putting the conversion passer first. Sam Darnold,
+ * a quarterback, was credited a 6-point punt-return touchdown, and Rashid
+ * Shaheed was denied his: a 12-point swing on one play, both halves wrong, with
+ * no warning anywhere. Ordering is an implementation detail of the feed; the
+ * clause a name sits in is what the sentence actually means.
+ *
+ * `(PHI)` in "Blocked Kick Recovered by Jordan Davis (PHI) …" is stripped too,
+ * which is harmless — that name also appears in the main clause.
+ */
+export function mainClause(scoreText: string): string {
+  return scoreText.replace(/\([^)]*\)/g, " ");
+}
+
+/**
+ * Whether this player is the one the main clause says scored.
+ *
+ * A substring match, like `twoPointCredit`'s, and safe for the same reason: it
+ * is only ever asked about players the play already names in `playerIDs`, so a
+ * coincidental hit needs two participants in one play whose names contain one
+ * another. It is **not** safe to widen this to the whole roster without a
+ * stricter comparison.
+ */
+export function scoredInMainClause(scoreText: string, longName: string): boolean {
+  return mainClause(scoreText).includes(longName);
+}
+
 /** Whether a touchdown was a defensive return — an interception or fumble. */
 export function isDefensiveReturnTouchdown(scoreText: string): boolean {
   return DEFENSIVE_RETURN.test(scoreText);
