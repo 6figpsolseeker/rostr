@@ -25,13 +25,18 @@ import {
 } from "./sync.js";
 
 /**
- * NFL regular-season weeks.
+ * NFL regular-season weeks — `NFL.seasonWeeks`, not a local 18.
  *
- * Not read from a league's rules on purpose — this syncs the *sport's* schedule,
+ * Not read from a league's rules on purpose: this syncs the *sport's* schedule,
  * which every league in the database shares, and a league's own
  * `regularSeasonWeeks` is how much of it that league plays.
+ *
+ * It was a hardcoded 18 here, duplicating the registry. `/api/cron/season-sync`
+ * does the same loop and reads the registry, and two answers to "how long is an
+ * NFL season" is one more than the invariant allows — `sports/nfl.ts` is the
+ * only file permitted to name a football fact.
  */
-const REGULAR_SEASON_WEEKS = 18;
+const REGULAR_SEASON_WEEKS = NFL.seasonWeeks;
 
 function connectionString(): string {
   const url = process.env["DATABASE_URL"];

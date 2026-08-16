@@ -15,6 +15,7 @@
     "@rostr/db": "workspace:*",
     "@rostr/escrow": "workspace:*",
     "@rostr/pinning": "workspace:*",
+    "@rostr/stats": "workspace:*",
     "@solana/wallet-adapter-base": "^0.9.24",
     "@solana/wallet-adapter-coinbase": "^0.1.23",
     "@solana/wallet-adapter-phantom": "^0.9.29",
