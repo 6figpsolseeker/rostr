@@ -100,6 +100,9 @@ export default async function LobbyPage({ params }: { params: Promise<{ id: stri
             : `Draft lobby · ${view.humans} of ${teams.length} seats taken by managers`
         }
         rulesHash={stored.hash}
+        // This page already `notFound()`s a non-member above, so anyone who
+        // renders it can reach every tab.
+        navOpen
         active=""
       />
 

@@ -34,6 +34,7 @@ export function LeagueChrome({
   subtitle,
   rulesHash,
   active,
+  navOpen,
 }: {
   readonly leagueId: string;
   readonly name: string;
@@ -42,6 +43,23 @@ export function LeagueChrome({
   readonly rulesHash: string;
   /** The tab to mark current, as its `href` suffix. `""` is Home. */
   readonly active: (typeof TABS)[number]["href"];
+  /**
+   * Whether these tabs lead anywhere for this viewer — `leagueNavOpen`.
+   *
+   * Five of the six 404 for a non-member, because the league is private and
+   * `leagueReadAccess` refuses. That refusal is correct and must stay: a "this
+   * league is private" page would confirm the league exists to anyone holding
+   * the URL. What was wrong was offering the doors.
+   *
+   * The commissioner is the person most likely to meet this. Creating a league
+   * seats nobody — see #165 — so they land on their own league with six tabs
+   * and no team, and every one of them fails.
+   *
+   * **Required rather than optional-defaulting-to-true.** `CLAUDE.md`: "an
+   * optional filter defaulting to 'all' is not a filter." A default would let
+   * the next caller inherit the bug by saying nothing.
+   */
+  readonly navOpen: boolean;
 }) {
   return (
     <div className="mb-10 border-b border-nocturne-neutral-900 pb-0">
@@ -64,25 +82,38 @@ export function LeagueChrome({
         </span>
       </div>
 
-      <nav className="mt-7 flex flex-wrap gap-7">
-        {TABS.map((tab) => {
-          const current = tab.href === active;
-          return (
-            <a
-              key={tab.label}
-              href={`/leagues/${leagueId}${tab.href}`}
-              aria-current={current ? "page" : undefined}
-              className={`-mb-px border-b-2 pb-3 text-[14px] transition-colors ${
-                current
-                  ? "border-nocturne-accent text-nocturne-text"
-                  : "border-transparent text-nocturne-neutral-500 hover:text-nocturne-text"
-              }`}
-            >
-              {tab.label}
-            </a>
-          );
-        })}
-      </nav>
+      {/*
+        Hidden, not greyed out.
+
+        A disabled tab is a promise about a future that may never arrive — for a
+        stranger who will never join, "Standings, once you join" is simply
+        false. And this codebase already decided the general case: the draft and
+        bracket are not tabs because a dead link for most of a season would be
+        one, and `CLAUDE.md` says a greyed-out Week 16 fixture "would be an
+        invention". Five greyed labels would also compete for attention with the
+        one control that does work, which is the join panel below.
+      */}
+      {!navOpen ? null : (
+        <nav className="mt-7 flex flex-wrap gap-7">
+          {TABS.map((tab) => {
+            const current = tab.href === active;
+            return (
+              <a
+                key={tab.label}
+                href={`/leagues/${leagueId}${tab.href}`}
+                aria-current={current ? "page" : undefined}
+                className={`-mb-px border-b-2 pb-3 text-[14px] transition-colors ${
+                  current
+                    ? "border-nocturne-accent text-nocturne-text"
+                    : "border-transparent text-nocturne-neutral-500 hover:text-nocturne-text"
+                }`}
+              >
+                {tab.label}
+              </a>
+            );
+          })}
+        </nav>
+      )}
     </div>
   );
 }

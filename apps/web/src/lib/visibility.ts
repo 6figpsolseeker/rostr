@@ -57,3 +57,28 @@ export async function leagueReadAccess(leagueId: string): Promise<LeagueReadAcce
 
   return { ok: false, reason: "PRIVATE" };
 }
+
+/**
+ * Whether the league-scoped tabs will actually open for this viewer.
+ *
+ * **Derived from the gate, never a second copy of the rule.** The nav and the
+ * 404 have to agree, and this repo has twice been bitten by one rule
+ * implemented in two places — the trade deadline computed separately in
+ * `proposeTrade` and `resolveDueTrades`, and the lineup lock computed from a
+ * roster map in both the screen and the server. Re-deriving "is this person a
+ * member" from `visibility` and a wallet row would be the same mistake a third
+ * time, and its failure mode is a nav that offers doors the gate refuses.
+ *
+ * **Deliberately not named `leagueReadAccess`, and not a re-export.**
+ * `/leagues/[id]/page.tsx` is one of the two files that must never refuse
+ * anybody — `RULES.md` requires the full rule set to be readable before someone
+ * joins, and an invitee is by definition not yet a member. That file is listed
+ * in `OPEN` in `league-read.test.ts`, and `/leagueReadAccess\(/` is one of that
+ * sweep's `GATES` patterns. Calling the gate directly from the entrance would
+ * put a gate's name in a file that does not gate — which is exactly the shape
+ * that test exists to catch, and would silently certify the entrance the day
+ * anybody removed its `OPEN` entry.
+ */
+export async function leagueNavOpen(leagueId: string): Promise<boolean> {
+  return (await leagueReadAccess(leagueId)).ok;
+}
