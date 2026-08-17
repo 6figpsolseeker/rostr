@@ -10,6 +10,9 @@ import {
   parseStatValue,
   TANK01_DST_MAP,
   TANK01_STAT_MAP,
+  TANK01_TEAM_BLOCKED_KICK_FIELDS,
+  TANK01_TEAM_DEF_ST_TD_FIELD,
+  TANK01_UNMAPPED_PLAYER_DEFENSE_FIELDS,
 } from "./stat-map.js";
 
 /** Verbatim from the live probe of 20250904_DAL@PHI. */
@@ -306,5 +309,140 @@ describe("mapping integrity", () => {
   it("sources points allowed from the DST block only", () => {
     expect(TANK01_DST_MAP["ptsAllowed"]).toBe("def_pts_allowed");
     expect(Object.values(TANK01_STAT_MAP)).not.toContain("def_pts_allowed");
+  });
+});
+
+/**
+ * Blocked kicks are often **recovered**, not returned.
+ *
+ * Both strings below are verbatim Tank01 output and neither contains the word
+ * "return" in a form the old pattern matched, so both scored as nothing: the
+ * unit lost the 6 points `RULES.md` §1 pays for a special teams touchdown, and
+ * `DST.defTD` reads "0" in the Kneeland game, so no other path made it up.
+ */
+const REAL_BLOCKED_KICK_TDS = {
+  // 2025 week 9, 20251103_ARI@DAL. Captured as
+  // __fixtures__/box-score-blocked-punt-td.json.
+  kneeland: "Marshawn Kneeland Blocked Punt Recovery in End Zone (Brandon Aubrey Kick)",
+  // docs/TANK01.md, and issue #158. Note Tank01's own typo, "Touchown".
+  jordanDavis:
+    "Blocked Kick Recovered by Jordan Davis (PHI) Jordan Davis 61 Yd Touchown Return",
+} as const;
+
+/**
+ * The negative case, and the reason the new pattern is anchored on "blocked".
+ *
+ * **Every** fumble-return touchdown in the 2025 season is worded "Fumble
+ * Recovery" rather than "Fumble Return". Adding a bare `recover` alternative to
+ * the special teams pattern — the obvious repair for the two strings above —
+ * therefore reclassifies **14 defensive touchdowns** as return touchdowns, which
+ * pays each of them a second time on a second roster spot.
+ */
+const REAL_FUMBLE_RECOVERY_TDS = [
+  "Tyler Lockett 0 Yd Fumble Recovery",
+  "Zack Baun 12 Yd Fumble Recovery (Jake Elliott Kick)",
+] as const;
+
+describe("blocked kick touchdowns", () => {
+  it("recognises a blocked kick recovered rather than returned", () => {
+    expect(isSpecialTeamsReturnTouchdown(REAL_BLOCKED_KICK_TDS.kneeland)).toBe(true);
+    expect(isSpecialTeamsReturnTouchdown(REAL_BLOCKED_KICK_TDS.jordanDavis)).toBe(true);
+  });
+
+  it("does NOT read a fumble recovery as a special teams return", () => {
+    // The 14-touchdown trap. If this ever goes green the other way, one play is
+    // being paid under two rules in two different roster spots.
+    for (const text of REAL_FUMBLE_RECOVERY_TDS) {
+      expect(isSpecialTeamsReturnTouchdown(text), text).toBe(false);
+      expect(isDefensiveReturnTouchdown(text), text).toBe(true);
+    }
+  });
+
+  it("does not fire on a touchdown that merely had its extra point blocked", () => {
+    // "(Joshua Karty PAT blocked)" puts the word after the kick rather than
+    // before it, and a blocked PAT is not a touchdown by anyone.
+    expect(isSpecialTeamsReturnTouchdown(REAL_PAT_FORMS.patBlocked)).toBe(false);
+    expect(isSpecialTeamsReturnTouchdown(REAL_PAT_FORMS.patBlocked2)).toBe(false);
+  });
+
+  it("leaves every previously recognised return where it was", () => {
+    // Widening a pattern is how a fix becomes a regression. Every string the old
+    // rule classified is re-asserted here rather than assumed.
+    for (const text of Object.values(REAL_RETURNS)) {
+      const special = isSpecialTeamsReturnTouchdown(text);
+      const defensive = isDefensiveReturnTouchdown(text);
+      expect(special && defensive, `both matched: ${text}`).toBe(false);
+      expect(special || defensive, `neither matched: ${text}`).toBe(true);
+    }
+  });
+
+  /**
+   * Deliberately still unrecognised — see the comment on the pattern.
+   *
+   * It is not a blocked kick, the scorer is a running back rather than a
+   * defender, and whether ESPN pays it as a return touchdown or as an offensive
+   * fumble recovery has not been settled against a second source. Six points on a
+   * rosterable player is not something to guess at. Refs #158.
+   */
+  it("still does not recognise a kickoff recovered in the end zone", () => {
+    expect(
+      isSpecialTeamsReturnTouchdown(
+        "George Holani Recovered Kickoff in End Zone for a Touchdown",
+      ),
+    ).toBe(false);
+  });
+});
+
+describe("no per-player defensive stat is mapped", () => {
+  /**
+   * `NFL_SLOT_TYPES` admits QB, RB, WR, TE, K and DEF. There is no IDP slot, so
+   * the only roster spot a `def_*` key can reach is the D/ST — which is scored
+   * from `TANK01_DST_MAP`. A per-player row keyed the same way is not an unused
+   * row, it is a **duplicate** paid to whoever holds that player.
+   */
+  it("maps none of the individual Defense fields", () => {
+    for (const field of TANK01_UNMAPPED_PLAYER_DEFENSE_FIELDS) {
+      expect(TANK01_STAT_MAP[field], `${field} must not be mapped`).toBeUndefined();
+    }
+  });
+
+  it("keeps the one Defense field that really is the offensive player's", () => {
+    // He lost the ball; the points come off his own roster spot. Removing the
+    // whole category would have been the mirror-image error.
+    expect(TANK01_STAT_MAP["Defense.fumblesLost"]).toBe("fum_lost");
+  });
+
+  it("leaves every unit stat key to the DST block alone", () => {
+    // Tyler Lockett, a wide receiver, was paid 6 points for "Tyler Lockett 0 Yd
+    // Fumble Recovery" because `Defense.defTD` was mapped; three quarterbacks,
+    // a receiver and a running back were paid 2 each for recovering their own
+    // fumbles because `Defense.fumblesRecovered` was.
+    const unitOnly = ["def_td", "def_sack", "def_int", "def_fum_rec", "def_safety"];
+    const mapped = Object.values(TANK01_STAT_MAP);
+
+    for (const statKey of unitOnly) {
+      expect(mapped, `${statKey} must come from the DST block only`).not.toContain(statKey);
+      expect(Object.values(TANK01_DST_MAP)).toContain(statKey);
+    }
+  });
+});
+
+describe("the team-level fields", () => {
+  it("names the three blocked kick counters", () => {
+    // Summed into one `def_blk_kick`. Verified against 20250907_ARI@NO, where
+    // New Orleans — the blocking team — carries blockedFG "1".
+    expect([...TANK01_TEAM_BLOCKED_KICK_FIELDS].sort()).toEqual([
+      "blockedFG",
+      "blockedPunt",
+      "blockedXP",
+    ]);
+  });
+
+  it("keeps the def/ST touchdown total out of the stat maps", () => {
+    // A check, never a source: it double-counts a defensive player's return the
+    // way this adapter used to, reading 2 for New England's single punt-return
+    // touchdown in week 4.
+    expect(Object.keys(TANK01_DST_MAP)).not.toContain(TANK01_TEAM_DEF_ST_TD_FIELD);
+    expect(Object.keys(TANK01_STAT_MAP)).not.toContain(TANK01_TEAM_DEF_ST_TD_FIELD);
   });
 });

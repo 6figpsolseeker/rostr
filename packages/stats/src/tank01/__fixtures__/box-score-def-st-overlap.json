@@ -1,0 +1,2890 @@
+{
+  "DST": {
+    "away": {
+      "teamAbv": "CAR",
+      "teamID": "5",
+      "defTD": "0",
+      "defensiveInterceptions": "0",
+      "sacks": "1",
+      "ydsAllowed": "307",
+      "fumblesRecovered": "0",
+      "ptsAllowed": "36",
+      "safeties": "0"
+    },
+    "home": {
+      "teamAbv": "NE",
+      "teamID": "22",
+      "defTD": "1",
+      "defensiveInterceptions": "0",
+      "sacks": "1",
+      "ydsAllowed": "326",
+      "fumblesRecovered": "0",
+      "ptsAllowed": "13",
+      "safeties": "0"
+    }
+  },
+  "Referees": "Greg Meyer, Bill Vinovich, Jimmy Buchanan, Aaron Santi, Tripp Sutter, Dale Keller, Scott Walker",
+  "arena": "Gillette Stadium",
+  "arenaCapacity": "64,628",
+  "attendance": "64,628",
+  "away": "CAR",
+  "awayPts": "13",
+  "awayResult": "L",
+  "currentPeriod": "Final",
+  "gameClock": "",
+  "gameDate": "20250928",
+  "gameLocation": "Foxborough, MA",
+  "gameStatus": "Completed",
+  "gameWeek": "Week 4",
+  "home": "NE",
+  "homePts": "42",
+  "homeResult": "W",
+  "lineScore": {
+    "period": "Final",
+    "gameClock": "",
+    "away": {
+      "Q1": "6",
+      "Q2": "0",
+      "Q3": "0",
+      "Q4": "7",
+      "teamID": "5",
+      "currentlyInPossession": "False",
+      "totalPts": "13",
+      "teamAbv": "CAR"
+    },
+    "home": {
+      "Q1": "7",
+      "Q2": "21",
+      "Q3": "7",
+      "Q4": "7",
+      "teamID": "22",
+      "currentlyInPossession": "False",
+      "totalPts": "42",
+      "teamAbv": "NE"
+    }
+  },
+  "network": "FOX",
+  "playerStats": {
+    "11759": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "5",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "8",
+        "stSnapPct": "0.29",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "CAR",
+      "teamAbv": "CAR",
+      "playerID": "11759",
+      "longName": "JJ Jansen"
+    },
+    "14012": {
+      "gameID": "20250928_CAR@NE",
+      "Passing": {
+        "qbr": "100.0",
+        "rtg": "146.5",
+        "sacked": "0-0",
+        "passAttempts": "6",
+        "passAvg": "9.7",
+        "passTD": "1",
+        "passYds": "58",
+        "int": "0",
+        "passCompletions": "5"
+      },
+      "scoringPlays": [
+        {
+          "score": "Mitchell Evans 2 Yd pass from Andy Dalton (Ryan Fitzgerald Kick)",
+          "scorePeriod": "Q4",
+          "homeScore": "42",
+          "awayScore": "13",
+          "teamID": "5",
+          "scoreDetails": "13 plays, 91 yards, 6:45",
+          "scoreType": "TD",
+          "scoreTime": "1:56",
+          "team": "CAR",
+          "playerIDs": ["14012", "4683243", "4568263"]
+        }
+      ],
+      "teamID": "5",
+      "snapCounts": {
+        "offSnapPct": "0.19",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "13",
+        "defSnapPct": "0.00"
+      },
+      "team": "CAR",
+      "teamAbv": "CAR",
+      "playerID": "14012",
+      "longName": "Andy Dalton"
+    },
+    "15928": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "5",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "8",
+        "stSnapPct": "0.29",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "Punting": {
+        "puntYds": "231",
+        "punts": "5",
+        "puntAvg": "46.2",
+        "puntsin20": "1",
+        "puntTouchBacks": "1",
+        "puntLong": "55"
+      },
+      "team": "CAR",
+      "teamAbv": "CAR",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "15928",
+      "longName": "Sam Martin"
+    },
+    "16771": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "22",
+      "snapCounts": {
+        "offSnapPct": "0.88",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "43",
+        "defSnapPct": "0.00"
+      },
+      "team": "NE",
+      "teamAbv": "NE",
+      "playerID": "16771",
+      "longName": "Morgan Moses"
+    },
+    "2973051": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "5",
+      "snapCounts": {
+        "offSnapPct": "1.00",
+        "defSnap": "0",
+        "stSnap": "3",
+        "stSnapPct": "0.11",
+        "offSnap": "69",
+        "defSnapPct": "0.00"
+      },
+      "team": "CAR",
+      "teamAbv": "CAR",
+      "playerID": "2973051",
+      "longName": "Taylor Moton"
+    },
+    "2976212": {
+      "gameID": "20250928_CAR@NE",
+      "Receiving": {
+        "receptions": "6",
+        "recTD": "0",
+        "longRec": "33",
+        "targets": "7",
+        "recYds": "101",
+        "recAvg": "16.8"
+      },
+      "teamID": "22",
+      "snapCounts": {
+        "offSnapPct": "0.63",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "31",
+        "defSnapPct": "0.00"
+      },
+      "team": "NE",
+      "teamAbv": "NE",
+      "playerID": "2976212",
+      "longName": "Stefon Diggs"
+    },
+    "2991662": {
+      "gameID": "20250928_CAR@NE",
+      "Receiving": {
+        "receptions": "1",
+        "recTD": "1",
+        "longRec": "4",
+        "targets": "1",
+        "recYds": "4",
+        "recAvg": "4.0"
+      },
+      "scoringPlays": [
+        {
+          "score": "Mack Hollins 4 Yd pass from Drake Maye (Andy Borregales Kick)",
+          "scorePeriod": "Q4",
+          "homeScore": "42",
+          "awayScore": "6",
+          "teamID": "22",
+          "scoreDetails": "7 plays, 41 yards, 3:10",
+          "scoreType": "TD",
+          "scoreTime": "14:13",
+          "team": "NE",
+          "playerIDs": ["4431452", "2991662", "4569923"]
+        }
+      ],
+      "teamID": "22",
+      "snapCounts": {
+        "offSnapPct": "0.49",
+        "defSnap": "1",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "24",
+        "defSnapPct": "0.01"
+      },
+      "team": "NE",
+      "teamAbv": "NE",
+      "playerID": "2991662",
+      "longName": "Mack Hollins"
+    },
+    "3043275": {
+      "gameID": "20250928_CAR@NE",
+      "Receiving": {
+        "receptions": "1",
+        "recTD": "0",
+        "longRec": "24",
+        "targets": "1",
+        "recYds": "24",
+        "recAvg": "24.0"
+      },
+      "teamID": "22",
+      "snapCounts": {
+        "offSnapPct": "0.65",
+        "defSnap": "0",
+        "stSnap": "6",
+        "stSnapPct": "0.21",
+        "offSnap": "32",
+        "defSnapPct": "0.00"
+      },
+      "team": "NE",
+      "teamAbv": "NE",
+      "playerID": "3043275",
+      "longName": "Austin Hooper"
+    },
+    "3044720": {
+      "gameID": "20250928_CAR@NE",
+      "Rushing": {
+        "rushAvg": "-0.7",
+        "rushYds": "-2",
+        "carries": "3",
+        "longRush": "0",
+        "rushTD": "0"
+      },
+      "Passing": {
+        "qbr": "1.0",
+        "rtg": "39.6",
+        "sacked": "0-0",
+        "passAttempts": "1",
+        "passAvg": "0.0",
+        "passTD": "0",
+        "passYds": "0",
+        "int": "0",
+        "passCompletions": "0"
+      },
+      "teamID": "22",
+      "snapCounts": {
+        "offSnapPct": "0.12",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "6",
+        "defSnapPct": "0.00"
+      },
+      "team": "NE",
+      "teamAbv": "NE",
+      "playerID": "3044720",
+      "longName": "Joshua Dobbs"
+    },
+    "3046439": {
+      "gameID": "20250928_CAR@NE",
+      "Receiving": {
+        "receptions": "2",
+        "recTD": "1",
+        "longRec": "31",
+        "targets": "2",
+        "recYds": "39",
+        "recAvg": "19.5"
+      },
+      "scoringPlays": [
+        {
+          "score": "Hunter Henry 31 Yd pass from Drake Maye (Andy Borregales Kick)",
+          "scorePeriod": "Q3",
+          "homeScore": "35",
+          "awayScore": "6",
+          "teamID": "22",
+          "scoreDetails": "8 plays, 78 yards, 4:43",
+          "scoreType": "TD",
+          "scoreTime": "10:17",
+          "team": "NE",
+          "playerIDs": ["4431452", "3046439", "4569923"]
+        }
+      ],
+      "teamID": "22",
+      "snapCounts": {
+        "offSnapPct": "0.76",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "37",
+        "defSnapPct": "0.00"
+      },
+      "team": "NE",
+      "teamAbv": "NE",
+      "playerID": "3046439",
+      "longName": "Hunter Henry"
+    },
+    "3054857": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "5",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "29",
+        "stSnap": "3",
+        "stSnapPct": "0.11",
+        "offSnap": "0",
+        "defSnapPct": "0.59"
+      },
+      "team": "CAR",
+      "teamAbv": "CAR",
+      "Defense": {
+        "totalTackles": "6",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "3054857",
+      "longName": "A'Shawn Robinson"
+    },
+    "3116179": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "5",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "47",
+        "stSnap": "6",
+        "stSnapPct": "0.21",
+        "offSnap": "0",
+        "defSnapPct": "0.96"
+      },
+      "team": "CAR",
+      "teamAbv": "CAR",
+      "Defense": {
+        "totalTackles": "6",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "4",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "3116179",
+      "longName": "Nick Scott"
+    },
+    "3116729": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "22",
+      "snapCounts": {
+        "offSnapPct": "1.00",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "49",
+        "defSnapPct": "0.00"
+      },
+      "team": "NE",
+      "teamAbv": "NE",
+      "playerID": "3116729",
+      "longName": "Garrett Bradbury"
+    },
+    "3122793": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "22",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "49",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "0.71"
+      },
+      "team": "NE",
+      "teamAbv": "NE",
+      "Defense": {
+        "totalTackles": "0",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "0",
+        "tfl": "0",
+        "qbHits": "1",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "3122793",
+      "longName": "Harold Landry III"
+    },
+    "3122906": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "22",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "16",
+        "stSnapPct": "0.57",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "NE",
+      "teamAbv": "NE",
+      "Defense": {
+        "totalTackles": "2",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "3122906",
+      "longName": "Darius Harris"
+    },
+    "3129446": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "22",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "51",
+        "stSnap": "2",
+        "stSnapPct": "0.07",
+        "offSnap": "0",
+        "defSnapPct": "0.74"
+      },
+      "team": "NE",
+      "teamAbv": "NE",
+      "Defense": {
+        "totalTackles": "10",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "4",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "3129446",
+      "longName": "Robert Spillane"
+    },
+    "3135321": {
+      "gameID": "20250928_CAR@NE",
+      "Receiving": {
+        "receptions": "2",
+        "recTD": "0",
+        "longRec": "5",
+        "targets": "2",
+        "recYds": "10",
+        "recAvg": "5.0"
+      },
+      "teamID": "5",
+      "snapCounts": {
+        "offSnapPct": "0.49",
+        "defSnap": "0",
+        "stSnap": "2",
+        "stSnapPct": "0.07",
+        "offSnap": "34",
+        "defSnapPct": "0.00"
+      },
+      "Punting": {
+        "puntReturns": "1",
+        "puntReturnYds": "13",
+        "puntReturnAvg": "13.0",
+        "puntReturnLong": "13",
+        "puntReturnTD": "0"
+      },
+      "team": "CAR",
+      "teamAbv": "CAR",
+      "playerID": "3135321",
+      "longName": "Hunter Renfrow"
+    },
+    "3858276": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "22",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "39",
+        "stSnap": "1",
+        "stSnapPct": "0.04",
+        "offSnap": "0",
+        "defSnapPct": "0.57"
+      },
+      "team": "NE",
+      "teamAbv": "NE",
+      "Defense": {
+        "totalTackles": "4",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "4",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "3858276",
+      "longName": "Jaylinn Hawkins"
+    },
+    "3871880": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "5",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "3",
+        "stSnapPct": "0.11",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "CAR",
+      "teamAbv": "CAR",
+      "playerID": "3871880",
+      "longName": "Yosh Nijman"
+    },
+    "3909013": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "5",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "49",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "1.00"
+      },
+      "team": "CAR",
+      "teamAbv": "CAR",
+      "Defense": {
+        "totalTackles": "4",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "3909013",
+      "longName": "Christian Rozeboom"
+    },
+    "3916923": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "22",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "49",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "0.71"
+      },
+      "team": "NE",
+      "teamAbv": "NE",
+      "playerID": "3916923",
+      "longName": "Carlton Davis III"
+    },
+    "3917853": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "5",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "49",
+        "stSnap": "6",
+        "stSnapPct": "0.21",
+        "offSnap": "0",
+        "defSnapPct": "1.00"
+      },
+      "team": "CAR",
+      "teamAbv": "CAR",
+      "Defense": {
+        "totalTackles": "4",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "3",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "1"
+      },
+      "playerID": "3917853",
+      "longName": "Mike Jackson"
+    },
+    "3925350": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "22",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "20",
+        "stSnap": "17",
+        "stSnapPct": "0.61",
+        "offSnap": "0",
+        "defSnapPct": "0.29"
+      },
+      "team": "NE",
+      "teamAbv": "NE",
+      "Defense": {
+        "totalTackles": "3",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "3925350",
+      "longName": "Anfernee Jennings"
+    },
+    "4035495": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "5",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "37",
+        "stSnap": "6",
+        "stSnapPct": "0.21",
+        "offSnap": "0",
+        "defSnapPct": "0.76"
+      },
+      "team": "CAR",
+      "teamAbv": "CAR",
+      "Defense": {
+        "totalTackles": "4",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4035495",
+      "longName": "Derrick Brown"
+    },
+    "4037239": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "5",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "10",
+        "stSnap": "7",
+        "stSnapPct": "0.25",
+        "offSnap": "0",
+        "defSnapPct": "0.20"
+      },
+      "team": "CAR",
+      "teamAbv": "CAR",
+      "Defense": {
+        "totalTackles": "2",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "0",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4037239",
+      "longName": "Boogie Basham"
+    },
+    "4038815": {
+      "gameID": "20250928_CAR@NE",
+      "Rushing": {
+        "rushAvg": "3.6",
+        "rushYds": "32",
+        "carries": "9",
+        "longRush": "10",
+        "rushTD": "0"
+      },
+      "Receiving": {
+        "receptions": "1",
+        "recTD": "0",
+        "longRec": "-2",
+        "targets": "1",
+        "recYds": "-2",
+        "recAvg": "-2.0"
+      },
+      "teamID": "5",
+      "snapCounts": {
+        "offSnapPct": "0.39",
+        "defSnap": "0",
+        "stSnap": "7",
+        "stSnapPct": "0.25",
+        "offSnap": "27",
+        "defSnapPct": "0.00"
+      },
+      "Kicking": {
+        "kickReturns": "4",
+        "kickReturnTD": "0",
+        "kickReturnYds": "100",
+        "kickReturnAvg": "25.0",
+        "kickReturnLong": "30"
+      },
+      "team": "CAR",
+      "teamAbv": "CAR",
+      "playerID": "4038815",
+      "longName": "Rico Dowdle"
+    },
+    "4040778": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "5",
+      "snapCounts": {
+        "offSnapPct": "0.33",
+        "defSnap": "0",
+        "stSnap": "3",
+        "stSnapPct": "0.11",
+        "offSnap": "23",
+        "defSnapPct": "0.00"
+      },
+      "team": "CAR",
+      "teamAbv": "CAR",
+      "playerID": "4040778",
+      "longName": "Brandon Walton"
+    },
+    "4046545": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "22",
+      "snapCounts": {
+        "offSnapPct": "1.00",
+        "defSnap": "0",
+        "stSnap": "6",
+        "stSnapPct": "0.21",
+        "offSnap": "49",
+        "defSnapPct": "0.00"
+      },
+      "team": "NE",
+      "teamAbv": "NE",
+      "playerID": "4046545",
+      "longName": "Mike Onwenu"
+    },
+    "4047941": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "22",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "22",
+        "stSnapPct": "0.79",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "NE",
+      "teamAbv": "NE",
+      "Defense": {
+        "totalTackles": "3",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4047941",
+      "longName": "Brenden Schooler"
+    },
+    "4058925": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "5",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "31",
+        "stSnap": "5",
+        "stSnapPct": "0.18",
+        "offSnap": "0",
+        "defSnapPct": "0.63"
+      },
+      "team": "CAR",
+      "teamAbv": "CAR",
+      "Defense": {
+        "totalTackles": "5",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "2",
+        "tfl": "0",
+        "qbHits": "1",
+        "defensiveInterceptions": "0",
+        "sacks": "1",
+        "passDeflections": "0"
+      },
+      "playerID": "4058925",
+      "longName": "Tershawn Wharton"
+    },
+    "4212909": {
+      "gameID": "20250928_CAR@NE",
+      "Rushing": {
+        "rushAvg": "12.0",
+        "rushYds": "12",
+        "carries": "1",
+        "longRush": "12",
+        "rushTD": "0"
+      },
+      "teamID": "5",
+      "snapCounts": {
+        "offSnapPct": "0.01",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "1",
+        "defSnapPct": "0.00"
+      },
+      "team": "CAR",
+      "teamAbv": "CAR",
+      "playerID": "4212909",
+      "longName": "David Moore"
+    },
+    "4239699": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "22",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "40",
+        "stSnap": "4",
+        "stSnapPct": "0.14",
+        "offSnap": "0",
+        "defSnapPct": "0.58"
+      },
+      "team": "NE",
+      "teamAbv": "NE",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4239699",
+      "longName": "Milton Williams"
+    },
+    "4240042": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "22",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "16",
+        "stSnap": "1",
+        "stSnapPct": "0.04",
+        "offSnap": "0",
+        "defSnapPct": "0.23"
+      },
+      "team": "NE",
+      "teamAbv": "NE",
+      "Defense": {
+        "totalTackles": "2",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "1",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4240042",
+      "longName": "Cory Durden"
+    },
+    "4240545": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "22",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "10",
+        "stSnapPct": "0.36",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "Punting": {
+        "puntYds": "205",
+        "punts": "4",
+        "puntAvg": "51.3",
+        "puntsin20": "2",
+        "puntTouchBacks": "0",
+        "puntLong": "59"
+      },
+      "team": "NE",
+      "teamAbv": "NE",
+      "playerID": "4240545",
+      "longName": "Bryce Baringer"
+    },
+    "4240554": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "22",
+      "snapCounts": {
+        "offSnapPct": "0.16",
+        "defSnap": "0",
+        "stSnap": "6",
+        "stSnapPct": "0.21",
+        "offSnap": "8",
+        "defSnapPct": "0.00"
+      },
+      "team": "NE",
+      "teamAbv": "NE",
+      "playerID": "4240554",
+      "longName": "Vederian Lowe"
+    },
+    "4240623": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "5",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "24",
+        "stSnap": "5",
+        "stSnapPct": "0.18",
+        "offSnap": "0",
+        "defSnapPct": "0.49"
+      },
+      "team": "CAR",
+      "teamAbv": "CAR",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4240623",
+      "longName": "DJ Johnson"
+    },
+    "4240800": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "22",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "6",
+        "stSnapPct": "0.21",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "NE",
+      "teamAbv": "NE",
+      "playerID": "4240800",
+      "longName": "Brenden Jaimes"
+    },
+    "4241416": {
+      "gameID": "20250928_CAR@NE",
+      "Rushing": {
+        "rushAvg": "4.9",
+        "rushYds": "49",
+        "carries": "10",
+        "longRush": "11",
+        "rushTD": "0"
+      },
+      "Receiving": {
+        "receptions": "3",
+        "recTD": "0",
+        "longRec": "14",
+        "targets": "3",
+        "recYds": "20",
+        "recAvg": "6.7"
+      },
+      "teamID": "5",
+      "snapCounts": {
+        "offSnapPct": "0.51",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "35",
+        "defSnapPct": "0.00"
+      },
+      "team": "CAR",
+      "teamAbv": "CAR",
+      "playerID": "4241416",
+      "longName": "Chuba Hubbard"
+    },
+    "4241720": {
+      "gameID": "20250928_CAR@NE",
+      "scoringPlays": [
+        {
+          "score": "Marcus Jones 87 Yd Punt Return (Andy Borregales Kick)",
+          "scorePeriod": "Q1",
+          "homeScore": "7",
+          "awayScore": "6",
+          "teamID": "22",
+          "scoreDetails": "6 plays, 34 yards, 3:42",
+          "scoreType": "TD",
+          "scoreTime": "5:34",
+          "team": "NE",
+          "playerIDs": ["4241720", "4569923"]
+        }
+      ],
+      "teamID": "22",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "38",
+        "stSnap": "5",
+        "stSnapPct": "0.18",
+        "offSnap": "0",
+        "defSnapPct": "0.55"
+      },
+      "Punting": {
+        "puntReturns": "3",
+        "puntReturnYds": "167",
+        "puntReturnAvg": "55.7",
+        "puntReturnLong": "87",
+        "puntReturnTD": "1"
+      },
+      "team": "NE",
+      "teamAbv": "NE",
+      "Defense": {
+        "totalTackles": "5",
+        "defTD": "1",
+        "forcedFumbles": "0",
+        "soloTackles": "3",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4241720",
+      "longName": "Marcus Jones"
+    },
+    "4242205": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "22",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "34",
+        "stSnap": "9",
+        "stSnapPct": "0.32",
+        "offSnap": "0",
+        "defSnapPct": "0.49"
+      },
+      "team": "NE",
+      "teamAbv": "NE",
+      "Defense": {
+        "totalTackles": "2",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "2",
+        "tfl": "1",
+        "qbHits": "1",
+        "defensiveInterceptions": "0",
+        "sacks": "1",
+        "passDeflections": "0"
+      },
+      "playerID": "4242205",
+      "longName": "K'Lavon Chaisson"
+    },
+    "4243493": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "22",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "42",
+        "stSnap": "12",
+        "stSnapPct": "0.43",
+        "offSnap": "0",
+        "defSnapPct": "0.61"
+      },
+      "team": "NE",
+      "teamAbv": "NE",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4243493",
+      "longName": "Keion White"
+    },
+    "4244607": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "5",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "11",
+        "stSnapPct": "0.39",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "CAR",
+      "teamAbv": "CAR",
+      "Defense": {
+        "totalTackles": "2",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "2",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4244607",
+      "longName": "Akayleb Evans"
+    },
+    "4245273": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "22",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "39",
+        "stSnap": "20",
+        "stSnapPct": "0.71",
+        "offSnap": "0",
+        "defSnapPct": "0.57"
+      },
+      "team": "NE",
+      "teamAbv": "NE",
+      "Defense": {
+        "totalTackles": "9",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "3",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4245273",
+      "longName": "Christian Elliss"
+    },
+    "4248899": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "22",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "16",
+        "stSnap": "17",
+        "stSnapPct": "0.61",
+        "offSnap": "0",
+        "defSnapPct": "0.23"
+      },
+      "team": "NE",
+      "teamAbv": "NE",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4248899",
+      "longName": "Marte Mapu"
+    },
+    "4249739": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "22",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "31",
+        "stSnap": "22",
+        "stSnapPct": "0.79",
+        "offSnap": "0",
+        "defSnapPct": "0.45"
+      },
+      "team": "NE",
+      "teamAbv": "NE",
+      "Defense": {
+        "totalTackles": "12",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "8",
+        "tfl": "1",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4249739",
+      "longName": "Jack Gibbens"
+    },
+    "4256062": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "5",
+      "snapCounts": {
+        "offSnapPct": "0.43",
+        "defSnap": "0",
+        "stSnap": "3",
+        "stSnapPct": "0.11",
+        "offSnap": "30",
+        "defSnapPct": "0.00"
+      },
+      "team": "CAR",
+      "teamAbv": "CAR",
+      "playerID": "4256062",
+      "longName": "Brady Christensen"
+    },
+    "4256074": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "22",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "27",
+        "stSnap": "6",
+        "stSnapPct": "0.21",
+        "offSnap": "0",
+        "defSnapPct": "0.39"
+      },
+      "team": "NE",
+      "teamAbv": "NE",
+      "Defense": {
+        "totalTackles": "0",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "0",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "1"
+      },
+      "playerID": "4256074",
+      "longName": "Khyiris Tonga"
+    },
+    "4256224": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "5",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "25",
+        "stSnapPct": "0.89",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "CAR",
+      "teamAbv": "CAR",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "0",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4256224",
+      "longName": "Claudin Cherelus"
+    },
+    "4360294": {
+      "gameID": "20250928_CAR@NE",
+      "Rushing": {
+        "rushAvg": "4.5",
+        "rushYds": "27",
+        "carries": "6",
+        "longRush": "21",
+        "rushTD": "1"
+      },
+      "scoringPlays": [
+        {
+          "score": "Antonio Gibson 1 Yd Rush (Andy Borregales Kick)",
+          "scorePeriod": "Q2",
+          "homeScore": "28",
+          "awayScore": "6",
+          "teamID": "22",
+          "scoreDetails": "4 plays, 14 yards, 2:05",
+          "scoreType": "TD",
+          "scoreTime": "1:57",
+          "team": "NE",
+          "playerIDs": ["4360294", "4569923"]
+        }
+      ],
+      "teamID": "22",
+      "snapCounts": {
+        "offSnapPct": "0.18",
+        "defSnap": "0",
+        "stSnap": "3",
+        "stSnapPct": "0.11",
+        "offSnap": "9",
+        "defSnapPct": "0.00"
+      },
+      "Kicking": {
+        "kickReturns": "1",
+        "kickReturnTD": "0",
+        "kickReturnYds": "28",
+        "kickReturnAvg": "28.0",
+        "kickReturnLong": "28"
+      },
+      "team": "NE",
+      "teamAbv": "NE",
+      "playerID": "4360294",
+      "longName": "Antonio Gibson"
+    },
+    "4360763": {
+      "gameID": "20250928_CAR@NE",
+      "Receiving": {
+        "receptions": "3",
+        "recTD": "0",
+        "longRec": "24",
+        "targets": "4",
+        "recYds": "36",
+        "recAvg": "12.0"
+      },
+      "teamID": "5",
+      "snapCounts": {
+        "offSnapPct": "0.81",
+        "defSnap": "0",
+        "stSnap": "2",
+        "stSnapPct": "0.07",
+        "offSnap": "56",
+        "defSnapPct": "0.00"
+      },
+      "team": "CAR",
+      "teamAbv": "CAR",
+      "Defense": {
+        "fumblesLost": "0",
+        "defensiveInterceptions": "0",
+        "forcedFumbles": "0",
+        "fumbles": "1",
+        "fumblesRecovered": "0"
+      },
+      "playerID": "4360763",
+      "longName": "Brycen Tremayne"
+    },
+    "4361100": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "22",
+      "snapCounts": {
+        "offSnapPct": "0.22",
+        "defSnap": "0",
+        "stSnap": "8",
+        "stSnapPct": "0.29",
+        "offSnap": "11",
+        "defSnapPct": "0.00"
+      },
+      "team": "NE",
+      "teamAbv": "NE",
+      "playerID": "4361100",
+      "longName": "Jack Westover"
+    },
+    "4361788": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "5",
+      "snapCounts": {
+        "offSnapPct": "1.00",
+        "defSnap": "0",
+        "stSnap": "2",
+        "stSnapPct": "0.07",
+        "offSnap": "69",
+        "defSnapPct": "0.00"
+      },
+      "team": "CAR",
+      "teamAbv": "CAR",
+      "playerID": "4361788",
+      "longName": "Cade Mays"
+    },
+    "4361988": {
+      "gameID": "20250928_CAR@NE",
+      "Receiving": {
+        "receptions": "2",
+        "recTD": "0",
+        "longRec": "9",
+        "targets": "2",
+        "recYds": "17",
+        "recAvg": "8.5"
+      },
+      "teamID": "5",
+      "snapCounts": {
+        "offSnapPct": "0.25",
+        "defSnap": "0",
+        "stSnap": "12",
+        "stSnapPct": "0.43",
+        "offSnap": "17",
+        "defSnapPct": "0.00"
+      },
+      "team": "CAR",
+      "teamAbv": "CAR",
+      "playerID": "4361988",
+      "longName": "James Mitchell"
+    },
+    "4362487": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "5",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "46",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "0.94"
+      },
+      "team": "CAR",
+      "teamAbv": "CAR",
+      "Defense": {
+        "totalTackles": "3",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "0",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4362487",
+      "longName": "Tre'von Moehrig"
+    },
+    "4362647": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "5",
+      "snapCounts": {
+        "offSnapPct": "1.00",
+        "defSnap": "0",
+        "stSnap": "3",
+        "stSnapPct": "0.11",
+        "offSnap": "69",
+        "defSnapPct": "0.00"
+      },
+      "team": "CAR",
+      "teamAbv": "CAR",
+      "playerID": "4362647",
+      "longName": "Damien Lewis"
+    },
+    "4362847": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "5",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "46",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "0.94"
+      },
+      "team": "CAR",
+      "teamAbv": "CAR",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "0",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4362847",
+      "longName": "Jaycee Horn"
+    },
+    "4362890": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "22",
+      "snapCounts": {
+        "offSnapPct": "1.00",
+        "defSnap": "0",
+        "stSnap": "6",
+        "stSnapPct": "0.21",
+        "offSnap": "49",
+        "defSnapPct": "0.00"
+      },
+      "team": "NE",
+      "teamAbv": "NE",
+      "playerID": "4362890",
+      "longName": "Ben Brown"
+    },
+    "4368113": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "22",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "21",
+        "stSnap": "14",
+        "stSnapPct": "0.50",
+        "offSnap": "0",
+        "defSnapPct": "0.30"
+      },
+      "team": "NE",
+      "teamAbv": "NE",
+      "Defense": {
+        "totalTackles": "2",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "0",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4368113",
+      "longName": "Charles Woods"
+    },
+    "4372030": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "22",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "36",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "0.52"
+      },
+      "team": "NE",
+      "teamAbv": "NE",
+      "Defense": {
+        "totalTackles": "0",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "0",
+        "tfl": "0",
+        "qbHits": "2",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4372030",
+      "longName": "Christian Barmore"
+    },
+    "4372518": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "5",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "18",
+        "stSnap": "6",
+        "stSnapPct": "0.21",
+        "offSnap": "0",
+        "defSnapPct": "0.37"
+      },
+      "team": "CAR",
+      "teamAbv": "CAR",
+      "Defense": {
+        "totalTackles": "2",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "0",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4372518",
+      "longName": "Bobby Brown III"
+    },
+    "4372780": {
+      "gameID": "20250928_CAR@NE",
+      "Receiving": {
+        "receptions": "5",
+        "recTD": "1",
+        "longRec": "15",
+        "targets": "8",
+        "recYds": "42",
+        "recAvg": "8.4"
+      },
+      "scoringPlays": [
+        {
+          "score": "Tommy Tremble 7 Yd pass from Bryce Young (Ryan Fitzgerald PAT Failed)",
+          "scorePeriod": "Q1",
+          "homeScore": "0",
+          "awayScore": "6",
+          "teamID": "5",
+          "scoreDetails": "7 plays, 76 yards, 4:09",
+          "scoreType": "TD",
+          "scoreTime": "10:51",
+          "team": "CAR",
+          "playerIDs": ["4685720", "4372780", "4568263"]
+        }
+      ],
+      "teamID": "5",
+      "snapCounts": {
+        "offSnapPct": "0.75",
+        "defSnap": "0",
+        "stSnap": "2",
+        "stSnapPct": "0.07",
+        "offSnap": "52",
+        "defSnapPct": "0.00"
+      },
+      "team": "CAR",
+      "teamAbv": "CAR",
+      "playerID": "4372780",
+      "longName": "Tommy Tremble"
+    },
+    "4401811": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "22",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "35",
+        "stSnap": "12",
+        "stSnapPct": "0.43",
+        "offSnap": "0",
+        "defSnapPct": "0.51"
+      },
+      "team": "NE",
+      "teamAbv": "NE",
+      "Defense": {
+        "totalTackles": "3",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "0",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4401811",
+      "longName": "Kyle Dugger"
+    },
+    "4426599": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "22",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "20",
+        "stSnap": "6",
+        "stSnapPct": "0.21",
+        "offSnap": "0",
+        "defSnapPct": "0.29"
+      },
+      "team": "NE",
+      "teamAbv": "NE",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4426599",
+      "longName": "Alex Austin"
+    },
+    "4426926": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "5",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "25",
+        "stSnapPct": "0.89",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "CAR",
+      "teamAbv": "CAR",
+      "playerID": "4426926",
+      "longName": "Demani Richardson"
+    },
+    "4427095": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "22",
+      "snapCounts": {
+        "offSnapPct": "0.16",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "8",
+        "defSnapPct": "0.00"
+      },
+      "team": "NE",
+      "teamAbv": "NE",
+      "playerID": "4427095",
+      "longName": "DeMario Douglas"
+    },
+    "4427132": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "5",
+      "snapCounts": {
+        "offSnapPct": "1.00",
+        "defSnap": "0",
+        "stSnap": "3",
+        "stSnapPct": "0.11",
+        "offSnap": "69",
+        "defSnapPct": "0.00"
+      },
+      "team": "CAR",
+      "teamAbv": "CAR",
+      "playerID": "4427132",
+      "longName": "Ikem Ekwonu"
+    },
+    "4428125": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "5",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "19",
+        "stSnapPct": "0.68",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "CAR",
+      "teamAbv": "CAR",
+      "playerID": "4428125",
+      "longName": "Maema Njongmeta"
+    },
+    "4428232": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "22",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "18",
+        "stSnap": "22",
+        "stSnapPct": "0.79",
+        "offSnap": "0",
+        "defSnapPct": "0.26"
+      },
+      "team": "NE",
+      "teamAbv": "NE",
+      "Defense": {
+        "totalTackles": "4",
+        "defTD": "0",
+        "forcedFumbles": "1",
+        "soloTackles": "2",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4428232",
+      "longName": "Dell Pettus"
+    },
+    "4428930": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "22",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "68",
+        "stSnap": "10",
+        "stSnapPct": "0.36",
+        "offSnap": "0",
+        "defSnapPct": "0.99"
+      },
+      "team": "NE",
+      "teamAbv": "NE",
+      "Defense": {
+        "totalTackles": "5",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "4",
+        "tfl": "2",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "1"
+      },
+      "playerID": "4428930",
+      "longName": "Craig Woodson"
+    },
+    "4429022": {
+      "gameID": "20250928_CAR@NE",
+      "Receiving": {
+        "receptions": "1",
+        "recTD": "0",
+        "longRec": "18",
+        "targets": "3",
+        "recYds": "18",
+        "recAvg": "18.0"
+      },
+      "teamID": "22",
+      "snapCounts": {
+        "offSnapPct": "0.69",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "34",
+        "defSnapPct": "0.00"
+      },
+      "team": "NE",
+      "teamAbv": "NE",
+      "playerID": "4429022",
+      "longName": "Kayshon Boutte"
+    },
+    "4429110": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "5",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "15",
+        "stSnap": "13",
+        "stSnapPct": "0.46",
+        "offSnap": "0",
+        "defSnapPct": "0.31"
+      },
+      "team": "CAR",
+      "teamAbv": "CAR",
+      "Defense": {
+        "totalTackles": "2",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "0",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4429110",
+      "longName": "Lathan Ransom"
+    },
+    "4429166": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "5",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "12",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "0.24"
+      },
+      "team": "CAR",
+      "teamAbv": "CAR",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "0",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4429166",
+      "longName": "Princely Umanmielen"
+    },
+    "4431426": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "5",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "3",
+        "stSnap": "16",
+        "stSnapPct": "0.57",
+        "offSnap": "0",
+        "defSnapPct": "0.06"
+      },
+      "team": "CAR",
+      "teamAbv": "CAR",
+      "playerID": "4431426",
+      "longName": "Corey Thornton"
+    },
+    "4431452": {
+      "gameID": "20250928_CAR@NE",
+      "Rushing": {
+        "rushAvg": "3.7",
+        "rushYds": "11",
+        "carries": "3",
+        "longRush": "5",
+        "rushTD": "1"
+      },
+      "Passing": {
+        "qbr": "93.3",
+        "rtg": "155.6",
+        "sacked": "1-0",
+        "passAttempts": "17",
+        "passAvg": "11.9",
+        "passTD": "2",
+        "passYds": "203",
+        "int": "0",
+        "passCompletions": "14"
+      },
+      "scoringPlays": [
+        {
+          "score": "Drake Maye 5 Yd Rush (Andy Borregales Kick)",
+          "scorePeriod": "Q2",
+          "homeScore": "14",
+          "awayScore": "6",
+          "teamID": "22",
+          "scoreDetails": "6 plays, 80 yards, 3:02",
+          "scoreType": "TD",
+          "scoreTime": "14:54",
+          "team": "NE",
+          "playerIDs": ["4431452", "4569923"]
+        },
+        {
+          "score": "Hunter Henry 31 Yd pass from Drake Maye (Andy Borregales Kick)",
+          "scorePeriod": "Q3",
+          "homeScore": "35",
+          "awayScore": "6",
+          "teamID": "22",
+          "scoreDetails": "8 plays, 78 yards, 4:43",
+          "scoreType": "TD",
+          "scoreTime": "10:17",
+          "team": "NE",
+          "playerIDs": ["4431452", "3046439", "4569923"]
+        },
+        {
+          "score": "Mack Hollins 4 Yd pass from Drake Maye (Andy Borregales Kick)",
+          "scorePeriod": "Q4",
+          "homeScore": "42",
+          "awayScore": "6",
+          "teamID": "22",
+          "scoreDetails": "7 plays, 41 yards, 3:10",
+          "scoreType": "TD",
+          "scoreTime": "14:13",
+          "team": "NE",
+          "playerIDs": ["4431452", "2991662", "4569923"]
+        }
+      ],
+      "teamID": "22",
+      "snapCounts": {
+        "offSnapPct": "0.88",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "43",
+        "defSnapPct": "0.00"
+      },
+      "team": "NE",
+      "teamAbv": "NE",
+      "playerID": "4431452",
+      "longName": "Drake Maye"
+    },
+    "4432710": {
+      "gameID": "20250928_CAR@NE",
+      "Rushing": {
+        "rushAvg": "4.6",
+        "rushYds": "32",
+        "carries": "7",
+        "longRush": "11",
+        "rushTD": "1"
+      },
+      "Receiving": {
+        "receptions": "2",
+        "recTD": "0",
+        "longRec": "9",
+        "targets": "2",
+        "recYds": "14",
+        "recAvg": "7.0"
+      },
+      "scoringPlays": [
+        {
+          "score": "TreVeyon Henderson 5 Yd Rush (Andy Borregales Kick)",
+          "scorePeriod": "Q2",
+          "homeScore": "21",
+          "awayScore": "6",
+          "teamID": "22",
+          "scoreDetails": "8 plays, 55 yards, 4:07",
+          "scoreType": "TD",
+          "scoreTime": "5:48",
+          "team": "NE",
+          "playerIDs": ["4432710", "4569923"]
+        }
+      ],
+      "teamID": "22",
+      "snapCounts": {
+        "offSnapPct": "0.31",
+        "defSnap": "0",
+        "stSnap": "3",
+        "stSnapPct": "0.11",
+        "offSnap": "15",
+        "defSnapPct": "0.00"
+      },
+      "Kicking": {
+        "kickReturns": "1",
+        "kickReturnTD": "0",
+        "kickReturnYds": "20",
+        "kickReturnAvg": "20.0",
+        "kickReturnLong": "20"
+      },
+      "team": "NE",
+      "teamAbv": "NE",
+      "playerID": "4432710",
+      "longName": "TreVeyon Henderson"
+    },
+    "4565293": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "22",
+      "snapCounts": {
+        "offSnapPct": "0.12",
+        "defSnap": "0",
+        "stSnap": "6",
+        "stSnapPct": "0.21",
+        "offSnap": "6",
+        "defSnapPct": "0.00"
+      },
+      "team": "NE",
+      "teamAbv": "NE",
+      "playerID": "4565293",
+      "longName": "Marcus Bryant"
+    },
+    "4568263": {
+      "gameID": "20250928_CAR@NE",
+      "scoringPlays": [
+        {
+          "score": "Tommy Tremble 7 Yd pass from Bryce Young (Ryan Fitzgerald PAT Failed)",
+          "scorePeriod": "Q1",
+          "homeScore": "0",
+          "awayScore": "6",
+          "teamID": "5",
+          "scoreDetails": "7 plays, 76 yards, 4:09",
+          "scoreType": "TD",
+          "scoreTime": "10:51",
+          "team": "CAR",
+          "playerIDs": ["4685720", "4372780", "4568263"]
+        },
+        {
+          "score": "Mitchell Evans 2 Yd pass from Andy Dalton (Ryan Fitzgerald Kick)",
+          "scorePeriod": "Q4",
+          "homeScore": "42",
+          "awayScore": "13",
+          "teamID": "5",
+          "scoreDetails": "13 plays, 91 yards, 6:45",
+          "scoreType": "TD",
+          "scoreTime": "1:56",
+          "team": "CAR",
+          "playerIDs": ["14012", "4683243", "4568263"]
+        }
+      ],
+      "teamID": "5",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "6",
+        "stSnapPct": "0.21",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "Kicking": {
+        "fgLong": "0",
+        "fgMade": "0",
+        "fgAttempts": "1",
+        "xpMade": "1",
+        "fgPct": "0.0",
+        "kickingPts": "1",
+        "xpAttempts": "2",
+        "fgMissed": "1",
+        "xpMissed": "1"
+      },
+      "team": "CAR",
+      "teamAbv": "CAR",
+      "playerID": "4568263",
+      "longName": "Ryan Fitzgerald"
+    },
+    "4569173": {
+      "gameID": "20250928_CAR@NE",
+      "Rushing": {
+        "rushAvg": "4.2",
+        "rushYds": "38",
+        "carries": "9",
+        "longRush": "22",
+        "rushTD": "0"
+      },
+      "Receiving": {
+        "receptions": "1",
+        "recTD": "0",
+        "longRec": "3",
+        "targets": "1",
+        "recYds": "3",
+        "recAvg": "3.0"
+      },
+      "teamID": "22",
+      "snapCounts": {
+        "offSnapPct": "0.57",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "28",
+        "defSnapPct": "0.00"
+      },
+      "team": "NE",
+      "teamAbv": "NE",
+      "playerID": "4569173",
+      "longName": "Rhamondre Stevenson"
+    },
+    "4569372": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "5",
+      "snapCounts": {
+        "offSnapPct": "0.13",
+        "defSnap": "0",
+        "stSnap": "6",
+        "stSnapPct": "0.21",
+        "offSnap": "9",
+        "defSnapPct": "0.00"
+      },
+      "team": "CAR",
+      "teamAbv": "CAR",
+      "playerID": "4569372",
+      "longName": "Dalevon Campbell"
+    },
+    "4569923": {
+      "gameID": "20250928_CAR@NE",
+      "scoringPlays": [
+        {
+          "score": "Marcus Jones 87 Yd Punt Return (Andy Borregales Kick)",
+          "scorePeriod": "Q1",
+          "homeScore": "7",
+          "awayScore": "6",
+          "teamID": "22",
+          "scoreDetails": "6 plays, 34 yards, 3:42",
+          "scoreType": "TD",
+          "scoreTime": "5:34",
+          "team": "NE",
+          "playerIDs": ["4241720", "4569923"]
+        },
+        {
+          "score": "Drake Maye 5 Yd Rush (Andy Borregales Kick)",
+          "scorePeriod": "Q2",
+          "homeScore": "14",
+          "awayScore": "6",
+          "teamID": "22",
+          "scoreDetails": "6 plays, 80 yards, 3:02",
+          "scoreType": "TD",
+          "scoreTime": "14:54",
+          "team": "NE",
+          "playerIDs": ["4431452", "4569923"]
+        },
+        {
+          "score": "TreVeyon Henderson 5 Yd Rush (Andy Borregales Kick)",
+          "scorePeriod": "Q2",
+          "homeScore": "21",
+          "awayScore": "6",
+          "teamID": "22",
+          "scoreDetails": "8 plays, 55 yards, 4:07",
+          "scoreType": "TD",
+          "scoreTime": "5:48",
+          "team": "NE",
+          "playerIDs": ["4432710", "4569923"]
+        },
+        {
+          "score": "Antonio Gibson 1 Yd Rush (Andy Borregales Kick)",
+          "scorePeriod": "Q2",
+          "homeScore": "28",
+          "awayScore": "6",
+          "teamID": "22",
+          "scoreDetails": "4 plays, 14 yards, 2:05",
+          "scoreType": "TD",
+          "scoreTime": "1:57",
+          "team": "NE",
+          "playerIDs": ["4360294", "4569923"]
+        },
+        {
+          "score": "Hunter Henry 31 Yd pass from Drake Maye (Andy Borregales Kick)",
+          "scorePeriod": "Q3",
+          "homeScore": "35",
+          "awayScore": "6",
+          "teamID": "22",
+          "scoreDetails": "8 plays, 78 yards, 4:43",
+          "scoreType": "TD",
+          "scoreTime": "10:17",
+          "team": "NE",
+          "playerIDs": ["4431452", "3046439", "4569923"]
+        },
+        {
+          "score": "Mack Hollins 4 Yd pass from Drake Maye (Andy Borregales Kick)",
+          "scorePeriod": "Q4",
+          "homeScore": "42",
+          "awayScore": "6",
+          "teamID": "22",
+          "scoreDetails": "7 plays, 41 yards, 3:10",
+          "scoreType": "TD",
+          "scoreTime": "14:13",
+          "team": "NE",
+          "playerIDs": ["4431452", "2991662", "4569923"]
+        }
+      ],
+      "teamID": "22",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "13",
+        "stSnapPct": "0.46",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "Kicking": {
+        "fgLong": "0",
+        "fgMade": "0",
+        "fgAttempts": "0",
+        "xpMade": "6",
+        "fgPct": "0.0",
+        "kickingPts": "6",
+        "xpAttempts": "6",
+        "fgMissed": "0",
+        "xpMissed": "0"
+      },
+      "team": "NE",
+      "teamAbv": "NE",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4569923",
+      "longName": "Andy Borregales"
+    },
+    "4611993": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "22",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "20",
+        "stSnap": "1",
+        "stSnapPct": "0.04",
+        "offSnap": "0",
+        "defSnapPct": "0.29"
+      },
+      "team": "NE",
+      "teamAbv": "NE",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4611993",
+      "longName": "Joshua Farmer"
+    },
+    "4613202": {
+      "gameID": "20250928_CAR@NE",
+      "Rushing": {
+        "rushAvg": "-2.0",
+        "rushYds": "-2",
+        "carries": "1",
+        "longRush": "-2",
+        "rushTD": "0"
+      },
+      "teamID": "22",
+      "snapCounts": {
+        "offSnapPct": "0.29",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "14",
+        "defSnapPct": "0.00"
+      },
+      "team": "NE",
+      "teamAbv": "NE",
+      "playerID": "4613202",
+      "longName": "Kyle Williams"
+    },
+    "4683243": {
+      "gameID": "20250928_CAR@NE",
+      "Receiving": {
+        "receptions": "3",
+        "recTD": "1",
+        "longRec": "16",
+        "targets": "4",
+        "recYds": "23",
+        "recAvg": "7.7"
+      },
+      "scoringPlays": [
+        {
+          "score": "Mitchell Evans 2 Yd pass from Andy Dalton (Ryan Fitzgerald Kick)",
+          "scorePeriod": "Q4",
+          "homeScore": "42",
+          "awayScore": "13",
+          "teamID": "5",
+          "scoreDetails": "13 plays, 91 yards, 6:45",
+          "scoreType": "TD",
+          "scoreTime": "1:56",
+          "team": "CAR",
+          "playerIDs": ["14012", "4683243", "4568263"]
+        }
+      ],
+      "teamID": "5",
+      "snapCounts": {
+        "offSnapPct": "0.54",
+        "defSnap": "0",
+        "stSnap": "8",
+        "stSnapPct": "0.29",
+        "offSnap": "37",
+        "defSnapPct": "0.00"
+      },
+      "team": "CAR",
+      "teamAbv": "CAR",
+      "playerID": "4683243",
+      "longName": "Mitchell Evans"
+    },
+    "4683815": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "5",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "46",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "0.94"
+      },
+      "team": "CAR",
+      "teamAbv": "CAR",
+      "Defense": {
+        "totalTackles": "5",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "4",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "1"
+      },
+      "playerID": "4683815",
+      "longName": "Trevin Wallace"
+    },
+    "4685298": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "22",
+      "snapCounts": {
+        "offSnapPct": "0.88",
+        "defSnap": "0",
+        "stSnap": "6",
+        "stSnapPct": "0.21",
+        "offSnap": "43",
+        "defSnapPct": "0.00"
+      },
+      "team": "NE",
+      "teamAbv": "NE",
+      "playerID": "4685298",
+      "longName": "Will Campbell"
+    },
+    "4685350": {
+      "gameID": "20250928_CAR@NE",
+      "Rushing": {
+        "rushAvg": "4.7",
+        "rushYds": "33",
+        "carries": "7",
+        "longRush": "22",
+        "rushTD": "0"
+      },
+      "teamID": "5",
+      "snapCounts": {
+        "offSnapPct": "0.16",
+        "defSnap": "0",
+        "stSnap": "11",
+        "stSnapPct": "0.39",
+        "offSnap": "11",
+        "defSnapPct": "0.00"
+      },
+      "Kicking": {
+        "kickReturns": "2",
+        "kickReturnTD": "0",
+        "kickReturnYds": "39",
+        "kickReturnAvg": "19.5",
+        "kickReturnLong": "21"
+      },
+      "Punting": {
+        "puntReturns": "2",
+        "puntReturnYds": "6",
+        "puntReturnAvg": "3.0",
+        "puntReturnLong": "8",
+        "puntReturnTD": "0"
+      },
+      "team": "CAR",
+      "teamAbv": "CAR",
+      "playerID": "4685350",
+      "longName": "Trevor Etienne"
+    },
+    "4685472": {
+      "gameID": "20250928_CAR@NE",
+      "Receiving": {
+        "receptions": "4",
+        "recTD": "0",
+        "longRec": "22",
+        "targets": "8",
+        "recYds": "62",
+        "recAvg": "15.5"
+      },
+      "teamID": "5",
+      "snapCounts": {
+        "offSnapPct": "0.94",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "65",
+        "defSnapPct": "0.00"
+      },
+      "team": "CAR",
+      "teamAbv": "CAR",
+      "playerID": "4685472",
+      "longName": "Tetairoa McMillan"
+    },
+    "4685720": {
+      "gameID": "20250928_CAR@NE",
+      "Rushing": {
+        "rushAvg": "3.0",
+        "rushYds": "3",
+        "carries": "1",
+        "longRush": "3",
+        "rushTD": "0"
+      },
+      "Passing": {
+        "qbr": "44.6",
+        "rtg": "84.0",
+        "sacked": "1-11",
+        "passAttempts": "30",
+        "passAvg": "5.0",
+        "passTD": "1",
+        "passYds": "150",
+        "int": "0",
+        "passCompletions": "18"
+      },
+      "scoringPlays": [
+        {
+          "score": "Tommy Tremble 7 Yd pass from Bryce Young (Ryan Fitzgerald PAT Failed)",
+          "scorePeriod": "Q1",
+          "homeScore": "0",
+          "awayScore": "6",
+          "teamID": "5",
+          "scoreDetails": "7 plays, 76 yards, 4:09",
+          "scoreType": "TD",
+          "scoreTime": "10:51",
+          "team": "CAR",
+          "playerIDs": ["4685720", "4372780", "4568263"]
+        }
+      ],
+      "teamID": "5",
+      "snapCounts": {
+        "offSnapPct": "0.81",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "56",
+        "defSnapPct": "0.00"
+      },
+      "team": "CAR",
+      "teamAbv": "CAR",
+      "playerID": "4685720",
+      "longName": "Bryce Young"
+    },
+    "4686772": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "22",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "49",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "0.71"
+      },
+      "team": "NE",
+      "teamAbv": "NE",
+      "Defense": {
+        "totalTackles": "3",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "3",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4686772",
+      "longName": "Christian Gonzalez"
+    },
+    "4687513": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "5",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "9",
+        "stSnap": "4",
+        "stSnapPct": "0.14",
+        "offSnap": "0",
+        "defSnapPct": "0.18"
+      },
+      "team": "CAR",
+      "teamAbv": "CAR",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "0",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4687513",
+      "longName": "Cam Jackson"
+    },
+    "4695254": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "22",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "10",
+        "stSnapPct": "0.36",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "NE",
+      "teamAbv": "NE",
+      "playerID": "4695254",
+      "longName": "Julian Ashby"
+    },
+    "4697636": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "5",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "24",
+        "stSnap": "8",
+        "stSnapPct": "0.29",
+        "offSnap": "0",
+        "defSnapPct": "0.49"
+      },
+      "team": "CAR",
+      "teamAbv": "CAR",
+      "Defense": {
+        "totalTackles": "2",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "2",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4697636",
+      "longName": "Chau Smith-Wade"
+    },
+    "4710661": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "5",
+      "snapCounts": {
+        "offSnapPct": "0.25",
+        "defSnap": "0",
+        "stSnap": "1",
+        "stSnapPct": "0.04",
+        "offSnap": "17",
+        "defSnapPct": "0.00"
+      },
+      "team": "CAR",
+      "teamAbv": "CAR",
+      "playerID": "4710661",
+      "longName": "Chandler Zavala"
+    },
+    "4714157": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "5",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "25",
+        "stSnapPct": "0.89",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "CAR",
+      "teamAbv": "CAR",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "0",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4714157",
+      "longName": "Thomas Incoom"
+    },
+    "4833355": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "5",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "44",
+        "stSnap": "6",
+        "stSnapPct": "0.21",
+        "offSnap": "0",
+        "defSnapPct": "0.90"
+      },
+      "team": "CAR",
+      "teamAbv": "CAR",
+      "Defense": {
+        "totalTackles": "3",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "2",
+        "tfl": "1",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4833355",
+      "longName": "Nic Scourton"
+    },
+    "4880613": {
+      "gameID": "20250928_CAR@NE",
+      "teamID": "5",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "19",
+        "stSnapPct": "0.68",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "CAR",
+      "teamAbv": "CAR",
+      "playerID": "4880613",
+      "longName": "Bam Martin-Scott"
+    }
+  },
+  "scoringPlays": [
+    {
+      "score": "Tommy Tremble 7 Yd pass from Bryce Young (Ryan Fitzgerald PAT Failed)",
+      "scorePeriod": "Q1",
+      "homeScore": "0",
+      "awayScore": "6",
+      "teamID": "5",
+      "scoreDetails": "7 plays, 76 yards, 4:09",
+      "scoreType": "TD",
+      "scoreTime": "10:51",
+      "team": "CAR",
+      "playerIDs": ["4685720", "4372780", "4568263"]
+    },
+    {
+      "score": "Marcus Jones 87 Yd Punt Return (Andy Borregales Kick)",
+      "scorePeriod": "Q1",
+      "homeScore": "7",
+      "awayScore": "6",
+      "teamID": "22",
+      "scoreDetails": "6 plays, 34 yards, 3:42",
+      "scoreType": "TD",
+      "scoreTime": "5:34",
+      "team": "NE",
+      "playerIDs": ["4241720", "4569923"]
+    },
+    {
+      "score": "Drake Maye 5 Yd Rush (Andy Borregales Kick)",
+      "scorePeriod": "Q2",
+      "homeScore": "14",
+      "awayScore": "6",
+      "teamID": "22",
+      "scoreDetails": "6 plays, 80 yards, 3:02",
+      "scoreType": "TD",
+      "scoreTime": "14:54",
+      "team": "NE",
+      "playerIDs": ["4431452", "4569923"]
+    },
+    {
+      "score": "TreVeyon Henderson 5 Yd Rush (Andy Borregales Kick)",
+      "scorePeriod": "Q2",
+      "homeScore": "21",
+      "awayScore": "6",
+      "teamID": "22",
+      "scoreDetails": "8 plays, 55 yards, 4:07",
+      "scoreType": "TD",
+      "scoreTime": "5:48",
+      "team": "NE",
+      "playerIDs": ["4432710", "4569923"]
+    },
+    {
+      "score": "Antonio Gibson 1 Yd Rush (Andy Borregales Kick)",
+      "scorePeriod": "Q2",
+      "homeScore": "28",
+      "awayScore": "6",
+      "teamID": "22",
+      "scoreDetails": "4 plays, 14 yards, 2:05",
+      "scoreType": "TD",
+      "scoreTime": "1:57",
+      "team": "NE",
+      "playerIDs": ["4360294", "4569923"]
+    },
+    {
+      "score": "Hunter Henry 31 Yd pass from Drake Maye (Andy Borregales Kick)",
+      "scorePeriod": "Q3",
+      "homeScore": "35",
+      "awayScore": "6",
+      "teamID": "22",
+      "scoreDetails": "8 plays, 78 yards, 4:43",
+      "scoreType": "TD",
+      "scoreTime": "10:17",
+      "team": "NE",
+      "playerIDs": ["4431452", "3046439", "4569923"]
+    },
+    {
+      "score": "Mack Hollins 4 Yd pass from Drake Maye (Andy Borregales Kick)",
+      "scorePeriod": "Q4",
+      "homeScore": "42",
+      "awayScore": "6",
+      "teamID": "22",
+      "scoreDetails": "7 plays, 41 yards, 3:10",
+      "scoreType": "TD",
+      "scoreTime": "14:13",
+      "team": "NE",
+      "playerIDs": ["4431452", "2991662", "4569923"]
+    },
+    {
+      "score": "Mitchell Evans 2 Yd pass from Andy Dalton (Ryan Fitzgerald Kick)",
+      "scorePeriod": "Q4",
+      "homeScore": "42",
+      "awayScore": "13",
+      "teamID": "5",
+      "scoreDetails": "13 plays, 91 yards, 6:45",
+      "scoreType": "TD",
+      "scoreTime": "1:56",
+      "team": "CAR",
+      "playerIDs": ["14012", "4683243", "4568263"]
+    }
+  ],
+  "seasonType": "Regular Season",
+  "teamIDAway": "5",
+  "teamIDHome": "22",
+  "teamStats": {
+    "away": {
+      "totalYards": "326",
+      "rushingAttempts": "28",
+      "rushingYards": "129",
+      "fumblesLost": "0",
+      "penalties": "5-29",
+      "totalPlays": "65",
+      "possession": "35:14",
+      "safeties": "0",
+      "passCompletionsAndAttempts": "23-36",
+      "passingFirstDowns": "11",
+      "interceptionsThrown": "0",
+      "sacksAndYardsLost": "1-11",
+      "thirdDownEfficiency": "5-14",
+      "blockedPunt": "0",
+      "yardsPerPlay": "5.0",
+      "redZoneScoredAndAttempted": "2-2",
+      "teamID": "5",
+      "defensiveInterceptions": "0",
+      "defensiveOrSpecialTeamsTds": "0",
+      "totalDrives": "11",
+      "rushingFirstDowns": "8",
+      "blockedFG": "0",
+      "rushTD": "0",
+      "twoPointConversions": "0",
+      "firstDowns": "21",
+      "passTD": "2",
+      "team": "CAR",
+      "blockedXP": "0",
+      "teamAbv": "CAR",
+      "firstDownsFromPenalties": "2",
+      "fourthDownEfficiency": "1-3",
+      "defensiveTwoPointConversionReturns": "0",
+      "passingYards": "197",
+      "yardsPerRush": "4.6",
+      "snapCounts": {
+        "totalSpecialTeams": "28",
+        "totalOffensive": "69",
+        "totalDefensive": "49"
+      },
+      "turnovers": "0",
+      "yardsPerPass": "5.3"
+    },
+    "home": {
+      "totalYards": "307",
+      "rushingAttempts": "29",
+      "rushingYards": "104",
+      "fumblesLost": "0",
+      "penalties": "7-54",
+      "totalPlays": "48",
+      "possession": "24:46",
+      "safeties": "0",
+      "passCompletionsAndAttempts": "14-18",
+      "passingFirstDowns": "8",
+      "interceptionsThrown": "0",
+      "sacksAndYardsLost": "1-0",
+      "thirdDownEfficiency": "3-9",
+      "blockedPunt": "0",
+      "yardsPerPlay": "6.4",
+      "redZoneScoredAndAttempted": "4-4",
+      "teamID": "22",
+      "defensiveInterceptions": "0",
+      "defensiveOrSpecialTeamsTds": "2",
+      "totalDrives": "10",
+      "rushingFirstDowns": "7",
+      "blockedFG": "0",
+      "rushTD": "3",
+      "twoPointConversions": "0",
+      "firstDowns": "16",
+      "passTD": "2",
+      "team": "NE",
+      "blockedXP": "0",
+      "teamAbv": "NE",
+      "firstDownsFromPenalties": "1",
+      "fourthDownEfficiency": "1-1",
+      "defensiveTwoPointConversionReturns": "0",
+      "passingYards": "203",
+      "yardsPerRush": "3.6",
+      "snapCounts": {
+        "totalSpecialTeams": "28",
+        "totalOffensive": "49",
+        "totalDefensive": "69"
+      },
+      "turnovers": "0",
+      "yardsPerPass": "10.7"
+    }
+  },
+  "gameID": "20250928_CAR@NE",
+  "gameStatusCode": "2"
+}

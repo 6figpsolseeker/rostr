@@ -127,23 +127,32 @@ scoring zero.
 
 ## Scoring plays: the only source for three of our rules
 
-There are exactly **three** `scoreType` values across 96 games spanning the whole
-2025 season: `TD`, `FG`, `SF`. See [Recheck](#recheck).
+`TD`, `FG` and `SF` are the three that carry meaning for us, and they were the
+only three seen across the 96 games sampled in [Recheck](#recheck).
+
+> **Corrected 2026-08-17.** This section said "there are exactly **three**
+> `scoreType` values" and that was a claim about a sample, not about the feed. A
+> sweep of the **full** 2025 season also found `2PTC` and a `null`. Nothing in
+> the adapter enumerates the set — every use is an equality test against one of
+> the three — so an unfamiliar value is inert rather than a crash. Do not write a
+> `switch` over this field.
 
 Extra points, two-point conversions, and blocked kicks are **not score types**.
 They appear in the trailing parenthetical of a touchdown's `score` text.
 
 Every observed form:
 
-| Text                                                                   | Meaning                 |
-| ---------------------------------------------------------------------- | ----------------------- |
-| `(Brandon Aubrey Kick)`                                                | Extra point made        |
-| `(Harrison Butker PAT Failed)`                                         | Extra point missed      |
-| `(Joshua Karty PAT blocked)`                                           | Extra point **blocked** |
-| `(Rhamondre Stevenson Run for Two-Point Conversion)`                   | Two-point **good**      |
-| `(Tua Tagovailoa Pass to Julian Hill for Two-Point Conversion)`        | Two-point **good**      |
-| `(Two-Point Pass Conversion Failed)`                                   | Two-point **failed**    |
-| `Blocked Kick Recovered by Jordan Davis (PHI) … 61 Yd Touchown Return` | Blocked kick returned   |
+| Text                                                                   | Meaning                  |
+| ---------------------------------------------------------------------- | ------------------------ |
+| `(Brandon Aubrey Kick)`                                                | Extra point made         |
+| `(Harrison Butker PAT Failed)`                                         | Extra point missed       |
+| `(Joshua Karty PAT blocked)`                                           | Extra point **blocked**  |
+| `(Rhamondre Stevenson Run for Two-Point Conversion)`                   | Two-point **good**       |
+| `(Tua Tagovailoa Pass to Julian Hill for Two-Point Conversion)`        | Two-point **good**       |
+| `(Two-Point Pass Conversion Failed)`                                   | Two-point **failed**     |
+| `Blocked Kick Recovered by Jordan Davis (PHI) … 61 Yd Touchown Return` | Blocked kick returned    |
+| `Marshawn Kneeland Blocked Punt Recovery in End Zone`                  | Blocked punt, recovered  |
+| `Defensive Holding in Endzone for Safety`                              | Safety, `scoreType` `SF` |
 
 Three consequences:
 
@@ -158,6 +167,116 @@ would award two points for a conversion that did not happen.
 
 **Tank01's text contains typos.** `"61 Yd Touchown Return"` is verbatim. Match
 stable tokens, never whole phrases.
+
+---
+
+## `teamStats` — the second team-level block
+
+Established 2026-08-17, after a full-season comparison against Sleeper turned up
+four defects in the D/ST and player translation. **This block was read nowhere
+until then**, and three of the four fixes come out of it. Same `home` / `away`
+shape as `DST`, same string-typed values (`blockedFG: "1"`, not `1`).
+
+| Field                        | What it is                                          |
+| ---------------------------- | --------------------------------------------------- |
+| `blockedFG`                  | Field goals **this team blocked**                   |
+| `blockedPunt`                | Punts this team blocked                             |
+| `blockedXP`                  | Extra points this team blocked                      |
+| `defensiveOrSpecialTeamsTds` | Def + ST touchdowns — **double-counted, see below** |
+| `safeties`                   | Safeties this team scored                           |
+
+### Blocked kicks are credited to the blocking team
+
+The fact that had to be nailed down before these could be used at all, because
+getting it backwards is a four-point swing between two rosters.
+
+**Proven on `20250907_ARI@NO` (2025 week 1).** Arizona's kicker had a field goal
+blocked. **New Orleans**' `teamStats.blockedFG` reads `"1"`; Arizona's reads
+`"0"`. Captured as `packages/stats/src/tank01/__fixtures__/box-score-blocked-fg.json`.
+
+That game is also why this matters: **no scoring play in it mentions a block at
+all**, so the play-text path — the only source before this — scored New Orleans
+zero. **27 of the 44 blocked kicks in the 2025 season never led to a score**, 54
+points invisible.
+
+**The counters include a block that scored.** Proven on `20251103_ARI@DAL`, where
+Marshawn Kneeland recovered a blocked punt in the end zone for a touchdown and
+Dallas reads `blockedPunt: "1"`. So the numeric counters and the text path are
+combined by taking the **larger**, never by adding — adding pays twice.
+
+### `defensiveOrSpecialTeamsTds` double-counts, and is a check rather than a source
+
+`20250928_CAR@NE` has **exactly one** defensive or special-teams touchdown in it,
+Marcus Jones's 87-yard punt return. New England's `defensiveOrSpecialTeamsTds`
+reads **`"2"`**: `DST.defTD` (1) plus the special-teams score (1).
+
+Which is the whole of the `def_td` defect. **`DST.defTD` is the sum of the
+players' own `Defense.defTD`** — Marcus Jones is the only player in that game
+carrying one, and it is `"1"` — and **ESPN files a punt or kickoff return by a
+_defensive_ player there too.** So a unit whose returner happened to be a
+defender was paid twice for one touchdown. Six times in 2025, 36 points.
+
+Subtracting gives Tank01's own independent count of the special-teams half, which
+is a usable cross-check on our pattern matching and is wired up as one. It is what
+would have caught `"Marshawn Kneeland Blocked Punt Recovery in End Zone"` sitting
+unrecognised for a season, without a sweep. Refs #157, #158.
+
+### `DST.safeties` — what was actually observed
+
+A full-season sweep reported `DST.safeties` as `"0"` for every game including two
+with a genuine safety, and this document was going to record that. **It does not
+reproduce.** `20250921_ARI@SF` — the sweep's own example, "Defensive Holding in
+Endzone for Safety" — returns `DST.away.safeties: "1"` for Arizona today, and the
+adapter has always scored that correctly.
+
+What _is_ established from that game:
+
+- `scoreType` is **`"SF"`**, and `team` is the **defense that scored it** —
+  Arizona's away score moves 13 → 15 on the play.
+- `teamStats.safeties` agrees with `DST.safeties` (`"1"` / `"1"`).
+
+So a safety has two independent readings, and the adapter takes the larger of the
+two and **warns on any disagreement** rather than picking a winner between a
+measurement it cannot reproduce and one it can. About a dozen safeties a season,
+2 points each.
+
+### Individual `Defense.*` fields are not fantasy stats
+
+`Defense.defTD`, `Defense.sacks`, `Defense.defensiveInterceptions` and
+`Defense.fumblesRecovered` were mapped to `def_td`, `def_sack`, `def_int` and
+`def_fum_rec` **for every player**. There is no IDP slot in this product, so the
+only roster spot those keys reach is the D/ST — which is scored from the `DST`
+block. A per-player row keyed the same way is a duplicate, not an unused row.
+
+And Tank01 files things under `Defense` that are not defensive plays. A player who
+fumbles and falls on his own ball carries `Defense.fumblesRecovered: "1"`. From
+`20251103_ARI@DAL`, verbatim:
+
+```
+Jacoby Brissett  (QB, ARI)  fumbles "1"  fumblesRecovered "1"  fumblesLost "0"
+George Pickens   (WR, DAL)  fumbles "2"  fumblesRecovered "1"  fumblesLost "0"
+Javonte Williams (RB, DAL)  fumbles "1"  fumblesRecovered "1"  fumblesLost "1"
+```
+
+All three were paid 2 points each. **185 player-weeks of the 2025 season, 384
+points.** `Defense.defTD` did the same to Tyler Lockett, a wide receiver, for
+"Tyler Lockett 0 Yd Fumble Recovery" in week 5.
+
+**`Defense.fumblesLost` stays mapped.** That one really is the offensive player's
+own stat.
+
+### `"Recovery"` is not a synonym for `"Return"`
+
+The trap in repairing the blocked-kick wordings above. **Every** fumble-return
+touchdown in the 2025 season is worded `"Fumble Recovery"`, not `"Fumble
+Return"` — so adding a bare `recover` alternative to the special-teams pattern
+turns **14 defensive touchdowns** into return touchdowns as well, paying each of
+them under two rules in two roster spots. The pattern is anchored on `blocked`
+instead, and there is a test pinning the negative case.
+
+Still unrecognised on purpose: `"George Holani Recovered Kickoff in End Zone for a
+Touchdown"` (#158). Not a blocked kick, scorer is a running back, and whether ESPN
+pays it as a return touchdown or an offensive fumble recovery is not established.
 
 ---
 
@@ -369,9 +488,13 @@ obtainable:
 - ✅ Extra points — `Kicking.xpMade`
 - ✅ Field goals by distance — parsed from scoring plays
 - ✅ Two-point conversions — parsed from scoring plays
-- ✅ Blocked kicks — parsed from scoring plays
-- ✅ Defensive points allowed, sacks, interceptions, fumble recoveries,
-  safeties, defensive touchdowns — the `DST` block
+- ✅ Blocked kicks — **`teamStats`**, floored by the scoring text
+- ✅ Defensive points allowed, yards allowed, sacks, interceptions, fumble
+  recoveries — the `DST` block
+- ✅ Safeties — `DST.safeties`, floored by the `SF` scoring plays
+- ✅ Defensive and special teams touchdowns — `DST.defTD` plus the special teams
+  scores it does not already contain. **Not a single field**; see
+  [`teamStats`](#teamstats--the-second-team-level-block) for why.
 
 Outstanding questions, none blocking:
 

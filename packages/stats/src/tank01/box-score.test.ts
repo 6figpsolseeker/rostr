@@ -4,6 +4,10 @@ import type { StatLine } from "@rostr/core";
 import { translateBoxScore } from "./box-score.js";
 import rawBoxScore from "./__fixtures__/box-score.json" with { type: "json" };
 import rawReturnGame from "./__fixtures__/box-score-return-td.json" with { type: "json" };
+import rawBlockedFgGame from "./__fixtures__/box-score-blocked-fg.json" with { type: "json" };
+import rawSafetyGame from "./__fixtures__/box-score-safety.json" with { type: "json" };
+import rawBlockedPuntTdGame from "./__fixtures__/box-score-blocked-punt-td.json" with { type: "json" };
+import rawOverlapGame from "./__fixtures__/box-score-def-st-overlap.json" with { type: "json" };
 
 /**
  * Tests run against a **real captured box score** — Cowboys at Eagles, the 2025
@@ -612,5 +616,359 @@ describe("two-point conversions", () => {
     );
 
     expect(translated.warnings.join(" ")).toMatch(/reports 2 two-point conversion/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Four defects found by scoring the whole 2025 season against Sleeper and then
+// checking every disagreement against the play text and the box score itself.
+// Sleeper found them; the evidence below is what decided them. Each fixture is a
+// real captured `getNFLBoxScore` response.
+// ---------------------------------------------------------------------------
+
+const blockedFgGame = translateBoxScore(rawBlockedFgGame);
+const safetyGame = translateBoxScore(rawSafetyGame);
+const blockedPuntTdGame = translateBoxScore(rawBlockedPuntTdGame);
+const overlapGame = translateBoxScore(rawOverlapGame);
+
+const unitOf = (
+  translated: ReturnType<typeof translateBoxScore>,
+  teamAbv: string,
+): Map<string, number> =>
+  new Map((translated.teamDefense.get(teamAbv) ?? []).map((l) => [l.statKey, l.value]));
+
+const playerOf = (
+  translated: ReturnType<typeof translateBoxScore>,
+  playerID: string,
+): Map<string, number> =>
+  new Map((translated.players.get(playerID) ?? []).map((l) => [l.statKey, l.value]));
+
+const defenceBlock = (
+  raw: { playerStats: Record<string, unknown> },
+  playerID: string,
+): Record<string, string> =>
+  ((raw.playerStats[playerID] as { Defense?: Record<string, string> } | undefined)?.Defense ??
+    {}) as Record<string, string>;
+
+/**
+ * A quarterback falling on his own fumble is not a defensive play.
+ *
+ * `TANK01_STAT_MAP` mapped `Defense.fumblesRecovered` for **every** player, and
+ * Tank01 files a player recovering his own fumble there. 185 player-weeks of the
+ * 2025 season, 384 points, paid to somebody's quarterback, running back or
+ * receiver.
+ *
+ * The whole class went rather than the one field: `NFL_SLOT_TYPES` has no IDP
+ * slot, so no per-player defensive stat can reach a roster spot except by being
+ * mistaken for the D/ST's.
+ */
+describe("per-player defensive stats are not scored", () => {
+  const BRISSETT = "2578570"; // QB, ARI
+  const PICKENS = "4426354"; // WR, DAL
+  const JAVONTE = "4361579"; // RB, DAL
+  const MARCUS_JONES = "4241720"; // CB, NE
+
+  it("does not pay a quarterback for recovering his own fumble", () => {
+    // Verbatim from the fixture: he fumbled once and recovered one, and lost
+    // none — so the recovery is his own ball.
+    expect(defenceBlock(rawBlockedPuntTdGame, BRISSETT)["fumbles"]).toBe("1");
+    expect(defenceBlock(rawBlockedPuntTdGame, BRISSETT)["fumblesRecovered"]).toBe("1");
+    expect(defenceBlock(rawBlockedPuntTdGame, BRISSETT)["fumblesLost"]).toBe("0");
+
+    expect(playerOf(blockedPuntTdGame, BRISSETT).get("def_fum_rec")).toBeUndefined();
+  });
+
+  it("does not pay a receiver or a running back for the same thing", () => {
+    expect(defenceBlock(rawBlockedPuntTdGame, PICKENS)["fumblesRecovered"]).toBe("1");
+    expect(defenceBlock(rawBlockedPuntTdGame, JAVONTE)["fumblesRecovered"]).toBe("1");
+
+    expect(playerOf(blockedPuntTdGame, PICKENS).get("def_fum_rec")).toBeUndefined();
+    expect(playerOf(blockedPuntTdGame, JAVONTE).get("def_fum_rec")).toBeUndefined();
+  });
+
+  it("still charges the fumble that was actually lost", () => {
+    // `Defense.fumblesLost` is the one field under `Defense` that belongs to the
+    // offensive player, and it stays mapped. Dropping the whole category would
+    // have been the mirror-image error, and this is what stops it.
+    expect(playerOf(blockedPuntTdGame, JAVONTE).get("fum_lost")).toBe(1);
+  });
+
+  it("does not pay an individual defender for a touchdown", () => {
+    // Marcus Jones carries `Defense.defTD: "1"` for his punt return, and the old
+    // map turned that into a 6-point `def_td` on his own row — the same thing
+    // that paid Tyler Lockett, a wide receiver, 6 points for "Tyler Lockett 0 Yd
+    // Fumble Recovery" in week 5.
+    expect(defenceBlock(rawOverlapGame, MARCUS_JONES)["defTD"]).toBe("1");
+
+    expect(playerOf(overlapGame, MARCUS_JONES).get("def_td")).toBeUndefined();
+  });
+
+  it("emits no unit-only stat key on any player row, in any real game", () => {
+    // The sweep, so a re-introduced mapping fails here rather than in a payout.
+    const unitOnly = ["def_td", "def_sack", "def_int", "def_fum_rec", "def_safety"];
+    const games = [box, returnGame, blockedFgGame, safetyGame, blockedPuntTdGame, overlapGame];
+
+    for (const translated of games) {
+      for (const [playerID, lines] of translated.players) {
+        for (const line of lines) {
+          expect(unitOnly, `${playerID} produced ${line.statKey}`).not.toContain(line.statKey);
+        }
+      }
+    }
+  });
+});
+
+/**
+ * Blocked kicks, from the numbers rather than from the prose.
+ *
+ * The text path can only ever see a block that led to a score. **27 of the 44
+ * blocked kicks in 2025 did not**, which is 54 points nobody was paid.
+ */
+describe("blocked kicks come from teamStats", () => {
+  it("credits a block no scoring play mentions", () => {
+    // 2025 week 1, `20250907_ARI@NO`. New Orleans blocked an Arizona field goal,
+    // it went nowhere, and the scoring summary is silent about it.
+    expect(rawBlockedFgGame.scoringPlays.filter((p) => /block/i.test(p.score))).toEqual([]);
+
+    expect(unitOf(blockedFgGame, "NO").get("def_blk_kick")).toBe(1);
+  });
+
+  it("credits the team that made the block, not the team that got blocked", () => {
+    // The fact that had to be established before these fields could be used at
+    // all — the mirror of the trap `blockingTeamOf` exists for. Arizona's kick
+    // was blocked; Arizona's own counter reads 0 and New Orleans' reads 1.
+    expect(rawBlockedFgGame.teamStats.home.teamAbv).toBe("NO");
+    expect(rawBlockedFgGame.teamStats.home.blockedFG).toBe("1");
+    expect(rawBlockedFgGame.teamStats.away.blockedFG).toBe("0");
+
+    expect(unitOf(blockedFgGame, "ARI").get("def_blk_kick")).toBeUndefined();
+  });
+
+  it("counts a block that also scored exactly once", () => {
+    // The reason the two sources are combined with `max` and not `+`. Marshawn
+    // Kneeland recovered a blocked punt in the end zone for a touchdown, so the
+    // numeric counter and the scoring text both see it; adding them would pay
+    // Dallas twice for one block.
+    expect(rawBlockedPuntTdGame.teamStats.home.blockedPunt).toBe("1");
+
+    expect(unitOf(blockedPuntTdGame, "DAL").get("def_blk_kick")).toBe(1);
+  });
+
+  it("falls back to the scoring text when teamStats is absent, and says nothing", () => {
+    const translated = translateBoxScore({
+      gameID: "g",
+      playerStats: {},
+      DST: {
+        home: { teamAbv: "PHI", ptsAllowed: "20" },
+        away: { teamAbv: "DAL", ptsAllowed: "24" },
+      },
+      scoringPlays: [
+        { score: "Blake Corum 1 Yd Rush (Joshua Karty PAT blocked)", team: "DAL" },
+      ],
+    });
+
+    expect(unitOf(translated, "PHI").get("def_blk_kick")).toBe(1);
+    expect(translated.warnings.join(" ")).not.toMatch(/blocked kick/);
+  });
+
+  it("keeps the larger count and warns when the text sees a block the numbers do not", () => {
+    // The only direction worth reporting. The reverse is the ordinary case, 27
+    // times a season, and warning about it would drown the signal.
+    const translated = translateBoxScore({
+      gameID: "g",
+      playerStats: {},
+      DST: {
+        home: { teamAbv: "PHI", ptsAllowed: "20" },
+        away: { teamAbv: "DAL", ptsAllowed: "24" },
+      },
+      teamStats: {
+        home: { teamAbv: "PHI", blockedFG: "0", blockedPunt: "0", blockedXP: "0" },
+        away: { teamAbv: "DAL", blockedFG: "0", blockedPunt: "0", blockedXP: "0" },
+      },
+      scoringPlays: [
+        { score: "Blake Corum 1 Yd Rush (Joshua Karty PAT blocked)", team: "DAL" },
+      ],
+    });
+
+    expect(unitOf(translated, "PHI").get("def_blk_kick")).toBe(1);
+    expect(translated.warnings.join(" ")).toMatch(/PHI: teamStats reports 0 blocked kick/);
+  });
+});
+
+/**
+ * One touchdown pays the unit once.
+ *
+ * Both halves below are load-bearing and pull in opposite directions: removing
+ * the special-teams term outright would have cost more points than the
+ * double-count it fixes.
+ */
+describe("the D/ST is paid once per defensive or special teams touchdown", () => {
+  it("does not pay twice when the returner is a defensive player", () => {
+    // 2025 week 4, `20250928_CAR@NE`. There is exactly one defensive or special
+    // teams touchdown in the whole game — Marcus Jones's 87-yard punt return —
+    // and New England scored 2 for it, because Jones is a cornerback and ESPN
+    // files his return under `defensiveTouchdowns` as well.
+    expect(rawOverlapGame.DST.home.defTD).toBe("1");
+    expect(rawOverlapGame.scoringPlays.filter((p) => /Return/i.test(p.score)).length).toBe(1);
+
+    expect(unitOf(overlapGame, "NE").get("def_td")).toBe(1);
+    expect(unitOf(overlapGame, "CAR").get("def_td")).toBeUndefined();
+  });
+
+  it("still pays the returner his own six on that same play", () => {
+    // The pair that is *not* a double-count: different roster spots, usually
+    // different managers. Losing this half would be the larger bug.
+    expect(playerOf(overlapGame, "4241720").get("ret_td")).toBe(1);
+  });
+
+  it("still pays the unit when the returner is not a defensive player", () => {
+    // `20251218_LAR@SEA`: Rashid Shaheed is a receiver, so Seattle's `DST.defTD`
+    // reads "0" and the scoring text is the only evidence the unit scored at all.
+    expect(rawReturnGame.DST.home.defTD).toBe("0");
+
+    expect(unitOf(returnGame, "SEA").get("def_td")).toBe(1);
+  });
+
+  it("pays a blocked punt recovered in the end zone", () => {
+    // `20251103_ARI@DAL`, verbatim: "Marshawn Kneeland Blocked Punt Recovery in
+    // End Zone". No "return" anywhere in it, so the old pattern read nothing —
+    // and Dallas's `DST.defTD` is "0", so no other path made it up. Refs #158.
+    expect(rawBlockedPuntTdGame.DST.home.defTD).toBe("0");
+
+    expect(unitOf(blockedPuntTdGame, "DAL").get("def_td")).toBe(1);
+    expect(unitOf(blockedPuntTdGame, "ARI").get("def_td")).toBeUndefined();
+  });
+
+  /**
+   * The negative case, and the reason the new pattern is anchored on "blocked".
+   *
+   * Every fumble-return touchdown in the 2025 season is worded "Fumble
+   * Recovery", not "Fumble Return". A bare `recover` alternative in the
+   * special-teams pattern therefore turns **14 defensive touchdowns** into a
+   * `ret_td` on a player *and* a second `def_td` on the unit — one play paid
+   * three times across two roster spots.
+   */
+  it("does not read a fumble recovery touchdown as a special teams score", () => {
+    const translated = translateBoxScore({
+      gameID: "g",
+      playerStats: { p: { playerID: "p", longName: "Zack Baun", team: "PHI" } },
+      DST: {
+        home: { teamAbv: "PHI", ptsAllowed: "20", defTD: "1" },
+        away: { teamAbv: "DAL", ptsAllowed: "24" },
+      },
+      scoringPlays: [
+        {
+          score: "Zack Baun 12 Yd Fumble Recovery (Jake Elliott Kick)",
+          scoreType: "TD",
+          team: "PHI",
+          playerIDs: ["p"],
+        },
+      ],
+    });
+
+    // One touchdown, one credit — the one `DST.defTD` already reports.
+    expect(unitOf(translated, "PHI").get("def_td")).toBe(1);
+    expect(playerOf(translated, "p").get("ret_td")).toBeUndefined();
+  });
+
+  it("warns when Tank01's own count disagrees with the plays we recognised", () => {
+    // `defensiveOrSpecialTeamsTds` minus `DST.defTD` is Tank01's independent
+    // count of the special-teams half. This is the check that would have found
+    // the Kneeland wording without a season-long sweep. Refs #157, #158.
+    const translated = translateBoxScore({
+      gameID: "g",
+      playerStats: {},
+      DST: {
+        home: { teamAbv: "PHI", ptsAllowed: "20", defTD: "0" },
+        away: { teamAbv: "DAL", ptsAllowed: "24" },
+      },
+      teamStats: {
+        home: { teamAbv: "PHI", defensiveOrSpecialTeamsTds: "1" },
+        away: { teamAbv: "DAL", defensiveOrSpecialTeamsTds: "0" },
+      },
+      scoringPlays: [],
+    });
+
+    expect(translated.warnings.join(" ")).toMatch(
+      /PHI: teamStats implies 1 special teams touchdown/,
+    );
+  });
+});
+
+/**
+ * Safeties.
+ *
+ * A safety always scores, so it always reaches `scoringPlays` — which makes the
+ * play list an independent second reading of a category worth 2 points and
+ * reported about a dozen times a season.
+ */
+describe("safeties", () => {
+  it("reads a safety, and does not count it twice", () => {
+    // 2025 week 3, `20250921_ARI@SF`. The away score moves 13 -> 15 on
+    // "Defensive Holding in Endzone for Safety" with `team: "ARI"`, which is what
+    // proves `play.team` on an `SF` play names the defense that scored it rather
+    // than the offense that conceded it.
+    const safety = rawSafetyGame.scoringPlays.find((p) => p.scoreType === "SF");
+    expect(safety?.team).toBe("ARI");
+    expect(safety?.score).toBe("Defensive Holding in Endzone for Safety");
+    expect(safety?.awayScore).toBe("15");
+
+    expect(unitOf(safetyGame, "ARI").get("def_safety")).toBe(1);
+    expect(unitOf(safetyGame, "SF").get("def_safety")).toBeUndefined();
+  });
+
+  it("agrees with the DST block on that game, and says nothing", () => {
+    // Recorded because a full-season sweep reported `DST.safeties` as "0" for
+    // this exact game. It is "1". The two sources agree here, so neither is
+    // discarded and no warning is raised. See docs/TANK01.md.
+    expect(rawSafetyGame.DST.away.safeties).toBe("1");
+
+    expect(safetyGame.warnings.join(" ")).not.toMatch(/safety/);
+  });
+
+  it("credits a safety the DST block does not report, and warns", () => {
+    const translated = translateBoxScore({
+      gameID: "g",
+      playerStats: {},
+      DST: {
+        home: { teamAbv: "PHI", ptsAllowed: "20", safeties: "0" },
+        away: { teamAbv: "DAL", ptsAllowed: "24", safeties: "0" },
+      },
+      scoringPlays: [
+        { score: "Defensive Holding in Endzone for Safety", scoreType: "SF", team: "PHI" },
+      ],
+    });
+
+    expect(unitOf(translated, "PHI").get("def_safety")).toBe(1);
+    expect(translated.warnings.join(" ")).toMatch(/PHI: DST.safeties is 0 but 1 safety/);
+  });
+});
+
+describe("the newly captured games reconcile", () => {
+  it.each([
+    ["20250907_ARI@NO", () => blockedFgGame],
+    ["20250921_ARI@SF", () => safetyGame],
+    ["20251103_ARI@DAL", () => blockedPuntTdGame],
+    ["20250928_CAR@NE", () => overlapGame],
+  ])("%s reads cleanly", (gameRef, get) => {
+    const translated = get();
+
+    expect(translated.gameRef).toBe(gameRef);
+    expect(translated.fatal).toEqual([]);
+    // Zero warnings is the claim worth making: every cross-check added here
+    // agrees with the provider on four independently captured responses.
+    expect(translated.warnings).toEqual([]);
+    expect(translated.players.size).toBeGreaterThan(50);
+  });
+
+  it("scores every player and every unit in them without throwing", () => {
+    for (const translated of [blockedFgGame, safetyGame, blockedPuntTdGame, overlapGame]) {
+      for (const lines of translated.players.values()) {
+        expect(() => scorePlayer(lines, RULES)).not.toThrow();
+      }
+      for (const lines of translated.teamDefense.values()) {
+        expect(() => scorePlayer(lines, RULES)).not.toThrow();
+      }
+    }
   });
 });

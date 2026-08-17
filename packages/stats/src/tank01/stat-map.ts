@@ -31,14 +31,10 @@ export const TANK01_STAT_MAP: Readonly<Record<string, string>> = {
   // Fumbles live under Defense even for offensive players. Counter-intuitive,
   // and verified: there is no `Rushing.fumblesLost` or `Receiving.fumblesLost`,
   // which is what an earlier version of this file wrongly assumed.
+  //
+  // **This is the only `Defense.*` field mapped, and the exclusion of the rest
+  // is deliberate — see the block below.**
   "Defense.fumblesLost": "fum_lost",
-
-  // Individual defensive stats. Note these are for *players*, not the team
-  // defense unit — fantasy DST scoring comes from the `DST` block instead.
-  "Defense.defTD": "def_td",
-  "Defense.sacks": "def_sack",
-  "Defense.defensiveInterceptions": "def_int",
-  "Defense.fumblesRecovered": "def_fum_rec",
 
   "Kicking.xpMade": "xp_made",
   // Missed field goals cost a point each under ESPN's table. `fgMissed` is a
@@ -51,6 +47,44 @@ export const TANK01_STAT_MAP: Readonly<Record<string, string>> = {
   // a flat -1 is what makes the category computable from this feed at all.
   "Kicking.fgMissed": "fg_missed",
 };
+
+/**
+ * Why no per-player defensive stats are mapped.
+ *
+ * `Defense.defTD`, `Defense.sacks`, `Defense.defensiveInterceptions` and
+ * `Defense.fumblesRecovered` used to be mapped here, to `def_td`, `def_sack`,
+ * `def_int` and `def_fum_rec`, under a comment saying they were "for *players*,
+ * not the team defense unit". That comment was accurate about the data and wrong
+ * about the consequence: **nothing in this product can consume a per-player
+ * defensive stat.** `NFL_SLOT_TYPES` admits QB, RB, WR, TE, K and DEF and there
+ * is no IDP slot, so the only roster spot those keys reach is the D/ST — which is
+ * scored from {@link TANK01_DST_MAP} instead. A per-player row keyed on the same
+ * stat key is not an unused row; it is a **duplicate** attributed to whoever
+ * happens to hold that player.
+ *
+ * And Tank01 files things under `Defense` that are not defensive plays at all. A
+ * player who fumbles and falls on his own ball carries
+ * `Defense.fumblesRecovered: "1"`. Verified verbatim in
+ * `__fixtures__/box-score-blocked-punt-td.json` (2025 week 9, `20251103_ARI@DAL`):
+ *
+ *     Jacoby Brissett  (QB, ARI)  fumbles "1"  fumblesRecovered "1"
+ *     George Pickens   (WR, DAL)  fumbles "2"  fumblesRecovered "1"
+ *     Javonte Williams (RB, DAL)  fumbles "1"  fumblesRecovered "1"
+ *
+ * All three were paid `def_fum_rec` — 2 points each — for recovering their own
+ * fumbles. Measured across the 2025 season: **185 player-weeks, 384 points.**
+ * `Defense.defTD` did the same thing to Tyler Lockett (WR), credited 6 points for
+ * "Tyler Lockett 0 Yd Fumble Recovery" in week 5.
+ *
+ * `Defense.fumblesLost` stays, because that one really is the offensive player's
+ * own stat and `fum_lost` really is scored on his roster spot.
+ */
+export const TANK01_UNMAPPED_PLAYER_DEFENSE_FIELDS: readonly string[] = [
+  "Defense.defTD",
+  "Defense.sacks",
+  "Defense.defensiveInterceptions",
+  "Defense.fumblesRecovered",
+];
 
 /**
  * The team defense block, `box.DST.home` / `box.DST.away`.
@@ -75,6 +109,60 @@ export const TANK01_DST_MAP: Readonly<Record<string, string>> = {
   defTD: "def_td",
   safeties: "def_safety",
 };
+
+/**
+ * `teamStats.home` / `teamStats.away` — the fields the `DST` block does not carry.
+ *
+ * A **second** team-level block, and one this adapter read nothing from until
+ * 2026-08-17. Like everything else from this provider its values are strings —
+ * `blockedFG: "1"`, not `1` — which is worth stating only because the first
+ * version of this comment said the opposite and two tests caught it.
+ *
+ * It is keyed the way `DST` is: `home` / `away`, each carrying its own
+ * `teamAbv`, and in every captured game the two blocks agree side for side. This
+ * adapter still matches on `teamAbv` rather than on the side, because crediting a
+ * defensive stat to the wrong team is a swing between two rosters and there is no
+ * reason to depend on an ordering nothing enforces.
+ */
+
+/**
+ * The three blocked-kick counters, summed into `def_blk_kick`.
+ *
+ * **Credited to the team that made the block**, which is the fact that had to be
+ * established before these could be used at all — the mirror of the trap
+ * {@link isBlockedKick}'s caller fell into twice. Proven against
+ * `20250907_ARI@NO` (2025 week 1), captured as
+ * `__fixtures__/box-score-blocked-fg.json`: Arizona's kicker had a field goal
+ * blocked, and it is **New Orleans** whose `teamStats` reads `blockedFG: 1` while
+ * Arizona's reads `0`.
+ *
+ * That game is also why these are read at all: no scoring play in it mentions a
+ * block, so the text path — the only source before this — scored New Orleans 0.
+ * **27 of the season's 44 blocked kicks never led to a score**, which is 54
+ * points invisible to a translator that only reads scoring text.
+ */
+export const TANK01_TEAM_BLOCKED_KICK_FIELDS: readonly string[] = [
+  "blockedFG",
+  "blockedPunt",
+  "blockedXP",
+];
+
+/**
+ * Tank01's own count of a team's defensive **and** special-teams touchdowns.
+ *
+ * Read as a cross-check and never as a source, because it **double-counts the
+ * same play** the way this adapter used to. `20250928_CAR@NE` (2025 week 4) has
+ * exactly one defensive or special-teams touchdown in it — Marcus Jones's 87-yard
+ * punt return — and New England's `defensiveOrSpecialTeamsTds` reads **2**, being
+ * `DST.defTD` (1, because Jones is a cornerback and ESPN counts his return as a
+ * defensive touchdown too) plus the special-teams score (1).
+ *
+ * Which makes `defensiveOrSpecialTeamsTds - DST.defTD` a usable check on our own
+ * detection of special-teams touchdowns: it is Tank01's independent count of the
+ * same thing. It is what would have caught `Marshawn Kneeland Blocked Punt
+ * Recovery in End Zone` sitting unrecognised for a season.
+ */
+export const TANK01_TEAM_DEF_ST_TD_FIELD = "defensiveOrSpecialTeamsTds";
 
 /**
  * Everything our scoring table needs is obtainable.
@@ -119,10 +207,15 @@ export function parseFieldGoalYards(scoreText: string): number | null {
 /**
  * Two-point conversions and blocked kicks: the parenthetical.
  *
- * Confirmed across 48 games of the 2025 season (weeks 1-3). There are exactly
- * **three** `scoreType` values — `TD`, `FG`, `SF` — and nothing else. Extra
- * points, two-point conversions, and blocked kicks are not score types at all:
- * they live in the trailing parenthetical of a touchdown's `score` text, the
+ * `TD`, `FG` and `SF` are the three that carry meaning here, and they were the
+ * only three seen across 48 games of 2025 weeks 1-3. **That is not the whole
+ * vocabulary**, and this comment used to say it was: a sweep of the full season
+ * also found `2PTC` and a `null`. Nothing below enumerates the set — every use
+ * is an equality test against one of the three — so an unfamiliar value is inert
+ * rather than a crash, and that is deliberate.
+ *
+ * Extra points, two-point conversions, and blocked kicks are not score types at
+ * all: they live in the trailing parenthetical of a touchdown's `score` text, the
  * same slot as the kick.
  *
  * Every observed form:
@@ -185,8 +278,11 @@ export function isExtraPointMade(scoreText: string): boolean {
  *     Sydney Brown 35 yd. return of blocked punt    -> ret_td
  *     Jared Verse 76 Yd Return of Blocked Field Goal -> ret_td
  *
+ *     Marshawn Kneeland Blocked Punt Recovery in End Zone -> ret_td
+ *     Blocked Kick Recovered by Jordan Davis (PHI) …      -> ret_td
+ *
  *     Christian Benford 63 Yd Interception Return   -> def_td   (defensive)
- *     ... Fumble Return                             -> def_td
+ *     Tyler Lockett 0 Yd Fumble Recovery            -> def_td
  *
  * Interception and fumble returns are already scored as defensive touchdowns.
  * Counting them here as well would pay a single play twice under two different
@@ -197,13 +293,53 @@ export function isExtraPointMade(scoreText: string): boolean {
  * abbreviated name, and a full stop after "yd". Tank01's play text comes from
  * more than one source and its formatting is not consistent, so this matches
  * tokens rather than shapes.
+ *
+ * ## "Recovery" is not a synonym for "return", and that is the trap here
+ *
+ * A blocked kick is often *recovered* rather than *returned* — verbatim, from
+ * 2025 week 9 `20251103_ARI@DAL`:
+ *
+ *     Marshawn Kneeland Blocked Punt Recovery in End Zone (Brandon Aubrey Kick)
+ *
+ * There is no "return" anywhere in it, so the old pattern scored it as nothing at
+ * all: Dallas's unit lost the 6 points `RULES.md` §1 pays for a special-teams
+ * touchdown, and `DST.defTD` reads `"0"` for that game, so no other path made it
+ * up. Issue #158's `"Blocked Kick Recovered by Jordan Davis (PHI) … 61 Yd
+ * Touchown Return"` is the same shape.
+ *
+ * **The obvious repair is wrong.** Adding a bare `recover` alternative to
+ * {@link SPECIAL_TEAMS_RETURN} looks equivalent and is not: every fumble-return
+ * touchdown in the 2025 season is worded `"Fumble Recovery"`, not `"Fumble
+ * Return"`, so a loose `recover` turns **14 defensive touchdowns** into `ret_td`
+ * *and* `def_td` — one play paid twice, in two different roster spots. So the
+ * recovery forms below are anchored on **`blocked`**, which a fumble recovery
+ * never carries, and `DEFENSIVE_RETURN` is widened to exclude a recovery as well
+ * as a return so the guard holds even if this pattern is loosened later. There is
+ * a test for that exact negative.
+ *
+ * ## Still not recognised, deliberately
+ *
+ * `"George Holani Recovered Kickoff in End Zone for a Touchdown"` (issue #158) is
+ * left out. It is not a blocked kick, the scorer is a running back rather than a
+ * defender, and whether ESPN pays that as a return touchdown or as an offensive
+ * fumble recovery has not been established from a second source. Adding it would
+ * put six points on a rosterable player on a guess.
  */
-const DEFENSIVE_RETURN = /\b(interception|fumble)\s+return\b/i;
+const DEFENSIVE_RETURN = /\b(interception|fumble)\s+(return|recovery)\b/i;
 const SPECIAL_TEAMS_RETURN = /\b(kickoff|kick|punt)\s+return\b|\breturn\s+of\s+blocked\b/i;
+/**
+ * A blocked kick recovered rather than returned. Anchored on "blocked".
+ *
+ * Note what is **not** in the alternation: extra point and PAT. A blocked extra
+ * point picked up and taken the other way is a two-point defensive conversion
+ * return, not a touchdown, and `"(Joshua Karty PAT blocked)"` puts the word the
+ * other way round in any case.
+ */
+const BLOCKED_KICK_RECOVERY = /\bblocked\s+(kick|punt|field\s+goal|fg)\b/i;
 
 export function isSpecialTeamsReturnTouchdown(scoreText: string): boolean {
   if (DEFENSIVE_RETURN.test(scoreText)) return false;
-  return SPECIAL_TEAMS_RETURN.test(scoreText);
+  return SPECIAL_TEAMS_RETURN.test(scoreText) || BLOCKED_KICK_RECOVERY.test(scoreText);
 }
 
 /**
@@ -248,7 +384,16 @@ export function scoredInMainClause(scoreText: string, longName: string): boolean
   return mainClause(scoreText).includes(longName);
 }
 
-/** Whether a touchdown was a defensive return — an interception or fumble. */
+/**
+ * Whether a touchdown was a defensive return — an interception or a fumble,
+ * **returned or recovered**.
+ *
+ * The `recovery` half was added on 2026-08-17 with the blocked-kick recovery
+ * forms above. It changes nothing on its own — a fumble recovery matched neither
+ * pattern before — but it is what keeps the two mutually exclusive now that one
+ * of them recognises the word "recover" at all, and every 2025 fumble-return
+ * touchdown is worded `"Fumble Recovery"` rather than `"Fumble Return"`.
+ */
 export function isDefensiveReturnTouchdown(scoreText: string): boolean {
   return DEFENSIVE_RETURN.test(scoreText);
 }
