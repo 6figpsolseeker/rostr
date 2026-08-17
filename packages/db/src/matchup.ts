@@ -55,12 +55,7 @@ export class MatchupError extends Error {
  * See `gameAvailability` in `@rostr/core`.
  */
 export type PlayerGameState =
-  | "BYE"
-  | "UNSCHEDULED"
-  | "TIME_TBD"
-  | "YET_TO_PLAY"
-  | "IN_PROGRESS"
-  | "FINAL";
+  "BYE" | "UNSCHEDULED" | "TIME_TBD" | "YET_TO_PLAY" | "IN_PROGRESS" | "FINAL";
 
 export interface PlayerLine {
   readonly playerId: string;
@@ -351,11 +346,7 @@ function toLine(
   };
 }
 
-function gameStateOf(
-  facts: PlayerFacts | undefined,
-  week: number,
-  now: Date,
-): PlayerGameState {
+function gameStateOf(facts: PlayerFacts | undefined, week: number, now: Date): PlayerGameState {
   // No game in this week's schedule, and there are two reasons for that. A bye
   // means he cannot score, and the screen should say so rather than show a
   // hopeful zero. A fixture awaiting its time means he will play and nobody yet

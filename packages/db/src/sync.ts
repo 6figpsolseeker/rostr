@@ -166,9 +166,7 @@ export async function syncByeWeeks(
  * skipped. That keeps the change strictly additive: a game is only ever stored
  * when its lock time comes from data.
  */
-function earliestKickoffByDate(
-  games: readonly ProviderGame[],
-): ReadonlyMap<string, number> {
+function earliestKickoffByDate(games: readonly ProviderGame[]): ReadonlyMap<string, number> {
   const earliest = new Map<string, number>();
 
   for (const game of games) {

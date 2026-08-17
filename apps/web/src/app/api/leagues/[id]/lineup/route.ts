@@ -86,12 +86,7 @@ export async function GET(
     // only decide what the screen says, and can mislabel a row without
     // unlocking one — the lock uses the conservative time exactly as stored.
     const byeWeeks = await loadByeWeeks(client, [...roster.keys()], context.season);
-    const tbdKickoffs = await loadTbdKickoffs(
-      client,
-      [...roster.keys()],
-      context.season,
-      week,
-    );
+    const tbdKickoffs = await loadTbdKickoffs(client, [...roster.keys()], context.season, week);
 
     // Points so far this week, so a manager can see what their lineup is doing
     // while it is doing it.
@@ -144,10 +139,11 @@ export async function GET(
         status: player.status,
         kickoffAt: player.kickoffAt,
         /**
-         * Why an empty week is empty. A bye and a fixture the provider has not
-         * dated both arrive here as a null kickoff and mean opposite things to
-         * someone choosing a lineup, so the screen is told which it is rather
-         * than inferring "bye" from the absence.
+         * How settled this player's week is. A bye, a fixture whose kickoff
+         * time the NFL has not fixed, and an ordinary game mean quite
+         * different things to someone choosing a lineup — and the first two
+         * are indistinguishable from a kickoff alone. The screen is told which
+         * it is rather than inferring "bye" from an absence.
          */
         availability: gameAvailability({
           kickoffAt: player.kickoffAt,

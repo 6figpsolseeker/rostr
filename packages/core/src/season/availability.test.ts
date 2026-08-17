@@ -3,19 +3,27 @@ import { gameAvailability } from "./availability.js";
 
 describe("gameAvailability", () => {
   it("reports a game as scheduled whenever there is a kickoff", () => {
-    expect(gameAvailability({ kickoffAt: 1_767_000_000, byeWeek: 7, week: 16 })).toBe("SCHEDULED");
+    expect(gameAvailability({ kickoffAt: 1_767_000_000, byeWeek: 7, week: 16 })).toBe(
+      "SCHEDULED",
+    );
   });
 
   it("accepts a Date as well as an epoch second", () => {
-    expect(gameAvailability({ kickoffAt: new Date("2026-12-27T18:00:00Z"), byeWeek: null, week: 16 })).toBe(
-      "SCHEDULED",
-    );
+    expect(
+      gameAvailability({
+        kickoffAt: new Date("2026-12-27T18:00:00Z"),
+        byeWeek: null,
+        week: 16,
+      }),
+    ).toBe("SCHEDULED");
   });
 
   it("still calls it scheduled in the team's own bye week, because the row wins", () => {
     // Contradictory inputs, and the fixture is the fact. A game row in the bye
     // week means the bye moved, not that the game is imaginary.
-    expect(gameAvailability({ kickoffAt: 1_767_000_000, byeWeek: 16, week: 16 })).toBe("SCHEDULED");
+    expect(gameAvailability({ kickoffAt: 1_767_000_000, byeWeek: 16, week: 16 })).toBe(
+      "SCHEDULED",
+    );
   });
 
   it("calls a stored fixture with a provisional kickoff TIME_TBD", () => {

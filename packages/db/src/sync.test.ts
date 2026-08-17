@@ -198,12 +198,10 @@ describe("syncGames", () => {
     gameDate: date,
   });
 
-  const dated = (
-    ref: string,
-    week: number,
-    kickoff: number,
-    date: string,
-  ): ProviderGame => ({ ...game(ref, week, kickoff), gameDate: date });
+  const dated = (ref: string, week: number, kickoff: number, date: string): ProviderGame => ({
+    ...game(ref, week, kickoff),
+    gameDate: date,
+  });
 
   it("inserts games", async () => {
     const client = await fresh();
