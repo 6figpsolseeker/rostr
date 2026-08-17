@@ -27,7 +27,7 @@ interface PlayerLine {
   position: string;
   slot: string;
   milliPoints: number;
-  gameState: "BYE" | "YET_TO_PLAY" | "IN_PROGRESS" | "FINAL";
+  gameState: "BYE" | "UNSCHEDULED" | "YET_TO_PLAY" | "IN_PROGRESS" | "FINAL";
   kickoffAt: string | null;
 }
 
@@ -39,6 +39,8 @@ interface Side {
   restatedMilliPoints: number | null;
   yetToPlay: number;
   inProgress: number;
+  /** Starters whose fixture has no kickoff time yet. Never "all done". */
+  unscheduled: number;
   starters: PlayerLine[];
   bench: PlayerLine[];
 }
@@ -153,6 +155,24 @@ export function Scoreboard({ leagueId }: { leagueId: string }) {
 
 // ---------------------------------------------------------------------------
 
+/**
+ * How much of this side's week is still to come.
+ *
+ * "All done" is the claim worth being careful with: it is what tells a manager
+ * the result is settled, and a starter whose fixture has no kickoff time yet has
+ * not played and is not counted anywhere else on this line. Saying "all done"
+ * over an undated fixture would report a loss that has not happened.
+ */
+function progressLabel(side: Side): string {
+  const parts: string[] = [];
+  if (side.yetToPlay > 0) parts.push(`${side.yetToPlay} still to play`);
+  if (side.inProgress > 0) parts.push(`${side.inProgress} playing`);
+  if (side.unscheduled > 0) {
+    parts.push(`${side.unscheduled} not scheduled yet`);
+  }
+  return parts.length > 0 ? parts.join(" · ") : "all done";
+}
+
 function Header({ side, opponent }: { side: Side; opponent: Side | null }) {
   const winning = opponent !== null && side.milliPoints > opponent.milliPoints;
 
@@ -162,12 +182,7 @@ function Header({ side, opponent }: { side: Side; opponent: Side | null }) {
       <p className={`text-3xl font-semibold ${winning ? "text-nocturne-accent-300" : ""}`}>
         {points(side.milliPoints)}
       </p>
-      <p className="text-xs text-nocturne-neutral-600">
-        {side.yetToPlay > 0 && `${side.yetToPlay} still to play`}
-        {side.yetToPlay > 0 && side.inProgress > 0 && " · "}
-        {side.inProgress > 0 && `${side.inProgress} playing`}
-        {side.yetToPlay === 0 && side.inProgress === 0 && "all done"}
-      </p>
+      <p className="text-xs text-nocturne-neutral-600">{progressLabel(side)}</p>
     </div>
   );
 }
@@ -312,11 +327,16 @@ function Score({ line }: { line: PlayerLine }) {
   const label =
     line.gameState === "BYE"
       ? "bye"
-      : line.gameState === "YET_TO_PLAY"
-        ? kickoffLabel(line.kickoffAt)
-        : line.gameState === "IN_PROGRESS"
-          ? "live"
-          : null;
+      : // A fixture with no kickoff time yet. Distinct from a bye, because this
+        // player will play and a bye player cannot — the difference decides
+        // whether a manager holds the roster spot.
+        line.gameState === "UNSCHEDULED"
+        ? "TBD"
+        : line.gameState === "YET_TO_PLAY"
+          ? kickoffLabel(line.kickoffAt)
+          : line.gameState === "IN_PROGRESS"
+            ? "live"
+            : null;
 
   return (
     <span className="flex shrink-0 items-baseline gap-1.5">

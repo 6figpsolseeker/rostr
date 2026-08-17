@@ -30,6 +30,12 @@ interface RosterPlayer {
   positions: string[];
   status: string;
   kickoffAt: number | null;
+  /**
+   * Why an empty week is empty. `BYE` is a rest week and he cannot score;
+   * `UNSCHEDULED` is a real fixture the NFL has not dated yet, so he will play
+   * and the slot is worth holding. Both arrive with a null kickoff.
+   */
+  availability: "SCHEDULED" | "BYE" | "UNSCHEDULED";
   milliPoints: number;
   /** This week's projection under this league's scoring. Null if unpublished. */
   projectedMilliPoints: number | null;
@@ -285,6 +291,12 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
                       >
                         {candidate.name} ({candidate.positions.join("/")})
                         {played ? " — played" : ""}
+                        {candidate.availability === "BYE" ? " — bye" : ""}
+                        {/* Not folded into the bye label: a bye scores nothing
+                            and this player will score, once the fixture has a
+                            date. Choosing between them is the point of this
+                            list. */}
+                        {candidate.availability === "UNSCHEDULED" ? " — TBD" : ""}
                         {OUT_STATUSES.has(candidate.status.toUpperCase())
                           ? ` — ${candidate.status}`
                           : ""}
@@ -299,7 +311,9 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
                 title={
                   slot.locksAt
                     ? `Locks at ${new Date(slot.locksAt * 1000).toLocaleString()}`
-                    : "This player has no game this week"
+                    : player?.availability === "UNSCHEDULED"
+                      ? "This fixture has no kickoff time yet, so the slot cannot lock. He will play once the NFL announces when."
+                      : "This player has no game this week"
                 }
               >
                 {untilLock(slot.locksAt, now)}
@@ -337,8 +351,16 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
               {OUT_STATUSES.has(player.status.toUpperCase()) && (
                 <span className="text-amber-400/70">{player.status}</span>
               )}
-              {player.kickoffAt === null && (
+              {player.availability === "BYE" && (
                 <span className="text-nocturne-neutral-600">bye</span>
+              )}
+              {player.availability === "UNSCHEDULED" && (
+                <span
+                  className="text-nocturne-neutral-600"
+                  title="This fixture has no kickoff time yet. He will play — the NFL has not announced when."
+                >
+                  TBD
+                </span>
               )}
               {isBreakout(player) && (
                 <span

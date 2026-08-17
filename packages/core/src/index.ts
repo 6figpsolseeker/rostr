@@ -197,6 +197,12 @@ export {
 } from "./season/lineup.js";
 
 export {
+  gameAvailability,
+  type GameAvailability,
+  type GameAvailabilityInput,
+} from "./season/availability.js";
+
+export {
   BracketError,
   buildBracket,
   thirdPlaceWinner,

@@ -238,6 +238,39 @@ export async function loadKickoffs(
 }
 
 /**
+ * Each of these players' bye week this season, `null` where it is not recorded.
+ *
+ * ## Why this is not part of `loadKickoffs`
+ *
+ * That function is the single definition of when a slot freezes, and its own
+ * docstring is emphatic that widening it is how the lock bypass happened. A bye
+ * week decides nothing about locking — it only separates "resting" from "not yet
+ * dated" for the screen — so it is loaded alongside rather than folded in.
+ * Keeping them apart means a bug here can mislabel a row and cannot unlock one.
+ *
+ * Absent from the result means absent from `player_seasons`, which
+ * `gameAvailability` reads as a bye rather than as a fixture still to come.
+ */
+export async function loadByeWeeks(
+  db: SqlClient,
+  playerIds: readonly string[],
+  season: number,
+): Promise<ReadonlyMap<string, number | null>> {
+  if (playerIds.length === 0) return new Map();
+
+  const rows = await db.query<{ player_id: string; bye_week: number | null }>(
+    `SELECT player_id, bye_week
+       FROM player_seasons
+      WHERE season = $2 AND player_id = ANY($1)`,
+    [[...playerIds], season],
+  );
+
+  return new Map(
+    rows.map((row) => [row.player_id, row.bye_week === null ? null : Number(row.bye_week)]),
+  );
+}
+
+/**
  * The earliest kickoff of the week, or `null` when the week has no games.
  *
  * The conservative lock time for a player whose team is nowhere in the schedule:

@@ -92,6 +92,7 @@ export {
   autoFillLineup,
   ensureLineups,
   LineupError,
+  loadByeWeeks,
   loadLineup,
   loadKickoffs,
   loadRosterForWeek,
@@ -198,6 +199,7 @@ export {
   type OrderDraw,
   type RecordedPick,
   type RecordPickInput,
+  type SeasonStartOracle,
 } from "./draft.js";
 
 export {
