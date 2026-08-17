@@ -448,3 +448,169 @@ describe("the D/ST unit is paid for a special teams return touchdown", () => {
     }
   });
 });
+
+/**
+ * Two-point conversions, and the two ways they used to pay nobody.
+ *
+ * Both defects come from one root cause: attribution was decided inside each
+ * player's own loop, over his own `scoringPlays`, gated on the play's
+ * `playerIDs` naming him. A conversion is described in the parenthetical of
+ * somebody *else's* touchdown, so neither condition is reliable.
+ */
+describe("two-point conversions", () => {
+  const twoPtOf = (translated: ReturnType<typeof translateBoxScore>, id: string): number =>
+    translated.players.get(id)?.find((line) => line.statKey === "two_pt")?.value ?? 0;
+
+  const player = (playerID: string, longName: string, extra: Record<string, unknown> = {}) => ({
+    playerID,
+    longName,
+    ...extra,
+  });
+
+  const game = (playerStats: Record<string, unknown>, scoringPlays: unknown[]) =>
+    translateBoxScore({ gameID: "g", playerStats, DST: {}, scoringPlays });
+
+  /**
+   * Issue #155, verbatim from 2025 week 1 `20250907_MIA@IND`.
+   *
+   * Julian Hill caught the conversion. He is not in `playerIDs` — those are the
+   * touchdown's two players — and Tank01's entire record for him in that game is
+   * an id, a name and snap counts: no `scoringPlays`, no `Receiving`. His own
+   * loop ran zero times whatever the gate said, so nothing that iterates a
+   * player's own plays could ever have found him. Sleeper credits him.
+   */
+  it("credits a receiver the provider leaves out of playerIDs entirely", () => {
+    const translated = game(
+      {
+        "4241479": player("4241479", "Tua Tagovailoa"),
+        "4429160": player("4429160", "De'Von Achane"),
+        "4365395": player("4365395", "Julian Hill"),
+      },
+      [
+        {
+          score:
+            "De'Von Achane 11 Yd pass from Tua Tagovailoa " +
+            "(Tua Tagovailoa Pass to Julian Hill for Two-Point Conversion)",
+          scoreType: "TD",
+          team: "MIA",
+          playerIDs: ["4241479", "4429160"],
+        },
+      ],
+    );
+
+    expect(twoPtOf(translated, "4365395")).toBe(1);
+    // And the passer, who our rules pay too.
+    expect(twoPtOf(translated, "4241479")).toBe(1);
+    // The touchdown scorer took no part in the conversion.
+    expect(twoPtOf(translated, "4429160")).toBe(0);
+  });
+
+  /**
+   * Issue #81's fourth defect. `docs/TANK01.md` records that Tank01 abbreviates
+   * names in some plays, and the old exact-substring match scored both of these
+   * as zero with no warning.
+   */
+  it("credits an abbreviated name", () => {
+    const translated = game({ p: player("p", "Rhamondre Stevenson") }, [
+      { score: "TD (R.Stevenson Run for Two-Point Conversion)", scoreType: "TD" },
+    ]);
+    expect(twoPtOf(translated, "p")).toBe(1);
+  });
+
+  it("credits a name carrying a suffix the play omits", () => {
+    const translated = game({ p: player("p", "Rhamondre Stevenson Jr.") }, [
+      { score: "TD (Rhamondre Stevenson Run for Two-Point Conversion)", scoreType: "TD" },
+    ]);
+    expect(twoPtOf(translated, "p")).toBe(1);
+  });
+
+  /**
+   * `docs/TANK01.md:105` records a play whose *first* parenthetical is a team
+   * code. Taking `[0]` and stopping would miss a conversion noted after it.
+   */
+  it("reads every parenthetical, not the first", () => {
+    const translated = game({ p: player("p", "Jordan Davis") }, [
+      {
+        score:
+          "Blocked Kick Recovered by Someone (PHI) (Jordan Davis Run for Two-Point Conversion)",
+        scoreType: "TD",
+      },
+    ]);
+    expect(twoPtOf(translated, "p")).toBe(1);
+  });
+
+  it("ignores a failed conversion", () => {
+    const translated = game({ p: player("p", "Rhamondre Stevenson") }, [
+      {
+        score: "TD (Rhamondre Stevenson Run for Two-Point Conversion failed)",
+        scoreType: "TD",
+      },
+    ]);
+    expect(twoPtOf(translated, "p")).toBe(0);
+  });
+
+  /**
+   * Crediting the wrong player is worse than crediting none: it takes two points
+   * from whoever earned them *and* gives them to somebody who did not, so the
+   * error lands twice, in two different teams' totals.
+   */
+  it("credits nobody when one spelling fits two players, and says so", () => {
+    const translated = game(
+      {
+        a: player("a", "Robert Stevenson"),
+        b: player("b", "Rhamondre Stevenson"),
+      },
+      [{ score: "TD (R.Stevenson Run for Two-Point Conversion)", scoreType: "TD" }],
+    );
+
+    expect(twoPtOf(translated, "a")).toBe(0);
+    expect(twoPtOf(translated, "b")).toBe(0);
+    expect(translated.warnings.join(" ")).toMatch(/neither is credited/);
+  });
+
+  it("warns when a conversion names nobody the game recognises", () => {
+    // Two points definitely happened — the text says so — and nothing was paid.
+    // Silence here is what let issue #155's points vanish with `warnings: []`.
+    const translated = game({ p: player("p", "Someone Else") }, [
+      { score: "TD (Nobody Known Run for Two-Point Conversion)", scoreType: "TD" },
+    ]);
+    expect(translated.warnings.join(" ")).toMatch(/names no player this game recognises/);
+  });
+
+  /**
+   * The trap #155 names explicitly. `passingTwoPointConversion` is read as a
+   * *check* and never as a source — a player both named in a parenthetical and
+   * carrying the numeric field would otherwise be paid twice, four points for
+   * one conversion.
+   */
+  it("does not double-count a passer who also carries the numeric field", () => {
+    const translated = game(
+      {
+        p: player("p", "Adam Thielen", { Passing: { passingTwoPointConversion: "1" } }),
+        r: player("r", "Some Receiver"),
+      },
+      [
+        {
+          score: "TD (Adam Thielen Pass to Some Receiver for Two-Point Conversion)",
+          scoreType: "TD",
+        },
+      ],
+    );
+
+    expect(twoPtOf(translated, "p")).toBe(1);
+    expect(twoPtOf(translated, "r")).toBe(1);
+    // Agreeing, so nothing to report.
+    expect(translated.warnings.join(" ")).not.toMatch(/two-point/);
+  });
+
+  it("warns when the numeric field disagrees with the text", () => {
+    // The guard field goals have always had, and conversions never did — which
+    // is why #155's two points disappeared with no warning at all.
+    const translated = game(
+      { p: player("p", "Adam Thielen", { Passing: { passingTwoPointConversion: "2" } }) },
+      [{ score: "TD (Adam Thielen Pass to Nobody for Two-Point Conversion)", scoreType: "TD" }],
+    );
+
+    expect(translated.warnings.join(" ")).toMatch(/reports 2 two-point conversion/);
+  });
+});
