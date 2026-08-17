@@ -221,6 +221,38 @@ is a usable cross-check on our pattern matching and is wired up as one. It is wh
 would have caught `"Marshawn Kneeland Blocked Punt Recovery in End Zone"` sitting
 unrecognised for a season, without a sweep. Refs #157, #158.
 
+**It is narrowed for blocked kicks, and that is a fact about ESPN rather than
+about Tank01.** ESPN classifies a blocked-kick touchdown as a **defensive** score
+— stat id **93**, "Def. blocked kick for TD" — not as a return, so
+`defensiveOrSpecialTeamsTds` holds it **once** where it holds an ordinary return
+by a defensive player twice. Measured across 2025: Marcus Jones's punt return
+reads `2, 1`, while Jordan Davis's and Will McDonald's blocked-kick touchdowns
+read `1, 1` — the subtraction gives 0 where the scoring text legitimately sees 1.
+**Four of the season's five blocked-kick touchdowns fired this warning on a game
+we score exactly as ESPN does.** Kneeland's is the fifth and reads `1, 0`, because
+Tank01 carries no `Defense` block for him at all — which is why the adapter
+subtracts only the blocked kicks **already inside `DST.defTD`** rather than all of
+them, and why excluding all of them would have moved the quiet game to a warning
+while silencing the loud ones.
+
+### What ESPN pays for a defensive or special-teams touchdown
+
+Established 2026-08-17 by reconciling ESPN's own `appliedTotal` arithmetic across
+**5 D/ST units and 6 players**. Recorded verbatim because ESPN's public pages
+contradict each other, and the scoring table is frozen per league.
+
+| Play                              | Player | D/ST | ESPN files it as             |
+| --------------------------------- | ------ | ---- | ---------------------------- |
+| Kickoff or punt return TD         | 6      | 6    | return TD **and** def/ST TD  |
+| Blocked-kick TD                   | 6      | 6    | 93, Def. blocked kick for TD |
+| Kickoff recovered in the end zone | **0**  | 6    | 104, Fumble return TD        |
+
+**Both the returner and the unit are paid** for an ordinary return touchdown —
+five independent pairs confirm it: Gibson/NE, Ray Davis/BUF, Nwangwu/NYJ,
+Shaheed/SEA, Mims/DEN. The third row is the George Holani play; see
+["Recovery" is not a synonym](#recovery-is-not-a-synonym-for-return) for why the
+player gets nothing and why Sleeper disagrees.
+
 ### `DST.safeties` — what was actually observed
 
 A full-season sweep reported `DST.safeties` as `"0"` for every game including two
@@ -269,14 +301,31 @@ own stat.
 
 The trap in repairing the blocked-kick wordings above. **Every** fumble-return
 touchdown in the 2025 season is worded `"Fumble Recovery"`, not `"Fumble
-Return"` — so adding a bare `recover` alternative to the special-teams pattern
-turns **14 defensive touchdowns** into return touchdowns as well, paying each of
-them under two rules in two roster spots. The pattern is anchored on `blocked`
-instead, and there is a test pinning the negative case.
+Return"`, so a bare `recover` alternative in the special-teams pattern looks
+equivalent to anchoring on `blocked` and is not. The pattern is anchored on
+`blocked`, and there is a test pinning the negative case.
+
+> **Corrected 2026-08-17.** This section said the loose variant "turns **14
+> defensive touchdowns** into return touchdowns as well". It does not, and has
+> not since #178 widened `DEFENSIVE_RETURN` to
+> `/\b(interception|fumble)\s+(return|recovery)\b/i`. Measured over all **2,339**
+> scoring plays of the 2025 season: the bare-`recover` variant goes from 26
+> matches to **27**, and the single addition is George Holani, below. **Not one
+> fumble touchdown leaks** — all **19** of them (17 worded `Fumble Recovery`, 2
+> worded `Fumble Return`) match `DEFENSIVE_RETURN`, which
+> `isSpecialTeamsReturnTouchdown()` consults first. The anchoring stays, because
+> a pattern that is correct only by virtue of a different pattern in front of it
+> is one edit away from not being — but the number was wrong and the conclusion
+> no longer follows from it.
 
 Still unrecognised on purpose: `"George Holani Recovered Kickoff in End Zone for a
-Touchdown"` (#158). Not a blocked kick, scorer is a running back, and whether ESPN
-pays it as a return touchdown or an offensive fumble recovery is not established.
+Touchdown"` (#158) — **and that is now a measurement rather than a caution.** A
+Seattle kickoff was muffed by Pittsburgh and recovered in the end zone, which is a
+coverage-team score rather than a return. **ESPN pays the player 0 and Seattle's
+D/ST 6**, filing it under stat id **104**, its fumble-return touchdown; Holani's
+ESPN fantasy `appliedTotal` for 2025 week 2 is 0. Tank01 mirrors ESPN —
+`Defense.defTD: "1"`, `Kicking.kickReturnTD: "0"`. **Sleeper disagrees** and pays
+him `st_td` 6. We score exactly what ESPN scores, so our `ret_td` of 0 is correct.
 
 ---
 

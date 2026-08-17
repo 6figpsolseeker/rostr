@@ -24,6 +24,7 @@ import type { StatLine } from "@rostr/core";
 import {
   bucketFieldGoal,
   isBlockedKick,
+  isBlockedKickTouchdown,
   isSpecialTeamsReturnTouchdown,
   isSuccessfulTwoPointConversion,
   mainClause,
@@ -645,9 +646,9 @@ function translateTeamDefense(
     const alreadyInDefTd = specialTeamsTds.filter((play) => {
       const clause = normaliseName(mainClause(play.score ?? ""));
       return defensiveScorers.some((forms) => forms.some((form) => clause.includes(form)));
-    }).length;
+    });
 
-    const unitTds = specialTeamsTds.length - alreadyInDefTd;
+    const unitTds = specialTeamsTds.length - alreadyInDefTd.length;
     if (unitTds > 0) accumulate(totals, "def_td", unitTds);
 
     // A check, never a source. `defensiveOrSpecialTeamsTds` double-counts the
@@ -657,16 +658,46 @@ function translateTeamDefense(
     // of special-teams touchdowns than the provider did, which is how
     // `"Marshawn Kneeland Blocked Punt Recovery in End Zone"` went a season
     // unrecognised. Refs #158.
+    //
+    // **A blocked kick is filed once, not twice, and this cried wolf on every
+    // one it could see.** ESPN classifies a blocked-kick touchdown as a
+    // *defensive* score — stat id 93 — rather than as a return, so it appears in
+    // `defensiveOrSpecialTeamsTds` a single time while an ordinary return by a
+    // defensive player appears twice. Measured on 2025: Marcus Jones's punt
+    // return reads `2, 1`, and Jordan Davis's and Will McDonald's blocked-kick
+    // touchdowns read `1, 1` — the subtraction gives 0 where the scoring text
+    // legitimately sees 1, on a game we score exactly as ESPN does.
+    //
+    // What is subtracted is the blocked kicks **already inside `DST.defTD`**,
+    // not every blocked kick, and the distinction is the whole of the fix.
+    // `defensiveOrSpecialTeamsTds` drops the second count only when the first is
+    // present: Marshawn Kneeland's blocked-punt recovery reads `1, 0`, because
+    // Tank01 carries no `Defense` block for him at all, and excluding it would
+    // move a silent game to a warning while quieting the loud one. Four of the
+    // season's five blocked-kick touchdowns took the first path.
+    //
+    // Narrowed rather than dropped, because this is still the only thing that
+    // would find a novel wording without a season sweep — and a warning that
+    // fires on correct data is how the next real one gets dismissed.
+    const blockedInDefTd = alreadyInDefTd.filter((play) =>
+      isBlockedKickTouchdown(play.score ?? ""),
+    ).length;
+    const readFromText = specialTeamsTds.length - blockedInDefTd;
+
     const reportedDefStTds = parseStatValue(team?.[TANK01_TEAM_DEF_ST_TD_FIELD]);
     const reportedDefTds = parseStatValue(unit["defTD"]);
     if (reportedDefStTds !== null && reportedDefTds !== null) {
       const expected = reportedDefStTds - reportedDefTds;
-      if (expected !== specialTeamsTds.length) {
+      if (expected !== readFromText) {
         warnings.push(
           `${teamAbv}: teamStats implies ${expected} special teams touchdown(s) ` +
             `(${TANK01_TEAM_DEF_ST_TD_FIELD} ${reportedDefStTds} - DST.defTD ` +
-            `${reportedDefTds}) but ${specialTeamsTds.length} were read from the ` +
-            `scoring text`,
+            `${reportedDefTds}) but ${readFromText} were read from the ` +
+            `scoring text` +
+            (blockedInDefTd > 0
+              ? `, excluding ${blockedInDefTd} blocked-kick touchdown(s) ESPN ` +
+                `files as defensive`
+              : ""),
         );
       }
     }

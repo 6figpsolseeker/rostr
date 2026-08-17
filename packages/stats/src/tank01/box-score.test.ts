@@ -840,13 +840,20 @@ describe("the D/ST is paid once per defensive or special teams touchdown", () =>
   });
 
   /**
-   * The negative case, and the reason the new pattern is anchored on "blocked".
+   * The negative case, and the reason the pattern is anchored on "blocked".
    *
    * Every fumble-return touchdown in the 2025 season is worded "Fumble
-   * Recovery", not "Fumble Return". A bare `recover` alternative in the
-   * special-teams pattern therefore turns **14 defensive touchdowns** into a
-   * `ret_td` on a player *and* a second `def_td` on the unit — one play paid
-   * three times across two roster spots.
+   * Recovery", not "Fumble Return", so a bare `recover` alternative in the
+   * special-teams pattern looks equivalent to anchoring on "blocked" and is not.
+   * What it would cost is a `ret_td` on a player *and* a second `def_td` on the
+   * unit — one play paid three times across two roster spots.
+   *
+   * **Corrected 2026-08-17: the figure of "14 defensive touchdowns" that used to
+   * sit here is wrong.** `isDefensiveReturnTouchdown` is consulted first and now
+   * matches a recovery as well as a return, so all 19 of the season's fumble
+   * touchdowns are excluded before the special-teams pattern is reached; over all
+   * 2,339 scoring plays of 2025 the loose variant gains exactly one play, George
+   * Holani's. The assertion below is unchanged — it is what makes that true.
    */
   it("does not read a fumble recovery touchdown as a special teams score", () => {
     const translated = translateBoxScore({
@@ -891,6 +898,111 @@ describe("the D/ST is paid once per defensive or special teams touchdown", () =>
 
     expect(translated.warnings.join(" ")).toMatch(
       /PHI: teamStats implies 1 special teams touchdown/,
+    );
+  });
+
+  /**
+   * The check cried wolf on correctly scored games, which is the one thing a
+   * check must not do.
+   *
+   * ESPN classifies a blocked-kick touchdown as a **defensive** score — stat id
+   * 93, "Def. blocked kick for TD" — rather than as a return, so
+   * `defensiveOrSpecialTeamsTds` holds it once where it holds an ordinary return
+   * by a defensive player twice. Measured on 2025: Marcus Jones's punt return
+   * reads `2, 1` and Jordan Davis's blocked kick reads `1, 1`, so the subtraction
+   * gives 0 against a scoring text that legitimately sees 1. Four of the season's
+   * five blocked-kick touchdowns fired it. Refs #158.
+   */
+  it("does not warn on a blocked kick ESPN files as a defensive touchdown", () => {
+    const play = {
+      score: "Blocked Kick Recovered by Jordan Davis (PHI) Jordan Davis 61 Yd Touchown Return",
+      scoreType: "TD",
+      team: "PHI",
+      playerIDs: ["p"],
+    };
+
+    const translated = translateBoxScore({
+      gameID: "g",
+      playerStats: {
+        p: {
+          playerID: "p",
+          longName: "Jordan Davis",
+          team: "PHI",
+          Defense: { defTD: "1" },
+          // Tank01 repeats a player's own scoring plays under him, and that is
+          // the only place `ret_td` is read from.
+          scoringPlays: [play],
+        },
+      },
+      DST: {
+        home: { teamAbv: "PHI", ptsAllowed: "20", defTD: "1" },
+        away: { teamAbv: "DAL", ptsAllowed: "24", defTD: "0" },
+      },
+      teamStats: {
+        home: { teamAbv: "PHI", defensiveOrSpecialTeamsTds: "1" },
+        away: { teamAbv: "DAL", defensiveOrSpecialTeamsTds: "0" },
+      },
+      scoringPlays: [play],
+    });
+
+    expect(translated.warnings.join(" ")).not.toMatch(/special teams touchdown/);
+
+    // Nothing about the scoring moves. Six for the unit — from `DST.defTD`,
+    // which already holds it — and six for the scorer, which is what ESPN pays
+    // and what all four 2025 blocked-kick touchdowns reconcile against.
+    expect(unitOf(translated, "PHI").get("def_td")).toBe(1);
+    expect(playerOf(translated, "p").get("ret_td")).toBe(1);
+  });
+
+  it("still compares a blocked kick the provider did not already count", () => {
+    // The fifth of the five, and the reason only the blocked kicks *already
+    // inside* `DST.defTD` are excluded rather than all of them. `20251103_ARI@DAL`
+    // reads `1, 0` — Tank01 carries no `Defense` block for Marshawn Kneeland at
+    // all — so the subtraction already agrees with the text. Excluding every
+    // blocked kick would have moved this game to a warning while quieting the
+    // other four, which is the same defect with the sign flipped.
+    expect(rawBlockedPuntTdGame.teamStats.home.defensiveOrSpecialTeamsTds).toBe("1");
+    expect(rawBlockedPuntTdGame.DST.home.defTD).toBe("0");
+
+    expect(blockedPuntTdGame.warnings.join(" ")).not.toMatch(/special teams touchdown/);
+  });
+
+  it("says how many blocked kicks it excluded when it does warn", () => {
+    // Narrowed, not deleted. A team carrying two special-teams touchdowns Tank01
+    // knows about and one blocked kick we recognised still disagrees, and the
+    // warning has to be readable by someone who does not already know about stat
+    // id 93 — otherwise the excluded play looks like a play nobody counted.
+    const translated = translateBoxScore({
+      gameID: "g",
+      playerStats: {
+        p: {
+          playerID: "p",
+          longName: "Jordan Davis",
+          team: "PHI",
+          Defense: { defTD: "1" },
+        },
+      },
+      DST: {
+        home: { teamAbv: "PHI", ptsAllowed: "20", defTD: "1" },
+        away: { teamAbv: "DAL", ptsAllowed: "24", defTD: "0" },
+      },
+      teamStats: {
+        home: { teamAbv: "PHI", defensiveOrSpecialTeamsTds: "3" },
+        away: { teamAbv: "DAL", defensiveOrSpecialTeamsTds: "0" },
+      },
+      scoringPlays: [
+        {
+          score:
+            "Blocked Kick Recovered by Jordan Davis (PHI) Jordan Davis 61 Yd Touchown Return",
+          scoreType: "TD",
+          team: "PHI",
+          playerIDs: ["p"],
+        },
+      ],
+    });
+
+    expect(translated.warnings.join(" ")).toMatch(
+      /PHI: teamStats implies 2 special teams touchdown\(s\) .* but 0 were read from the scoring text, excluding 1 blocked-kick touchdown\(s\) ESPN files as defensive/,
     );
   });
 });

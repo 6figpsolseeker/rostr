@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   bucketFieldGoal,
   isBlockedKick,
+  isBlockedKickTouchdown,
   isDefensiveReturnTouchdown,
   isExtraPointMade,
   isSpecialTeamsReturnTouchdown,
@@ -333,10 +334,18 @@ const REAL_BLOCKED_KICK_TDS = {
  * The negative case, and the reason the new pattern is anchored on "blocked".
  *
  * **Every** fumble-return touchdown in the 2025 season is worded "Fumble
- * Recovery" rather than "Fumble Return". Adding a bare `recover` alternative to
- * the special teams pattern — the obvious repair for the two strings above —
- * therefore reclassifies **14 defensive touchdowns** as return touchdowns, which
- * pays each of them a second time on a second roster spot.
+ * Recovery" rather than "Fumble Return", so a bare `recover` alternative in the
+ * special teams pattern — the obvious repair for the two strings above — looks
+ * equivalent to anchoring on "blocked" and is not.
+ *
+ * **Corrected 2026-08-17: it does not reclassify 14 defensive touchdowns**, which
+ * is what this comment claimed. `isDefensiveReturnTouchdown` is consulted first
+ * and now matches a recovery as well as a return, so all **19** of the season's
+ * fumble touchdowns — 17 worded "Fumble Recovery", 2 worded "Fumble Return" — are
+ * excluded before the special teams pattern is reached. Over all 2,339 scoring
+ * plays of 2025 the loose variant gains exactly **one** play, George Holani's,
+ * pinned below. The assertions here are unchanged; the reason to keep them is
+ * that they are what makes the sentence above true.
  */
 const REAL_FUMBLE_RECOVERY_TDS = [
   "Tyler Lockett 0 Yd Fumble Recovery",
@@ -350,8 +359,8 @@ describe("blocked kick touchdowns", () => {
   });
 
   it("does NOT read a fumble recovery as a special teams return", () => {
-    // The 14-touchdown trap. If this ever goes green the other way, one play is
-    // being paid under two rules in two different roster spots.
+    // If this ever goes green the other way, one play is being paid under two
+    // rules in two different roster spots.
     for (const text of REAL_FUMBLE_RECOVERY_TDS) {
       expect(isSpecialTeamsReturnTouchdown(text), text).toBe(false);
       expect(isDefensiveReturnTouchdown(text), text).toBe(true);
@@ -377,12 +386,19 @@ describe("blocked kick touchdowns", () => {
   });
 
   /**
-   * Deliberately still unrecognised — see the comment on the pattern.
+   * Deliberately still unrecognised, and **settled** as of 2026-08-17.
    *
-   * It is not a blocked kick, the scorer is a running back rather than a
-   * defender, and whether ESPN pays it as a return touchdown or as an offensive
-   * fumble recovery has not been settled against a second source. Six points on a
-   * rosterable player is not something to guess at. Refs #158.
+   * This comment said the question "has not been settled against a second
+   * source". It has been. A Seattle kickoff was muffed by Pittsburgh and
+   * recovered in the end zone, which is a coverage-team score rather than a
+   * return: **ESPN pays the player 0 and Seattle's D/ST 6**, filing it under stat
+   * id 104, its fumble-return touchdown, and Holani's ESPN fantasy `appliedTotal`
+   * for 2025 week 2 is 0. Tank01 mirrors ESPN — `Defense.defTD: "1"`,
+   * `Kicking.kickReturnTD: "0"`. Sleeper disagrees and pays him `st_td` 6.
+   *
+   * So the test stays and its meaning changes: it pinned a gap waiting on
+   * evidence, and now pins the answer. `ret_td` of 0 is what ESPN scores. Refs
+   * #158.
    */
   it("still does not recognise a kickoff recovered in the end zone", () => {
     expect(
@@ -390,6 +406,55 @@ describe("blocked kick touchdowns", () => {
         "George Holani Recovered Kickoff in End Zone for a Touchdown",
       ),
     ).toBe(false);
+  });
+});
+
+/**
+ * A blocked kick is a special teams touchdown that **ESPN files as a defensive
+ * one** — stat id 93, "Def. blocked kick for TD".
+ *
+ * That is the only reason this predicate exists: `defensiveOrSpecialTeamsTds`
+ * counts such a play once where it counts an ordinary return by a defensive
+ * player twice, so the cross-check in `box-score.ts` has to know which it is
+ * looking at. It changes no score.
+ */
+describe("isBlockedKickTouchdown", () => {
+  it("recognises both the recovered and the returned wording", () => {
+    // All four real 2025 examples. Two are recovered and two are returned, and
+    // the anchor has to hold across both — a predicate that caught only the
+    // "Recovery" half would leave Sydney Brown's and Jared Verse's games warning.
+    for (const text of [
+      REAL_BLOCKED_KICK_TDS.kneeland,
+      REAL_BLOCKED_KICK_TDS.jordanDavis,
+      REAL_RETURNS.blockedPunt,
+      REAL_RETURNS.blockedFieldGoal,
+    ]) {
+      expect(isBlockedKickTouchdown(text), text).toBe(true);
+      // It is a narrowing, never a widening.
+      expect(isSpecialTeamsReturnTouchdown(text), text).toBe(true);
+    }
+  });
+
+  it("does not fire on an ordinary return", () => {
+    // Marcus Jones's punt return is the contrast the whole narrowing rests on:
+    // `2, 1` for a return, `1, 1` for a block.
+    expect(isBlockedKickTouchdown(REAL_RETURNS.punt)).toBe(false);
+    expect(isBlockedKickTouchdown(REAL_RETURNS.kickoff)).toBe(false);
+  });
+
+  it("does not fire on a touchdown that merely had its extra point blocked", () => {
+    // The difference from `isBlockedKick`, which matches the bare word anywhere.
+    // A blocked PAT on a rushing touchdown is a block that scored for nobody, and
+    // reading it as a special teams touchdown would suppress a real disagreement.
+    expect(isBlockedKick(REAL_PAT_FORMS.patBlocked)).toBe(true);
+    expect(isBlockedKickTouchdown(REAL_PAT_FORMS.patBlocked)).toBe(false);
+    expect(isBlockedKickTouchdown(REAL_PAT_FORMS.patBlocked2)).toBe(false);
+  });
+
+  it("does not fire on a fumble recovery", () => {
+    for (const text of REAL_FUMBLE_RECOVERY_TDS) {
+      expect(isBlockedKickTouchdown(text), text).toBe(false);
+    }
   });
 });
 
