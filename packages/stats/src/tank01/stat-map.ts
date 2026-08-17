@@ -307,23 +307,38 @@ export function isExtraPointMade(scoreText: string): boolean {
  * up. Issue #158's `"Blocked Kick Recovered by Jordan Davis (PHI) … 61 Yd
  * Touchown Return"` is the same shape.
  *
- * **The obvious repair is wrong.** Adding a bare `recover` alternative to
- * {@link SPECIAL_TEAMS_RETURN} looks equivalent and is not: every fumble-return
- * touchdown in the 2025 season is worded `"Fumble Recovery"`, not `"Fumble
- * Return"`, so a loose `recover` turns **14 defensive touchdowns** into `ret_td`
- * *and* `def_td` — one play paid twice, in two different roster spots. So the
- * recovery forms below are anchored on **`blocked`**, which a fumble recovery
- * never carries, and `DEFENSIVE_RETURN` is widened to exclude a recovery as well
- * as a return so the guard holds even if this pattern is loosened later. There is
- * a test for that exact negative.
+ * The recovery forms below are anchored on **`blocked`**, which a fumble recovery
+ * never carries, and `DEFENSIVE_RETURN` matches a recovery as well as a return so
+ * the guard holds even if this pattern is loosened later. There is a test for
+ * that exact negative.
+ *
+ * **Corrected 2026-08-17.** This comment used to say that adding a bare `recover`
+ * alternative to {@link SPECIAL_TEAMS_RETURN} would turn **14 defensive
+ * touchdowns** into `ret_td` as well. It would not, and has not since
+ * `DEFENSIVE_RETURN` was widened to `/(interception|fumble)\s+(return|recovery)/`.
+ * Measured over all **2,339** scoring plays of the 2025 season: the loose variant
+ * goes from 26 matches to **27**, and the single addition is George Holani, below.
+ * Not one of the season's **19** fumble touchdowns — 17 worded `"Fumble
+ * Recovery"`, 2 worded `"Fumble Return"` — leaks, because
+ * {@link isSpecialTeamsReturnTouchdown} consults `DEFENSIVE_RETURN` first and
+ * every one of them matches it. The anchoring stays anyway: a pattern that is
+ * correct only by virtue of a different pattern in front of it is one edit away
+ * from not being.
  *
  * ## Still not recognised, deliberately
  *
  * `"George Holani Recovered Kickoff in End Zone for a Touchdown"` (issue #158) is
- * left out. It is not a blocked kick, the scorer is a running back rather than a
- * defender, and whether ESPN pays that as a return touchdown or as an offensive
- * fumble recovery has not been established from a second source. Adding it would
- * put six points on a rosterable player on a guess.
+ * left out, and **the reason is what ESPN pays rather than a collision with
+ * fumble recoveries** — the reason this comment gave until 2026-08-17, which the
+ * measurement above retires.
+ *
+ * A Seattle kickoff was muffed by Pittsburgh and recovered in the end zone, which
+ * is a coverage-team score rather than a return. **ESPN pays the player 0 and
+ * Seattle's D/ST 6**, filing it under stat id **104**, its fumble-return
+ * touchdown; Holani's ESPN fantasy `appliedTotal` for 2025 week 2 is 0. Tank01
+ * mirrors ESPN — `Defense.defTD: "1"`, `Kicking.kickReturnTD: "0"`. **Sleeper
+ * disagrees** and pays him `st_td` 6. We score exactly what ESPN scores, so a
+ * `ret_td` of 0 here is the right answer rather than a gap waiting on evidence.
  */
 const DEFENSIVE_RETURN = /\b(interception|fumble)\s+(return|recovery)\b/i;
 const SPECIAL_TEAMS_RETURN = /\b(kickoff|kick|punt)\s+return\b|\breturn\s+of\s+blocked\b/i;
@@ -340,6 +355,38 @@ const BLOCKED_KICK_RECOVERY = /\bblocked\s+(kick|punt|field\s+goal|fg)\b/i;
 export function isSpecialTeamsReturnTouchdown(scoreText: string): boolean {
   if (DEFENSIVE_RETURN.test(scoreText)) return false;
   return SPECIAL_TEAMS_RETURN.test(scoreText) || BLOCKED_KICK_RECOVERY.test(scoreText);
+}
+
+/**
+ * Whether a special-teams touchdown was a **blocked kick**.
+ *
+ * A narrowing of {@link isSpecialTeamsReturnTouchdown} that **says nothing about
+ * scoring**: a blocked-kick touchdown pays the scorer his `ret_td` and the unit
+ * its six exactly as any other special-teams score does, and all four 2025
+ * examples reconcile against ESPN on both. It exists for one consumer — the
+ * `defensiveOrSpecialTeamsTds` cross-check in `box-score.ts` — because **ESPN
+ * files a blocked-kick touchdown as a _defensive_ score**, stat id 93, "Def.
+ * blocked kick for TD", rather than as a return. So Tank01's counter holds one of
+ * these **once** where it holds an ordinary return by a defensive player twice,
+ * and a check that does not know the difference reports a discrepancy on a
+ * correctly scored game.
+ *
+ * Every observed wording puts "blocked" immediately before the kick, in both the
+ * recovered and the returned form, so this is {@link BLOCKED_KICK_RECOVERY}'s own
+ * anchor rather than a second vocabulary:
+ *
+ *     Blocked Kick Recovered by Jordan Davis (PHI) …        -> true
+ *     Marshawn Kneeland Blocked Punt Recovery in End Zone   -> true
+ *     Sydney Brown 35 yd. return of blocked punt            -> true
+ *     Jared Verse 76 Yd Return of Blocked Field Goal        -> true
+ *     Marcus Jones 87 Yd Punt Return                        -> false
+ *
+ * Not {@link isBlockedKick}, which answers a different question — it matches the
+ * bare word anywhere, including `"(Joshua Karty PAT blocked)"` on a rushing
+ * touchdown, which is a block that scored for nobody.
+ */
+export function isBlockedKickTouchdown(scoreText: string): boolean {
+  return BLOCKED_KICK_RECOVERY.test(scoreText);
 }
 
 /**
