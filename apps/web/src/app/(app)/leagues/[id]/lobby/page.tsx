@@ -63,6 +63,32 @@ export default async function LobbyPage({ params }: { params: Promise<{ id: stri
   const commissionerTeam = teams.find((team) => team.owner_id === league.commissioner_id);
   const now = new Date();
 
+  /*
+    Members of a pot league whose stake is not in the vault.
+
+    The same query `drawDraftOrder` refuses on, so the lobby cannot promise a
+    draw the server will decline — `refunded_at IS NULL` included, because a
+    member who staked and then withdrew under a failed league's refund has their
+    money back and is not funded.
+
+    A count, not a list. Naming who has not paid turns a scheduling problem into
+    a public accusation on a screen the whole league can see.
+  */
+  const [unfunded] = stored.rules.pot
+    ? await client.query<{ count: number }>(
+        `SELECT count(*)::int AS count
+           FROM teams t
+           JOIN league_memberships m ON m.team_id = t.id
+           JOIN wallets w ON w.id = m.wallet_id
+           LEFT JOIN league_onchain_stakes s
+             ON s.league_id = t.league_id AND s.wallet_address = w.address
+          WHERE t.league_id = $1
+            AND t.is_bot = false
+            AND (s.deposited_at IS NULL OR s.refunded_at IS NOT NULL)`,
+        [id],
+      )
+    : [{ count: 0 }];
+
   const view = buildLobbyView({
     leagueId: league.id,
     rulesHash: stored.hash,
@@ -79,6 +105,8 @@ export default async function LobbyPage({ params }: { params: Promise<{ id: stri
       isBot: team.is_bot,
       position: team.draft_position === null ? null : Number(team.draft_position),
     })),
+    hasPot: stored.rules.pot !== null,
+    unfundedMembers: Number(unfunded?.count ?? 0),
     draw: draft.draw
       ? {
           slot: draft.draw.slot,
@@ -118,6 +146,7 @@ export default async function LobbyPage({ params }: { params: Promise<{ id: stri
         pickSeconds={draft.pickSeconds}
         rounds={draft.rounds}
         drawBlocker={view.drawBlocker}
+        readiness={view.readiness}
         verification={
           view.verification
             ? {

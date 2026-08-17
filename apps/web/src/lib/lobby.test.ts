@@ -23,9 +23,21 @@ function input(overrides: Partial<LobbyInput> = {}): LobbyInput {
       team(null, "Hail Mary Inc."),
       team(null, "Route 66"),
     ],
+    hasPot: false,
+    unfundedMembers: 0,
     draw: null,
     ...overrides,
   };
+}
+
+/** An even field, so the readiness rules are not tripped incidentally. */
+function evenTeams() {
+  return [
+    team(null, "Backfield Ballers"),
+    team(null, "Hail Mary Inc."),
+    team(null, "Route 66"),
+    team(null, "Fourth Down"),
+  ];
 }
 
 const drawn = {
@@ -78,7 +90,11 @@ describe("buildLobbyView", () => {
       scheduledAt: SCHEDULED,
     });
 
-    const after = buildLobbyView(input({ now: new Date(SCHEDULED.getTime() + 1000) }));
+    // An even field, because this is about the clock: the default fixture has
+    // three teams, and an odd league is refused whatever the time says.
+    const after = buildLobbyView(
+      input({ now: new Date(SCHEDULED.getTime() + 1000), teams: evenTeams() }),
+    );
     expect(after.drawBlocker).toBeNull();
   });
 
@@ -149,5 +165,109 @@ describe("buildLobbyView", () => {
     const view = buildLobbyView(input({ viewerTeamId: null, isCommissioner: false }));
     expect(view.seats.some((seat) => seat.isYou)).toBe(false);
     expect(view.yourPicks).toEqual([]);
+  });
+});
+
+/**
+ * The warning that has to arrive before the deadline.
+ *
+ * `drawBlocker` answers "why is the button dead", first reason wins, and before
+ * the draft time it always answers `TOO_EARLY` — so on its own it would tell a
+ * commissioner looking a week ahead at a five-team league nothing at all about
+ * the thing that will stop them.
+ *
+ * That matters more here than it would anywhere else: migration `0028` locks the
+ * field at `scheduledAt` on INSERT *and* DELETE, so once the draft time passes
+ * nobody can join, nobody can leave, and no bot can square the field. The draw
+ * can only refuse, and the league then fails and refunds everyone. This list is
+ * the only thing that can prevent that.
+ */
+describe("readiness", () => {
+  it("reports an odd field a week before the draft, when the blocker still says TOO_EARLY", () => {
+    const view = buildLobbyView(input());
+
+    expect(view.drawBlocker).toMatchObject({ code: "TOO_EARLY" });
+    expect(view.readiness).toContainEqual({ code: "ODD_FIELD", teams: 3, canUseBot: true });
+  });
+
+  it("is empty for a league that is ready", () => {
+    expect(buildLobbyView(input({ teams: evenTeams() })).readiness).toEqual([]);
+  });
+
+  it("reports every problem at once, not the first", () => {
+    // They all have to be fixed by the same deadline, and finding out about the
+    // second after solving the first may be finding out too late.
+    const view = buildLobbyView(
+      input({
+        teams: [team(null, "Alone")],
+        minHumans: 2,
+        hasPot: true,
+        unfundedMembers: 1,
+      }),
+    );
+
+    expect(view.readiness.map((p) => p.code)).toEqual([
+      "BELOW_MIN_HUMANS",
+      "ODD_FIELD",
+      "POT_NOT_FUNDED",
+    ]);
+  });
+
+  it("says a bot can square a free league and cannot square a pot league", () => {
+    // Completely different remedies — press a button, or find a person — so the
+    // screen has to know which one it is asking for.
+    const free = buildLobbyView(input({ hasPot: false })).readiness;
+    expect(free).toContainEqual({ code: "ODD_FIELD", teams: 3, canUseBot: true });
+
+    const pot = buildLobbyView(input({ hasPot: true })).readiness;
+    expect(pot).toContainEqual({ code: "ODD_FIELD", teams: 3, canUseBot: false });
+  });
+
+  it("never asks a free league for stakes", () => {
+    const view = buildLobbyView(
+      input({ teams: evenTeams(), hasPot: false, unfundedMembers: 3 }),
+    );
+    expect(view.readiness).toEqual([]);
+  });
+
+  it("counts unfunded members of a pot league", () => {
+    const view = buildLobbyView(
+      input({ teams: evenTeams(), hasPot: true, unfundedMembers: 2 }),
+    );
+    expect(view.readiness).toEqual([{ code: "POT_NOT_FUNDED", unfunded: 2 }]);
+  });
+});
+
+/**
+ * And the button's own reasons, which must stay in the server's order.
+ *
+ * `drawDraftOrder` refuses in the order NO_TEAMS, BELOW_MIN_HUMANS, ODD_FIELD,
+ * POT_NOT_FUNDED. A screen that named a different reason first than the server
+ * would is the two-sources problem this repo keeps paying for.
+ */
+describe("drawBlocker, once the draft time has passed", () => {
+  const atDrawTime = { now: new Date(SCHEDULED.getTime() + 1000), isCommissioner: true };
+
+  it("blocks an odd field", () => {
+    const view = buildLobbyView(input(atDrawTime));
+    expect(view.drawBlocker).toEqual({ code: "ODD_FIELD", teams: 3 });
+  });
+
+  it("blocks a pot league that is not fully staked", () => {
+    const view = buildLobbyView(
+      input({ ...atDrawTime, teams: evenTeams(), hasPot: true, unfundedMembers: 1 }),
+    );
+    expect(view.drawBlocker).toEqual({ code: "POT_NOT_FUNDED", unfunded: 1 });
+  });
+
+  it("puts a short field ahead of a lopsided one, as the server does", () => {
+    const view = buildLobbyView(
+      input({ ...atDrawTime, teams: [team(null, "Alone")], minHumans: 2 }),
+    );
+    expect(view.drawBlocker).toMatchObject({ code: "BELOW_MIN_HUMANS" });
+  });
+
+  it("lets a ready league draw", () => {
+    expect(buildLobbyView(input({ ...atDrawTime, teams: evenTeams() })).drawBlocker).toBeNull();
   });
 });
