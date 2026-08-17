@@ -65,6 +65,11 @@ export class DraftPersistenceError extends Error {
       | "ORDER_ALREADY_DRAWN"
       | "TOO_EARLY_TO_DRAW"
       | "BELOW_MIN_HUMANS"
+      // An odd field would give somebody a bye every week. Squaring it is only
+      // possible before `scheduledAt`, when the field is still open.
+      | "ODD_FIELD"
+      // A pot league whose vault does not hold every member's stake.
+      | "POT_NOT_FUNDED"
       | "RULES_MISSING"
       | "NOT_IN_PROGRESS"
       | "ALREADY_STARTED"
@@ -310,6 +315,75 @@ export async function drawDraftOrder(
           `gap: it is a placeholder for a person, not a person.`,
         "BELOW_MIN_HUMANS",
       );
+    }
+
+    /*
+      No odd fields — decided by the owner on 2026-08-17.
+
+      An odd field gives somebody a bye every week, and a bye is a free result:
+      no game, no loss, and in a paying league that moves who gets paid. The
+      existing tool for squaring one is a bot, which is exactly what `maxBots`
+      exists for — and which a pot league may never have, because a bot has no
+      wallet and paid no buy-in. So a pot league's people have to be even.
+
+      **This refuses; it does not fix.** Adding a bot here is impossible rather
+      than merely unwanted: migration `0028` locks the field at `scheduledAt` on
+      INSERT *and* DELETE, and this runs at or after that instant. The remedy has
+      to happen while the field is still open, which is why the lobby has to say
+      so before the deadline rather than after it.
+    */
+    if (teams.length % 2 !== 0) {
+      throw new DraftPersistenceError(
+        `This league has ${teams.length} teams and cannot draft with an odd field — ` +
+          `somebody would take a bye every week. ` +
+          (stored.rules.pot
+            ? `A pot league cannot use a bot to square it, because a bot pays no buy-in.`
+            : `A bot can square it, but only before the draft time: the field is locked now.`),
+        "ODD_FIELD",
+      );
+    }
+
+    /*
+      And a pot league drafts only once every member has actually staked.
+
+      Nothing used to check this — the seat is written in Postgres when the rules
+      are signed, and the buy-in moves in a separate transaction the member can
+      simply not send. So a pot league could fill, draft, and play a whole season
+      against an empty vault, and the first anyone would learn of it is when
+      settlement tried to pay out of it.
+
+      The stake is read from `league_onchain_stakes`, which is written only after
+      `/deposit` has read the `Membership` PDA back — so this is the chain's
+      answer, recorded, not the client's word for it. `refunded_at IS NULL`
+      matters as much as `deposited_at IS NOT NULL`: a member who staked and then
+      withdrew under a failed league's refund has their money back, and is not
+      funded.
+
+      Bots are excluded because they cannot pay and are barred from pot leagues
+      anyway; the check is written to be true rather than to rely on that.
+    */
+    if (stored.rules.pot) {
+      const unfunded = await tx.query<{ count: number }>(
+        `SELECT count(*)::int AS count
+           FROM teams t
+           JOIN league_memberships m ON m.team_id = t.id
+           JOIN wallets w ON w.id = m.wallet_id
+           LEFT JOIN league_onchain_stakes s
+             ON s.league_id = t.league_id AND s.wallet_address = w.address
+          WHERE t.league_id = $1
+            AND t.is_bot = false
+            AND (s.deposited_at IS NULL OR s.refunded_at IS NOT NULL)`,
+        [input.leagueId],
+      );
+      const owing = Number(unfunded[0]?.count ?? 0);
+      if (owing > 0) {
+        throw new DraftPersistenceError(
+          `${owing} member${owing === 1 ? " has" : "s have"} not staked the buy-in, so the ` +
+            `pot is not full. A pot league cannot draft against a vault that does not hold ` +
+            `every member's stake.`,
+          "POT_NOT_FUNDED",
+        );
+      }
     }
 
     const seed = deriveOrderSeed({
