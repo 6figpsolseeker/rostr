@@ -374,6 +374,25 @@ is 2.
   cost an hour and looked like a code bug twice.
 - **`CI=true` is required** for anything running pnpm without a TTY, or it aborts
   trying to purge `node_modules`.
+- **An interrupted pnpm install poisons every later one, and the error names the
+  wrong thing.** pnpm relinks by renaming each package symlink to `.ignored_<name>`
+  first; if the run dies partway, those directories survive, and the next install
+  fails with `EPERM: operation not permitted, rename '…/eslint' → '…/.ignored_eslint'`
+  because on Windows `rename` will not overwrite an existing directory. It reads as
+  a file lock or a permissions problem and is neither — nothing is holding the file,
+  and no amount of retrying or closing editors helps. Delete the leftovers and
+  reinstall:
+
+  ```powershell
+  Get-ChildItem . -Recurse -Force -Directory -Filter '.ignored_*' |
+    ForEach-Object { cmd /c rmdir "$($_.FullName)" }
+  ```
+
+  It also **empties the workspace root's `node_modules`** on the way through, so
+  `pnpm typecheck` then fails with `'tsc' is not recognized` — which looks like a
+  missing toolchain and is the same interrupted install. Cost about twenty minutes
+  on 2026-08-17.
+
 - **Stale servers on 3000/3001/3002** made half of them answer and half not. Check
   which port is actually live before diagnosing anything.
 - **Deleting a league is impossible by design.** Every FK into `leagues` is ON
@@ -386,8 +405,17 @@ is 2.
 - **#165 — creating a league does not join it.** Has a **full implementation plan
   in a comment**, from three independent reviews: the five-step sequence, why
   steps 3 and 4 cannot be swapped, the batching trap that would put a seat
-  on-chain before consent, and a recommended sub-hour first slice. Start there.
-  #166 fixed the symptom (a nav offering eight doors that 404); the cause stands.
+  on-chain before consent, and a recommended sub-hour first slice. #166 fixed the
+  symptom (a nav offering eight doors that 404); the cause stands.
+
+  **The plan's first slice landed 2026-08-17** — see "The commissioner's four
+  steps" below. It makes the state legible and resumable; it does **not** make a
+  memberless league impossible. The next piece is the plan's own follow-up:
+  extract `JoinPanel`'s link-wallet block into a control that stands on its own,
+  and collect the commissioner's team name in the create form. Note the issue was
+  **closed by #166's PR body** and had to be reopened — `Closes #165` on a partial
+  fix, which is the third time this repo has swallowed an issue that way.
+
 - **#157** — provider stats that contradict themselves are ingested silently. Only
   field goals are cross-checked today. Two cheap checks would have caught both
   known cases without a season sweep or a second source.
@@ -2028,6 +2056,62 @@ does exactly that.
 The denormalised `league_scoring_rules` and `league_roster_slots` are **copies**, never
 references to a shared template — a template edit must never be able to reach a league
 that already exists. They carry the same immutability triggers.
+
+### The commissioner's four steps
+
+`apps/web/src/lib/setup.ts`, `components/CommissionerSetup.tsx`, on `/leagues/[id]`.
+The first slice of #165, landed 2026-08-17.
+
+**`createLeague` seats nobody, and that is not a flag somebody forgot.** Joining is a
+wallet signature over the rules hash; `joinLeague` needs a linked wallet and an anchored
+league, and a league is unanchored at the instant it is created. So the commissioner is a
+stranger to their own league until they walk the same steps every member walks — and
+because the league is usually PRIVATE, `leagueReadAccess` 404s them out of every tab in
+the meantime. #166 stopped the nav offering those doors. This says why they are shut.
+
+**The decision is in `lib/setup.ts`, not in the component.** `apps/web` cannot render a
+component in a test, so a rule written in `.tsx` is verified only by being run in
+production — the same reasoning that put `expectedTermsFromRules` in `@rostr/escrow` and
+the lobby's view model in `lib/lobby.ts`, and in both of those the defects review found
+were in the mapping rather than in the rule.
+
+**Anchor is step one here, and the issue's plan tabulates it second.** That table is right
+about the happy path — linking is the first wallet interaction — but linking is reachable
+only from `JoinPanel`, and `JoinPanel` renders a bare "not open yet" notice with no link
+control until the league is anchored. A checklist naming a step that has no button
+anywhere on the page is worse than no checklist. Anchoring is also the only step that
+blocks _other people_. Revisit the order when the link control is extracted.
+
+**Every input is a row, never a step counter.** All five come from state the page already
+loads, so the position survives a reload, a second tab, and the wallet popup in the middle
+of two of the four steps — which here is the ordinary case, not the exceptional one. A
+wizard inside `CreateLeagueForm` would hold its position in `useState` and strand a
+commissioner exactly when a popup stole focus, which is the failure `JoinPanel`'s
+`resumable` already exists to prevent.
+
+**`done` is each step's own condition, not "sits before the current one".** A commissioner
+can anchor without ever linking — `AnchorPanel` signs from the connected wallet and never
+consults `wallets` — and a list telling them they have not anchored, on the one step
+nobody can repeat, would be the screen contradicting the thing it reports on.
+
+**`AnchorPanel` now renders above `JoinPanel`.** It never renders once anchored, so this
+changes nothing for anybody else; while unanchored it stops the only control the
+commissioner can act on sitting _below_ the panel explaining that they need to act.
+
+**And `CreateLeagueForm` now compares the hash it previewed against the hash the server
+froze.** The whole promise of that screen is that they are the same, its own docstring
+said a divergence "should be visible", and nothing made it visible. They are built from
+separately supplied values — the mint and fee recipient come from server configuration and
+are only mirrored into `NEXT_PUBLIC_*` — so drift is a configuration mistake away. On a
+mismatch it stops, shows both hashes, disables the create button and hands over the link:
+the league already exists by then and cannot be amended, so this has to be loud **and**
+not lose it. `router.replace`, not `push`, so Back cannot return to a filled-in freeze
+step whose only button creates a second league.
+
+**What this does not do.** A commissioner can still abandon the league at any step, and
+after the frozen draft time migration `0028` refuses every `teams` INSERT — so a
+zero-team, undissolvable league is still reachable. The checklist says so, with the date.
+Making it impossible rather than merely legible is the next slice.
 
 ### Database
 

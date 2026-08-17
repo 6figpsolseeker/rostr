@@ -182,6 +182,21 @@ export function CreateLeagueForm() {
   const [problems, setProblems] = useState<readonly string[]>([]);
 
   /**
+   * The league was created and its hash is not the one previewed above.
+   *
+   * Held rather than thrown, because by the time this is knowable the league
+   * exists — the rules are frozen and cannot be corrected, only abandoned. So
+   * this has to be loud *and* still hand over the link: an error that navigated
+   * nowhere would leave a real league reachable only through browser history,
+   * and there is no "my leagues" list to find it in.
+   */
+  const [mismatch, setMismatch] = useState<{
+    id: string;
+    previewed: string;
+    frozen: string;
+  } | null>(null);
+
+  /**
    * Two steps, and the second is a ceremony rather than a page.
    *
    * The design splits creation into the choices and **the freeze** — read the
@@ -293,6 +308,7 @@ export function CreateLeagueForm() {
 
       const created = (await response.json()) as {
         id?: string;
+        rulesHash?: string;
         error?: string;
         problems?: string[];
       };
@@ -302,7 +318,36 @@ export function CreateLeagueForm() {
         throw new Error(created.error ?? "Could not create the league");
       }
 
-      router.push(`/leagues/${created.id}`);
+      /*
+        The one check this screen was missing.
+
+        Everything above promises that the hash rendered in the freeze step is
+        the hash the server stores — the preview is built by the same
+        `buildNflPprRules` from the same inputs, and the comment at the top of
+        this file says the discrepancy "should be visible" if they ever
+        disagreed. Nothing made it visible. The two are built from separately
+        supplied values (the mint and the fee recipient come from server
+        configuration and are only *mirrored* into `NEXT_PUBLIC_*` here), so
+        drift is a configuration mistake away rather than hypothetical, and its
+        symptom is a commissioner who read and acknowledged one document while
+        their members sign another.
+
+        Three lines, and the divergence stops the flow rather than being logged.
+      */
+      if (previewHash !== null && created.rulesHash !== previewHash) {
+        setMismatch({
+          id: created.id ?? "",
+          previewed: previewHash,
+          frozen: created.rulesHash ?? "none returned",
+        });
+        setSubmitting(false);
+        return;
+      }
+
+      // `replace`, not `push`. Back from the league would otherwise return to a
+      // filled-in freeze step whose only button creates a *second* league — and
+      // a league cannot be deleted, only dissolved.
+      router.replace(`/leagues/${created.id}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setSubmitting(false);
@@ -389,6 +434,38 @@ export function CreateLeagueForm() {
           </span>
         </label>
 
+        {mismatch ? (
+          <div className="mt-6 space-y-3 rounded-lg border border-red-500/40 bg-red-500/5 p-5">
+            <p className="text-[15px] font-medium text-red-300">
+              The frozen rules are not the rules you just read.
+            </p>
+            <p className="max-w-[620px] text-[13.5px] leading-[1.6] text-nocturne-neutral-400">
+              The league was created — that cannot be undone, and its rules cannot be amended —
+              but the hash the server stored differs from the one shown above, so this screen
+              did not show you the document your members will sign. Do not invite anyone until
+              you have read the stored rule set on the league page.
+            </p>
+            <dl className="space-y-1 font-mono text-[11.5px] break-all text-nocturne-neutral-500">
+              <div>
+                <dt className="inline text-nocturne-neutral-600">shown here </dt>
+                <dd className="inline">{mismatch.previewed}</dd>
+              </div>
+              <div>
+                <dt className="inline text-nocturne-neutral-600">frozen </dt>
+                <dd className="inline">{mismatch.frozen}</dd>
+              </div>
+            </dl>
+            {mismatch.id ? (
+              <a
+                href={`/leagues/${mismatch.id}`}
+                className="inline-block rounded-[4px] border border-nocturne-neutral-800 px-4 py-2 text-[13.5px] text-nocturne-neutral-300 transition-colors hover:text-nocturne-text"
+              >
+                Open the league and read what was stored
+              </a>
+            ) : null}
+          </div>
+        ) : null}
+
         {problems.length > 0 ? (
           <ul className="mt-6 space-y-1 text-[13.5px] text-nocturne-accent-300">
             {problems.map((problem) => (
@@ -401,7 +478,9 @@ export function CreateLeagueForm() {
         <form onSubmit={(e) => void submit(e)} className="mt-8">
           <button
             type="submit"
-            disabled={!acknowledged || submitting || !preview}
+            // Shut once a league exists, mismatch or not: this button creates,
+            // and pressing it again would create a second one.
+            disabled={!acknowledged || submitting || !preview || mismatch !== null}
             className="rounded-[4px] border border-nocturne-accent px-[26px] py-3 text-[14.5px] text-nocturne-accent-200 transition-colors hover:bg-nocturne-accent/10 disabled:cursor-not-allowed disabled:border-nocturne-neutral-800 disabled:text-nocturne-neutral-600"
           >
             {submitting ? "Freezing…" : "Freeze and create the league"}
