@@ -1,0 +1,2702 @@
+{
+  "DST": {
+    "away": {
+      "teamAbv": "ARI",
+      "teamID": "1",
+      "defTD": "0",
+      "defensiveInterceptions": "1",
+      "sacks": "1",
+      "ydsAllowed": "355",
+      "fumblesRecovered": "0",
+      "ptsAllowed": "16",
+      "safeties": "1"
+    },
+    "home": {
+      "teamAbv": "SF",
+      "teamID": "28",
+      "defTD": "0",
+      "defensiveInterceptions": "0",
+      "sacks": "1",
+      "ydsAllowed": "260",
+      "fumblesRecovered": "0",
+      "ptsAllowed": "15",
+      "safeties": "0"
+    }
+  },
+  "Referees": "Allen Baynes, John Hussey, Carl Johnson, Max Causey, Matt Edwards, Anthony Flemming, Duane Heydt",
+  "arena": "Levi's Stadium",
+  "arenaCapacity": "68,500",
+  "attendance": "70,414",
+  "away": "ARI",
+  "awayPts": "15",
+  "awayResult": "L",
+  "currentPeriod": "Final",
+  "gameClock": "",
+  "gameDate": "20250921",
+  "gameLocation": "Santa Clara, CA",
+  "gameStatus": "Completed",
+  "gameWeek": "Week 3",
+  "home": "SF",
+  "homePts": "16",
+  "homeResult": "W",
+  "lineScore": {
+    "period": "Final",
+    "gameClock": "",
+    "away": {
+      "Q1": "0",
+      "Q2": "3",
+      "Q3": "3",
+      "Q4": "9",
+      "teamID": "1",
+      "currentlyInPossession": "False",
+      "totalPts": "15",
+      "teamAbv": "ARI"
+    },
+    "home": {
+      "Q1": "0",
+      "Q2": "6",
+      "Q3": "0",
+      "Q4": "10",
+      "teamID": "28",
+      "currentlyInPossession": "False",
+      "totalPts": "16",
+      "teamAbv": "SF"
+    }
+  },
+  "network": "FOX",
+  "playerStats": {
+    "11284": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "32",
+        "stSnap": "5",
+        "stSnapPct": "0.20",
+        "offSnap": "0",
+        "defSnapPct": "0.49"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "3",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "11284",
+      "longName": "Calais Campbell"
+    },
+    "12701": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "28",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "7",
+        "stSnapPct": "0.28",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "Punting": {
+        "puntYds": "128",
+        "punts": "3",
+        "puntAvg": "42.7",
+        "puntsin20": "2",
+        "puntTouchBacks": "0",
+        "puntLong": "48"
+      },
+      "team": "SF",
+      "teamAbv": "SF",
+      "playerID": "12701",
+      "longName": "Thomas Morstead"
+    },
+    "13241": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "28",
+      "snapCounts": {
+        "offSnapPct": "1.00",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "65",
+        "defSnapPct": "0.00"
+      },
+      "team": "SF",
+      "teamAbv": "SF",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "13241",
+      "longName": "Trent Williams"
+    },
+    "13729": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "28",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "7",
+        "stSnapPct": "0.28",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "SF",
+      "teamAbv": "SF",
+      "playerID": "13729",
+      "longName": "Jon Weeks"
+    },
+    "15035": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "1.00",
+        "defSnap": "0",
+        "stSnap": "4",
+        "stSnapPct": "0.16",
+        "offSnap": "66",
+        "defSnapPct": "0.00"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "playerID": "15035",
+      "longName": "Kelvin Beachum"
+    },
+    "15241": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "9",
+        "stSnapPct": "0.36",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "playerID": "15241",
+      "longName": "Aaron Brewer"
+    },
+    "16002": {
+      "gameID": "20250921_ARI@SF",
+      "Receiving": {
+        "receptions": "1",
+        "recTD": "1",
+        "longRec": "1",
+        "targets": "1",
+        "recYds": "1",
+        "recAvg": "1.0"
+      },
+      "scoringPlays": [
+        {
+          "score": "Kyle Juszczyk 1 Yd pass from Mac Jones (Eddy Pineiro Kick)",
+          "scorePeriod": "Q4",
+          "homeScore": "13",
+          "awayScore": "6",
+          "teamID": "28",
+          "scoreDetails": "6 plays, 48 yards, 3:09",
+          "scoreType": "TD",
+          "scoreTime": "10:50",
+          "team": "SF",
+          "playerIDs": ["4241464", "16002", "4034949"]
+        }
+      ],
+      "teamID": "28",
+      "snapCounts": {
+        "offSnapPct": "0.34",
+        "defSnap": "0",
+        "stSnap": "3",
+        "stSnapPct": "0.12",
+        "offSnap": "22",
+        "defSnapPct": "0.00"
+      },
+      "team": "SF",
+      "teamAbv": "SF",
+      "playerID": "16002",
+      "longName": "Kyle Juszczyk"
+    },
+    "2577185": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "28",
+      "snapCounts": {
+        "offSnapPct": "1.00",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "65",
+        "defSnapPct": "0.00"
+      },
+      "team": "SF",
+      "teamAbv": "SF",
+      "playerID": "2577185",
+      "longName": "Jake Brendel"
+    },
+    "2979860": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "35",
+        "stSnap": "1",
+        "stSnapPct": "0.04",
+        "offSnap": "0",
+        "defSnapPct": "0.54"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "Defense": {
+        "totalTackles": "3",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "3",
+        "tfl": "1",
+        "qbHits": "1",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "2979860",
+      "longName": "Dalvin Tomlinson"
+    },
+    "3045147": {
+      "gameID": "20250921_ARI@SF",
+      "Rushing": {
+        "rushAvg": "2.4",
+        "rushYds": "22",
+        "carries": "9",
+        "longRush": "9",
+        "rushTD": "0"
+      },
+      "Receiving": {
+        "receptions": "3",
+        "recTD": "0",
+        "longRec": "10",
+        "targets": "4",
+        "recYds": "15",
+        "recAvg": "5.0"
+      },
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.30",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "20",
+        "defSnapPct": "0.00"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "Defense": {
+        "fumblesLost": "0",
+        "defensiveInterceptions": "0",
+        "forcedFumbles": "0",
+        "fumbles": "1",
+        "fumblesRecovered": "0"
+      },
+      "playerID": "3045147",
+      "longName": "James Conner"
+    },
+    "3045523": {
+      "gameID": "20250921_ARI@SF",
+      "Receiving": {
+        "receptions": "4",
+        "recTD": "0",
+        "longRec": "11",
+        "targets": "6",
+        "recYds": "38",
+        "recAvg": "9.5"
+      },
+      "teamID": "28",
+      "snapCounts": {
+        "offSnapPct": "0.72",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "47",
+        "defSnapPct": "0.00"
+      },
+      "team": "SF",
+      "teamAbv": "SF",
+      "playerID": "3045523",
+      "longName": "Kendrick Bourne"
+    },
+    "3051738": {
+      "gameID": "20250921_ARI@SF",
+      "Receiving": {
+        "receptions": "1",
+        "recTD": "0",
+        "longRec": "9",
+        "targets": "1",
+        "recYds": "9",
+        "recAvg": "9.0"
+      },
+      "teamID": "28",
+      "snapCounts": {
+        "offSnapPct": "0.26",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "17",
+        "defSnapPct": "0.00"
+      },
+      "team": "SF",
+      "teamAbv": "SF",
+      "playerID": "3051738",
+      "longName": "Marquez Valdes-Scantling"
+    },
+    "3057524": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "28",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "19",
+        "stSnapPct": "0.76",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "SF",
+      "teamAbv": "SF",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "0",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "3057524",
+      "longName": "Siran Neal"
+    },
+    "3059722": {
+      "gameID": "20250921_ARI@SF",
+      "Receiving": {
+        "receptions": "2",
+        "recTD": "0",
+        "longRec": "18",
+        "targets": "3",
+        "recYds": "25",
+        "recAvg": "12.5"
+      },
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.50",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "33",
+        "defSnapPct": "0.00"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "playerID": "3059722",
+      "longName": "Zay Jones"
+    },
+    "3115928": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "28",
+      "snapCounts": {
+        "offSnapPct": "0.02",
+        "defSnap": "0",
+        "stSnap": "7",
+        "stSnapPct": "0.28",
+        "offSnap": "1",
+        "defSnapPct": "0.00"
+      },
+      "team": "SF",
+      "teamAbv": "SF",
+      "playerID": "3115928",
+      "longName": "Malik Turner"
+    },
+    "3116097": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "28",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "12",
+        "stSnap": "21",
+        "stSnapPct": "0.84",
+        "offSnap": "0",
+        "defSnapPct": "0.18"
+      },
+      "team": "SF",
+      "teamAbv": "SF",
+      "Defense": {
+        "totalTackles": "2",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "0",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "3116097",
+      "longName": "Luke Gifford"
+    },
+    "3117251": {
+      "gameID": "20250921_ARI@SF",
+      "Rushing": {
+        "rushAvg": "3.1",
+        "rushYds": "52",
+        "carries": "17",
+        "longRush": "15",
+        "rushTD": "0"
+      },
+      "Receiving": {
+        "receptions": "10",
+        "recTD": "0",
+        "longRec": "20",
+        "targets": "15",
+        "recYds": "88",
+        "recAvg": "8.8"
+      },
+      "teamID": "28",
+      "snapCounts": {
+        "offSnapPct": "0.91",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "59",
+        "defSnapPct": "0.00"
+      },
+      "team": "SF",
+      "teamAbv": "SF",
+      "playerID": "3117251",
+      "longName": "Christian McCaffrey"
+    },
+    "3127287": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "65",
+        "stSnap": "5",
+        "stSnapPct": "0.20",
+        "offSnap": "0",
+        "defSnapPct": "1.00"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "Defense": {
+        "totalTackles": "6",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "3",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "3127287",
+      "longName": "Budda Baker"
+    },
+    "3128412": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "1.00",
+        "defSnap": "0",
+        "stSnap": "4",
+        "stSnapPct": "0.16",
+        "offSnap": "66",
+        "defSnapPct": "0.00"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "playerID": "3128412",
+      "longName": "Evan Brown"
+    },
+    "3138826": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "28",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "66",
+        "stSnap": "6",
+        "stSnapPct": "0.24",
+        "offSnap": "0",
+        "defSnapPct": "1.00"
+      },
+      "team": "SF",
+      "teamAbv": "SF",
+      "Defense": {
+        "totalTackles": "11",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "5",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "2"
+      },
+      "playerID": "3138826",
+      "longName": "Fred Warner"
+    },
+    "3693166": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "27",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "0.42"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "Defense": {
+        "totalTackles": "2",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "1",
+        "qbHits": "2",
+        "defensiveInterceptions": "0",
+        "sacks": "1",
+        "passDeflections": "0"
+      },
+      "playerID": "3693166",
+      "longName": "Josh Sweat"
+    },
+    "3886633": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "1.00",
+        "defSnap": "0",
+        "stSnap": "4",
+        "stSnapPct": "0.16",
+        "offSnap": "66",
+        "defSnapPct": "0.00"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "Defense": {
+        "fumblesLost": "0",
+        "defensiveInterceptions": "0",
+        "forcedFumbles": "0",
+        "fumbles": "0",
+        "fumblesRecovered": "1"
+      },
+      "playerID": "3886633",
+      "longName": "Hjalte Froholdt"
+    },
+    "3916075": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "28",
+      "snapCounts": {
+        "offSnapPct": "1.00",
+        "defSnap": "0",
+        "stSnap": "4",
+        "stSnapPct": "0.16",
+        "offSnap": "65",
+        "defSnapPct": "0.00"
+      },
+      "team": "SF",
+      "teamAbv": "SF",
+      "playerID": "3916075",
+      "longName": "Colton McKivitz"
+    },
+    "3917142": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "52",
+        "stSnap": "14",
+        "stSnapPct": "0.56",
+        "offSnap": "0",
+        "defSnapPct": "0.80"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "Defense": {
+        "totalTackles": "8",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "5",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "3917142",
+      "longName": "Akeem Davis-Gaither"
+    },
+    "3917315": {
+      "gameID": "20250921_ARI@SF",
+      "Rushing": {
+        "rushAvg": "6.2",
+        "rushYds": "37",
+        "carries": "6",
+        "longRush": "9",
+        "rushTD": "0"
+      },
+      "Passing": {
+        "qbr": "52.0",
+        "rtg": "82.9",
+        "sacked": "1-5",
+        "passAttempts": "35",
+        "passAvg": "4.5",
+        "passTD": "1",
+        "passYds": "159",
+        "int": "0",
+        "passCompletions": "22"
+      },
+      "scoringPlays": [
+        {
+          "score": "Trey McBride 1 Yd pass from Kyler Murray (Chad Ryland Kick)",
+          "scorePeriod": "Q4",
+          "homeScore": "13",
+          "awayScore": "13",
+          "teamID": "1",
+          "scoreDetails": "4 plays, 65 yards, 2:13",
+          "scoreType": "TD",
+          "scoreTime": "8:37",
+          "team": "ARI",
+          "playerIDs": ["3917315", "4361307", "4363538"]
+        }
+      ],
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "1.00",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "66",
+        "defSnapPct": "0.00"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "playerID": "3917315",
+      "longName": "Kyler Murray"
+    },
+    "3920814": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "28",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "4",
+        "stSnapPct": "0.16",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "SF",
+      "teamAbv": "SF",
+      "playerID": "3920814",
+      "longName": "Austen Pleasants"
+    },
+    "4034949": {
+      "gameID": "20250921_ARI@SF",
+      "scoringPlays": [
+        {
+          "score": "Eddy Pineiro 38 Yd Field Goal",
+          "scorePeriod": "Q2",
+          "homeScore": "3",
+          "awayScore": "3",
+          "teamID": "28",
+          "scoreDetails": "9 plays, 49 yards, 4:23",
+          "scoreType": "FG",
+          "scoreTime": "4:22",
+          "team": "SF",
+          "playerIDs": ["4034949"]
+        },
+        {
+          "score": "Eddy Pineiro 51 Yd Field Goal",
+          "scorePeriod": "Q2",
+          "homeScore": "6",
+          "awayScore": "3",
+          "teamID": "28",
+          "scoreDetails": "11 plays, 53 yards, 1:51",
+          "scoreType": "FG",
+          "scoreTime": "0:17",
+          "team": "SF",
+          "playerIDs": ["4034949"]
+        },
+        {
+          "score": "Kyle Juszczyk 1 Yd pass from Mac Jones (Eddy Pineiro Kick)",
+          "scorePeriod": "Q4",
+          "homeScore": "13",
+          "awayScore": "6",
+          "teamID": "28",
+          "scoreDetails": "6 plays, 48 yards, 3:09",
+          "scoreType": "TD",
+          "scoreTime": "10:50",
+          "team": "SF",
+          "playerIDs": ["4241464", "16002", "4034949"]
+        },
+        {
+          "score": "Eddy Pineiro 35 Yd Field Goal",
+          "scorePeriod": "Q4",
+          "homeScore": "16",
+          "awayScore": "15",
+          "teamID": "28",
+          "scoreDetails": "10 plays, 63 yards, 1:46",
+          "scoreType": "FG",
+          "scoreTime": "0:00",
+          "team": "SF",
+          "playerIDs": ["4034949"]
+        }
+      ],
+      "teamID": "28",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "9",
+        "stSnapPct": "0.36",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "Kicking": {
+        "fgLong": "51",
+        "fgMade": "3",
+        "fgAttempts": "3",
+        "xpMade": "1",
+        "fgPct": "100.0",
+        "kickingPts": "10",
+        "xpAttempts": "1",
+        "fgMissed": "0",
+        "xpMissed": "0"
+      },
+      "team": "SF",
+      "teamAbv": "SF",
+      "playerID": "4034949",
+      "longName": "Eddy Pineiro"
+    },
+    "4035870": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "4",
+        "stSnapPct": "0.16",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "playerID": "4035870",
+      "longName": "Jake Curhan"
+    },
+    "4037235": {
+      "gameID": "20250921_ARI@SF",
+      "Rushing": {
+        "rushAvg": "5.0",
+        "rushYds": "5",
+        "carries": "1",
+        "longRush": "5",
+        "rushTD": "0"
+      },
+      "Receiving": {
+        "receptions": "2",
+        "recTD": "0",
+        "longRec": "2",
+        "targets": "2",
+        "recYds": "3",
+        "recAvg": "1.5"
+      },
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.24",
+        "defSnap": "0",
+        "stSnap": "8",
+        "stSnapPct": "0.32",
+        "offSnap": "16",
+        "defSnapPct": "0.00"
+      },
+      "Kicking": {
+        "kickReturns": "2",
+        "kickReturnTD": "0",
+        "kickReturnYds": "58",
+        "kickReturnAvg": "29.0",
+        "kickReturnLong": "33"
+      },
+      "Punting": {
+        "puntReturns": "1",
+        "puntReturnYds": "8",
+        "puntReturnAvg": "8.0",
+        "puntReturnLong": "8",
+        "puntReturnTD": "0"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "playerID": "4037235",
+      "longName": "Greg Dortch"
+    },
+    "4039052": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "28",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "32",
+        "stSnap": "4",
+        "stSnapPct": "0.16",
+        "offSnap": "0",
+        "defSnapPct": "0.48"
+      },
+      "team": "SF",
+      "teamAbv": "SF",
+      "Defense": {
+        "totalTackles": "3",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "1",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4039052",
+      "longName": "Jordan Elliott"
+    },
+    "4039375": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "28",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "36",
+        "stSnap": "2",
+        "stSnapPct": "0.08",
+        "offSnap": "0",
+        "defSnapPct": "0.55"
+      },
+      "team": "SF",
+      "teamAbv": "SF",
+      "Defense": {
+        "totalTackles": "5",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "2",
+        "tfl": "1",
+        "qbHits": "2",
+        "defensiveInterceptions": "0",
+        "sacks": "1",
+        "passDeflections": "1"
+      },
+      "playerID": "4039375",
+      "longName": "Bryce Huff"
+    },
+    "4040605": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "28",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "14",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "0.21"
+      },
+      "team": "SF",
+      "teamAbv": "SF",
+      "Defense": {
+        "totalTackles": "2",
+        "defTD": "0",
+        "forcedFumbles": "1",
+        "soloTackles": "0",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4040605",
+      "longName": "Nick Bosa"
+    },
+    "4040612": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "28",
+      "snapCounts": {
+        "offSnapPct": "0.46",
+        "defSnap": "0",
+        "stSnap": "8",
+        "stSnapPct": "0.32",
+        "offSnap": "30",
+        "defSnapPct": "0.00"
+      },
+      "team": "SF",
+      "teamAbv": "SF",
+      "playerID": "4040612",
+      "longName": "Luke Farrell"
+    },
+    "4040726": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "1.00",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "66",
+        "defSnapPct": "0.00"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "playerID": "4040726",
+      "longName": "Jonah Williams"
+    },
+    "4040983": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "65",
+        "stSnap": "1",
+        "stSnapPct": "0.04",
+        "offSnap": "0",
+        "defSnapPct": "1.00"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "Defense": {
+        "totalTackles": "12",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "6",
+        "tfl": "1",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "2"
+      },
+      "playerID": "4040983",
+      "longName": "Mack Wilson Sr."
+    },
+    "4043089": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "65",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "1.00"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "Defense": {
+        "totalTackles": "6",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "4",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4043089",
+      "longName": "Jalen Thompson"
+    },
+    "4044138": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "28",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "4",
+        "stSnapPct": "0.16",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "SF",
+      "teamAbv": "SF",
+      "playerID": "4044138",
+      "longName": "Matt Hennessy"
+    },
+    "4044448": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "28",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "15",
+        "stSnapPct": "0.60",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "SF",
+      "teamAbv": "SF",
+      "playerID": "4044448",
+      "longName": "Curtis Robinson"
+    },
+    "4045180": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "9",
+        "stSnapPct": "0.36",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "Punting": {
+        "puntYds": "258",
+        "punts": "5",
+        "puntAvg": "51.6",
+        "puntsin20": "2",
+        "puntTouchBacks": "1",
+        "puntLong": "55"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "playerID": "4045180",
+      "longName": "Blake Gillikin"
+    },
+    "4047846": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "28",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "12",
+        "stSnapPct": "0.48",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "SF",
+      "teamAbv": "SF",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4047846",
+      "longName": "Chase Lucas"
+    },
+    "4240706": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "28",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "66",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "1.00"
+      },
+      "team": "SF",
+      "teamAbv": "SF",
+      "Defense": {
+        "totalTackles": "3",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "3",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4240706",
+      "longName": "Jason Pinnock"
+    },
+    "4241464": {
+      "gameID": "20250921_ARI@SF",
+      "Rushing": {
+        "rushAvg": "-1.0",
+        "rushYds": "-1",
+        "carries": "1",
+        "longRush": "-1",
+        "rushTD": "0"
+      },
+      "Passing": {
+        "qbr": "62.9",
+        "rtg": "83.8",
+        "sacked": "1-2",
+        "passAttempts": "41",
+        "passAvg": "6.9",
+        "passTD": "1",
+        "passYds": "284",
+        "int": "1",
+        "passCompletions": "27"
+      },
+      "scoringPlays": [
+        {
+          "score": "Kyle Juszczyk 1 Yd pass from Mac Jones (Eddy Pineiro Kick)",
+          "scorePeriod": "Q4",
+          "homeScore": "13",
+          "awayScore": "6",
+          "teamID": "28",
+          "scoreDetails": "6 plays, 48 yards, 3:09",
+          "scoreType": "TD",
+          "scoreTime": "10:50",
+          "team": "SF",
+          "playerIDs": ["4241464", "16002", "4034949"]
+        }
+      ],
+      "teamID": "28",
+      "snapCounts": {
+        "offSnapPct": "1.00",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "65",
+        "defSnapPct": "0.00"
+      },
+      "team": "SF",
+      "teamAbv": "SF",
+      "playerID": "4241464",
+      "longName": "Mac Jones"
+    },
+    "4241474": {
+      "gameID": "20250921_ARI@SF",
+      "Rushing": {
+        "rushAvg": "11.0",
+        "rushYds": "22",
+        "carries": "2",
+        "longRush": "19",
+        "rushTD": "0"
+      },
+      "teamID": "28",
+      "snapCounts": {
+        "offSnapPct": "0.09",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "6",
+        "defSnapPct": "0.00"
+      },
+      "team": "SF",
+      "teamAbv": "SF",
+      "playerID": "4241474",
+      "longName": "Brian Robinson Jr."
+    },
+    "4241987": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "30",
+        "stSnap": "1",
+        "stSnapPct": "0.04",
+        "offSnap": "0",
+        "defSnapPct": "0.46"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "0",
+        "tfl": "0",
+        "qbHits": "1",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4241987",
+      "longName": "Baron Browning"
+    },
+    "4242488": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "28",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "64",
+        "stSnap": "2",
+        "stSnapPct": "0.08",
+        "offSnap": "0",
+        "defSnapPct": "0.97"
+      },
+      "team": "SF",
+      "teamAbv": "SF",
+      "Defense": {
+        "totalTackles": "3",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "3",
+        "tfl": "1",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4242488",
+      "longName": "Deommodore Lenoir"
+    },
+    "4243541": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "28",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "31",
+        "stSnap": "5",
+        "stSnapPct": "0.20",
+        "offSnap": "0",
+        "defSnapPct": "0.47"
+      },
+      "team": "SF",
+      "teamAbv": "SF",
+      "Defense": {
+        "totalTackles": "2",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "0",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4243541",
+      "longName": "Kalia Davis"
+    },
+    "4244606": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "29",
+        "stSnap": "9",
+        "stSnapPct": "0.36",
+        "offSnap": "0",
+        "defSnapPct": "0.45"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "Defense": {
+        "totalTackles": "2",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "0",
+        "tfl": "0",
+        "qbHits": "1",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4244606",
+      "longName": "Zaven Collins"
+    },
+    "4259147": {
+      "gameID": "20250921_ARI@SF",
+      "Receiving": {
+        "receptions": "2",
+        "recTD": "0",
+        "longRec": "11",
+        "targets": "3",
+        "recYds": "21",
+        "recAvg": "10.5"
+      },
+      "teamID": "28",
+      "snapCounts": {
+        "offSnapPct": "0.69",
+        "defSnap": "0",
+        "stSnap": "15",
+        "stSnapPct": "0.60",
+        "offSnap": "45",
+        "defSnapPct": "0.00"
+      },
+      "team": "SF",
+      "teamAbv": "SF",
+      "playerID": "4259147",
+      "longName": "Jake Tonges"
+    },
+    "4259324": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "5",
+        "stSnapPct": "0.20",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "playerID": "4259324",
+      "longName": "Travis Vokolek"
+    },
+    "4259594": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "28",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "22",
+        "stSnap": "2",
+        "stSnapPct": "0.08",
+        "offSnap": "0",
+        "defSnapPct": "0.33"
+      },
+      "team": "SF",
+      "teamAbv": "SF",
+      "playerID": "4259594",
+      "longName": "Yetur Gross-Matos"
+    },
+    "4261606": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "10",
+        "stSnapPct": "0.40",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "playerID": "4261606",
+      "longName": "Darren Hall"
+    },
+    "4360203": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "5",
+        "stSnapPct": "0.20",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "playerID": "4360203",
+      "longName": "Elijah Jones"
+    },
+    "4360290": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "28",
+      "snapCounts": {
+        "offSnapPct": "0.02",
+        "defSnap": "0",
+        "stSnap": "11",
+        "stSnapPct": "0.44",
+        "offSnap": "1",
+        "defSnapPct": "0.00"
+      },
+      "team": "SF",
+      "teamAbv": "SF",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "0",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4360290",
+      "longName": "Brayden Willis"
+    },
+    "4360739": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "16",
+        "stSnapPct": "0.64",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4360739",
+      "longName": "Simi Fehoko"
+    },
+    "4360761": {
+      "gameID": "20250921_ARI@SF",
+      "Receiving": {
+        "receptions": "1",
+        "recTD": "0",
+        "longRec": "5",
+        "targets": "2",
+        "recYds": "5",
+        "recAvg": "5.0"
+      },
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.74",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "49",
+        "defSnapPct": "0.00"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "playerID": "4360761",
+      "longName": "Michael Wilson"
+    },
+    "4361307": {
+      "gameID": "20250921_ARI@SF",
+      "Receiving": {
+        "receptions": "5",
+        "recTD": "1",
+        "longRec": "17",
+        "targets": "8",
+        "recYds": "43",
+        "recAvg": "8.6"
+      },
+      "scoringPlays": [
+        {
+          "score": "Trey McBride 1 Yd pass from Kyler Murray (Chad Ryland Kick)",
+          "scorePeriod": "Q4",
+          "homeScore": "13",
+          "awayScore": "13",
+          "teamID": "1",
+          "scoreDetails": "4 plays, 65 yards, 2:13",
+          "scoreType": "TD",
+          "scoreTime": "8:37",
+          "team": "ARI",
+          "playerIDs": ["3917315", "4361307", "4363538"]
+        }
+      ],
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.88",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "58",
+        "defSnapPct": "0.00"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "playerID": "4361307",
+      "longName": "Trey McBride"
+    },
+    "4361421": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "20",
+        "stSnap": "4",
+        "stSnapPct": "0.16",
+        "offSnap": "0",
+        "defSnapPct": "0.31"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "1"
+      },
+      "playerID": "4361421",
+      "longName": "PJ Mustipher"
+    },
+    "4362225": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "36",
+        "stSnap": "4",
+        "stSnapPct": "0.16",
+        "offSnap": "0",
+        "defSnapPct": "0.55"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "0",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4362225",
+      "longName": "Dante Stills"
+    },
+    "4362478": {
+      "gameID": "20250921_ARI@SF",
+      "Rushing": {
+        "rushAvg": "0.0",
+        "rushYds": "0",
+        "carries": "2",
+        "longRush": "1",
+        "rushTD": "0"
+      },
+      "Receiving": {
+        "receptions": "0",
+        "recTD": "0",
+        "longRec": "0",
+        "targets": "1",
+        "recYds": "0",
+        "recAvg": "0.0"
+      },
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.11",
+        "defSnap": "0",
+        "stSnap": "12",
+        "stSnapPct": "0.48",
+        "offSnap": "7",
+        "defSnapPct": "0.00"
+      },
+      "Kicking": {
+        "kickReturns": "2",
+        "kickReturnTD": "0",
+        "kickReturnYds": "57",
+        "kickReturnAvg": "28.5",
+        "kickReturnLong": "36"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "playerID": "4362478",
+      "longName": "Emari Demercado"
+    },
+    "4363538": {
+      "gameID": "20250921_ARI@SF",
+      "scoringPlays": [
+        {
+          "score": "Chad Ryland 34 Yd Field Goal",
+          "scorePeriod": "Q2",
+          "homeScore": "0",
+          "awayScore": "3",
+          "teamID": "1",
+          "scoreDetails": "12 plays, 49 yards, 6:09",
+          "scoreType": "FG",
+          "scoreTime": "8:45",
+          "team": "ARI",
+          "playerIDs": ["4363538"]
+        },
+        {
+          "score": "Chad Ryland 28 Yd Field Goal",
+          "scorePeriod": "Q3",
+          "homeScore": "6",
+          "awayScore": "6",
+          "teamID": "1",
+          "scoreDetails": "15 plays, 77 yards, 6:35",
+          "scoreType": "FG",
+          "scoreTime": "6:37",
+          "team": "ARI",
+          "playerIDs": ["4363538"]
+        },
+        {
+          "score": "Trey McBride 1 Yd pass from Kyler Murray (Chad Ryland Kick)",
+          "scorePeriod": "Q4",
+          "homeScore": "13",
+          "awayScore": "13",
+          "teamID": "1",
+          "scoreDetails": "4 plays, 65 yards, 2:13",
+          "scoreType": "TD",
+          "scoreTime": "8:37",
+          "team": "ARI",
+          "playerIDs": ["3917315", "4361307", "4363538"]
+        }
+      ],
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "8",
+        "stSnapPct": "0.32",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "Kicking": {
+        "fgLong": "34",
+        "fgMade": "2",
+        "fgAttempts": "3",
+        "xpMade": "1",
+        "fgPct": "66.7",
+        "kickingPts": "7",
+        "xpAttempts": "1",
+        "fgMissed": "1",
+        "xpMissed": "0"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "playerID": "4363538",
+      "longName": "Chad Ryland"
+    },
+    "4367199": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.03",
+        "defSnap": "0",
+        "stSnap": "4",
+        "stSnapPct": "0.16",
+        "offSnap": "2",
+        "defSnapPct": "0.00"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "playerID": "4367199",
+      "longName": "Jon Gaines II"
+    },
+    "4372378": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "8",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "0.12"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "0",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4372378",
+      "longName": "Anthony Goodlow"
+    },
+    "4372561": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "28",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "15",
+        "stSnapPct": "0.60",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "Kicking": {
+        "kickReturns": "1",
+        "kickReturnTD": "0",
+        "kickReturnYds": "19",
+        "kickReturnAvg": "19.0",
+        "kickReturnLong": "19"
+      },
+      "team": "SF",
+      "teamAbv": "SF",
+      "playerID": "4372561",
+      "longName": "Isaac Guerendo"
+    },
+    "4426698": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "28",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "15",
+        "stSnapPct": "0.60",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "SF",
+      "teamAbv": "SF",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4426698",
+      "longName": "Tatum Bethune"
+    },
+    "4426844": {
+      "gameID": "20250921_ARI@SF",
+      "Receiving": {
+        "receptions": "1",
+        "recTD": "0",
+        "longRec": "7",
+        "targets": "1",
+        "recYds": "7",
+        "recAvg": "7.0"
+      },
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.15",
+        "defSnap": "0",
+        "stSnap": "16",
+        "stSnapPct": "0.64",
+        "offSnap": "10",
+        "defSnapPct": "0.00"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "playerID": "4426844",
+      "longName": "Elijah Higgins"
+    },
+    "4426923": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "31",
+        "stSnap": "6",
+        "stSnapPct": "0.24",
+        "offSnap": "0",
+        "defSnapPct": "0.48"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "Defense": {
+        "totalTackles": "5",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "3",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4426923",
+      "longName": "Kei'Trel Clark"
+    },
+    "4427325": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "28",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "57",
+        "stSnap": "2",
+        "stSnapPct": "0.08",
+        "offSnap": "0",
+        "defSnapPct": "0.86"
+      },
+      "team": "SF",
+      "teamAbv": "SF",
+      "Defense": {
+        "totalTackles": "4",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4427325",
+      "longName": "Renardo Green"
+    },
+    "4428209": {
+      "gameID": "20250921_ARI@SF",
+      "Receiving": {
+        "receptions": "8",
+        "recTD": "0",
+        "longRec": "34",
+        "targets": "11",
+        "recYds": "117",
+        "recAvg": "14.6"
+      },
+      "teamID": "28",
+      "snapCounts": {
+        "offSnapPct": "0.97",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "63",
+        "defSnapPct": "0.00"
+      },
+      "team": "SF",
+      "teamAbv": "SF",
+      "playerID": "4428209",
+      "longName": "Ricky Pearsall"
+    },
+    "4428633": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "40",
+        "stSnap": "15",
+        "stSnapPct": "0.60",
+        "offSnap": "0",
+        "defSnapPct": "0.62"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "Defense": {
+        "totalTackles": "4",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "4",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "1",
+        "defensiveInterceptionsYards": "18",
+        "interceptionTDs": "0",
+        "sacks": "0",
+        "passDeflections": "1"
+      },
+      "playerID": "4428633",
+      "longName": "Dadrion Taylor-Demerson"
+    },
+    "4428914": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "28",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "66",
+        "stSnap": "2",
+        "stSnapPct": "0.08",
+        "offSnap": "0",
+        "defSnapPct": "1.00"
+      },
+      "team": "SF",
+      "teamAbv": "SF",
+      "Defense": {
+        "totalTackles": "8",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "4",
+        "tfl": "0",
+        "qbHits": "1",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "1"
+      },
+      "playerID": "4428914",
+      "longName": "Dee Winters"
+    },
+    "4428996": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "38",
+        "stSnap": "7",
+        "stSnapPct": "0.28",
+        "offSnap": "0",
+        "defSnapPct": "0.58"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4428996",
+      "longName": "Jordan Burch"
+    },
+    "4429071": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "2",
+        "stSnap": "20",
+        "stSnapPct": "0.80",
+        "offSnap": "0",
+        "defSnapPct": "0.03"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "Defense": {
+        "totalTackles": "2",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "0",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4429071",
+      "longName": "Cody Simon"
+    },
+    "4429275": {
+      "gameID": "20250921_ARI@SF",
+      "Rushing": {
+        "rushAvg": "4.2",
+        "rushYds": "42",
+        "carries": "10",
+        "longRush": "29",
+        "rushTD": "0"
+      },
+      "Receiving": {
+        "receptions": "3",
+        "recTD": "0",
+        "longRec": "5",
+        "targets": "4",
+        "recYds": "9",
+        "recAvg": "3.0"
+      },
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.61",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "40",
+        "defSnapPct": "0.00"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "playerID": "4429275",
+      "longName": "Trey Benson"
+    },
+    "4429782": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.14",
+        "defSnap": "0",
+        "stSnap": "4",
+        "stSnapPct": "0.16",
+        "offSnap": "9",
+        "defSnapPct": "0.00"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "playerID": "4429782",
+      "longName": "Josh Fryar"
+    },
+    "4430191": {
+      "gameID": "20250921_ARI@SF",
+      "Receiving": {
+        "receptions": "1",
+        "recTD": "0",
+        "longRec": "10",
+        "targets": "1",
+        "recYds": "10",
+        "recAvg": "10.0"
+      },
+      "teamID": "28",
+      "snapCounts": {
+        "offSnapPct": "0.52",
+        "defSnap": "0",
+        "stSnap": "9",
+        "stSnapPct": "0.36",
+        "offSnap": "34",
+        "defSnapPct": "0.00"
+      },
+      "Kicking": {
+        "kickReturns": "2",
+        "kickReturnTD": "0",
+        "kickReturnYds": "61",
+        "kickReturnAvg": "30.5",
+        "kickReturnLong": "31"
+      },
+      "Punting": {
+        "puntReturns": "3",
+        "puntReturnYds": "26",
+        "puntReturnAvg": "8.7",
+        "puntReturnLong": "14",
+        "puntReturnTD": "0"
+      },
+      "team": "SF",
+      "teamAbv": "SF",
+      "playerID": "4430191",
+      "longName": "Skyy Moore"
+    },
+    "4430821": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "6",
+        "stSnap": "20",
+        "stSnapPct": "0.80",
+        "offSnap": "0",
+        "defSnapPct": "0.09"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "Defense": {
+        "totalTackles": "2",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4430821",
+      "longName": "Kitan Crawford"
+    },
+    "4430835": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "28",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "31",
+        "stSnap": "4",
+        "stSnapPct": "0.16",
+        "offSnap": "0",
+        "defSnapPct": "0.47"
+      },
+      "team": "SF",
+      "teamAbv": "SF",
+      "playerID": "4430835",
+      "longName": "Alfred Collins"
+    },
+    "4431523": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "28",
+      "snapCounts": {
+        "offSnapPct": "1.00",
+        "defSnap": "0",
+        "stSnap": "4",
+        "stSnapPct": "0.16",
+        "offSnap": "65",
+        "defSnapPct": "0.00"
+      },
+      "team": "SF",
+      "teamAbv": "SF",
+      "playerID": "4431523",
+      "longName": "Connor Colby"
+    },
+    "4432668": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "33",
+        "stSnap": "1",
+        "stSnapPct": "0.04",
+        "offSnap": "0",
+        "defSnapPct": "0.51"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "Defense": {
+        "totalTackles": "2",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "2",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4432668",
+      "longName": "Denzel Burke"
+    },
+    "4432708": {
+      "gameID": "20250921_ARI@SF",
+      "Receiving": {
+        "receptions": "3",
+        "recTD": "0",
+        "longRec": "32",
+        "targets": "6",
+        "recYds": "44",
+        "recAvg": "14.7"
+      },
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.80",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "53",
+        "defSnapPct": "0.00"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "playerID": "4432708",
+      "longName": "Marvin Harrison Jr."
+    },
+    "4565200": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "28",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "32",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "0.48"
+      },
+      "team": "SF",
+      "teamAbv": "SF",
+      "Defense": {
+        "totalTackles": "5",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "3",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "1"
+      },
+      "playerID": "4565200",
+      "longName": "Upton Stout"
+    },
+    "4567219": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "16",
+        "stSnapPct": "0.64",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "0",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4567219",
+      "longName": "Owen Pappoe"
+    },
+    "4569480": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "37",
+        "stSnap": "5",
+        "stSnapPct": "0.20",
+        "offSnap": "0",
+        "defSnapPct": "0.57"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4569480",
+      "longName": "Darius Robinson"
+    },
+    "4569497": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "28",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "42",
+        "stSnap": "8",
+        "stSnapPct": "0.32",
+        "offSnap": "0",
+        "defSnapPct": "0.64"
+      },
+      "team": "SF",
+      "teamAbv": "SF",
+      "Defense": {
+        "totalTackles": "7",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "2",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4569497",
+      "longName": "Sam Okuayinonu"
+    },
+    "4685623": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "28",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "43",
+        "stSnap": "3",
+        "stSnapPct": "0.12",
+        "offSnap": "0",
+        "defSnapPct": "0.65"
+      },
+      "team": "SF",
+      "teamAbv": "SF",
+      "Defense": {
+        "totalTackles": "2",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "2",
+        "tfl": "1",
+        "qbHits": "1",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4685623",
+      "longName": "Mykel Williams"
+    },
+    "4685978": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "28",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "7",
+        "stSnap": "15",
+        "stSnapPct": "0.60",
+        "offSnap": "0",
+        "defSnapPct": "0.11"
+      },
+      "team": "SF",
+      "teamAbv": "SF",
+      "Defense": {
+        "totalTackles": "2",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "0",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4685978",
+      "longName": "Darrell Luter Jr."
+    },
+    "4686308": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "28",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "14",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "0.21"
+      },
+      "team": "SF",
+      "teamAbv": "SF",
+      "Defense": {
+        "totalTackles": "2",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4686308",
+      "longName": "CJ West"
+    },
+    "4693337": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "28",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "66",
+        "stSnap": "9",
+        "stSnapPct": "0.36",
+        "offSnap": "0",
+        "defSnapPct": "1.00"
+      },
+      "team": "SF",
+      "teamAbv": "SF",
+      "Defense": {
+        "totalTackles": "7",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "2",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4693337",
+      "longName": "Marques Sigle"
+    },
+    "4693644": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "28",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "25",
+        "stSnap": "13",
+        "stSnapPct": "0.52",
+        "offSnap": "0",
+        "defSnapPct": "0.38"
+      },
+      "team": "SF",
+      "teamAbv": "SF",
+      "Defense": {
+        "totalTackles": "4",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "2",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4693644",
+      "longName": "Ji'Ayir Brown"
+    },
+    "4696700": {
+      "gameID": "20250921_ARI@SF",
+      "Receiving": {
+        "receptions": "2",
+        "recTD": "0",
+        "longRec": "6",
+        "targets": "3",
+        "recYds": "8",
+        "recAvg": "4.0"
+      },
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.50",
+        "defSnap": "0",
+        "stSnap": "14",
+        "stSnapPct": "0.56",
+        "offSnap": "33",
+        "defSnapPct": "0.00"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "playerID": "4696700",
+      "longName": "Tip Reiman"
+    },
+    "4698113": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "64",
+        "stSnap": "1",
+        "stSnapPct": "0.04",
+        "offSnap": "0",
+        "defSnapPct": "0.98"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "Defense": {
+        "totalTackles": "3",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "2",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4698113",
+      "longName": "Max Melton"
+    },
+    "4879480": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "28",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "4",
+        "stSnapPct": "0.16",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "SF",
+      "teamAbv": "SF",
+      "playerID": "4879480",
+      "longName": "Drew Moss"
+    },
+    "5084939": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "1.00",
+        "defSnap": "0",
+        "stSnap": "4",
+        "stSnapPct": "0.16",
+        "offSnap": "66",
+        "defSnapPct": "0.00"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "playerID": "5084939",
+      "longName": "Isaiah Adams"
+    },
+    "5092959": {
+      "gameID": "20250921_ARI@SF",
+      "teamID": "28",
+      "snapCounts": {
+        "offSnapPct": "1.00",
+        "defSnap": "0",
+        "stSnap": "4",
+        "stSnapPct": "0.16",
+        "offSnap": "65",
+        "defSnapPct": "0.00"
+      },
+      "team": "SF",
+      "teamAbv": "SF",
+      "playerID": "5092959",
+      "longName": "Dominick Puni"
+    }
+  },
+  "scoringPlays": [
+    {
+      "score": "Chad Ryland 34 Yd Field Goal",
+      "scorePeriod": "Q2",
+      "homeScore": "0",
+      "awayScore": "3",
+      "teamID": "1",
+      "scoreDetails": "12 plays, 49 yards, 6:09",
+      "scoreType": "FG",
+      "scoreTime": "8:45",
+      "team": "ARI",
+      "playerIDs": ["4363538"]
+    },
+    {
+      "score": "Eddy Pineiro 38 Yd Field Goal",
+      "scorePeriod": "Q2",
+      "homeScore": "3",
+      "awayScore": "3",
+      "teamID": "28",
+      "scoreDetails": "9 plays, 49 yards, 4:23",
+      "scoreType": "FG",
+      "scoreTime": "4:22",
+      "team": "SF",
+      "playerIDs": ["4034949"]
+    },
+    {
+      "score": "Eddy Pineiro 51 Yd Field Goal",
+      "scorePeriod": "Q2",
+      "homeScore": "6",
+      "awayScore": "3",
+      "teamID": "28",
+      "scoreDetails": "11 plays, 53 yards, 1:51",
+      "scoreType": "FG",
+      "scoreTime": "0:17",
+      "team": "SF",
+      "playerIDs": ["4034949"]
+    },
+    {
+      "score": "Chad Ryland 28 Yd Field Goal",
+      "scorePeriod": "Q3",
+      "homeScore": "6",
+      "awayScore": "6",
+      "teamID": "1",
+      "scoreDetails": "15 plays, 77 yards, 6:35",
+      "scoreType": "FG",
+      "scoreTime": "6:37",
+      "team": "ARI",
+      "playerIDs": ["4363538"]
+    },
+    {
+      "score": "Kyle Juszczyk 1 Yd pass from Mac Jones (Eddy Pineiro Kick)",
+      "scorePeriod": "Q4",
+      "homeScore": "13",
+      "awayScore": "6",
+      "teamID": "28",
+      "scoreDetails": "6 plays, 48 yards, 3:09",
+      "scoreType": "TD",
+      "scoreTime": "10:50",
+      "team": "SF",
+      "playerIDs": ["4241464", "16002", "4034949"]
+    },
+    {
+      "score": "Trey McBride 1 Yd pass from Kyler Murray (Chad Ryland Kick)",
+      "scorePeriod": "Q4",
+      "homeScore": "13",
+      "awayScore": "13",
+      "teamID": "1",
+      "scoreDetails": "4 plays, 65 yards, 2:13",
+      "scoreType": "TD",
+      "scoreTime": "8:37",
+      "team": "ARI",
+      "playerIDs": ["3917315", "4361307", "4363538"]
+    },
+    {
+      "score": "Defensive Holding in Endzone for Safety",
+      "scorePeriod": "Q4",
+      "homeScore": "13",
+      "awayScore": "15",
+      "teamID": "1",
+      "scoreDetails": "1 play, -6 yards, 0:14",
+      "scoreType": "SF",
+      "scoreTime": "3:15",
+      "team": "ARI",
+      "playerIDs": []
+    },
+    {
+      "score": "Eddy Pineiro 35 Yd Field Goal",
+      "scorePeriod": "Q4",
+      "homeScore": "16",
+      "awayScore": "15",
+      "teamID": "28",
+      "scoreDetails": "10 plays, 63 yards, 1:46",
+      "scoreType": "FG",
+      "scoreTime": "0:00",
+      "team": "SF",
+      "playerIDs": ["4034949"]
+    }
+  ],
+  "seasonType": "Regular Season",
+  "teamIDAway": "1",
+  "teamIDHome": "28",
+  "teamStats": {
+    "away": {
+      "totalYards": "260",
+      "rushingAttempts": "28",
+      "rushingYards": "106",
+      "fumblesLost": "0",
+      "penalties": "5-30",
+      "totalPlays": "64",
+      "possession": "34:39",
+      "safeties": "1",
+      "passCompletionsAndAttempts": "22-35",
+      "passingFirstDowns": "8",
+      "interceptionsThrown": "0",
+      "sacksAndYardsLost": "1-5",
+      "thirdDownEfficiency": "5-15",
+      "blockedPunt": "0",
+      "yardsPerPlay": "4.1",
+      "redZoneScoredAndAttempted": "1-3",
+      "teamID": "1",
+      "defensiveInterceptions": "1",
+      "defensiveOrSpecialTeamsTds": "0",
+      "totalDrives": "10",
+      "rushingFirstDowns": "7",
+      "blockedFG": "0",
+      "rushTD": "0",
+      "twoPointConversions": "0",
+      "firstDowns": "16",
+      "passTD": "1",
+      "team": "ARI",
+      "blockedXP": "0",
+      "teamAbv": "ARI",
+      "firstDownsFromPenalties": "1",
+      "fourthDownEfficiency": "2-2",
+      "defensiveTwoPointConversionReturns": "0",
+      "passingYards": "154",
+      "yardsPerRush": "3.8",
+      "snapCounts": {
+        "totalSpecialTeams": "25",
+        "totalOffensive": "66",
+        "totalDefensive": "65"
+      },
+      "turnovers": "0",
+      "yardsPerPass": "4.3"
+    },
+    "home": {
+      "totalYards": "355",
+      "rushingAttempts": "20",
+      "rushingYards": "73",
+      "fumblesLost": "0",
+      "penalties": "5-69",
+      "totalPlays": "62",
+      "possession": "25:21",
+      "safeties": "0",
+      "passCompletionsAndAttempts": "27-41",
+      "passingFirstDowns": "14",
+      "interceptionsThrown": "1",
+      "sacksAndYardsLost": "1-2",
+      "thirdDownEfficiency": "2-10",
+      "blockedPunt": "0",
+      "yardsPerPlay": "5.7",
+      "redZoneScoredAndAttempted": "1-4",
+      "teamID": "28",
+      "defensiveInterceptions": "0",
+      "defensiveOrSpecialTeamsTds": "0",
+      "totalDrives": "10",
+      "rushingFirstDowns": "4",
+      "blockedFG": "0",
+      "rushTD": "0",
+      "twoPointConversions": "0",
+      "firstDowns": "19",
+      "passTD": "1",
+      "team": "SF",
+      "blockedXP": "0",
+      "teamAbv": "SF",
+      "firstDownsFromPenalties": "1",
+      "fourthDownEfficiency": "1-2",
+      "defensiveTwoPointConversionReturns": "0",
+      "passingYards": "282",
+      "yardsPerRush": "3.7",
+      "snapCounts": {
+        "totalSpecialTeams": "25",
+        "totalOffensive": "65",
+        "totalDefensive": "66"
+      },
+      "turnovers": "1",
+      "yardsPerPass": "6.7"
+    }
+  },
+  "gameID": "20250921_ARI@SF",
+  "gameStatusCode": "2"
+}

@@ -26,11 +26,14 @@ import {
   isBlockedKick,
   isSpecialTeamsReturnTouchdown,
   isSuccessfulTwoPointConversion,
+  mainClause,
   parseFieldGoalYards,
   parseStatValue,
   scoredInMainClause,
   TANK01_DST_MAP,
   TANK01_STAT_MAP,
+  TANK01_TEAM_BLOCKED_KICK_FIELDS,
+  TANK01_TEAM_DEF_ST_TD_FIELD,
 } from "./stat-map.js";
 
 interface ScoringPlay {
@@ -364,16 +367,6 @@ function translatePlayerWithConversions(
 }
 
 /**
- * Team defense stat lines.
- *
- * `ptsAllowed` is emitted **even when zero**, because the scoring engine treats
- * an absent stat as "did not play" and a shutout would otherwise silently
- * forfeit its bonus.
- *
- * Blocked kicks are credited to the team that *blocked* one, which is the
- * opponent of the team whose kick it was.
- */
-/**
  * Which team blocked the kick in this scoring play.
  *
  * `play.team` is the team that **scored** the play, and a blocked kick reaches
@@ -423,13 +416,111 @@ function blockingTeamOf(play: ScoringPlay, teamAbvs: readonly string[]): string 
   return scoringTeam;
 }
 
+/**
+ * The `teamStats` block, indexed by team rather than by side.
+ *
+ * `DST.home` and `teamStats.home` name the same team in every captured game, so
+ * matching on the side would work. It matches on `teamAbv` anyway, because a
+ * defensive stat credited to the wrong team is a swing between two rosters and
+ * this file has already made that mistake twice — see `blockingTeamOf`.
+ */
+function teamStatsByAbv(raw: unknown): Map<string, Record<string, unknown>> {
+  const block = (raw ?? {}) as Record<string, unknown>;
+  const byAbv = new Map<string, Record<string, unknown>>();
+
+  for (const side of ["home", "away"] as const) {
+    const unit = block[side] as Record<string, unknown> | undefined;
+    if (!unit || typeof unit !== "object") continue;
+
+    const teamAbv = String(unit["teamAbv"] ?? "");
+    if (teamAbv) byAbv.set(teamAbv, unit);
+  }
+
+  return byAbv;
+}
+
+/**
+ * Blocked kicks this team made, summed from the three `teamStats` counters.
+ *
+ * `null` when the block carries none of the three fields at all — which is not a
+ * zero, it is "this response does not have them", and the caller falls back to
+ * the scoring text rather than reporting no blocks.
+ */
+function blockedKicksFromTeamStats(unit: Record<string, unknown> | undefined): number | null {
+  if (!unit) return null;
+
+  let total: number | null = null;
+
+  for (const field of TANK01_TEAM_BLOCKED_KICK_FIELDS) {
+    if (unit[field] === undefined) continue;
+
+    const parsed = parseStatValue(unit[field]);
+    if (parsed === null) continue;
+
+    total = (total ?? 0) + parsed;
+  }
+
+  return total;
+}
+
+/**
+ * The name forms of every player on this team credited with a defensive
+ * touchdown in this game.
+ *
+ * This reads `Defense.defTD`, which {@link TANK01_STAT_MAP} deliberately no
+ * longer maps to a stat key. Reading a field and paying a roster spot for it are
+ * different things: nothing can start an individual defender, so the per-player
+ * value is not a score — but it is exactly the evidence needed to tell whether a
+ * special-teams touchdown is *already inside* `DST.defTD`.
+ *
+ * Proven on `20250928_CAR@NE`: Marcus Jones is the only player in the game with
+ * `Defense.defTD` (`"1"`), and New England's `DST.defTD` is `"1"`. The team
+ * figure is the sum of the player figures.
+ */
+function defensiveTouchdownScorers(
+  playerStats: Record<string, RawPlayer>,
+  teamAbv: string,
+): readonly (readonly string[])[] {
+  const scorers: (readonly string[])[] = [];
+
+  for (const player of Object.values(playerStats)) {
+    const team = String(player.team ?? player.teamAbv ?? "");
+    if (team !== teamAbv || !player.longName) continue;
+
+    const defence = player["Defense"] as Record<string, unknown> | undefined;
+    if ((parseStatValue(defence?.["defTD"]) ?? 0) > 0) scorers.push(nameForms(player.longName));
+  }
+
+  return scorers;
+}
+
+/**
+ * Team defense stat lines.
+ *
+ * `ptsAllowed` is emitted **even when zero**, because the scoring engine treats
+ * an absent stat as "did not play" and a shutout would otherwise silently
+ * forfeit its bonus.
+ *
+ * Three of the seven D/ST rules cannot be read off the `DST` block alone, and
+ * each is handled in its own block below with the evidence that settled it:
+ * blocked kicks come from `teamStats`, the unit's touchdowns from `DST.defTD`
+ * plus the special-teams scores it does not already contain, and safeties from
+ * `DST.safeties` cross-read against the `"SF"` scoring plays.
+ *
+ * @param raw the `DST` block
+ * @param teamStats the `teamStats` block — a different shape, see {@link teamStatsByAbv}
+ * @param playerStats needed for `Defense.defTD`, which is evidence rather than a score
+ */
 function translateTeamDefense(
   raw: Record<string, unknown>,
+  teamStats: unknown,
+  playerStats: Record<string, RawPlayer>,
   scoringPlays: readonly ScoringPlay[],
   teamAbvs: readonly string[],
   warnings: string[],
 ): Map<string, StatLine[]> {
   const result = new Map<string, StatLine[]>();
+  const statsByAbv = teamStatsByAbv(teamStats);
 
   for (const side of ["home", "away"] as const) {
     const unit = raw[side] as Record<string, unknown> | undefined;
@@ -438,6 +529,7 @@ function translateTeamDefense(
     const teamAbv = String(unit["teamAbv"] ?? "");
     if (!teamAbv) continue;
 
+    const team = statsByAbv.get(teamAbv);
     const totals = new Map<string, number>();
 
     for (const [field, statKey] of Object.entries(TANK01_DST_MAP)) {
@@ -471,38 +563,142 @@ function translateTeamDefense(
       }
     }
 
-    for (const play of scoringPlays) {
-      const text = play.score ?? "";
+    // ---------------------------------------------------------------------
+    // Blocked kicks
+    // ---------------------------------------------------------------------
+    //
+    // **The `teamStats` counters are the source; the scoring text is a floor.**
+    //
+    // `def_blk_kick` used to be derived only from scoring-play text, which can
+    // only ever see a block that led to a score. **27 of the 44 blocked kicks in
+    // the 2025 season did not**, so 54 points were invisible — including New
+    // Orleans' blocked field goal in week 1, the game captured as
+    // `__fixtures__/box-score-blocked-fg.json`, where no scoring play mentions a
+    // block at all.
+    //
+    // The two sources are combined by taking the larger rather than by adding,
+    // and that is load-bearing: `teamStats` **does** count a block that scored.
+    // Proven on `20251103_ARI@DAL`, where Marshawn Kneeland recovered a blocked
+    // punt in the end zone for a touchdown and Dallas's `blockedPunt` reads
+    // `"1"`. Adding the two would have paid Dallas twice for one block.
+    //
+    // Neither source can over-count — each counts distinct real events — so the
+    // larger is the better lower bound, and only a *text* count in excess of the
+    // numeric one is worth reporting. The reverse is the ordinary case, 27 times
+    // a season, and warning about it would be noise.
+    const blockedFromText = scoringPlays.filter(
+      (play) => isBlockedKick(play.score ?? "") && blockingTeamOf(play, teamAbvs) === teamAbv,
+    ).length;
+    const blockedFromTeamStats = blockedKicksFromTeamStats(team);
 
-      if (isBlockedKick(text) && blockingTeamOf(play, teamAbvs) === teamAbv) {
-        accumulate(totals, "def_blk_kick", 1);
-      }
+    if (blockedFromTeamStats !== null && blockedFromText > blockedFromTeamStats) {
+      warnings.push(
+        `${teamAbv}: teamStats reports ${blockedFromTeamStats} blocked kick(s) but ` +
+          `${blockedFromText} were read from the scoring text — the larger was used`,
+      );
+    }
 
-      // A kickoff or punt return pays the **unit** as well as the returner.
-      //
-      // `RULES.md` §1 pays the D/ST for a "defensive or special teams
-      // touchdown", and §1 also says the returner keeps his own `ret_td` for the
-      // same play — different roster spots, usually different managers, so this
-      // is not double-counting. We were paying only the returner, because
-      // `def_td` came solely from `DST.defTD`, which counts *defensive* scores.
-      // Ten times in weeks 1-6 of 2025 alone, at 6 points each.
-      //
-      // `play.team` is the team that scored, which for a return is the returning
-      // team — the opposite of the blocked-kick case above, where the block is
-      // usually noted on the opponent's score. That is why this cannot reuse
-      // `blockingTeamOf`.
-      //
-      // Gated on `scoreType` so a non-scoring play that merely mentions a return
-      // cannot pay six points, and `isSpecialTeamsReturnTouchdown` already
-      // refuses interception and fumble returns, which `DST.defTD` has counted
-      // already.
-      if (
+    const blockedKicks = Math.max(blockedFromTeamStats ?? 0, blockedFromText);
+    if (blockedKicks > 0) accumulate(totals, "def_blk_kick", blockedKicks);
+
+    // ---------------------------------------------------------------------
+    // Defensive and special-teams touchdowns
+    // ---------------------------------------------------------------------
+    //
+    // `RULES.md` §1 pays the D/ST 6 for a "defensive **or special teams**
+    // touchdown", and pays the returner his own `ret_td` for the same play —
+    // different roster spots, usually different managers, so that pair is not a
+    // double-count.
+    //
+    // **`DST.defTD` is not "defensive scores", and this comment used to say it
+    // was.** It is the sum of the players' own `Defense.defTD`, and ESPN files a
+    // punt or kickoff return by a *defensive* player there too. So the unit's
+    // special-teams touchdown was already in it whenever the returner happened
+    // to be a defender, and adding one from the text paid the same touchdown
+    // twice: New England scored 2 for Marcus Jones's single 87-yard punt return
+    // in week 4. Six such plays in 2025, 36 points.
+    //
+    // Removing the addition outright would have been the larger error in the
+    // other direction. When the returner is *not* a defensive player, `DST.defTD`
+    // is `0` and the text is the only evidence the unit scored at all — Rashid
+    // Shaheed's punt return in `20251218_LAR@SEA` is exactly that, and Marshawn
+    // Kneeland's blocked-punt recovery is that plus a wording the old pattern did
+    // not recognise.
+    //
+    // So the overlap is subtracted rather than the term: a special-teams
+    // touchdown counts for the unit **unless the player who scored it carries a
+    // `Defense.defTD` of his own**, in which case `DST.defTD` already holds it.
+    //
+    // `play.team` is the team that scored, which for a return is the returning
+    // team — the opposite of the blocked-kick case above, where the block is
+    // usually noted on the opponent's score. That is why this cannot reuse
+    // `blockingTeamOf`. Gated on `scoreType` so a non-scoring play that merely
+    // mentions a return cannot pay six points.
+    const defensiveScorers = defensiveTouchdownScorers(playerStats, teamAbv);
+    const specialTeamsTds = scoringPlays.filter(
+      (play) =>
         play.scoreType === "TD" &&
-        isSpecialTeamsReturnTouchdown(text) &&
-        play.team === teamAbv
-      ) {
-        accumulate(totals, "def_td", 1);
+        play.team === teamAbv &&
+        isSpecialTeamsReturnTouchdown(play.score ?? ""),
+    );
+
+    const alreadyInDefTd = specialTeamsTds.filter((play) => {
+      const clause = normaliseName(mainClause(play.score ?? ""));
+      return defensiveScorers.some((forms) => forms.some((form) => clause.includes(form)));
+    }).length;
+
+    const unitTds = specialTeamsTds.length - alreadyInDefTd;
+    if (unitTds > 0) accumulate(totals, "def_td", unitTds);
+
+    // A check, never a source. `defensiveOrSpecialTeamsTds` double-counts the
+    // same play the way this code used to — New England reads 2 for one return —
+    // so subtracting `DST.defTD` recovers Tank01's own independent count of the
+    // special-teams half. Disagreement means our pattern saw a different number
+    // of special-teams touchdowns than the provider did, which is how
+    // `"Marshawn Kneeland Blocked Punt Recovery in End Zone"` went a season
+    // unrecognised. Refs #158.
+    const reportedDefStTds = parseStatValue(team?.[TANK01_TEAM_DEF_ST_TD_FIELD]);
+    const reportedDefTds = parseStatValue(unit["defTD"]);
+    if (reportedDefStTds !== null && reportedDefTds !== null) {
+      const expected = reportedDefStTds - reportedDefTds;
+      if (expected !== specialTeamsTds.length) {
+        warnings.push(
+          `${teamAbv}: teamStats implies ${expected} special teams touchdown(s) ` +
+            `(${TANK01_TEAM_DEF_ST_TD_FIELD} ${reportedDefStTds} - DST.defTD ` +
+            `${reportedDefTds}) but ${specialTeamsTds.length} were read from the ` +
+            `scoring text`,
+        );
       }
+    }
+
+    // ---------------------------------------------------------------------
+    // Safeties
+    // ---------------------------------------------------------------------
+    //
+    // Combined the same way as blocked kicks, and for the same reason: a safety
+    // always scores, so it always reaches `scoringPlays` as a `scoreType` of
+    // `"SF"` whose `team` is the defense that scored it — verified on
+    // `20250921_ARI@SF`, where Arizona's away score moves 13 -> 15 on
+    // `"Defensive Holding in Endzone for Safety"`.
+    //
+    // In that game `DST.safeties` reads `"1"` and agrees. It was reported not to
+    // in a full-season sweep, which this could not reproduce; rather than pick a
+    // winner, both are read and the larger is used, since neither can count a
+    // safety that did not happen. **Disagreement in either direction is
+    // reported**, because there are only about a dozen safeties in a season and
+    // each is worth 2 points to a unit.
+    const safetiesFromPlays = scoringPlays.filter(
+      (play) => play.scoreType === "SF" && play.team === teamAbv,
+    ).length;
+    const safetiesReported = totals.get("def_safety") ?? 0;
+
+    if (safetiesFromPlays !== safetiesReported) {
+      warnings.push(
+        `${teamAbv}: DST.safeties is ${safetiesReported} but ${safetiesFromPlays} ` +
+          `safety scoring play(s) were found — the larger was used`,
+      );
+      const safeties = Math.max(safetiesFromPlays, safetiesReported);
+      if (safeties > 0) totals.set("def_safety", safeties);
     }
 
     result.set(teamAbv, toStatLines(totals));
@@ -548,7 +744,14 @@ export function translateBoxScore(raw: unknown): TranslatedBoxScore {
     String((dst["away"] as Record<string, unknown> | undefined)?.["teamAbv"] ?? ""),
   ].filter(Boolean);
 
-  const teamDefense = translateTeamDefense(dst, scoringPlays, teamAbvs, warnings);
+  const teamDefense = translateTeamDefense(
+    dst,
+    box["teamStats"],
+    playerStats,
+    scoringPlays,
+    teamAbvs,
+    warnings,
+  );
 
   // A response we cannot read at all is a different fact from one that read fine
   // with a discrepancy in it, and only the first is a reason to throw the game

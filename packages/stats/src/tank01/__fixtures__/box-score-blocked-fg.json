@@ -1,0 +1,2597 @@
+{
+  "DST": {
+    "away": {
+      "teamAbv": "ARI",
+      "teamID": "1",
+      "defTD": "0",
+      "defensiveInterceptions": "0",
+      "sacks": "1",
+      "ydsAllowed": "315",
+      "fumblesRecovered": "0",
+      "ptsAllowed": "13",
+      "safeties": "0"
+    },
+    "home": {
+      "teamAbv": "NO",
+      "teamID": "23",
+      "defTD": "0",
+      "defensiveInterceptions": "0",
+      "sacks": "5",
+      "ydsAllowed": "276",
+      "fumblesRecovered": "0",
+      "ptsAllowed": "20",
+      "safeties": "0"
+    }
+  },
+  "Referees": "Terry Brown, Scott Novak, Mike Morton, Tony Josselyn, Mark Stewart, Don Willard, Brian Sakowski",
+  "arena": "Caesars Superdome",
+  "arenaCapacity": "73,000",
+  "attendance": "70,006",
+  "away": "ARI",
+  "awayPts": "20",
+  "awayResult": "W",
+  "currentPeriod": "Final",
+  "gameClock": "",
+  "gameDate": "20250907",
+  "gameLocation": "New Orleans, LA",
+  "gameStatus": "Completed",
+  "gameWeek": "Week 1",
+  "home": "NO",
+  "homePts": "13",
+  "homeResult": "L",
+  "lineScore": {
+    "period": "Final",
+    "gameClock": "",
+    "away": {
+      "Q1": "3",
+      "Q2": "14",
+      "Q3": "3",
+      "Q4": "0",
+      "teamID": "1",
+      "currentlyInPossession": "False",
+      "totalPts": "20",
+      "teamAbv": "ARI"
+    },
+    "home": {
+      "Q1": "0",
+      "Q2": "10",
+      "Q3": "0",
+      "Q4": "3",
+      "teamID": "23",
+      "currentlyInPossession": "False",
+      "totalPts": "13",
+      "teamAbv": "NO"
+    }
+  },
+  "network": "CBS",
+  "playerStats": {
+    "11284": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "33",
+        "stSnap": "5",
+        "stSnapPct": "0.19",
+        "offSnap": "0",
+        "defSnapPct": "0.44"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "Defense": {
+        "totalTackles": "5",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "3",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "11284",
+      "longName": "Calais Campbell"
+    },
+    "13971": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "23",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "49",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "0.74"
+      },
+      "team": "NO",
+      "teamAbv": "NO",
+      "Defense": {
+        "totalTackles": "3",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "2",
+        "tfl": "2",
+        "qbHits": "2",
+        "defensiveInterceptions": "0",
+        "sacks": "1.5",
+        "passDeflections": "1"
+      },
+      "playerID": "13971",
+      "longName": "Cameron Jordan"
+    },
+    "14958": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "23",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "66",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "1.00"
+      },
+      "team": "NO",
+      "teamAbv": "NO",
+      "Defense": {
+        "totalTackles": "9",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "6",
+        "tfl": "2",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "14958",
+      "longName": "Demario Davis"
+    },
+    "15035": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "5",
+        "stSnapPct": "0.19",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "playerID": "15035",
+      "longName": "Kelvin Beachum"
+    },
+    "15241": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "9",
+        "stSnapPct": "0.33",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "playerID": "15241",
+      "longName": "Aaron Brewer"
+    },
+    "16731": {
+      "gameID": "20250907_ARI@NO",
+      "Receiving": {
+        "receptions": "3",
+        "recTD": "0",
+        "longRec": "12",
+        "targets": "4",
+        "recYds": "26",
+        "recAvg": "8.7"
+      },
+      "teamID": "23",
+      "snapCounts": {
+        "offSnapPct": "0.76",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "57",
+        "defSnapPct": "0.00"
+      },
+      "team": "NO",
+      "teamAbv": "NO",
+      "playerID": "16731",
+      "longName": "Brandin Cooks"
+    },
+    "2575788": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "23",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "9",
+        "stSnapPct": "0.33",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "NO",
+      "teamAbv": "NO",
+      "playerID": "2575788",
+      "longName": "Zach Wood"
+    },
+    "2979860": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "25",
+        "stSnap": "5",
+        "stSnapPct": "0.19",
+        "offSnap": "0",
+        "defSnapPct": "0.33"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "playerID": "2979860",
+      "longName": "Dalvin Tomlinson"
+    },
+    "2980097": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "23",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "22",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "0.33"
+      },
+      "team": "NO",
+      "teamAbv": "NO",
+      "playerID": "2980097",
+      "longName": "Jonathan Bullard"
+    },
+    "3045147": {
+      "gameID": "20250907_ARI@NO",
+      "Rushing": {
+        "rushAvg": "3.3",
+        "rushYds": "39",
+        "carries": "12",
+        "longRush": "12",
+        "rushTD": "0"
+      },
+      "Receiving": {
+        "receptions": "4",
+        "recTD": "1",
+        "longRec": "5",
+        "targets": "4",
+        "recYds": "5",
+        "recAvg": "1.3"
+      },
+      "scoringPlays": [
+        {
+          "score": "James Conner 4 Yd pass from Kyler Murray (Chad Ryland Kick)",
+          "scorePeriod": "Q2",
+          "homeScore": "10",
+          "awayScore": "17",
+          "teamID": "1",
+          "scoreDetails": "10 plays, 71 yards, 4:30",
+          "scoreType": "TD",
+          "scoreTime": "0:28",
+          "team": "ARI",
+          "playerIDs": ["3917315", "3045147", "4363538"]
+        }
+      ],
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.65",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "43",
+        "defSnapPct": "0.00"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "playerID": "3045147",
+      "longName": "James Conner"
+    },
+    "3054850": {
+      "gameID": "20250907_ARI@NO",
+      "Rushing": {
+        "rushAvg": "4.1",
+        "rushYds": "45",
+        "carries": "11",
+        "longRush": "18",
+        "rushTD": "1"
+      },
+      "Receiving": {
+        "receptions": "2",
+        "recTD": "0",
+        "longRec": "7",
+        "targets": "2",
+        "recYds": "12",
+        "recAvg": "6.0"
+      },
+      "scoringPlays": [
+        {
+          "score": "Alvin Kamara 18 Yd Rush (Blake Grupe Kick)",
+          "scorePeriod": "Q2",
+          "homeScore": "7",
+          "awayScore": "3",
+          "teamID": "23",
+          "scoreDetails": "10 plays, 75 yards, 5:43",
+          "scoreType": "TD",
+          "scoreTime": "14:20",
+          "team": "NO",
+          "playerIDs": ["3054850", "4259619"]
+        }
+      ],
+      "teamID": "23",
+      "snapCounts": {
+        "offSnapPct": "0.79",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "59",
+        "defSnapPct": "0.00"
+      },
+      "team": "NO",
+      "teamAbv": "NO",
+      "playerID": "3054850",
+      "longName": "Alvin Kamara"
+    },
+    "3059722": {
+      "gameID": "20250907_ARI@NO",
+      "Receiving": {
+        "receptions": "1",
+        "recTD": "0",
+        "longRec": "4",
+        "targets": "1",
+        "recYds": "4",
+        "recAvg": "4.0"
+      },
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.47",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "31",
+        "defSnapPct": "0.00"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "playerID": "3059722",
+      "longName": "Zay Jones"
+    },
+    "3115383": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "23",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "39",
+        "stSnap": "5",
+        "stSnapPct": "0.19",
+        "offSnap": "0",
+        "defSnapPct": "0.59"
+      },
+      "team": "NO",
+      "teamAbv": "NO",
+      "Defense": {
+        "totalTackles": "3",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "3115383",
+      "longName": "Davon Godchaux"
+    },
+    "3116449": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "29",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "0.39"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "3116449",
+      "longName": "L.J. Collier"
+    },
+    "3122797": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "23",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "66",
+        "stSnap": "4",
+        "stSnapPct": "0.15",
+        "offSnap": "0",
+        "defSnapPct": "1.00"
+      },
+      "team": "NO",
+      "teamAbv": "NO",
+      "Defense": {
+        "totalTackles": "4",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "2",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "3122797",
+      "longName": "Isaac Yiadom"
+    },
+    "3127287": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "75",
+        "stSnap": "5",
+        "stSnapPct": "0.19",
+        "offSnap": "0",
+        "defSnapPct": "1.00"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "Defense": {
+        "totalTackles": "10",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "5",
+        "tfl": "1",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "1"
+      },
+      "playerID": "3127287",
+      "longName": "Budda Baker"
+    },
+    "3128412": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "1.00",
+        "defSnap": "0",
+        "stSnap": "5",
+        "stSnapPct": "0.19",
+        "offSnap": "66",
+        "defSnapPct": "0.00"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "playerID": "3128412",
+      "longName": "Evan Brown"
+    },
+    "3693166": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "47",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "0.63"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "0",
+        "tfl": "0",
+        "qbHits": "1",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "3693166",
+      "longName": "Josh Sweat"
+    },
+    "3886633": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "1.00",
+        "defSnap": "0",
+        "stSnap": "5",
+        "stSnapPct": "0.19",
+        "offSnap": "66",
+        "defSnapPct": "0.00"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "playerID": "3886633",
+      "longName": "Hjalte Froholdt"
+    },
+    "3886834": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "23",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "18",
+        "stSnapPct": "0.67",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "NO",
+      "teamAbv": "NO",
+      "playerID": "3886834",
+      "longName": "Ugo Amadi"
+    },
+    "3917142": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "28",
+        "stSnap": "19",
+        "stSnapPct": "0.70",
+        "offSnap": "0",
+        "defSnapPct": "0.37"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "Defense": {
+        "totalTackles": "7",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "3",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "1"
+      },
+      "playerID": "3917142",
+      "longName": "Akeem Davis-Gaither"
+    },
+    "3917315": {
+      "gameID": "20250907_ARI@NO",
+      "Rushing": {
+        "rushAvg": "5.4",
+        "rushYds": "38",
+        "carries": "7",
+        "longRush": "13",
+        "rushTD": "0"
+      },
+      "Passing": {
+        "qbr": "48.2",
+        "rtg": "108.8",
+        "sacked": "5-33",
+        "passAttempts": "29",
+        "passAvg": "5.6",
+        "passTD": "2",
+        "passYds": "163",
+        "int": "0",
+        "passCompletions": "21"
+      },
+      "scoringPlays": [
+        {
+          "score": "Marvin Harrison Jr. 1 Yd pass from Kyler Murray (Chad Ryland Kick)",
+          "scorePeriod": "Q2",
+          "homeScore": "7",
+          "awayScore": "10",
+          "teamID": "1",
+          "scoreDetails": "7 plays, 65 yards, 4:15",
+          "scoreType": "TD",
+          "scoreTime": "10:05",
+          "team": "ARI",
+          "playerIDs": ["3917315", "4432708", "4363538"]
+        },
+        {
+          "score": "James Conner 4 Yd pass from Kyler Murray (Chad Ryland Kick)",
+          "scorePeriod": "Q2",
+          "homeScore": "10",
+          "awayScore": "17",
+          "teamID": "1",
+          "scoreDetails": "10 plays, 71 yards, 4:30",
+          "scoreType": "TD",
+          "scoreTime": "0:28",
+          "team": "ARI",
+          "playerIDs": ["3917315", "3045147", "4363538"]
+        }
+      ],
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "1.00",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "66",
+        "defSnapPct": "0.00"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "playerID": "3917315",
+      "longName": "Kyler Murray"
+    },
+    "3917331": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "23",
+      "snapCounts": {
+        "offSnapPct": "1.00",
+        "defSnap": "0",
+        "stSnap": "2",
+        "stSnapPct": "0.07",
+        "offSnap": "75",
+        "defSnapPct": "0.00"
+      },
+      "team": "NO",
+      "teamAbv": "NO",
+      "playerID": "3917331",
+      "longName": "Erik McCoy"
+    },
+    "3918310": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "23",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "57",
+        "stSnap": "5",
+        "stSnapPct": "0.19",
+        "offSnap": "0",
+        "defSnapPct": "0.86"
+      },
+      "team": "NO",
+      "teamAbv": "NO",
+      "Defense": {
+        "totalTackles": "6",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "5",
+        "tfl": "1",
+        "qbHits": "1",
+        "defensiveInterceptions": "0",
+        "sacks": "1.5",
+        "passDeflections": "2"
+      },
+      "playerID": "3918310",
+      "longName": "Carl Granderson"
+    },
+    "3929645": {
+      "gameID": "20250907_ARI@NO",
+      "Receiving": {
+        "receptions": "8",
+        "recTD": "0",
+        "longRec": "21",
+        "targets": "11",
+        "recYds": "76",
+        "recAvg": "9.5"
+      },
+      "teamID": "23",
+      "snapCounts": {
+        "offSnapPct": "0.99",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "74",
+        "defSnapPct": "0.00"
+      },
+      "team": "NO",
+      "teamAbv": "NO",
+      "playerID": "3929645",
+      "longName": "Juwan Johnson"
+    },
+    "3931399": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "23",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "66",
+        "stSnap": "5",
+        "stSnapPct": "0.19",
+        "offSnap": "0",
+        "defSnapPct": "1.00"
+      },
+      "team": "NO",
+      "teamAbv": "NO",
+      "Defense": {
+        "totalTackles": "6",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "3",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "3931399",
+      "longName": "Justin Reid"
+    },
+    "4032473": {
+      "gameID": "20250907_ARI@NO",
+      "Receiving": {
+        "receptions": "6",
+        "recTD": "0",
+        "longRec": "17",
+        "targets": "9",
+        "recYds": "33",
+        "recAvg": "5.5"
+      },
+      "teamID": "23",
+      "snapCounts": {
+        "offSnapPct": "0.85",
+        "defSnap": "0",
+        "stSnap": "4",
+        "stSnapPct": "0.15",
+        "offSnap": "64",
+        "defSnapPct": "0.00"
+      },
+      "Punting": {
+        "puntReturns": "2",
+        "puntReturnYds": "18",
+        "puntReturnAvg": "9.0",
+        "puntReturnLong": "11",
+        "puntReturnTD": "0"
+      },
+      "team": "NO",
+      "teamAbv": "NO",
+      "playerID": "4032473",
+      "longName": "Rashid Shaheed"
+    },
+    "4032481": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "23",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "13",
+        "stSnap": "7",
+        "stSnapPct": "0.26",
+        "offSnap": "0",
+        "defSnapPct": "0.20"
+      },
+      "team": "NO",
+      "teamAbv": "NO",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "0",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4032481",
+      "longName": "Jonah Williams"
+    },
+    "4034862": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "23",
+      "snapCounts": {
+        "offSnapPct": "0.24",
+        "defSnap": "0",
+        "stSnap": "9",
+        "stSnapPct": "0.33",
+        "offSnap": "18",
+        "defSnapPct": "0.00"
+      },
+      "team": "NO",
+      "teamAbv": "NO",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4034862",
+      "longName": "Jack Stoll"
+    },
+    "4035048": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "23",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "5",
+        "stSnapPct": "0.19",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "NO",
+      "teamAbv": "NO",
+      "playerID": "4035048",
+      "longName": "Luke Fortner"
+    },
+    "4035661": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "23",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "66",
+        "stSnap": "3",
+        "stSnapPct": "0.11",
+        "offSnap": "0",
+        "defSnapPct": "1.00"
+      },
+      "team": "NO",
+      "teamAbv": "NO",
+      "Defense": {
+        "totalTackles": "7",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "4",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "1"
+      },
+      "playerID": "4035661",
+      "longName": "Julian Blackmon"
+    },
+    "4035693": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "23",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "17",
+        "stSnapPct": "0.63",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "Kicking": {
+        "kickReturns": "2",
+        "kickReturnTD": "0",
+        "kickReturnYds": "40",
+        "kickReturnAvg": "20.0",
+        "kickReturnLong": "22"
+      },
+      "team": "NO",
+      "teamAbv": "NO",
+      "playerID": "4035693",
+      "longName": "Velus Jones Jr."
+    },
+    "4037235": {
+      "gameID": "20250907_ARI@NO",
+      "Receiving": {
+        "receptions": "1",
+        "recTD": "0",
+        "longRec": "-2",
+        "targets": "1",
+        "recYds": "-2",
+        "recAvg": "-2.0"
+      },
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.15",
+        "defSnap": "0",
+        "stSnap": "9",
+        "stSnapPct": "0.33",
+        "offSnap": "10",
+        "defSnapPct": "0.00"
+      },
+      "Kicking": {
+        "kickReturns": "2",
+        "kickReturnTD": "0",
+        "kickReturnYds": "44",
+        "kickReturnAvg": "22.0",
+        "kickReturnLong": "22"
+      },
+      "Punting": {
+        "puntReturns": "3",
+        "puntReturnYds": "30",
+        "puntReturnAvg": "10.0",
+        "puntReturnLong": "23",
+        "puntReturnTD": "0"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "0",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4037235",
+      "longName": "Greg Dortch"
+    },
+    "4040726": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "1.00",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "66",
+        "defSnapPct": "0.00"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "playerID": "4040726",
+      "longName": "Jonah Williams"
+    },
+    "4040945": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "23",
+      "snapCounts": {
+        "offSnapPct": "1.00",
+        "defSnap": "0",
+        "stSnap": "5",
+        "stSnapPct": "0.19",
+        "offSnap": "75",
+        "defSnapPct": "0.00"
+      },
+      "team": "NO",
+      "teamAbv": "NO",
+      "playerID": "4040945",
+      "longName": "Dillon Radunz"
+    },
+    "4040983": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "75",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "1.00"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "Defense": {
+        "totalTackles": "8",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "4",
+        "tfl": "1",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "1"
+      },
+      "playerID": "4040983",
+      "longName": "Mack Wilson Sr."
+    },
+    "4043089": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "75",
+        "stSnap": "3",
+        "stSnapPct": "0.11",
+        "offSnap": "0",
+        "defSnapPct": "1.00"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "Defense": {
+        "totalTackles": "8",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "4",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "1"
+      },
+      "playerID": "4043089",
+      "longName": "Jalen Thompson"
+    },
+    "4045180": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "9",
+        "stSnapPct": "0.33",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "Punting": {
+        "puntYds": "188",
+        "punts": "4",
+        "puntAvg": "47.0",
+        "puntsin20": "1",
+        "puntTouchBacks": "0",
+        "puntLong": "60"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "playerID": "4045180",
+      "longName": "Blake Gillikin"
+    },
+    "4076951": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "23",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "44",
+        "stSnap": "5",
+        "stSnapPct": "0.19",
+        "offSnap": "0",
+        "defSnapPct": "0.67"
+      },
+      "team": "NO",
+      "teamAbv": "NO",
+      "Defense": {
+        "totalTackles": "3",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4076951",
+      "longName": "Nathan Shepherd"
+    },
+    "4240475": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "23",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "21",
+        "stSnap": "18",
+        "stSnapPct": "0.67",
+        "offSnap": "0",
+        "defSnapPct": "0.32"
+      },
+      "team": "NO",
+      "teamAbv": "NO",
+      "Defense": {
+        "totalTackles": "3",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4240475",
+      "longName": "Chris Rumph II"
+    },
+    "4240824": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "10",
+        "stSnapPct": "0.37",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "playerID": "4240824",
+      "longName": "Joey Blount"
+    },
+    "4241987": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "40",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "0.53"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "Defense": {
+        "totalTackles": "4",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "1",
+        "qbHits": "1",
+        "defensiveInterceptions": "0",
+        "sacks": "1",
+        "passDeflections": "0"
+      },
+      "playerID": "4241987",
+      "longName": "Baron Browning"
+    },
+    "4241993": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "23",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "60",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "0.91"
+      },
+      "team": "NO",
+      "teamAbv": "NO",
+      "Defense": {
+        "totalTackles": "9",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "7",
+        "tfl": "0",
+        "qbHits": "1",
+        "defensiveInterceptions": "0",
+        "sacks": "1",
+        "passDeflections": "0"
+      },
+      "playerID": "4241993",
+      "longName": "Pete Werner"
+    },
+    "4244606": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "37",
+        "stSnap": "9",
+        "stSnapPct": "0.33",
+        "offSnap": "0",
+        "defSnapPct": "0.49"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "Defense": {
+        "totalTackles": "6",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "2",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4244606",
+      "longName": "Zaven Collins"
+    },
+    "4258199": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "23",
+      "snapCounts": {
+        "offSnapPct": "1.00",
+        "defSnap": "0",
+        "stSnap": "5",
+        "stSnapPct": "0.19",
+        "offSnap": "75",
+        "defSnapPct": "0.00"
+      },
+      "team": "NO",
+      "teamAbv": "NO",
+      "playerID": "4258199",
+      "longName": "Cesar Ruiz"
+    },
+    "4259324": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.05",
+        "defSnap": "0",
+        "stSnap": "12",
+        "stSnapPct": "0.44",
+        "offSnap": "3",
+        "defSnapPct": "0.00"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "playerID": "4259324",
+      "longName": "Travis Vokolek"
+    },
+    "4259619": {
+      "gameID": "20250907_ARI@NO",
+      "scoringPlays": [
+        {
+          "score": "Alvin Kamara 18 Yd Rush (Blake Grupe Kick)",
+          "scorePeriod": "Q2",
+          "homeScore": "7",
+          "awayScore": "3",
+          "teamID": "23",
+          "scoreDetails": "10 plays, 75 yards, 5:43",
+          "scoreType": "TD",
+          "scoreTime": "14:20",
+          "team": "NO",
+          "playerIDs": ["3054850", "4259619"]
+        },
+        {
+          "score": "Blake Grupe 36 Yd Field Goal",
+          "scorePeriod": "Q2",
+          "homeScore": "10",
+          "awayScore": "10",
+          "teamID": "23",
+          "scoreDetails": "10 plays, 37 yards, 5:07",
+          "scoreType": "FG",
+          "scoreTime": "4:58",
+          "team": "NO",
+          "playerIDs": ["4259619"]
+        },
+        {
+          "score": "Blake Grupe 28 Yd Field Goal",
+          "scorePeriod": "Q4",
+          "homeScore": "13",
+          "awayScore": "20",
+          "teamID": "23",
+          "scoreDetails": "9 plays, 54 yards, 1:52",
+          "scoreType": "FG",
+          "scoreTime": "2:42",
+          "team": "NO",
+          "playerIDs": ["4259619"]
+        }
+      ],
+      "teamID": "23",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "9",
+        "stSnapPct": "0.33",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "Kicking": {
+        "fgLong": "36",
+        "fgMade": "2",
+        "fgAttempts": "3",
+        "xpMade": "1",
+        "fgPct": "66.7",
+        "kickingPts": "7",
+        "xpAttempts": "1",
+        "fgMissed": "1",
+        "xpMissed": "0"
+      },
+      "team": "NO",
+      "teamAbv": "NO",
+      "playerID": "4259619",
+      "longName": "Blake Grupe"
+    },
+    "4360761": {
+      "gameID": "20250907_ARI@NO",
+      "Receiving": {
+        "receptions": "1",
+        "recTD": "0",
+        "longRec": "5",
+        "targets": "4",
+        "recYds": "5",
+        "recAvg": "5.0"
+      },
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.67",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "44",
+        "defSnapPct": "0.00"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "playerID": "4360761",
+      "longName": "Michael Wilson"
+    },
+    "4361194": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "23",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "22",
+        "stSnapPct": "0.81",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "NO",
+      "teamAbv": "NO",
+      "Defense": {
+        "totalTackles": "2",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "2",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4361194",
+      "longName": "Isaiah Stalbird"
+    },
+    "4361307": {
+      "gameID": "20250907_ARI@NO",
+      "Receiving": {
+        "receptions": "6",
+        "recTD": "0",
+        "longRec": "25",
+        "targets": "9",
+        "recYds": "61",
+        "recAvg": "10.2"
+      },
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.97",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "64",
+        "defSnapPct": "0.00"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "playerID": "4361307",
+      "longName": "Trey McBride"
+    },
+    "4361370": {
+      "gameID": "20250907_ARI@NO",
+      "Receiving": {
+        "receptions": "7",
+        "recTD": "0",
+        "longRec": "13",
+        "targets": "13",
+        "recYds": "54",
+        "recAvg": "7.7"
+      },
+      "teamID": "23",
+      "snapCounts": {
+        "offSnapPct": "0.85",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "64",
+        "defSnapPct": "0.00"
+      },
+      "team": "NO",
+      "teamAbv": "NO",
+      "playerID": "4361370",
+      "longName": "Chris Olave"
+    },
+    "4361421": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "11",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "0.15"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "playerID": "4361421",
+      "longName": "PJ Mustipher"
+    },
+    "4362225": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "34",
+        "stSnap": "5",
+        "stSnapPct": "0.19",
+        "offSnap": "0",
+        "defSnapPct": "0.45"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "Defense": {
+        "totalTackles": "3",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "2",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4362225",
+      "longName": "Dante Stills"
+    },
+    "4362478": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "16",
+        "stSnapPct": "0.59",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "Kicking": {
+        "kickReturns": "1",
+        "kickReturnTD": "0",
+        "kickReturnYds": "29",
+        "kickReturnAvg": "29.0",
+        "kickReturnLong": "29"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4362478",
+      "longName": "Emari Demercado"
+    },
+    "4363538": {
+      "gameID": "20250907_ARI@NO",
+      "scoringPlays": [
+        {
+          "score": "Chad Ryland 42 Yd Field Goal",
+          "scorePeriod": "Q1",
+          "homeScore": "0",
+          "awayScore": "3",
+          "teamID": "1",
+          "scoreDetails": "11 plays, 42 yards, 5:31",
+          "scoreType": "FG",
+          "scoreTime": "5:03",
+          "team": "ARI",
+          "playerIDs": ["4363538"]
+        },
+        {
+          "score": "Marvin Harrison Jr. 1 Yd pass from Kyler Murray (Chad Ryland Kick)",
+          "scorePeriod": "Q2",
+          "homeScore": "7",
+          "awayScore": "10",
+          "teamID": "1",
+          "scoreDetails": "7 plays, 65 yards, 4:15",
+          "scoreType": "TD",
+          "scoreTime": "10:05",
+          "team": "ARI",
+          "playerIDs": ["3917315", "4432708", "4363538"]
+        },
+        {
+          "score": "James Conner 4 Yd pass from Kyler Murray (Chad Ryland Kick)",
+          "scorePeriod": "Q2",
+          "homeScore": "10",
+          "awayScore": "17",
+          "teamID": "1",
+          "scoreDetails": "10 plays, 71 yards, 4:30",
+          "scoreType": "TD",
+          "scoreTime": "0:28",
+          "team": "ARI",
+          "playerIDs": ["3917315", "3045147", "4363538"]
+        },
+        {
+          "score": "Chad Ryland 50 Yd Field Goal",
+          "scorePeriod": "Q3",
+          "homeScore": "10",
+          "awayScore": "20",
+          "teamID": "1",
+          "scoreDetails": "6 plays, 49 yards, 3:11",
+          "scoreType": "FG",
+          "scoreTime": "9:16",
+          "team": "ARI",
+          "playerIDs": ["4363538"]
+        }
+      ],
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "10",
+        "stSnapPct": "0.37",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "Kicking": {
+        "fgLong": "50",
+        "fgMade": "2",
+        "fgAttempts": "3",
+        "xpMade": "2",
+        "fgPct": "66.7",
+        "kickingPts": "8",
+        "xpAttempts": "2",
+        "fgMissed": "1",
+        "xpMissed": "0"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "playerID": "4363538",
+      "longName": "Chad Ryland"
+    },
+    "4367199": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "5",
+        "stSnapPct": "0.19",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "playerID": "4367199",
+      "longName": "Jon Gaines II"
+    },
+    "4369835": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "23",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "36",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "0.55"
+      },
+      "team": "NO",
+      "teamAbv": "NO",
+      "Defense": {
+        "totalTackles": "2",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "1",
+        "qbHits": "1",
+        "defensiveInterceptions": "0",
+        "sacks": "1",
+        "passDeflections": "0"
+      },
+      "playerID": "4369835",
+      "longName": "Alontae Taylor"
+    },
+    "4426339": {
+      "gameID": "20250907_ARI@NO",
+      "Rushing": {
+        "rushAvg": "7.3",
+        "rushYds": "29",
+        "carries": "4",
+        "longRush": "12",
+        "rushTD": "0"
+      },
+      "Passing": {
+        "qbr": "57.5",
+        "rtg": "70.4",
+        "sacked": "1-6",
+        "passAttempts": "46",
+        "passAvg": "4.7",
+        "passTD": "0",
+        "passYds": "214",
+        "int": "0",
+        "passCompletions": "27"
+      },
+      "teamID": "23",
+      "snapCounts": {
+        "offSnapPct": "1.00",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "75",
+        "defSnapPct": "0.00"
+      },
+      "team": "NO",
+      "teamAbv": "NO",
+      "playerID": "4426339",
+      "longName": "Spencer Rattler"
+    },
+    "4426844": {
+      "gameID": "20250907_ARI@NO",
+      "Receiving": {
+        "receptions": "1",
+        "recTD": "0",
+        "longRec": "3",
+        "targets": "2",
+        "recYds": "3",
+        "recAvg": "3.0"
+      },
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.30",
+        "defSnap": "0",
+        "stSnap": "10",
+        "stSnapPct": "0.37",
+        "offSnap": "20",
+        "defSnapPct": "0.00"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "0",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4426844",
+      "longName": "Elijah Higgins"
+    },
+    "4428350": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "23",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "13",
+        "stSnapPct": "0.48",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "NO",
+      "teamAbv": "NO",
+      "playerID": "4428350",
+      "longName": "Quincy Riley"
+    },
+    "4428633": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "50",
+        "stSnap": "14",
+        "stSnapPct": "0.52",
+        "offSnap": "0",
+        "defSnapPct": "0.67"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "Defense": {
+        "totalTackles": "3",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "3",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "2"
+      },
+      "playerID": "4428633",
+      "longName": "Dadrion Taylor-Demerson"
+    },
+    "4428811": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "1",
+        "stSnapPct": "0.04",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "playerID": "4428811",
+      "longName": "Xavier Weaver"
+    },
+    "4428988": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "23",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "47",
+        "stSnap": "5",
+        "stSnapPct": "0.19",
+        "offSnap": "0",
+        "defSnapPct": "0.71"
+      },
+      "team": "NO",
+      "teamAbv": "NO",
+      "Defense": {
+        "totalTackles": "2",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4428988",
+      "longName": "Bryan Bresee"
+    },
+    "4428991": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "1.00",
+        "defSnap": "0",
+        "stSnap": "5",
+        "stSnapPct": "0.19",
+        "offSnap": "66",
+        "defSnapPct": "0.00"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "playerID": "4428991",
+      "longName": "Paris Johnson Jr."
+    },
+    "4428996": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "28",
+        "stSnap": "10",
+        "stSnapPct": "0.37",
+        "offSnap": "0",
+        "defSnapPct": "0.37"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "Defense": {
+        "totalTackles": "2",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4428996",
+      "longName": "Jordan Burch"
+    },
+    "4429071": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "10",
+        "stSnapPct": "0.37",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4429071",
+      "longName": "Cody Simon"
+    },
+    "4429073": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "23",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "7",
+        "stSnap": "4",
+        "stSnapPct": "0.15",
+        "offSnap": "0",
+        "defSnapPct": "0.11"
+      },
+      "team": "NO",
+      "teamAbv": "NO",
+      "playerID": "4429073",
+      "longName": "Fadil Diggs"
+    },
+    "4429275": {
+      "gameID": "20250907_ARI@NO",
+      "Rushing": {
+        "rushAvg": "8.6",
+        "rushYds": "69",
+        "carries": "8",
+        "longRush": "52",
+        "rushTD": "0"
+      },
+      "Receiving": {
+        "receptions": "1",
+        "recTD": "0",
+        "longRec": "6",
+        "targets": "1",
+        "recYds": "6",
+        "recAvg": "6.0"
+      },
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.33",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "22",
+        "defSnapPct": "0.00"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "playerID": "4429275",
+      "longName": "Trey Benson"
+    },
+    "4429782": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "5",
+        "stSnapPct": "0.19",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "playerID": "4429782",
+      "longName": "Josh Fryar"
+    },
+    "4430379": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "23",
+      "snapCounts": {
+        "offSnapPct": "0.43",
+        "defSnap": "0",
+        "stSnap": "5",
+        "stSnapPct": "0.19",
+        "offSnap": "32",
+        "defSnapPct": "0.00"
+      },
+      "team": "NO",
+      "teamAbv": "NO",
+      "playerID": "4430379",
+      "longName": "Asim Richards"
+    },
+    "4430821": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "22",
+        "stSnapPct": "0.81",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "playerID": "4430821",
+      "longName": "Kitan Crawford"
+    },
+    "4432668": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "15",
+        "stSnapPct": "0.56",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "playerID": "4432668",
+      "longName": "Denzel Burke"
+    },
+    "4432708": {
+      "gameID": "20250907_ARI@NO",
+      "Receiving": {
+        "receptions": "5",
+        "recTD": "1",
+        "longRec": "45",
+        "targets": "6",
+        "recYds": "71",
+        "recAvg": "14.2"
+      },
+      "scoringPlays": [
+        {
+          "score": "Marvin Harrison Jr. 1 Yd pass from Kyler Murray (Chad Ryland Kick)",
+          "scorePeriod": "Q2",
+          "homeScore": "7",
+          "awayScore": "10",
+          "teamID": "1",
+          "scoreDetails": "7 plays, 65 yards, 4:15",
+          "scoreType": "TD",
+          "scoreTime": "10:05",
+          "team": "ARI",
+          "playerIDs": ["3917315", "4432708", "4363538"]
+        }
+      ],
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.89",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "59",
+        "defSnapPct": "0.00"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "playerID": "4432708",
+      "longName": "Marvin Harrison Jr."
+    },
+    "4432731": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "23",
+      "snapCounts": {
+        "offSnapPct": "0.01",
+        "defSnap": "0",
+        "stSnap": "5",
+        "stSnapPct": "0.19",
+        "offSnap": "1",
+        "defSnapPct": "0.00"
+      },
+      "team": "NO",
+      "teamAbv": "NO",
+      "playerID": "4432731",
+      "longName": "Moliki Matavao"
+    },
+    "4433975": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "23",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "66",
+        "stSnap": "1",
+        "stSnapPct": "0.04",
+        "offSnap": "0",
+        "defSnapPct": "1.00"
+      },
+      "team": "NO",
+      "teamAbv": "NO",
+      "Defense": {
+        "totalTackles": "7",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "5",
+        "tfl": "1",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "1"
+      },
+      "playerID": "4433975",
+      "longName": "Kool-Aid McKinstry"
+    },
+    "4566088": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "23",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "17",
+        "stSnapPct": "0.63",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "NO",
+      "teamAbv": "NO",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "0",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4566088",
+      "longName": "Jaylan Ford"
+    },
+    "4567219": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "20",
+        "stSnapPct": "0.74",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "0",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4567219",
+      "longName": "Owen Pappoe"
+    },
+    "4568506": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "75",
+        "stSnap": "8",
+        "stSnapPct": "0.30",
+        "offSnap": "0",
+        "defSnapPct": "1.00"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "Defense": {
+        "totalTackles": "4",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "2",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4568506",
+      "longName": "Garrett Williams"
+    },
+    "4569480": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "42",
+        "stSnap": "5",
+        "stSnapPct": "0.19",
+        "offSnap": "0",
+        "defSnapPct": "0.56"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "playerID": "4569480",
+      "longName": "Darius Robinson"
+    },
+    "4569559": {
+      "gameID": "20250907_ARI@NO",
+      "Receiving": {
+        "receptions": "1",
+        "recTD": "0",
+        "longRec": "13",
+        "targets": "2",
+        "recYds": "13",
+        "recAvg": "13.0"
+      },
+      "teamID": "23",
+      "snapCounts": {
+        "offSnapPct": "0.23",
+        "defSnap": "0",
+        "stSnap": "5",
+        "stSnapPct": "0.19",
+        "offSnap": "17",
+        "defSnapPct": "0.00"
+      },
+      "team": "NO",
+      "teamAbv": "NO",
+      "playerID": "4569559",
+      "longName": "Devaughn Vele"
+    },
+    "4570033": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "23",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "9",
+        "stSnapPct": "0.33",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "Punting": {
+        "puntYds": "202",
+        "punts": "4",
+        "puntAvg": "50.5",
+        "puntsin20": "2",
+        "puntTouchBacks": "0",
+        "puntLong": "54"
+      },
+      "team": "NO",
+      "teamAbv": "NO",
+      "playerID": "4570033",
+      "longName": "Kai Kroeger"
+    },
+    "4573697": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "23",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "2",
+        "stSnapPct": "0.07",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "NO",
+      "teamAbv": "NO",
+      "playerID": "4573697",
+      "longName": "Mason Tipton"
+    },
+    "4599739": {
+      "gameID": "20250907_ARI@NO",
+      "Rushing": {
+        "rushAvg": "4.8",
+        "rushYds": "24",
+        "carries": "5",
+        "longRush": "10",
+        "rushTD": "0"
+      },
+      "teamID": "23",
+      "snapCounts": {
+        "offSnapPct": "0.15",
+        "defSnap": "0",
+        "stSnap": "5",
+        "stSnapPct": "0.19",
+        "offSnap": "11",
+        "defSnapPct": "0.00"
+      },
+      "Kicking": {
+        "kickReturns": "3",
+        "kickReturnTD": "0",
+        "kickReturnYds": "88",
+        "kickReturnAvg": "29.3",
+        "kickReturnLong": "43"
+      },
+      "team": "NO",
+      "teamAbv": "NO",
+      "playerID": "4599739",
+      "longName": "Kendre Miller"
+    },
+    "4606711": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "23",
+      "snapCounts": {
+        "offSnapPct": "0.61",
+        "defSnap": "0",
+        "stSnap": "3",
+        "stSnapPct": "0.11",
+        "offSnap": "46",
+        "defSnapPct": "0.00"
+      },
+      "team": "NO",
+      "teamAbv": "NO",
+      "playerID": "4606711",
+      "longName": "Taliese Fuaga"
+    },
+    "4682652": {
+      "gameID": "20250907_ARI@NO",
+      "Rushing": {
+        "rushAvg": "4.5",
+        "rushYds": "9",
+        "carries": "2",
+        "longRush": "5",
+        "rushTD": "0"
+      },
+      "teamID": "23",
+      "snapCounts": {
+        "offSnapPct": "0.09",
+        "defSnap": "0",
+        "stSnap": "4",
+        "stSnapPct": "0.15",
+        "offSnap": "7",
+        "defSnapPct": "0.00"
+      },
+      "team": "NO",
+      "teamAbv": "NO",
+      "playerID": "4682652",
+      "longName": "Devin Neal"
+    },
+    "4683215": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "23",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "17",
+        "stSnapPct": "0.63",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "NO",
+      "teamAbv": "NO",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4683215",
+      "longName": "Danny Stutsman"
+    },
+    "4683813": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "23",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "1",
+        "stSnap": "22",
+        "stSnapPct": "0.81",
+        "offSnap": "0",
+        "defSnapPct": "0.02"
+      },
+      "team": "NO",
+      "teamAbv": "NO",
+      "playerID": "4683813",
+      "longName": "Jonas Sanker"
+    },
+    "4685260": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "23",
+      "snapCounts": {
+        "offSnapPct": "1.00",
+        "defSnap": "0",
+        "stSnap": "5",
+        "stSnapPct": "0.19",
+        "offSnap": "75",
+        "defSnapPct": "0.00"
+      },
+      "team": "NO",
+      "teamAbv": "NO",
+      "playerID": "4685260",
+      "longName": "Kelvin Banks Jr."
+    },
+    "4685408": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "45",
+        "stSnap": "4",
+        "stSnapPct": "0.15",
+        "offSnap": "0",
+        "defSnapPct": "0.60"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "3"
+      },
+      "playerID": "4685408",
+      "longName": "Will Johnson"
+    },
+    "4696043": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "23",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "13",
+        "stSnapPct": "0.48",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "NO",
+      "teamAbv": "NO",
+      "playerID": "4696043",
+      "longName": "Rejzohn Wright"
+    },
+    "4696700": {
+      "gameID": "20250907_ARI@NO",
+      "Receiving": {
+        "receptions": "1",
+        "recTD": "0",
+        "longRec": "10",
+        "targets": "1",
+        "recYds": "10",
+        "recAvg": "10.0"
+      },
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.52",
+        "defSnap": "0",
+        "stSnap": "12",
+        "stSnapPct": "0.44",
+        "offSnap": "34",
+        "defSnapPct": "0.00"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "playerID": "4696700",
+      "longName": "Tip Reiman"
+    },
+    "4696902": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "23",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "5",
+        "stSnapPct": "0.19",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "NO",
+      "teamAbv": "NO",
+      "playerID": "4696902",
+      "longName": "Torricelli Simpkins III"
+    },
+    "4698113": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "75",
+        "stSnap": "5",
+        "stSnapPct": "0.19",
+        "offSnap": "0",
+        "defSnapPct": "1.00"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "Defense": {
+        "totalTackles": "6",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "4",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "1"
+      },
+      "playerID": "4698113",
+      "longName": "Max Melton"
+    },
+    "5084939": {
+      "gameID": "20250907_ARI@NO",
+      "teamID": "1",
+      "snapCounts": {
+        "offSnapPct": "1.00",
+        "defSnap": "0",
+        "stSnap": "5",
+        "stSnapPct": "0.19",
+        "offSnap": "66",
+        "defSnapPct": "0.00"
+      },
+      "team": "ARI",
+      "teamAbv": "ARI",
+      "playerID": "5084939",
+      "longName": "Isaiah Adams"
+    }
+  },
+  "scoringPlays": [
+    {
+      "score": "Chad Ryland 42 Yd Field Goal",
+      "scorePeriod": "Q1",
+      "homeScore": "0",
+      "awayScore": "3",
+      "teamID": "1",
+      "scoreDetails": "11 plays, 42 yards, 5:31",
+      "scoreType": "FG",
+      "scoreTime": "5:03",
+      "team": "ARI",
+      "playerIDs": ["4363538"]
+    },
+    {
+      "score": "Alvin Kamara 18 Yd Rush (Blake Grupe Kick)",
+      "scorePeriod": "Q2",
+      "homeScore": "7",
+      "awayScore": "3",
+      "teamID": "23",
+      "scoreDetails": "10 plays, 75 yards, 5:43",
+      "scoreType": "TD",
+      "scoreTime": "14:20",
+      "team": "NO",
+      "playerIDs": ["3054850", "4259619"]
+    },
+    {
+      "score": "Marvin Harrison Jr. 1 Yd pass from Kyler Murray (Chad Ryland Kick)",
+      "scorePeriod": "Q2",
+      "homeScore": "7",
+      "awayScore": "10",
+      "teamID": "1",
+      "scoreDetails": "7 plays, 65 yards, 4:15",
+      "scoreType": "TD",
+      "scoreTime": "10:05",
+      "team": "ARI",
+      "playerIDs": ["3917315", "4432708", "4363538"]
+    },
+    {
+      "score": "Blake Grupe 36 Yd Field Goal",
+      "scorePeriod": "Q2",
+      "homeScore": "10",
+      "awayScore": "10",
+      "teamID": "23",
+      "scoreDetails": "10 plays, 37 yards, 5:07",
+      "scoreType": "FG",
+      "scoreTime": "4:58",
+      "team": "NO",
+      "playerIDs": ["4259619"]
+    },
+    {
+      "score": "James Conner 4 Yd pass from Kyler Murray (Chad Ryland Kick)",
+      "scorePeriod": "Q2",
+      "homeScore": "10",
+      "awayScore": "17",
+      "teamID": "1",
+      "scoreDetails": "10 plays, 71 yards, 4:30",
+      "scoreType": "TD",
+      "scoreTime": "0:28",
+      "team": "ARI",
+      "playerIDs": ["3917315", "3045147", "4363538"]
+    },
+    {
+      "score": "Chad Ryland 50 Yd Field Goal",
+      "scorePeriod": "Q3",
+      "homeScore": "10",
+      "awayScore": "20",
+      "teamID": "1",
+      "scoreDetails": "6 plays, 49 yards, 3:11",
+      "scoreType": "FG",
+      "scoreTime": "9:16",
+      "team": "ARI",
+      "playerIDs": ["4363538"]
+    },
+    {
+      "score": "Blake Grupe 28 Yd Field Goal",
+      "scorePeriod": "Q4",
+      "homeScore": "13",
+      "awayScore": "20",
+      "teamID": "23",
+      "scoreDetails": "9 plays, 54 yards, 1:52",
+      "scoreType": "FG",
+      "scoreTime": "2:42",
+      "team": "NO",
+      "playerIDs": ["4259619"]
+    }
+  ],
+  "seasonType": "Regular Season",
+  "teamIDAway": "1",
+  "teamIDHome": "23",
+  "teamStats": {
+    "away": {
+      "totalYards": "276",
+      "rushingAttempts": "27",
+      "rushingYards": "146",
+      "fumblesLost": "0",
+      "penalties": "9-54",
+      "totalPlays": "61",
+      "possession": "33:46",
+      "safeties": "0",
+      "passCompletionsAndAttempts": "21-29",
+      "passingFirstDowns": "11",
+      "interceptionsThrown": "0",
+      "sacksAndYardsLost": "5-33",
+      "thirdDownEfficiency": "6-13",
+      "blockedPunt": "0",
+      "yardsPerPlay": "4.5",
+      "redZoneScoredAndAttempted": "2-3",
+      "teamID": "1",
+      "defensiveInterceptions": "0",
+      "defensiveOrSpecialTeamsTds": "0",
+      "totalDrives": "9",
+      "rushingFirstDowns": "5",
+      "blockedFG": "0",
+      "rushTD": "0",
+      "twoPointConversions": "0",
+      "firstDowns": "19",
+      "passTD": "2",
+      "team": "ARI",
+      "blockedXP": "0",
+      "teamAbv": "ARI",
+      "firstDownsFromPenalties": "3",
+      "fourthDownEfficiency": "0-0",
+      "defensiveTwoPointConversionReturns": "0",
+      "passingYards": "130",
+      "yardsPerRush": "5.4",
+      "snapCounts": {
+        "totalSpecialTeams": "27",
+        "totalOffensive": "66",
+        "totalDefensive": "75"
+      },
+      "turnovers": "0",
+      "yardsPerPass": "3.8"
+    },
+    "home": {
+      "totalYards": "315",
+      "rushingAttempts": "22",
+      "rushingYards": "107",
+      "fumblesLost": "0",
+      "penalties": "13-89",
+      "totalPlays": "69",
+      "possession": "26:14",
+      "safeties": "0",
+      "passCompletionsAndAttempts": "27-46",
+      "passingFirstDowns": "12",
+      "interceptionsThrown": "0",
+      "sacksAndYardsLost": "1-6",
+      "thirdDownEfficiency": "5-14",
+      "blockedPunt": "0",
+      "yardsPerPlay": "4.6",
+      "redZoneScoredAndAttempted": "1-4",
+      "teamID": "23",
+      "defensiveInterceptions": "0",
+      "defensiveOrSpecialTeamsTds": "0",
+      "totalDrives": "10",
+      "rushingFirstDowns": "5",
+      "blockedFG": "1",
+      "rushTD": "1",
+      "twoPointConversions": "0",
+      "firstDowns": "21",
+      "passTD": "0",
+      "team": "NO",
+      "blockedXP": "0",
+      "teamAbv": "NO",
+      "firstDownsFromPenalties": "4",
+      "fourthDownEfficiency": "1-2",
+      "defensiveTwoPointConversionReturns": "0",
+      "passingYards": "208",
+      "yardsPerRush": "4.9",
+      "snapCounts": {
+        "totalSpecialTeams": "27",
+        "totalOffensive": "75",
+        "totalDefensive": "66"
+      },
+      "turnovers": "0",
+      "yardsPerPass": "4.4"
+    }
+  },
+  "gameID": "20250907_ARI@NO",
+  "gameStatusCode": "2"
+}
