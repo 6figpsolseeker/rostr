@@ -182,6 +182,21 @@ export function CreateLeagueForm() {
   const [problems, setProblems] = useState<readonly string[]>([]);
 
   /**
+   * The league was created and its hash is not the one previewed above.
+   *
+   * Held rather than thrown, because by the time this is knowable the league
+   * exists — the rules are frozen and cannot be corrected, only abandoned. So
+   * this has to be loud *and* still hand over the link: an error that navigated
+   * nowhere would leave a real league reachable only through browser history,
+   * and there is no "my leagues" list to find it in.
+   */
+  const [mismatch, setMismatch] = useState<{
+    id: string;
+    previewed: string;
+    frozen: string;
+  } | null>(null);
+
+  /**
    * Two steps, and the second is a ceremony rather than a page.
    *
    * The design splits creation into the choices and **the freeze** — read the
@@ -293,6 +308,7 @@ export function CreateLeagueForm() {
 
       const created = (await response.json()) as {
         id?: string;
+        rulesHash?: string;
         error?: string;
         problems?: string[];
       };
@@ -302,7 +318,44 @@ export function CreateLeagueForm() {
         throw new Error(created.error ?? "Could not create the league");
       }
 
-      router.push(`/leagues/${created.id}`);
+      /*
+        The one check this screen was missing.
+
+        Everything above promises that the hash rendered in the freeze step is
+        the hash the server stores. This file already noted that a divergence
+        *would* be visible — as two different hashes on two different screens —
+        and that is only true of someone who thinks to compare them. Nothing
+        surfaced it at the moment it matters.
+
+        Drift is a configuration mistake away rather than hypothetical.
+        `FEE_RECIPIENT` is mirrored into `NEXT_PUBLIC_FEE_RECIPIENT`, two values
+        set independently that must agree; and the mint is derived on both sides
+        from `POT_MINTS`, keyed by a cluster the browser reads from
+        `NEXT_PUBLIC_SOLANA_CLUSTER` and **defaults to devnet when unset**, where
+        the server's `declaredCluster()` would have thrown. So an unset browser
+        variable on a mainnet deployment previews a devnet mint against a mainnet
+        freeze — and the symptom is a commissioner who read and acknowledged one
+        document while their members sign another.
+
+        Free leagues build `pot: null` on both sides and have no divergence
+        surface at all, so this cannot fire on them.
+      */
+      if (previewHash !== null && created.rulesHash !== previewHash) {
+        setMismatch({
+          id: created.id ?? "",
+          previewed: previewHash,
+          frozen: created.rulesHash ?? "none returned",
+        });
+        setSubmitting(false);
+        return;
+      }
+
+      // `replace`, not `push`, so the create page leaves the history stack.
+      // Back from a league should return to wherever the commissioner came from,
+      // not to the form that made it — a form that remounts empty (every piece
+      // of its state is `useState`, and this is a route change) and invites a
+      // second league, which cannot be deleted, only dissolved.
+      router.replace(`/leagues/${created.id}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setSubmitting(false);
@@ -321,6 +374,57 @@ export function CreateLeagueForm() {
   const potAvailable = POT_MINT !== null;
   const choicesSet =
     (name.trim() ? 1 : 0) + 6 + (withPot ? 2 : 0) + (potAvailable && !withPot ? 1 : 0);
+
+  /*
+    Once a league exists this screen has nothing left to offer, so it stops being
+    a form.
+
+    Rendering the banner *inside* the freeze step left "Back to the choices"
+    live: pressing it landed the commissioner on a configure step whose submit
+    button was permanently disabled, with the explanation no longer on screen and
+    nothing saying why. The only thing worth doing now is opening the league that
+    was created, so that is the only thing here.
+  */
+  if (mismatch) {
+    return (
+      <div className="mx-auto max-w-[860px]">
+        <h1 className="text-[38px] font-medium leading-[1.08] tracking-[-0.03em]">
+          The frozen rules are not the rules you read
+        </h1>
+        <p className="mt-4 max-w-[640px] text-[15.5px] leading-[1.6] text-nocturne-neutral-400">
+          The league was created — that cannot be undone, and its rules can never be amended —
+          but the hash the server stored differs from the one shown on the previous screen. So
+          this screen did not show you the document your members will sign. Read the stored rule
+          set before inviting anyone.
+        </p>
+        <p className="mt-4 max-w-[640px] text-[14px] leading-[1.6] text-nocturne-neutral-500">
+          This almost always means the browser and the server disagree about which chain this
+          deployment is on, or about the fee recipient. Both are build-time configuration and
+          neither can be fixed from here.
+        </p>
+
+        <dl className="mt-6 space-y-1 font-mono text-[11.5px] break-all text-nocturne-neutral-500">
+          <div>
+            <dt className="inline text-nocturne-neutral-600">shown to you </dt>
+            <dd className="inline">{mismatch.previewed}</dd>
+          </div>
+          <div>
+            <dt className="inline text-nocturne-neutral-600">frozen </dt>
+            <dd className="inline">{mismatch.frozen}</dd>
+          </div>
+        </dl>
+
+        {mismatch.id ? (
+          <a
+            href={`/leagues/${mismatch.id}`}
+            className="mt-8 inline-block rounded-[4px] border border-nocturne-accent px-[26px] py-3 text-[14.5px] text-nocturne-accent-200 transition-colors hover:bg-nocturne-accent/10"
+          >
+            Open the league and read what was stored
+          </a>
+        ) : null}
+      </div>
+    );
+  }
 
   if (step === "freeze") {
     return (

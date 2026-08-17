@@ -12,9 +12,11 @@ import { RulesView } from "@/components/RulesView";
 import { JoinPanel } from "@/components/JoinPanel";
 import { AnchorPanel } from "@/components/AnchorPanel";
 import { DepositPanel } from "@/components/DepositPanel";
+import { CommissionerSetup } from "@/components/CommissionerSetup";
 import { db } from "@/lib/db";
 import { currentUser } from "@/lib/session";
 import { depositsOpen } from "@/lib/pot";
+import { commissionerSetup } from "@/lib/setup";
 
 export default async function LeaguePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -58,6 +60,40 @@ export default async function LeaguePage({ params }: { params: Promise<{ id: str
   const myWallet = user ? await memberWallet(client, id, user.id) : null;
   const resumable = myWallet !== null && (await getOnChainJoin(client, id, myWallet)) === null;
 
+  const anchored = chain?.anchoredAt !== null && chain?.anchoredAt !== undefined;
+  const isCommissioner = user !== null && commissioner?.commissioner_id === user.id;
+
+  /*
+    What the commissioner still owes their own league (#165).
+
+    Every input is already loaded above, and every one of them is a row rather
+    than a step counter — which is the point. The four steps each involve a
+    wallet popup, so leaving the page part-way through is the ordinary case, and
+    a position held in a component's state would be lost exactly when it was
+    needed. Resolved here, it survives a reload and a second tab.
+
+    `memberWallet` is the membership row and the team is written in the same
+    transaction, so it answers "has a seat"; `resumable` is already "has a seat
+    and no on-chain record", which is the fourth step still owed.
+
+    The last three are what stop the list naming a step that can never be taken.
+    `leagueState` and `seatsFree` are the same two facts `open` below is built
+    from, and `fieldLocked` is the frozen draft time against the server's clock —
+    the instant migration `0028` starts refusing every `teams` INSERT. Nothing in
+    this app moves a league out of FORMING when that time passes, so without them
+    the checklist would go on asking for a seat forever.
+  */
+  const setup = commissionerSetup({
+    isCommissioner,
+    hasLinkedWallet: wallets.length > 0,
+    anchored,
+    hasTeam: myWallet !== null,
+    onChainJoined: myWallet !== null && !resumable,
+    leagueState: league.state,
+    seatsFree: taken < stored.rules.league.maxTeams,
+    fieldLocked: Date.now() >= stored.rules.draft.scheduledAt * 1000,
+  });
+
   // Whether the six tabs and the two buttons below lead anywhere for this
   // viewer. Derived from the same gate those destinations enforce, so the nav
   // and the 404 cannot disagree — see `leagueNavOpen`.
@@ -75,6 +111,26 @@ export default async function LeaguePage({ params }: { params: Promise<{ id: str
         active=""
         navOpen={navOpen}
       />
+
+      {/*
+        First on the page, and only while something is owed.
+
+        A commissioner who has not finished is the person least able to guess
+        what to do next: their league is real, its rules are frozen, and every
+        tab 404s at them because they are not a member of it. Once the four
+        steps are done `setup.complete` is true and this disappears — a
+        permanently all-ticked list is noise on a screen people open weekly.
+
+        It stays when the steps can no longer be taken, and says so instead. A
+        commissioner who never joined their own league is not less entitled to
+        be told once it is too late to fix.
+      */}
+      {setup && !setup.complete ? (
+        <CommissionerSetup
+          setup={setup}
+          fieldLocksAt={new Date(stored.rules.draft.scheduledAt * 1000)}
+        />
+      ) : null}
 
       {/*
         The draft and the bracket are not tabs.
@@ -113,27 +169,19 @@ export default async function LeaguePage({ params }: { params: Promise<{ id: str
       */}
       <RulesView rules={stored.rules} hash={stored.hash} />
 
-      <JoinPanel
-        leagueId={league.id}
-        leagueName={league.name}
-        rulesHash={stored.hash}
-        open={league.state === "FORMING" && taken < stored.rules.league.maxTeams}
-        signedIn={user !== null}
-        linkedWallets={wallets.map((wallet) => wallet.address)}
-        anchored={chain?.anchoredAt !== null && chain?.anchoredAt !== undefined}
-        isCommissioner={user !== null && commissioner?.commissioner_id === user.id}
-        hasPot={stored.rules.pot !== null}
-        tokenMint={stored.rules.pot?.tokenMint ?? null}
-        resumable={resumable}
-      />
-
       {/*
         Only the commissioner, and only while it is unanchored. Anchoring is
         signed by their own wallet, so this is the one place the flow needs a
-        human rather than a job — and until it happens nobody can join, which is
-        why it sits directly under the notice explaining that.
+        human rather than a job.
+
+        **Above `JoinPanel`, so the screen order is the flow order.** It used to
+        sit below, which put the one control the commissioner can act on
+        underneath a panel telling them nobody can join yet — including the
+        notice explaining that anchoring is theirs to do, with the button for it
+        further down the page. It never renders once anchored, so this reorder
+        changes nothing for anybody else.
       */}
-      {!chain?.anchoredAt && user !== null && commissioner?.commissioner_id === user.id && (
+      {!anchored && isCommissioner && (
         <AnchorPanel
           leagueId={league.id}
           rulesHash={stored.hash}
@@ -155,6 +203,20 @@ export default async function LeaguePage({ params }: { params: Promise<{ id: str
           }
         />
       )}
+
+      <JoinPanel
+        leagueId={league.id}
+        leagueName={league.name}
+        rulesHash={stored.hash}
+        open={league.state === "FORMING" && taken < stored.rules.league.maxTeams}
+        signedIn={user !== null}
+        linkedWallets={wallets.map((wallet) => wallet.address)}
+        anchored={anchored}
+        isCommissioner={isCommissioner}
+        hasPot={stored.rules.pot !== null}
+        tokenMint={stored.rules.pot?.tokenMint ?? null}
+        resumable={resumable}
+      />
 
       {league.rules_uri && (
         <p className="text-xs text-nocturne-neutral-600">

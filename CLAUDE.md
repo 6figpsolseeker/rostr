@@ -374,6 +374,32 @@ is 2.
   cost an hour and looked like a code bug twice.
 - **`CI=true` is required** for anything running pnpm without a TTY, or it aborts
   trying to purge `node_modules`.
+- **An interrupted pnpm install poisons every later one, and the error names the
+  wrong thing.** pnpm relinks by renaming each package symlink to `.ignored_<name>`
+  first; if the run dies partway, those directories survive, and the next install
+  fails with `EPERM: operation not permitted, rename '…/eslint' → '…/.ignored_eslint'`
+  because on Windows `rename` will not overwrite an existing directory. It reads as
+  a file lock or a permissions problem and is neither — nothing is holding the file,
+  and no amount of retrying or closing editors helps. Delete the leftovers and
+  reinstall:
+
+  ```powershell
+  Get-ChildItem . -Recurse -Force -Directory -Filter '.ignored_*' |
+    ForEach-Object { cmd /c rmdir "$($_.FullName)" }
+  ```
+
+  `cmd /c rmdir` rather than `Remove-Item -Recurse`: every `.ignored_*` is a
+  directory **symlink**, and `Remove-Item -Recurse` would follow it and delete the
+  store contents behind it. `rmdir` without `/s` refuses a real directory, which
+  is the right way round — but it also fails silently through `cmd /c`, so check
+  the count afterwards rather than assuming.
+
+  It also strips the **root workspace's own direct devDependency links** —
+  `typescript`, `vitest`, `eslint`, `prettier`, `typescript-eslint` — which is why
+  `pnpm typecheck` then fails with `'tsc' is not recognized`. The virtual store
+  under `.pnpm` is intact, so it looks like a missing toolchain and is the same
+  interrupted install. Cost about twenty minutes on 2026-08-17.
+
 - **Stale servers on 3000/3001/3002** made half of them answer and half not. Check
   which port is actually live before diagnosing anything.
 - **Deleting a league is impossible by design.** Every FK into `leagues` is ON
@@ -386,8 +412,25 @@ is 2.
 - **#165 — creating a league does not join it.** Has a **full implementation plan
   in a comment**, from three independent reviews: the five-step sequence, why
   steps 3 and 4 cannot be swapped, the batching trap that would put a seat
-  on-chain before consent, and a recommended sub-hour first slice. Start there.
-  #166 fixed the symptom (a nav offering eight doors that 404); the cause stands.
+  on-chain before consent, and a recommended sub-hour first slice. #166 fixed the
+  symptom (a nav offering eight doors that 404); the cause stands.
+
+  **The plan's first slice landed 2026-08-17** — see "The commissioner's four
+  steps" below. It makes the state legible and resumable; it does **not** make a
+  memberless league impossible. The next piece is the plan's own follow-up:
+  extract `JoinPanel`'s link-wallet block into a control that stands on its own,
+  and collect the commissioner's team name in the create form.
+
+  **And note how it got closed, because the existing rule was followed and did not
+  save it.** #166 wrote `Refs #165`, exactly as the GitHub trap above instructs —
+  and, in its Scope section, the sentence _"This does not close #165."_ GitHub's
+  keyword parser has no notion of negation: it read `close #165`, linked the PR,
+  and closed the issue one second after the merge. So `Refs` plus a hand-close is
+  **necessary and not sufficient** — never put `close`/`fix`/`resolve` (in any
+  form) immediately before an issue number in a PR body **at all, even to deny
+  it**. Write "this does not resolve the cause in #165", or keep the number away
+  from the verb. Third issue swallowed, first by this mechanism.
+
 - **#157** — provider stats that contradict themselves are ingested silently. Only
   field goals are cross-checked today. Two cheap checks would have caught both
   known cases without a season sweep or a second source.
@@ -510,6 +553,13 @@ partial fix write `Refs #79` and close it by hand when the last part lands.
    unconditional refund, but it cannot be _distributed_. What closes the gap is
    `potDepositGate`, which shuts the stake button on mainnet until the committed IDL
    carries a settlement instruction. See "Deposit and refund" below.
+
+   **That is true of `DepositPanel` and false of `JoinPanel` — issue #168, found
+   2026-08-17.** The page passes `depositsOpen()` to the first and an ungated
+   `hasPot` to the second, and `JoinPanel` batches `deposit` into the join
+   transaction from that boolean alone. So the gate is not consulted on the path
+   every new member actually takes, and the sentence above describes the panel
+   almost nobody uses. Do not treat this as a structural barrier until #168 lands.
 
    The missing piece is the payout (#28, D6). PR #31 offered one and was closed on
    2026-08-14 — see the review above; the short version is that it declared a winner,
@@ -2028,6 +2078,100 @@ does exactly that.
 The denormalised `league_scoring_rules` and `league_roster_slots` are **copies**, never
 references to a shared template — a template edit must never be able to reach a league
 that already exists. They carry the same immutability triggers.
+
+### The commissioner's four steps
+
+`apps/web/src/lib/setup.ts`, `components/CommissionerSetup.tsx`, on `/leagues/[id]`.
+The first slice of #165, landed 2026-08-17.
+
+**`createLeague` seats nobody, and that is not a flag somebody forgot.** Joining is a
+wallet signature over the rules hash; `joinLeague` needs a linked wallet and an anchored
+league, and a league is unanchored at the instant it is created. So the commissioner is a
+stranger to their own league until they walk the same steps every member walks — and
+because the league is usually PRIVATE, `leagueReadAccess` 404s them out of every tab in
+the meantime. #166 stopped the nav offering those doors. This says why they are shut.
+
+**The decision is in `lib/setup.ts`, not in the component.** `apps/web` cannot render a
+component in a test, so a rule written in `.tsx` is verified only by being run in
+production — the same reasoning that put `expectedTermsFromRules` in `@rostr/escrow` and
+the lobby's view model in `lib/lobby.ts`, and in the `@rostr/escrow` case both defects
+review found were in the mapping rather than in the rule.
+
+**Anchor is step one here, and the issue's plan tabulates it second.** That table is right
+about the happy path — linking is the first wallet interaction — but linking is reachable
+only from `JoinPanel`, and `JoinPanel` renders a bare "not open yet" notice with no link
+control until the league is anchored. A checklist naming a step that has no button
+anywhere on the page is worse than no checklist. Anchoring is also the only step that
+blocks _other people_. Revisit the order when the link control is extracted.
+
+**Every input is a row, never a step counter.** All eight come from state the page already
+loads, so the position survives a reload, a second tab, and the wallet popup in the middle
+of any of the four — every step signs something, two transactions and two messages, so
+leaving part-way through is the ordinary case here rather than the exceptional one. A
+wizard inside `CreateLeagueForm` would hold its position in `useState` and strand a
+commissioner exactly when a popup stole focus, which is the failure `JoinPanel`'s
+`resumable` already exists to prevent.
+
+**`done` is each step's own condition, not "sits before the current one".** ANCHOR and
+LINK are independent in both directions: `AnchorPanel` signs from the connected wallet and
+never consults `wallets`, so anchoring can come first; and `wallets` is per-**user**, so a
+commissioner who linked one on any previous league arrives with LINK already satisfied —
+which is the ordinary case for a returning user. A list telling them they had not done
+what they just did would be the screen contradicting the thing it reports on.
+
+That per-user scope is also the one place the checklist is coarser than the control it
+points at. `JoinPanel` gates on whether the **connected** address is linked, so a
+commissioner who connects a second wallet sees LINK ticked and is still asked to verify.
+Narrowing it needs the connected address, which only the browser has.
+
+**A checklist has to know when it has run out of time**, and the first version did not.
+Three of the four steps need an open field, and **nothing in this app moves a league out
+of FORMING when its draft time passes** — so a step counter alone went on naming "take
+your seat" as the next action on a full league, a dissolved one, and one whose field
+`0028` had locked forever, directly above a `JoinPanel` saying "this league is not
+accepting members". Two panels, one screen, opposite answers. `blocker` reports the dead
+end instead, with the codes and their order mirroring `joinLeague`'s own refusals — state,
+then `requireOpenField`, then the seat count — so the screen cannot name a different reason
+than the server would. It is deliberately **never** set once `hasTeam` is true:
+`/join-onchain` grants the on-chain record against the existing membership row and consults
+none of those three, so a seated commissioner must still be sent to finish, and blocking
+there would strand exactly what `resumable` exists to prevent.
+
+`commissionerSetupStep` still answers the bare sequence and still says `SEAT` on a dead
+league — that is the correct answer to "which step is outstanding" and the wrong thing to
+put on a screen. Screens call `commissionerSetup`. A test asserts both answers side by
+side so nobody wires in the wrong one.
+
+**`AnchorPanel` now renders above `JoinPanel`.** It never renders once anchored, so this
+changes nothing for anybody else; while unanchored it stops the only control the
+commissioner can act on sitting _below_ the panel explaining that they need to act.
+
+**And `CreateLeagueForm` now compares the hash it previewed against the hash the server
+froze.** That file already noted a divergence _would_ be visible — as two hashes on two
+screens — which is only true of someone who thinks to compare them; nothing surfaced it at
+the moment it matters. Drift is a configuration mistake away: `FEE_RECIPIENT` is mirrored
+into `NEXT_PUBLIC_FEE_RECIPIENT`, two values set independently that must agree, and the
+mint is derived on both sides from `POT_MINTS` keyed by a cluster the browser reads from
+`NEXT_PUBLIC_SOLANA_CLUSTER` and **defaults to devnet when unset**, where the server's
+`declaredCluster()` would have thrown. A mainnet deployment with that browser variable
+unset previews a devnet mint against a mainnet freeze. Free leagues build `pot: null` on
+both sides and have no divergence surface, so it cannot fire on them.
+
+On a mismatch the form **stops being a form**: it shows both hashes and one link to the
+league, with no back button and no submit. The league exists by then and can never be
+amended, so this has to be loud **and** must not lose it — there is no "my leagues" list to
+find it in again, and an earlier draft that rendered the banner inside the freeze step left
+"back to the choices" live, landing the commissioner on a permanently disabled form with the
+explanation off screen. `router.replace`, not `push`, so the create page leaves the history
+stack and Back returns to wherever they came from rather than to a form that remounts empty
+and invites a second league.
+
+**What this does not do.** A commissioner can still abandon the league at any step, and
+after the frozen draft time migration `0028` refuses every `teams` INSERT — so a
+zero-team, undissolvable league is still reachable. What changed is that the screen now
+says so before the deadline (with the date, and the timezone named, because it is rendered
+on the server's clock) and reports it plainly afterwards instead of asking for a seat that
+can no longer be taken. Making it impossible rather than merely legible is the next slice.
 
 ### Database
 
