@@ -103,33 +103,182 @@ function toStatLines(totals: ReadonlyMap<string, number>): StatLine[] {
 }
 
 /**
- * Which players a two-point conversion should credit.
+ * A name reduced to something two spellings of the same person share.
  *
- * The least certain part of this file. The conversion is described inside the
- * parenthetical of a touchdown:
- *
- *     (Rhamondre Stevenson Run for Two-Point Conversion)
- *     (Tua Tagovailoa Pass to Julian Hill for Two-Point Conversion)
- *
- * `playerIDs` on the play does not distinguish the touchdown scorer from the
- * conversion participants, so this matches the player's `longName` **within the
- * parenthetical only** — a narrow enough window that a coincidental match is
- * implausible, unlike matching against the whole play text where the touchdown
- * scorer's name also appears.
- *
- * Our rules award 2 points for a conversion pass, rush, *and* reception, so both
- * the passer and the receiver are credited.
+ * Lower-cased, punctuation removed, common suffixes dropped. Removing the dots
+ * is what makes an abbreviation comparable: `R.Stevenson` becomes `rstevenson`,
+ * and so does the initial-plus-surname form built from `Rhamondre Stevenson`.
  */
-function twoPointCredit(scoreText: string, longName: string): boolean {
-  const parenthetical = /\(([^)]*)\)/.exec(scoreText)?.[1];
-  if (!parenthetical || !isSuccessfulTwoPointConversion(parenthetical)) return false;
-
-  return parenthetical.includes(longName);
+function normaliseName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/\b(jr|sr|ii|iii|iv)\b\.?/g, "")
+    .replace(/[.'’‘`-]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
-function translatePlayer(
+/**
+ * The spellings of `longName` a play might plausibly use.
+ *
+ * Two, because `docs/TANK01.md` records both: the full name, and the
+ * initial-plus-surname form Tank01 uses in some plays (`(J.Elliott kick)`).
+ * Matching only the first is issue #81's fourth defect — `R.Stevenson` and
+ * `Rhamondre Stevenson Jr.` both scored nothing, silently, on a play worth two
+ * points.
+ */
+function nameForms(longName: string): readonly string[] {
+  const full = normaliseName(longName);
+  if (!full) return [];
+
+  const parts = full.split(" ");
+  const surname = parts[parts.length - 1] ?? "";
+  const initial = parts[0]?.[0] ?? "";
+
+  // `rstevenson` — what `R.Stevenson` normalises to, dots and all removed.
+  const abbreviated = parts.length > 1 && initial && surname ? `${initial}${surname}` : null;
+
+  return abbreviated ? [full, abbreviated] : [full];
+}
+
+/**
+ * Everyone credited with a two-point conversion in this game, by player id.
+ *
+ * ## Why this is a game-level pass and not a per-player one
+ *
+ * It used to be decided inside `translatePlayer`, over that player's own
+ * `scoringPlays`, gated on `playerIDs` including him. Both halves lose people.
+ *
+ * `playerIDs` names the players from the **touchdown**, not the conversion
+ * (issue #155). In `20250907_MIA@IND` the conversion receiver Julian Hill is
+ * absent from it — and Tank01's entire record for him in that game carries no
+ * `scoringPlays` and no `Receiving` block at all, so his own loop ran zero
+ * times whatever the gate said. The conversion exists only on *other* players'
+ * records. Nothing that iterates a player's own plays can ever find him.
+ *
+ * So the plays are scanned once for the game, and names in the parenthetical are
+ * resolved against every player in it. Measured across 2025 weeks 1–3: six
+ * conversions, one dropped.
+ *
+ * ## Every parenthetical, not the first
+ *
+ * `docs/TANK01.md:105` records a play whose first parenthetical is a team code —
+ * `Blocked Kick Recovered by Jordan Davis (PHI) …`. Taking `[0]` and stopping
+ * would miss a conversion noted in a later one.
+ *
+ * ## Ambiguity credits nobody, and says so
+ *
+ * If two players in the game answer to the same spelling — two Stevensons, one
+ * abbreviation — this credits neither and warns. Crediting the wrong one is
+ * strictly worse than crediting no one: it takes two points from the player who
+ * earned them *and* hands them to somebody who did not, so the error is doubled
+ * and lands in two different teams' totals.
+ */
+function twoPointCreditsByPlayer(
+  scoringPlays: readonly ScoringPlay[],
+  playerStats: Record<string, RawPlayer>,
+  warnings: string[],
+): Map<string, number> {
+  const credits = new Map<string, number>();
+
+  const roster = Object.values(playerStats)
+    .filter((player) => player.playerID && player.longName)
+    .map((player) => ({
+      playerID: player.playerID as string,
+      longName: player.longName as string,
+      forms: nameForms(player.longName as string),
+    }));
+
+  for (const play of scoringPlays) {
+    const text = play.score ?? "";
+
+    for (const [, inner] of text.matchAll(/\(([^)]*)\)/g)) {
+      const parenthetical = inner ?? "";
+      if (!isSuccessfulTwoPointConversion(parenthetical)) continue;
+
+      const haystack = normaliseName(parenthetical);
+      const matched = roster.filter((player) =>
+        player.forms.some((form) => haystack.includes(form)),
+      );
+
+      // Group by the form that matched, so two different people matching two
+      // different names is the ordinary two-player conversion rather than an
+      // ambiguity — it is only ambiguous when one spelling fits two people.
+      const bySpelling = new Map<string, typeof matched>();
+      for (const player of matched) {
+        const form = player.forms.find((f) => haystack.includes(f)) ?? "";
+        bySpelling.set(form, [...(bySpelling.get(form) ?? []), player]);
+      }
+
+      for (const [form, candidates] of bySpelling) {
+        if (candidates.length > 1) {
+          warnings.push(
+            `two-point conversion "${parenthetical}": "${form}" matches ` +
+              `${candidates.map((c) => c.longName).join(" and ")}, so neither is credited`,
+          );
+          continue;
+        }
+        const only = candidates[0];
+        if (only) credits.set(only.playerID, (credits.get(only.playerID) ?? 0) + 1);
+      }
+
+      if (matched.length === 0) {
+        // Silence here is what let two points vanish with `warnings: []`. A
+        // conversion definitely happened — the text says so — and nobody in the
+        // game answered to any name in it.
+        warnings.push(
+          `two-point conversion "${parenthetical}" names no player this game recognises, ` +
+            `so nobody was credited for it`,
+        );
+      }
+    }
+  }
+
+  return credits;
+}
+
+/**
+ * Cross-check the conversions parsed from text against the numbers Tank01 gives.
+ *
+ * Field goals have had this since they were written, for the reason stated
+ * there: string parsing in a scoring path fails quietly. Two-point conversions
+ * had no equivalent, which is exactly why issue #155's two points disappeared
+ * with no warning at all — and `Passing.passingTwoPointConversion` was sitting
+ * in the same payload the whole time.
+ *
+ * **A check, never a source.** `passingTwoPointConversion` and
+ * `receivingTwoPointConversion` stay deliberately unmapped — `stat-map.test.ts`
+ * locks the exclusion — because a player named in a parenthetical *and* carrying
+ * the numeric field would otherwise be credited twice, which is four points for
+ * one conversion. Either/or. This reads them only to disagree out loud.
+ */
+function crossCheckTwoPoint(
+  playerStats: Record<string, RawPlayer>,
+  credits: ReadonlyMap<string, number>,
+  warnings: string[],
+): void {
+  for (const player of Object.values(playerStats)) {
+    if (!player.playerID) continue;
+
+    const passing = (player as unknown as { Passing?: Record<string, unknown> }).Passing;
+    const reported = parseStatValue(passing?.["passingTwoPointConversion"]);
+    if (reported === null || reported === 0) continue;
+
+    const parsed = credits.get(player.playerID) ?? 0;
+    if (parsed !== reported) {
+      warnings.push(
+        `${player.longName ?? player.playerID}: Tank01 reports ${reported} two-point ` +
+          `conversion pass(es) but ${parsed} were credited from the scoring text`,
+      );
+    }
+  }
+}
+
+function translatePlayerWithConversions(
   player: RawPlayer,
   warnings: string[],
+  /** Decided for the whole game — see `twoPointCreditsByPlayer`. */
+  twoPointConversions: number,
 ): { playerID: string; lines: StatLine[] } | null {
   const playerID = player.playerID;
   if (!playerID) return null;
@@ -185,11 +334,13 @@ function translatePlayer(
       ) {
         accumulate(totals, "ret_td", 1);
       }
-      if (player.longName && twoPointCredit(text, player.longName)) {
-        accumulate(totals, "two_pt", 1);
-      }
     }
   }
+
+  // Two-point conversions are decided for the whole game, not here: the player
+  // credited is often absent from this play's `playerIDs` and sometimes has no
+  // `scoringPlays` of his own at all. See `twoPointCreditsByPlayer`.
+  if (twoPointConversions > 0) accumulate(totals, "two_pt", twoPointConversions);
 
   // 3. Cross-check parsed field goals against the count Tank01 reports.
   //    Text parsing in a scoring path fails quietly; this is what makes it fail
@@ -369,9 +520,25 @@ export function translateBoxScore(raw: unknown): TranslatedBoxScore {
   const playerStats = (box["playerStats"] ?? {}) as Record<string, RawPlayer>;
   const scoringPlays = (box["scoringPlays"] ?? []) as ScoringPlay[];
 
+  /*
+    Conversions first, and for the game rather than per player.
+
+    The credited player is frequently not in the play's `playerIDs` — those name
+    the touchdown's participants — and is sometimes a player with no
+    `scoringPlays` and no receiving block of his own at all (issue #155). No
+    amount of looking at one player's own record finds him; the conversion only
+    exists on somebody else's.
+  */
+  const twoPoint = twoPointCreditsByPlayer(scoringPlays, playerStats, warnings);
+  crossCheckTwoPoint(playerStats, twoPoint, warnings);
+
   const players = new Map<string, readonly StatLine[]>();
   for (const player of Object.values(playerStats)) {
-    const translated = translatePlayer(player, warnings);
+    const translated = translatePlayerWithConversions(
+      player,
+      warnings,
+      player.playerID ? (twoPoint.get(player.playerID) ?? 0) : 0,
+    );
     if (translated) players.set(translated.playerID, translated.lines);
   }
 
