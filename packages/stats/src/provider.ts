@@ -29,8 +29,28 @@ export interface ProviderGame {
   readonly week: number;
   readonly homeTeamRef: string;
   readonly awayTeamRef: string;
-  /** Unix seconds. Drives lineup locks and every scheduled job. */
+  /** Unix seconds. Drives lineup locks and every scheduled job. `0` when the
+   * provider has not fixed a kickoff time — see `kickoffTbd`. */
   readonly kickoffAt: number;
+  /**
+   * The provider has this fixture's date but not its kickoff time.
+   *
+   * The NFL holds back the times of its late-December games for flex
+   * scheduling, and Tank01 sends those with `gameTime: "TBD"` and an empty
+   * `gameTime_epoch` while still giving the date and both teams. Before this
+   * flag existed the whole row was discarded, which is how weeks 16 and 17 came
+   * to be four fixtures short each.
+   *
+   * A consumer must not treat `kickoffAt` as fact while this is true.
+   */
+  readonly kickoffTbd: boolean;
+  /**
+   * The provider's own calendar date for the fixture, `YYYYMMDD`, or null.
+   *
+   * Carried so a conservative kickoff can be derived from the game's dated
+   * siblings rather than computed from a timezone by hand.
+   */
+  readonly gameDate: string | null;
   readonly status: "SCHEDULED" | "IN_PROGRESS" | "FINAL" | "POSTPONED" | "CANCELLED";
 }
 

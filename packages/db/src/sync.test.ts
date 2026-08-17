@@ -187,8 +187,23 @@ describe("syncGames", () => {
     homeTeamRef: "PHI",
     awayTeamRef: "DAL",
     kickoffAt: kickoff,
+    kickoffTbd: kickoff <= 0,
+    gameDate: null,
     status: "SCHEDULED",
   });
+
+  /** A fixture the NFL has dated but not timed, as Tank01 actually sends it. */
+  const undated = (ref: string, week: number, date: string): ProviderGame => ({
+    ...game(ref, week, 0),
+    gameDate: date,
+  });
+
+  const dated = (
+    ref: string,
+    week: number,
+    kickoff: number,
+    date: string,
+  ): ProviderGame => ({ ...game(ref, week, kickoff), gameDate: date });
 
   it("inserts games", async () => {
     const client = await fresh();
@@ -197,15 +212,105 @@ describe("syncGames", () => {
     expect(await syncGames(client, provider, "nfl", 2026)).toMatchObject({ inserted: 1 });
   });
 
-  it("skips a game with no kickoff time", async () => {
+  it("skips a game with no kickoff time and no dated sibling", async () => {
     // kickoffAt drives lineup locks and every scheduled job. Storing zero would
-    // lock lineups at the epoch.
+    // lock lineups at the epoch, and with nothing on the same date there is no
+    // conservative time to stand in for it.
     const client = await fresh();
     const provider = new FakeProvider([], [game("g1", 1, 0)]);
 
     expect(await syncGames(client, provider, "nfl", 2026)).toMatchObject({
       inserted: 0,
       skipped: 1,
+    });
+  });
+
+  describe("a fixture the NFL has dated but not timed", () => {
+    // The live case: weeks 16 and 17 were each four games short because the
+    // kickoff hour was pending, in the two weeks that decide a championship.
+    const SUNDAY_1PM = 1_798_988_400;
+    const SUNDAY_820PM = 1_798_914_000 + 98_400;
+
+    it("stores it, using the earliest kickoff known on the same date", async () => {
+      const client = await fresh();
+      const provider = new FakeProvider(
+        [],
+        [
+          dated("early", 16, SUNDAY_1PM, "20261227"),
+          dated("late", 16, SUNDAY_820PM, "20261227"),
+          undated("pending", 16, "20261227"),
+        ],
+      );
+
+      expect(await syncGames(client, provider, "nfl", 2026)).toMatchObject({
+        inserted: 3,
+        skipped: 0,
+      });
+
+      const [row] = await client.query<{ kickoff_at: string; kickoff_tbd: boolean }>(
+        "SELECT kickoff_at, kickoff_tbd FROM games WHERE external_ref = 'pending'",
+      );
+      expect(row?.kickoff_tbd).toBe(true);
+      // The earliest, not the latest: a slot that locks early costs a manager
+      // flexibility, where one that locks late lets them start a player they
+      // have already watched score.
+      expect(Math.floor(new Date(row!.kickoff_at).getTime() / 1000)).toBe(SUNDAY_1PM);
+    });
+
+    it("does not mark a properly timed game as provisional", async () => {
+      const client = await fresh();
+      const provider = new FakeProvider(
+        [],
+        [dated("early", 16, SUNDAY_1PM, "20261227"), undated("pending", 16, "20261227")],
+      );
+      await syncGames(client, provider, "nfl", 2026);
+
+      const [row] = await client.query<{ kickoff_tbd: boolean }>(
+        "SELECT kickoff_tbd FROM games WHERE external_ref = 'early'",
+      );
+      expect(row?.kickoff_tbd).toBe(false);
+    });
+
+    it("will not borrow a time from a different date", async () => {
+      // Thursday's kickoff is no evidence about Sunday's game, and standing it
+      // in would lock the Sunday slot three days early.
+      const client = await fresh();
+      const provider = new FakeProvider(
+        [],
+        [
+          dated("thursday", 16, SUNDAY_1PM - 3 * 86_400, "20261224"),
+          undated("pending", 16, "20261227"),
+        ],
+      );
+
+      expect(await syncGames(client, provider, "nfl", 2026)).toMatchObject({
+        inserted: 1,
+        skipped: 1,
+      });
+    });
+
+    it("clears the flag once the real time arrives", async () => {
+      const client = await fresh();
+      const first = new FakeProvider(
+        [],
+        [dated("early", 16, SUNDAY_1PM, "20261227"), undated("pending", 16, "20261227")],
+      );
+      await syncGames(client, first, "nfl", 2026);
+
+      const second = new FakeProvider(
+        [],
+        [
+          dated("early", 16, SUNDAY_1PM, "20261227"),
+          dated("pending", 16, SUNDAY_820PM, "20261227"),
+        ],
+      );
+      await syncGames(client, second, "nfl", 2026);
+
+      const [row] = await client.query<{ kickoff_at: string; kickoff_tbd: boolean }>(
+        "SELECT kickoff_at, kickoff_tbd FROM games WHERE external_ref = 'pending'",
+      );
+      expect(row?.kickoff_tbd).toBe(false);
+      expect(Math.floor(new Date(row!.kickoff_at).getTime() / 1000)).toBe(SUNDAY_820PM);
     });
   });
 

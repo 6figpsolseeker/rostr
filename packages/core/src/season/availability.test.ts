@@ -18,6 +18,28 @@ describe("gameAvailability", () => {
     expect(gameAvailability({ kickoffAt: 1_767_000_000, byeWeek: 16, week: 16 })).toBe("SCHEDULED");
   });
 
+  it("calls a stored fixture with a provisional kickoff TIME_TBD", () => {
+    // The row exists and carries a conservative stand-in. Reporting it as
+    // SCHEDULED would let the screen print an hour nobody has announced.
+    expect(
+      gameAvailability({ kickoffAt: 1_767_000_000, kickoffTbd: true, byeWeek: 11, week: 16 }),
+    ).toBe("TIME_TBD");
+  });
+
+  it("prefers TIME_TBD over the bye week, because the fixture is the fact", () => {
+    expect(
+      gameAvailability({ kickoffAt: 1_767_000_000, kickoffTbd: true, byeWeek: 16, week: 16 }),
+    ).toBe("TIME_TBD");
+  });
+
+  it("treats an absent kickoffTbd as a real kickoff", () => {
+    // Callers written before the flag existed keep their answer, rather than
+    // every fixture silently downgrading to provisional.
+    expect(gameAvailability({ kickoffAt: 1_767_000_000, byeWeek: 11, week: 16 })).toBe(
+      "SCHEDULED",
+    );
+  });
+
   it("reports a bye when the missing week is the team's bye week", () => {
     expect(gameAvailability({ kickoffAt: null, byeWeek: 7, week: 7 })).toBe("BYE");
   });

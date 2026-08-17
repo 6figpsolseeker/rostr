@@ -47,12 +47,20 @@ export class MatchupError extends Error {
 /**
  * Where a player's game stands.
  *
- * `UNSCHEDULED` is a real fixture whose kickoff time the NFL has not fixed yet,
- * which `syncGames` skips rather than storing at the epoch. It used to be
- * indistinguishable from `BYE`, and the two mean opposite things to anyone
- * deciding a lineup. See `gameAvailability` in `@rostr/core`.
+ * `TIME_TBD` is a stored fixture whose hour the NFL has not fixed — the row
+ * carries a conservative stand-in kickoff, so the clock passing it must **not**
+ * read as the game having started. `UNSCHEDULED` is the weaker case: no row at
+ * all on a week that is not the team's bye. Both used to be indistinguishable
+ * from `BYE`, and a bye means the opposite thing to anyone deciding a lineup.
+ * See `gameAvailability` in `@rostr/core`.
  */
-export type PlayerGameState = "BYE" | "UNSCHEDULED" | "YET_TO_PLAY" | "IN_PROGRESS" | "FINAL";
+export type PlayerGameState =
+  | "BYE"
+  | "UNSCHEDULED"
+  | "TIME_TBD"
+  | "YET_TO_PLAY"
+  | "IN_PROGRESS"
+  | "FINAL";
 
 export interface PlayerLine {
   readonly playerId: string;
@@ -207,7 +215,9 @@ export async function loadWeekMatchups(
         bench: lines.filter((line) => !line.counted),
         yetToPlay: starters.filter((line) => line.gameState === "YET_TO_PLAY").length,
         inProgress: starters.filter((line) => line.gameState === "IN_PROGRESS").length,
-        unscheduled: starters.filter((line) => line.gameState === "UNSCHEDULED").length,
+        unscheduled: starters.filter(
+          (line) => line.gameState === "UNSCHEDULED" || line.gameState === "TIME_TBD",
+        ).length,
       };
     };
 
@@ -247,6 +257,8 @@ interface PlayerFacts {
   readonly position: string;
   readonly kickoffAt: Date | null;
   readonly gameStatus: string | null;
+  /** `games.kickoff_tbd` — the kickoff above is a conservative stand-in. */
+  readonly kickoffTbd: boolean;
   /** This season's bye week, null when unrecorded. Separates a bye from a
    * fixture whose kickoff time is not fixed yet. */
   readonly byeWeek: number | null;
@@ -270,6 +282,7 @@ async function playerContext(
     position: string;
     kickoff_at: string | null;
     status: string | null;
+    kickoff_tbd: boolean | null;
     bye_week: number | null;
   }>(
     `SELECT DISTINCT p.id,
@@ -277,6 +290,7 @@ async function playerContext(
             pos.key AS position,
             g.kickoff_at,
             g.status,
+            g.kickoff_tbd,
             ps.bye_week
        FROM roster_entries r
        JOIN teams t ON t.id = r.team_id
@@ -302,6 +316,7 @@ async function playerContext(
         position: row.position,
         kickoffAt: row.kickoff_at ? new Date(row.kickoff_at) : null,
         gameStatus: row.status,
+        kickoffTbd: row.kickoff_tbd === true,
         byeWeek: row.bye_week === null ? null : Number(row.bye_week),
       },
     ]),
@@ -357,6 +372,14 @@ function gameStateOf(
 
   const status = (facts.gameStatus ?? "").toUpperCase();
   if (status === "FINAL") return "FINAL";
+
+  // A provisional kickoff is not a kickoff, and the clock passing it says
+  // nothing. `syncGames` stores the earliest hour the game could start, so a
+  // fixture actually played at 20:20 would otherwise read as under way from
+  // 13:00 — seven hours of a manager being told a game is live before it has
+  // begun, in the week the season is decided. The provider's own status is
+  // still believed, so this resolves itself the moment the game really starts.
+  if (facts.kickoffTbd && status !== "IN_PROGRESS") return "TIME_TBD";
 
   // The clock decides when the provider has not spoken. Kickoff has passed and
   // the game is not final, so it is under way — a player sitting on zero at

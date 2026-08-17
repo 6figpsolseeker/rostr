@@ -20,12 +20,18 @@
  * will play, and nobody has said at what hour" — the same player, a decision
  * reversed, in the week a season is won.
  *
- * Note what this therefore cannot say. The skipped row is never stored, so
- * nothing downstream can reach the opponent or the date the provider *did*
- * supply. `UNSCHEDULED` is inferred from the game's absence, so it reports that
- * a fixture is coming without naming when, or against whom. Storing those games
- * — with a conservative kickoff, because an optimistic one reopens a lock on a
- * player who has already played — is the larger fix this only labels.
+ * ## Two states, because there are two situations
+ *
+ * `syncGames` now stores such a fixture with `kickoff_tbd` set and a
+ * conservative kickoff taken from its dated siblings, so the ordinary case has a
+ * row and answers **`TIME_TBD`** — the screen can name the date and the
+ * opponent, and say the hour is pending.
+ *
+ * **`UNSCHEDULED` is what remains when even that fails**: no row at all, on a
+ * week that is not the team's bye. Reachable when every game on a date is
+ * untimed, so no stand-in could be derived, or when the sync has not run. It
+ * says a fixture is coming without being able to name when or against whom,
+ * which is worth saying and is strictly less than `TIME_TBD` says.
  *
  * ## The bye week is what separates them
  *
@@ -59,12 +65,18 @@
  * not exist yet.
  */
 
-/** Why a player's week is empty, when it is. */
-export type GameAvailability = "SCHEDULED" | "BYE" | "UNSCHEDULED";
+/** Why a player's week is empty, or when it is not quite settled. */
+export type GameAvailability = "SCHEDULED" | "TIME_TBD" | "BYE" | "UNSCHEDULED";
 
 export interface GameAvailabilityInput {
   /** Kickoff of this player's game this week, or null when there is no row. */
   readonly kickoffAt: number | Date | null;
+  /**
+   * The stored kickoff is a conservative stand-in, not the real time.
+   *
+   * `games.kickoff_tbd`. The fixture and its date are known; the hour is not.
+   */
+  readonly kickoffTbd?: boolean;
   /** The player's team's bye week this season. Null when it is not known. */
   readonly byeWeek: number | null;
   /** The week being asked about. */
@@ -81,6 +93,9 @@ export interface GameAvailabilityInput {
  * that sends a manager to the wrong decision.
  */
 export function gameAvailability(input: GameAvailabilityInput): GameAvailability {
+  // A stored fixture whose hour is provisional. Ranked above `SCHEDULED`
+  // because the row does carry a timestamp and it must not be read as one.
+  if (input.kickoffAt !== null && input.kickoffTbd === true) return "TIME_TBD";
   if (input.kickoffAt !== null) return "SCHEDULED";
   if (input.byeWeek === null) return "BYE";
   return input.byeWeek === input.week ? "BYE" : "UNSCHEDULED";

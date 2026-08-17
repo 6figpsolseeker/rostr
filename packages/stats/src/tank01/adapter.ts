@@ -98,6 +98,11 @@ interface RawGame {
   away?: string;
   gameTime_epoch?: string;
   gameStatus?: string;
+  /** `YYYYMMDD`. Present even when the kickoff time is not — verified live on
+   * 2026-08-17, see `listGames`. */
+  gameDate?: string;
+  /** `"TBD"` for a fixture the NFL has not given a time. Observed, not guessed. */
+  gameTime?: string;
 }
 
 /**
@@ -217,6 +222,29 @@ export class Tank01Provider implements StatsProvider {
     return players;
   }
 
+  /**
+   * A week's fixtures.
+   *
+   * ## A missing kickoff time is not a missing game
+   *
+   * Probed live on 2026-08-17, because this had been assumed and never checked.
+   * Tank01 returns **all 16** fixtures for every week. The ones the NFL has not
+   * yet timed come back fully formed apart from the hour:
+   *
+   * ```
+   * TB @ ATL  gameID=20261227_TB@ATL  gameDate="20261227"
+   *           gameTime="TBD"  gameTime_epoch=""  gameStatus="Scheduled"
+   * ```
+   *
+   * This used to collapse that into `kickoffAt: 0` and nothing else, so
+   * `syncGames` skipped the row and the date, the opponent and the fixture's
+   * existence went with it — which is how weeks 16 and 17 ended up four games
+   * short each, in the two weeks that decide a championship.
+   *
+   * The emptiness is reported rather than resolved here. Choosing a stand-in
+   * kickoff needs the game's dated siblings, which is a decision for the caller
+   * holding the whole week, not for a translator holding one row.
+   */
   async listGames(season: number, week?: number): Promise<readonly ProviderGame[]> {
     const params: Record<string, string> = { season: String(season), seasonType: "reg" };
     if (week !== undefined) params["week"] = String(week);
@@ -227,6 +255,14 @@ export class Tank01Provider implements StatsProvider {
       .filter((game): game is RawGame & { gameID: string } => Boolean(game.gameID))
       .map((game) => {
         const kickoff = Number.parseFloat(game.gameTime_epoch ?? "0");
+        const kickoffAt = Number.isFinite(kickoff) ? Math.round(kickoff) : 0;
+
+        // Derived from the epoch alone, never from `gameTime === "TBD"`. The
+        // epoch is what every downstream consumer actually uses, so keying the
+        // flag on it means the flag cannot disagree with the number it
+        // describes — and a provider that invents a new wording for "no time
+        // yet" still lands here rather than shipping a game stored at 1970.
+        const kickoffTbd = kickoffAt <= 0;
 
         return {
           externalRef: game.gameID,
@@ -235,7 +271,9 @@ export class Tank01Provider implements StatsProvider {
           week: Number.parseInt((game.gameWeek ?? "").replace(/\D+/g, ""), 10) || (week ?? 0),
           homeTeamRef: game.home ?? "",
           awayTeamRef: game.away ?? "",
-          kickoffAt: Number.isFinite(kickoff) ? Math.round(kickoff) : 0,
+          kickoffAt,
+          kickoffTbd,
+          gameDate: game.gameDate && /^\d{8}$/.test(game.gameDate) ? game.gameDate : null,
           status: mapGameStatus(game.gameStatus),
         };
       });

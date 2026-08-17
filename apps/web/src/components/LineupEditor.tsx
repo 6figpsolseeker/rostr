@@ -31,11 +31,12 @@ interface RosterPlayer {
   status: string;
   kickoffAt: number | null;
   /**
-   * Why an empty week is empty. `BYE` is a rest week and he cannot score;
-   * `UNSCHEDULED` is a real fixture the NFL has not dated yet, so he will play
-   * and the slot is worth holding. Both arrive with a null kickoff.
+   * How settled this player's week is. `BYE` is a rest week and he cannot
+   * score. `TIME_TBD` is a real fixture whose hour the NFL has not fixed — he
+   * will play, and `kickoffAt` is the earliest he could, not a promise.
+   * `UNSCHEDULED` is the same news with less of it: no fixture stored at all.
    */
-  availability: "SCHEDULED" | "BYE" | "UNSCHEDULED";
+  availability: "SCHEDULED" | "TIME_TBD" | "BYE" | "UNSCHEDULED";
   milliPoints: number;
   /** This week's projection under this league's scoring. Null if unpublished. */
   projectedMilliPoints: number | null;
@@ -296,7 +297,10 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
                             and this player will score, once the fixture has a
                             date. Choosing between them is the point of this
                             list. */}
-                        {candidate.availability === "UNSCHEDULED" ? " — TBD" : ""}
+                        {candidate.availability === "UNSCHEDULED" ||
+                        candidate.availability === "TIME_TBD"
+                          ? " — TBD"
+                          : ""}
                         {OUT_STATUSES.has(candidate.status.toUpperCase())
                           ? ` — ${candidate.status}`
                           : ""}
@@ -312,7 +316,7 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
                   slot.locksAt
                     ? `Locks at ${new Date(slot.locksAt * 1000).toLocaleString()}`
                     : player?.availability === "UNSCHEDULED"
-                      ? "This fixture has no kickoff time yet, so the slot cannot lock. He will play once the NFL announces when."
+                      ? "No fixture stored for his team this week, and it is not their bye, so the slot cannot lock."
                       : "This player has no game this week"
                 }
               >
@@ -354,10 +358,15 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
               {player.availability === "BYE" && (
                 <span className="text-nocturne-neutral-600">bye</span>
               )}
-              {player.availability === "UNSCHEDULED" && (
+              {(player.availability === "UNSCHEDULED" ||
+                player.availability === "TIME_TBD") && (
                 <span
                   className="text-nocturne-neutral-600"
-                  title="This fixture has no kickoff time yet. He will play — the NFL has not announced when."
+                  title={
+                    player.availability === "TIME_TBD"
+                      ? "He plays this week. The NFL has not fixed the kickoff time, so this slot locks at the earliest hour the game could start."
+                      : "No fixture stored for his team this week, and it is not their bye. Check back once the schedule syncs."
+                  }
                 >
                   TBD
                 </span>

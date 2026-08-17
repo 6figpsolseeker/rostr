@@ -27,7 +27,7 @@ interface PlayerLine {
   position: string;
   slot: string;
   milliPoints: number;
-  gameState: "BYE" | "UNSCHEDULED" | "YET_TO_PLAY" | "IN_PROGRESS" | "FINAL";
+  gameState: "BYE" | "UNSCHEDULED" | "TIME_TBD" | "YET_TO_PLAY" | "IN_PROGRESS" | "FINAL";
   kickoffAt: string | null;
 }
 
@@ -327,10 +327,12 @@ function Score({ line }: { line: PlayerLine }) {
   const label =
     line.gameState === "BYE"
       ? "bye"
-      : // A fixture with no kickoff time yet. Distinct from a bye, because this
+      : // A fixture whose hour is not fixed. Distinct from a bye, because this
         // player will play and a bye player cannot — the difference decides
-        // whether a manager holds the roster spot.
-        line.gameState === "UNSCHEDULED"
+        // whether a manager holds the roster spot. The stored kickoff is the
+        // earliest the game could start, so it is deliberately not shown as a
+        // time: the date is real and the clock beside it would not be.
+        line.gameState === "TIME_TBD" || line.gameState === "UNSCHEDULED"
         ? "TBD"
         : line.gameState === "YET_TO_PLAY"
           ? kickoffLabel(line.kickoffAt)

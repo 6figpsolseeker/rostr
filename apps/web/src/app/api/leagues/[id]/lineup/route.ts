@@ -18,6 +18,7 @@ import {
   loadProjectedPoints,
   loadKickoffs,
   loadRosterForWeek,
+  loadTbdKickoffs,
   loadWeekStats,
   setAutofillEnabled,
   setLineup,
@@ -79,11 +80,18 @@ export async function GET(
       week,
     );
 
-    // Bye weeks, loaded separately from the kickoffs above and deliberately so:
-    // `loadKickoffs` is the lock oracle and widening it is how the lock bypass
-    // happened. This only decides whether an empty week reads as "resting" or
-    // "not dated yet", and can mislabel a row without unlocking one.
+    // Bye weeks, and which fixtures carry a stand-in kickoff. Both are loaded
+    // separately from the kickoffs above and deliberately so: `loadKickoffs` is
+    // the lock oracle and widening it is how the lock bypass happened. These
+    // only decide what the screen says, and can mislabel a row without
+    // unlocking one — the lock uses the conservative time exactly as stored.
     const byeWeeks = await loadByeWeeks(client, [...roster.keys()], context.season);
+    const tbdKickoffs = await loadTbdKickoffs(
+      client,
+      [...roster.keys()],
+      context.season,
+      week,
+    );
 
     // Points so far this week, so a manager can see what their lineup is doing
     // while it is doing it.
@@ -143,6 +151,7 @@ export async function GET(
          */
         availability: gameAvailability({
           kickoffAt: player.kickoffAt,
+          kickoffTbd: tbdKickoffs.has(player.playerId),
           byeWeek: byeWeeks.get(player.playerId) ?? null,
           week,
         }),
