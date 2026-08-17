@@ -155,11 +155,28 @@ which is a different problem from not existing — and the honest description of
 risk is now **"the producer has never been exercised against a real box score"**, not
 "there is no producer".
 
-So what is actually outstanding for Sep 9 is **issue #81**. Its adapter defects were filed
-as latent "only because nothing calls `getBoxScore`" — something does now, so they are
-live and simply have not fired yet for want of a played game. Read that issue before the
-season starts, particularly defect 2: one unparseable field-goal string discards **every**
-player's line for the whole game, and a week that finalises that way is never rescored.
+**All four of #81's defects are now closed**, the last two by #175 (two-point attribution,
+with #155). Its defects were filed as latent "only because nothing calls `getBoxScore`" —
+something does, so they were live and merely unfired.
+
+**And the pipeline has now been run against real box scores, which had never been done.**
+2026-08-17, against the live Tank01 key:
+
+| Game               | Players | Warnings | Scored non-zero |
+| ------------------ | ------- | -------- | --------------- |
+| `20250904_DAL@PHI` | 95      | **0**    | 23              |
+| `20250907_MIA@IND` | 95      | **0**    | 32              |
+
+Provider → adapter → translator → `scorePlayer`, end to end. The second game is issue
+#155's own, and `two_pt` lands on `4241479` and `4365395` — Tua Tagovailoa **and Julian
+Hill**, the receiver who used to score nothing. The fix is confirmed on the data that
+exposed the bug rather than on a fixture built from it.
+
+**What that does and does not establish.** It proves the pipeline ingests, translates and
+scores real responses without warnings — which is what "never exercised" meant. It does
+**not** validate the totals: nobody has checked those 24.28 and 29.48-point lines against
+ESPN or Sleeper, and B5's outstanding half is exactly that. Per the standing rule, a
+scoring number is not confirmed until all three sources agree.
 
 - **Anchoring wired into the app** — `POST /api/leagues/[id]/anchor`, `AnchorPanel.tsx`,
   and `readOnlyEscrow()` in `apps/web/src/lib/escrow.ts`. The commissioner signs from
