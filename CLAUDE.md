@@ -172,11 +172,28 @@ Provider → adapter → translator → `scorePlayer`, end to end. The second ga
 Hill**, the receiver who used to score nothing. The fix is confirmed on the data that
 exposed the bug rather than on a fixture built from it.
 
-**What that does and does not establish.** It proves the pipeline ingests, translates and
-scores real responses without warnings — which is what "never exercised" meant. It does
-**not** validate the totals: nobody has checked those 24.28 and 29.48-point lines against
-ESPN or Sleeper, and B5's outstanding half is exactly that. Per the standing rule, a
-scoring number is not confirmed until all three sources agree.
+**And the stats were checked against Sleeper**, same day, same two games:
+
+```
+non-zero stat comparisons: 91
+agree: 91 (100.0%)
+differ: 0
+```
+
+Every non-zero `pass_yd`, `pass_td`, `pass_int`, `rush_yd`, `rush_td`, `rec`, `rec_yd`,
+`rec_td` and `fum_lost` we ingested matches Sleeper's own figure for the same player.
+Mapped by `sleeperBotID`, which Tank01 carries on its player list — 4,222 of them — so the
+join needs no name matching and cannot drift.
+
+Two-point conversions were compared separately, because Sleeper splits them across
+`pass_2pt`, `rush_2pt` and `rec_2pt`. **Tua Tagovailoa 1/1 and Julian Hill 1/1** — #175
+confirmed against an independent source on the game that exposed the bug.
+
+**What is still not established.** ESPN is the third source and has not been checked for
+these games, so by the standing rule above these numbers are corroborated rather than
+confirmed. And 91 comparisons across two games is not a season: #160 is the issue for
+making this a permanent check rather than a thing somebody did once. Nothing here tests
+D/ST, kicking or return touchdowns, none of which occurred in the two games sampled.
 
 - **Anchoring wired into the app** — `POST /api/leagues/[id]/anchor`, `AnchorPanel.tsx`,
   and `readOnlyEscrow()` in `apps/web/src/lib/escrow.ts`. The commissioner signs from
