@@ -189,9 +189,12 @@ Two-point conversions were compared separately, because Sleeper splits them acro
 `pass_2pt`, `rush_2pt` and `rec_2pt`. **Tua Tagovailoa 1/1 and Julian Hill 1/1** — #175
 confirmed against an independent source on the game that exposed the bug.
 
-**What is still not established.** ESPN is the third source and has not been checked for
-these games, so by the standing rule above these numbers are corroborated rather than
-confirmed. And 91 comparisons across two games is not a season: #160 is the issue for
+**And ESPN, the third source, agrees too** — 91 of 91, joined on `espnID`, which Tank01
+carries alongside `sleeperBotID`. Extracted by column _label_ rather than position, so a
+column moving in their payload cannot silently shift a stat into the wrong key. That
+satisfies the standing three-source rule for these two games.
+
+**What is still not established.** And 91 comparisons across two games is not a season: #160 is the issue for
 making this a permanent check rather than a thing somebody did once. Nothing here tests
 D/ST, kicking or return touchdowns, none of which occurred in the two games sampled.
 
