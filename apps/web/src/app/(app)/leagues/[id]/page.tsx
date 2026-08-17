@@ -7,6 +7,7 @@ import {
   getWallets,
 } from "@rostr/db";
 import { LeagueChrome } from "@/components/LeagueChrome";
+import { leagueNavOpen } from "@/lib/visibility";
 import { RulesView } from "@/components/RulesView";
 import { JoinPanel } from "@/components/JoinPanel";
 import { AnchorPanel } from "@/components/AnchorPanel";
@@ -57,6 +58,11 @@ export default async function LeaguePage({ params }: { params: Promise<{ id: str
   const myWallet = user ? await memberWallet(client, id, user.id) : null;
   const resumable = myWallet !== null && (await getOnChainJoin(client, id, myWallet)) === null;
 
+  // Whether the six tabs and the two buttons below lead anywhere for this
+  // viewer. Derived from the same gate those destinations enforce, so the nav
+  // and the 404 cannot disagree — see `leagueNavOpen`.
+  const navOpen = await leagueNavOpen(id);
+
   return (
     <div className="space-y-10">
       <LeagueChrome
@@ -67,6 +73,7 @@ export default async function LeaguePage({ params }: { params: Promise<{ id: str
           .replace("_", " ")}`}
         rulesHash={stored.hash}
         active=""
+        navOpen={navOpen}
       />
 
       {/*
@@ -77,20 +84,27 @@ export default async function LeaguePage({ params }: { params: Promise<{ id: str
         the permanent nav would leave a dead link for most of the season. They
         are surfaced from the body instead, when there is something behind them.
       */}
-      <div className="flex flex-wrap gap-3">
-        <a
-          href={`/leagues/${league.id}/draft`}
-          className="rounded-[4px] border border-nocturne-neutral-800 px-[14px] py-2 text-[13.5px] text-nocturne-neutral-400 transition-colors hover:text-nocturne-text"
-        >
-          Draft room
-        </a>
-        <a
-          href={`/leagues/${league.id}/bracket`}
-          className="rounded-[4px] border border-nocturne-neutral-800 px-[14px] py-2 text-[13.5px] text-nocturne-neutral-400 transition-colors hover:text-nocturne-text"
-        >
-          Playoff bracket
-        </a>
-      </div>
+      {/*
+        Gated on the same boolean as the tabs. These two 404 on exactly the same
+        check, so hiding the nav and leaving them would be half a fix — the
+        commissioner would still hit a dead end from the same screen.
+      */}
+      {navOpen ? (
+        <div className="flex flex-wrap gap-3">
+          <a
+            href={`/leagues/${league.id}/draft`}
+            className="rounded-[4px] border border-nocturne-neutral-800 px-[14px] py-2 text-[13.5px] text-nocturne-neutral-400 transition-colors hover:text-nocturne-text"
+          >
+            Draft room
+          </a>
+          <a
+            href={`/leagues/${league.id}/bracket`}
+            className="rounded-[4px] border border-nocturne-neutral-800 px-[14px] py-2 text-[13.5px] text-nocturne-neutral-400 transition-colors hover:text-nocturne-text"
+          >
+            Playoff bracket
+          </a>
+        </div>
+      ) : null}
 
       {/*
         The rules render above the join control, always, and in full. A join
