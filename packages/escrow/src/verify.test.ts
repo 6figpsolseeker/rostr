@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { anchorTermMismatches, expectedTermsFromRules } from "./verify.js";
+import { anchorTermMismatches, expectedTermsFromRules, verifyLeagueAnchor } from "./verify.js";
 import type { ExpectedTerms, OnChainLeague } from "./verify.js";
 import { startDeadlineFor } from "./start.js";
 import { PublicKey } from "@solana/web3.js";
@@ -55,6 +55,67 @@ const EXPECTED: ExpectedTerms = {
 /** The rules half of the fixture, with the draft the deadline derives from. */
 const RULES_LEAGUE = { maxTeams: 12 } as const;
 const RULES_DRAFT = { scheduledAt: DRAFT_AT } as const;
+
+/**
+ * An account this build cannot read is not an account that is missing.
+ *
+ * They are indistinguishable at the fetch — Anchor answers `null` for one and
+ * throws for the other — and they mean opposite things to whoever reads the
+ * answer. `NOT_FOUND` means the anchor never landed and should be retried;
+ * `INCOMPATIBLE` means it landed under an older program layout and can never be
+ * used, because the address derives from the league's id and there is no
+ * `close`. Retrying is the one action guaranteed not to help.
+ *
+ * Reached on 2026-08-17, when the failed-league refund appended three fields to
+ * `League` (#170). Before that the decode threw past every handler as a 500.
+ */
+describe("verifyLeagueAnchor's two kinds of absence", () => {
+  const leagueId = "11111111-1111-4111-8111-111111111111";
+
+  const programThat = (fetchNullable: () => Promise<unknown>) =>
+    ({ account: { league: { fetchNullable } } }) as never;
+
+  it("reports NOT_FOUND for a league nobody has anchored", async () => {
+    const verdict = await verifyLeagueAnchor(
+      programThat(async () => null),
+      leagueId,
+      "a".repeat(64),
+    );
+    expect(verdict).toEqual({ ok: false, reason: "NOT_FOUND" });
+  });
+
+  it("reports INCOMPATIBLE for an account it cannot decode, and never NOT_FOUND", async () => {
+    const verdict = await verifyLeagueAnchor(
+      programThat(async () => {
+        throw new Error("Invalid account discriminator");
+      }),
+      leagueId,
+      "a".repeat(64),
+    );
+
+    expect(verdict.ok).toBe(false);
+    if (verdict.ok) return;
+    expect(verdict.reason).toBe("INCOMPATIBLE");
+    // The message has to say the thing a retry cannot fix, because the retry is
+    // what somebody reaching this will otherwise do.
+    if (verdict.reason !== "INCOMPATIBLE") return;
+    expect(verdict.detail).toMatch(/cannot be re-anchored|different version/i);
+  });
+
+  it("surfaces the failure as an answer rather than a throw", async () => {
+    // A throw here is a 500 on the anchor route, which tells the commissioner
+    // nothing and records nothing. The route can only decide with a verdict.
+    await expect(
+      verifyLeagueAnchor(
+        programThat(async () => {
+          throw new Error("unexpected end of buffer");
+        }),
+        leagueId,
+        "a".repeat(64),
+      ),
+    ).resolves.toBeDefined();
+  });
+});
 
 describe("anchorTermMismatches", () => {
   it("passes when every term matches the signed rules", () => {

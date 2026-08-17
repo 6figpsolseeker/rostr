@@ -97,13 +97,53 @@ export function hexToBytes(hex: string): Uint8Array {
  * A missing account is the ordinary case — a league created in the database but
  * not yet anchored — so it is a return value rather than a throw.
  */
+/**
+ * An account exists at the league's address and this build cannot read it.
+ *
+ * **Not the same as "not anchored", and the difference is the whole reason this
+ * class exists.** `fetchNullable` answers `null` for a missing account, which is
+ * the ordinary case for a league nobody has anchored yet — and the anchor route
+ * documents that as *retry*. An account whose bytes do not fit the current
+ * `League` layout also fails to decode, but retrying it can never work: the PDA
+ * derives from the league's UUID, there is no `close`, and the account will hold
+ * those bytes forever.
+ *
+ * Reachable when the program's account layout changes and a league was anchored
+ * under the older one — which happened on 2026-08-17, when `commissioner`,
+ * `start_deadline` and `started` were appended for the failed-league refund
+ * (#170). Before this the decode threw an opaque Anchor error and surfaced as a
+ * 500, or, worse, as advice to try again.
+ */
+export class IncompatibleLeagueAccountError extends Error {
+  constructor(
+    readonly leagueId: string,
+    override readonly cause: unknown,
+  ) {
+    super(
+      `The account for league ${leagueId} was written by a different version of ` +
+        `the escrow program and cannot be read by this build. It cannot be ` +
+        `re-anchored: the address derives from the league's id and the program ` +
+        `has no instruction that closes an account.`,
+    );
+    this.name = "IncompatibleLeagueAccountError";
+  }
+}
+
 export async function fetchOnChainLeague(
   program: Program<RostrEscrow>,
   leagueId: string,
 ): Promise<OnChainLeague | null> {
   const address = leaguePda(leagueId);
 
-  const account = await program.account["league"]?.fetchNullable(address);
+  // Two failures wear the same coat here, and only one is recoverable. A missing
+  // account is `null`; an account that exists and does not decode *throws* out
+  // of Anchor, so without this it escapes as a 500 rather than as an answer.
+  let account: unknown;
+  try {
+    account = await program.account["league"]?.fetchNullable(address);
+  } catch (error) {
+    throw new IncompatibleLeagueAccountError(leagueId, error);
+  }
   if (!account) return null;
 
   const raw = account as {
@@ -143,6 +183,17 @@ export async function fetchOnChainLeague(
 export type AnchorVerdict =
   | { readonly ok: true; readonly league: OnChainLeague }
   | { readonly ok: false; readonly reason: "NOT_FOUND" }
+  /**
+   * An account is there and this build cannot read it — a league anchored
+   * under an older program layout.
+   *
+   * Deliberately its own reason rather than folded into `NOT_FOUND`. They look
+   * identical from here and mean opposite things to the person reading the
+   * answer: `NOT_FOUND` means the anchor did not land and should be retried,
+   * this means it landed and can never be used. Retrying is the one action
+   * guaranteed not to help.
+   */
+  | { readonly ok: false; readonly reason: "INCOMPATIBLE"; readonly detail: string }
   | {
       readonly ok: false;
       readonly reason: "HASH_MISMATCH";
@@ -166,7 +217,17 @@ export async function verifyLeagueAnchor(
   leagueId: string,
   expectedRulesHash: string,
 ): Promise<AnchorVerdict> {
-  const league = await fetchOnChainLeague(program, leagueId);
+  let league: OnChainLeague | null;
+  try {
+    league = await fetchOnChainLeague(program, leagueId);
+  } catch (error) {
+    // Answered rather than thrown, because the caller's job is to decide what
+    // to record and a 500 gives it nothing to decide with.
+    if (error instanceof IncompatibleLeagueAccountError) {
+      return { ok: false, reason: "INCOMPATIBLE", detail: error.message };
+    }
+    throw error;
+  }
   if (!league) return { ok: false, reason: "NOT_FOUND" };
 
   if (league.rulesHash.toLowerCase() !== expectedRulesHash.toLowerCase()) {

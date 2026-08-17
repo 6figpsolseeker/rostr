@@ -18,6 +18,7 @@ export {
   type Cluster,
 } from "./cluster.js";
 export {
+  IncompatibleLeagueAccountError,
   anchorTermMismatches,
   bytesToHex,
   clusterOf,
