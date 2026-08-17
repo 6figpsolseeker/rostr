@@ -155,11 +155,45 @@ which is a different problem from not existing — and the honest description of
 risk is now **"the producer has never been exercised against a real box score"**, not
 "there is no producer".
 
-So what is actually outstanding for Sep 9 is **issue #81**. Its adapter defects were filed
-as latent "only because nothing calls `getBoxScore`" — something does now, so they are
-live and simply have not fired yet for want of a played game. Read that issue before the
-season starts, particularly defect 2: one unparseable field-goal string discards **every**
-player's line for the whole game, and a week that finalises that way is never rescored.
+**All four of #81's defects are now closed**, the last two by #175 (two-point attribution,
+with #155). Its defects were filed as latent "only because nothing calls `getBoxScore`" —
+something does, so they were live and merely unfired.
+
+**And the pipeline has now been run against real box scores, which had never been done.**
+2026-08-17, against the live Tank01 key:
+
+| Game               | Players | Warnings | Scored non-zero |
+| ------------------ | ------- | -------- | --------------- |
+| `20250904_DAL@PHI` | 95      | **0**    | 23              |
+| `20250907_MIA@IND` | 95      | **0**    | 32              |
+
+Provider → adapter → translator → `scorePlayer`, end to end. The second game is issue
+#155's own, and `two_pt` lands on `4241479` and `4365395` — Tua Tagovailoa **and Julian
+Hill**, the receiver who used to score nothing. The fix is confirmed on the data that
+exposed the bug rather than on a fixture built from it.
+
+**And the stats were checked against Sleeper**, same day, same two games:
+
+```
+non-zero stat comparisons: 91
+agree: 91 (100.0%)
+differ: 0
+```
+
+Every non-zero `pass_yd`, `pass_td`, `pass_int`, `rush_yd`, `rush_td`, `rec`, `rec_yd`,
+`rec_td` and `fum_lost` we ingested matches Sleeper's own figure for the same player.
+Mapped by `sleeperBotID`, which Tank01 carries on its player list — 4,222 of them — so the
+join needs no name matching and cannot drift.
+
+Two-point conversions were compared separately, because Sleeper splits them across
+`pass_2pt`, `rush_2pt` and `rec_2pt`. **Tua Tagovailoa 1/1 and Julian Hill 1/1** — #175
+confirmed against an independent source on the game that exposed the bug.
+
+**What is still not established.** ESPN is the third source and has not been checked for
+these games, so by the standing rule above these numbers are corroborated rather than
+confirmed. And 91 comparisons across two games is not a season: #160 is the issue for
+making this a permanent check rather than a thing somebody did once. Nothing here tests
+D/ST, kicking or return touchdowns, none of which occurred in the two games sampled.
 
 - **Anchoring wired into the app** — `POST /api/leagues/[id]/anchor`, `AnchorPanel.tsx`,
   and `readOnlyEscrow()` in `apps/web/src/lib/escrow.ts`. The commissioner signs from
