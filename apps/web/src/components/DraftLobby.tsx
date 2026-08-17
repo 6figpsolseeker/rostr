@@ -37,8 +37,25 @@ export interface DraftLobbyProps {
     | { readonly code: "NOT_COMMISSIONER" }
     | { readonly code: "TOO_EARLY" }
     | { readonly code: "BELOW_MIN_HUMANS"; readonly humans: number; readonly required: number }
+    | { readonly code: "ODD_FIELD"; readonly teams: number }
+    | { readonly code: "POT_NOT_FUNDED"; readonly unfunded: number }
     | { readonly code: "ALREADY_DRAWN" }
     | null;
+  /**
+   * Everything outstanding, shown whether or not the draft time has arrived.
+   *
+   * Separate from `drawBlocker` because that answers "why is the button dead"
+   * and before the draft time always answers TOO_EARLY — which would tell a
+   * commissioner looking a week ahead nothing about what will stop them. After
+   * `scheduledAt` the field is locked on inserts and deletes alike, so none of
+   * these can be fixed any more: this list is the only thing that prevents the
+   * league failing.
+   */
+  readonly readiness: readonly (
+    | { readonly code: "BELOW_MIN_HUMANS"; readonly humans: number; readonly required: number }
+    | { readonly code: "ODD_FIELD"; readonly teams: number; readonly canUseBot: boolean }
+    | { readonly code: "POT_NOT_FUNDED"; readonly unfunded: number }
+  )[];
   readonly verification: {
     readonly slot: number;
     readonly blockhash: string;
@@ -124,6 +141,12 @@ function BeforeDraw(props: DraftLobbyProps & { remaining: number }) {
   return (
     <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_400px]">
       <div className="space-y-8">
+        {/*
+          Above the countdown, because it outranks it. The countdown says when
+          the draft is; this says whether there will be one — and after that
+          instant nothing here can be fixed by anybody.
+        */}
+        <Readiness readiness={props.readiness} scheduledAt={props.scheduledAt} />
         <section className="rounded-[14px] border border-nocturne-neutral-800 bg-nocturne-surface p-7">
           <p className="text-[10.5px] uppercase tracking-[0.14em] text-nocturne-neutral-500">
             Waiting for the draw
@@ -229,8 +252,98 @@ function DrawControl(props: DraftLobbyProps) {
           cannot fill the gap — the draw needs {props.drawBlocker.required} people.
         </p>
       )}
+      {props.drawBlocker?.code === "ODD_FIELD" && (
+        <p className="mt-3 text-[13px] text-nocturne-neutral-400">
+          {props.drawBlocker.teams} teams is an odd field, so somebody would take a bye every
+          week.
+        </p>
+      )}
+      {props.drawBlocker?.code === "POT_NOT_FUNDED" && (
+        <p className="mt-3 text-[13px] text-nocturne-neutral-400">
+          {props.drawBlocker.unfunded}{" "}
+          {props.drawBlocker.unfunded === 1 ? "member has" : "members have"} not staked the
+          buy-in. The draw waits until the pot holds every member&rsquo;s stake.
+        </p>
+      )}
       {error && <p className="mt-3 text-[13px] text-nocturne-accent-300">{error}</p>}
     </div>
+  );
+}
+
+/**
+ * What still has to be true when the draft time arrives.
+ *
+ * **Shown to everyone, not only the commissioner**, and that is deliberate: two
+ * of the three problems can only be solved by somebody who is not the
+ * commissioner — a member who has not staked, or a person who has not joined
+ * yet. A warning only the commissioner can see is a warning aimed at the one
+ * person who cannot act on it.
+ *
+ * It states the consequence rather than only the condition. "Five teams" means
+ * nothing on its own; "this league will not draft, and every buy-in comes back"
+ * is the sentence that makes somebody do something today.
+ */
+function Readiness(props: { readiness: DraftLobbyProps["readiness"]; scheduledAt: string }) {
+  if (props.readiness.length === 0) return null;
+
+  return (
+    <section className="mb-8 space-y-3 rounded-lg border border-amber-500/30 bg-amber-500/[0.04] p-6">
+      <h2 className="text-[15px] font-medium">This league is not ready to draft</h2>
+
+      <ul className="space-y-2 text-[13.5px] leading-[1.6] text-nocturne-neutral-400">
+        {props.readiness.map((problem) => (
+          <li key={problem.code} className="flex gap-2">
+            <span aria-hidden className="text-amber-400/70">
+              &bull;
+            </span>
+            <span>
+              {problem.code === "BELOW_MIN_HUMANS" && (
+                <>
+                  <strong className="font-medium text-nocturne-text">
+                    {problem.humans} of {problem.required} managers
+                  </strong>{" "}
+                  have joined. A bot cannot fill the gap — it is a placeholder for a person, not
+                  a person.
+                </>
+              )}
+              {problem.code === "ODD_FIELD" && (
+                <>
+                  <strong className="font-medium text-nocturne-text">
+                    {problem.teams} teams is an odd number
+                  </strong>
+                  , so somebody would take a bye every week.{" "}
+                  {problem.canUseBot
+                    ? "Add a bot from the league page to square it, or find one more person."
+                    : "A bot cannot square a league with a pot — it has no wallet and pays no buy-in — so this needs one more person, or one fewer."}
+                </>
+              )}
+              {problem.code === "POT_NOT_FUNDED" && (
+                <>
+                  <strong className="font-medium text-nocturne-text">
+                    {problem.unfunded} {problem.unfunded === 1 ? "member has" : "members have"}{" "}
+                    not staked
+                  </strong>{" "}
+                  the buy-in. Every member&rsquo;s stake has to be in the vault before the
+                  draft.
+                </>
+              )}
+            </span>
+          </li>
+        ))}
+      </ul>
+
+      {/*
+        The deadline and what happens at it, together. The field locks at the
+        draft time on joins *and* departures, so after that instant none of the
+        above can be fixed by anyone — which is why this says "before" rather
+        than leaving it to be inferred.
+      */}
+      <p className="text-[12.5px] leading-[1.6] text-nocturne-neutral-500">
+        All of it has to be settled before {clockTime(props.scheduledAt)}. Nobody can join or
+        leave after that, so a league still in this state does not draft at all — and every
+        buy-in already staked is released back to its owner two days later.
+      </p>
+    </section>
   );
 }
 
