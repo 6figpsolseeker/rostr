@@ -1373,6 +1373,61 @@ describe("queues", () => {
  * the default `minHumans: 2`, so they are a standing detector for anyone who
  * writes `<=` where the guard needs `<`.
  */
+/**
+ * No odd fields — decided by the owner on 2026-08-17.
+ *
+ * An odd field hands somebody a bye every week, and a bye is a free result: no
+ * game, no loss. In a league playing for money that moves who gets paid.
+ *
+ * The refusal is here rather than a fix, and that is forced rather than chosen:
+ * migration `0028` locks the field at `scheduledAt` on INSERT *and* DELETE, and
+ * this runs at or after that instant. So nothing can add a bot or drop a team
+ * by the time the draw happens — squaring the field has to be done while it is
+ * still open, which is what the lobby has to say before the deadline.
+ */
+describe("the draw refuses an odd field", () => {
+  it("refuses three teams", async () => {
+    const fx = await setup(3);
+    await createDraftRecord(fx.client, scheduleArgs(fx.leagueId));
+
+    await expect(
+      drawDraftOrder(fx.client, { leagueId: fx.leagueId, beacon: BEACON, now: DRAW_TIME }),
+    ).rejects.toMatchObject({ code: "ODD_FIELD" });
+  });
+
+  it("draws an even field", async () => {
+    const fx = await setup(4);
+    await createDraftRecord(fx.client, scheduleArgs(fx.leagueId));
+
+    await expect(
+      drawDraftOrder(fx.client, { leagueId: fx.leagueId, beacon: BEACON, now: DRAW_TIME }),
+    ).resolves.toBeDefined();
+  });
+
+  it("counts every team, bots included", async () => {
+    // A bot occupies a fixture like anyone else, so it is what squares an odd
+    // free league — the field being even is a fact about the schedule, not
+    // about how many people are in it.
+    const fx = await setup(5);
+    await createDraftRecord(fx.client, scheduleArgs(fx.leagueId));
+
+    await expect(
+      drawDraftOrder(fx.client, { leagueId: fx.leagueId, beacon: BEACON, now: DRAW_TIME }),
+    ).rejects.toThrow(/5 teams/);
+  });
+
+  it("answers BELOW_MIN_HUMANS first for a single-manager league", async () => {
+    // One team is both odd and short, and short is the more useful thing to be
+    // told — the same ordering `NO_TEAMS` keeps ahead of both.
+    const fx = await setup(1);
+    await createDraftRecord(fx.client, scheduleArgs(fx.leagueId));
+
+    await expect(
+      drawDraftOrder(fx.client, { leagueId: fx.leagueId, beacon: BEACON, now: DRAW_TIME }),
+    ).rejects.toMatchObject({ code: "BELOW_MIN_HUMANS" });
+  });
+});
+
 describe("the draw refuses a field below minHumans", () => {
   it("refuses a single-manager league", async () => {
     const fx = await setup(1);
