@@ -246,6 +246,30 @@ pub mod rostr_escrow {
             EscrowError::RefundUnlockTooFar
         );
 
+        // The deadline for declaring the season started, after which a league
+        // that never did releases every stake. One in the past would open the
+        // failed-league refund before anyone could deposit, so the first stake
+        // could be withdrawn immediately — the same failure `refund_unlock_at >
+        // now` prevents for the ordinary timelock.
+        require!(
+            args.start_deadline > now,
+            EscrowError::StartDeadlineNotInFuture
+        );
+
+        // The two refund openings must be ordered, and strictly.
+        //
+        // If the failed-league opening came at or after the timelock it would be
+        // dead code, and worse, `start_season` would still be legal past the
+        // point where the ordinary refund had already released stakes — a league
+        // could be declared started with a drained vault. Off-chain this cannot
+        // happen, since `earliestRefundUnlock` puts the timelock a season and
+        // sixty days beyond the draft, so this rejects only a caller who
+        // bypassed it.
+        require!(
+            args.start_deadline < args.refund_unlock_at,
+            EscrowError::StartDeadlineAfterRefundUnlock
+        );
+
         let league = &mut ctx.accounts.league;
         league.league_id = args.league_id;
         league.rules_hash = args.rules_hash;
@@ -262,6 +286,56 @@ pub mod rostr_escrow {
         league.member_count = 0;
         league.total_deposited = 0;
         league.bump = ctx.bumps.league;
+        // The one key on this account, and it can only ever call `start_season`.
+        league.commissioner = ctx.accounts.payer.key();
+        league.start_deadline = args.start_deadline;
+        league.started = false;
+
+        Ok(())
+    }
+
+    /// Declare that this league's season has begun, closing the failed-league
+    /// refund.
+    ///
+    /// ## What this is for
+    ///
+    /// A league that is not ready at its draft time — short of its buy-ins, or
+    /// with an odd field — must give everyone their money back **then**, not in
+    /// six months. But this program cannot tell a failed league from a running
+    /// one: the roster, the draft and who has paid are Postgres facts, and
+    /// `rules_hash` is 32 opaque bytes to it. Something has to say so.
+    ///
+    /// So the default is failure. A league that was ready calls this inside its
+    /// grace window; a league that was not never does, and its members are
+    /// released automatically. **Doing nothing returns the money.**
+    ///
+    /// ## The window is the whole safety argument
+    ///
+    /// This is illegal from exactly the instant the failed-league refund becomes
+    /// legal, so the two can never both be available. A league therefore cannot
+    /// be started with a partly-drained vault, and a member cannot be refunded
+    /// out of a season that has begun — the halves are complements rather than
+    /// two checks that have to agree with each other.
+    ///
+    /// ## What it cannot do
+    ///
+    /// It changes no term, moves no token, and names no winner. Its only effect
+    /// is which of two refund schedules the members are on, and both of those
+    /// end with the member holding their own money. `drawDraftOrder` refuses to
+    /// draw a pot league until this has landed, which is what stops a
+    /// commissioner running a season with the escape hatch still open.
+    ///
+    /// Free leagues are excluded rather than exempted: no vault, so nothing to
+    /// release and nothing to protect.
+    pub fn start_season(ctx: Context<StartSeason>) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        let league = &mut ctx.accounts.league;
+
+        require!(league.has_pot, EscrowError::LeagueHasNoPot);
+        require!(!league.started, EscrowError::AlreadyStarted);
+        require!(now < league.start_deadline, EscrowError::StartWindowClosed);
+
+        league.started = true;
 
         Ok(())
     }
@@ -303,6 +377,14 @@ pub mod rostr_escrow {
         league.member_count = 0;
         league.total_deposited = 0;
         league.bump = ctx.bumps.league;
+        // Recorded for symmetry, and it grants nothing here: `start_season`
+        // refuses a league with no pot, so this key has no instruction to call.
+        league.commissioner = ctx.accounts.payer.key();
+        // No start deadline and never started. Both are about releasing a vault
+        // and a free league has none, so they are inert rather than defaulted —
+        // `refund_stake` cannot run against this league at all.
+        league.start_deadline = 0;
+        league.started = false;
 
         Ok(())
     }
@@ -410,10 +492,23 @@ pub mod rostr_escrow {
     /// Do not add one.
     pub fn refund_stake(ctx: Context<RefundStake>) -> Result<()> {
         let now = Clock::get()?.unix_timestamp;
-        require!(
-            now >= ctx.accounts.league.refund_unlock_at,
-            EscrowError::RefundLocked
-        );
+        let league = &ctx.accounts.league;
+
+        // **Two ways in, and this is a disjunction rather than a new condition.**
+        //
+        // Every extra *condition* on this instruction is a new way for money to
+        // become permanently stuck, which is why it has three and no more. This
+        // adds none: it can only ever make a refund available earlier, so no
+        // path that worked before stops working.
+        //
+        // The second opening exists because the reasoning behind the first does
+        // not apply to a league that never started. The timelock is late so that
+        // a refund and a payout can never both be legal — but a league with no
+        // season has no payout to race, no scores, nothing to settle. Holding
+        // its members' money for six months protects nobody from anything.
+        let timelock_open = now >= league.refund_unlock_at;
+        let failed_open = !league.started && now >= league.start_deadline;
+        require!(timelock_open || failed_open, EscrowError::RefundLocked);
 
         let amount = ctx.accounts.membership.deposited;
         require!(amount > 0, EscrowError::NothingDeposited);
@@ -457,10 +552,16 @@ pub mod rostr_escrow {
 
 /// The terms of a league, frozen at creation.
 ///
-/// Deliberately absent: a commissioner authority. Nothing in this account may
-/// change, so there is nobody who needs the right to change it. Adding an
-/// authority field would create the exact attack docs/DECISIONS.md §
-/// "Commissioner powers are bounded by the contract" exists to remove.
+/// **No term may change, and there is no authority that could change one.** That
+/// is what docs/DECISIONS.md § "Commissioner powers are bounded by the contract"
+/// asks for, and it still holds: the buy-in, the fee, its recipient, the payout
+/// split, the mint and the refund date are written once and read forever.
+///
+/// This paragraph used to say the account had no authority field at all. It has
+/// one — `commissioner`, whose sole power is `start_season`, and whose sole
+/// effect is which of two refund schedules a member is on. Both end with them
+/// holding their own money. See the field for why that was the least bad way to
+/// let a league that never started give the money back.
 #[account]
 #[derive(InitSpace)]
 pub struct League {
@@ -540,6 +641,47 @@ pub struct League {
     /// it tracks what the vault actually holds rather than what it ever held.
     pub total_deposited: u64,
     pub bump: u8,
+    // ---------------------------------------------------------------------
+    // Appended, and appended deliberately. Field order is the serialisation
+    // layout, so inserting above would move every field below it and make every
+    // already-anchored league unreadable. Same discipline as `EscrowError`.
+    // ---------------------------------------------------------------------
+    // The wallet that created this league.
+    //
+    // **This is an authority, and this account did not have one.** The struct
+    // docstring above used to say so flatly. What it can do is call
+    // `start_season`, whose entire effect is to choose between two refund
+    // schedules — and both of them end with the member holding their own money.
+    // It cannot change a term, cannot move a token, and cannot name a winner.
+    //
+    // Its worst abuse is marking a failed league started, which locks stakes
+    // until the ordinary timelock: exactly the behaviour before this field
+    // existed, so it is not a regression but the floor it was measured against.
+    // The commissioner is also a member with a stake, so it costs them too.
+    //
+    // The alternative was a permissionless `start_season` proving on-chain that
+    // the field was full and funded. Rejected: `join_league` is permissionless
+    // (#18), so any stranger opening an unfunded `Membership` could force every
+    // pot league to fail. Money would stay safe, but a one-transaction kill on
+    // any league is worse than an authority whose worst case is the status quo.
+    pub commissioner: Pubkey,
+    // The instant by which this league must have declared itself started. After
+    // it, a league that never did releases every stake.
+    //
+    // **An explicit instant rather than the draft time plus a constant here**,
+    // for the same reason `refund_unlock_at` is: the program has no schedule and
+    // no view of a league's calendar, so a deadline it computed itself would be
+    // computed from something it was handed anyway. Derived off-chain by
+    // `startDeadlineFor` in `@rostr/escrow` as the draft time plus its grace,
+    // and compared against the signed rule set by `anchorTermMismatches` — so a
+    // creator cannot anchor a deadline nobody agreed to, exactly as they cannot
+    // anchor a buy-in or a refund date nobody agreed to.
+    //
+    // Zero for a free league, which has no vault and so nothing to release.
+    pub start_deadline: i64,
+    // Set once by `start_season` and never unset. False means the season never
+    // began, which is what opens the failed-league refund.
+    pub started: bool,
 }
 
 /// One member's place in one league.
@@ -568,6 +710,9 @@ pub struct InitializeLeagueArgs {
     pub fee_bps: u16,
     pub fee_recipient: Pubkey,
     pub max_teams: u8,
+    /// When the season must be declared started by. Appended, so the argument
+    /// order is stable. See the field on `League`.
+    pub start_deadline: i64,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
@@ -604,8 +749,11 @@ pub struct InitializeLeague<'info> {
     )]
     pub vault: Account<'info, TokenAccount>,
 
-    /// Pays rent. Holds no privileges afterwards — creating a league is not a
-    /// role, and this key is not recorded on the account.
+    /// Pays rent, and is recorded as `league.commissioner`.
+    ///
+    /// This used to say the key held no privileges afterwards and was not
+    /// recorded. It is now recorded, and it holds exactly one: `start_season`.
+    /// That instruction changes no term and moves no token — see the field.
     #[account(mut)]
     pub payer: Signer<'info>,
 
@@ -629,6 +777,23 @@ pub struct InitializeFreeLeague<'info> {
     pub payer: Signer<'info>,
 
     pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct StartSeason<'info> {
+    #[account(
+        mut,
+        seeds = [b"league", league.league_id.as_ref()],
+        bump = league.bump,
+        // The one authority on this account, checked here rather than in the
+        // handler so a caller who is not the commissioner cannot even reach it.
+        constraint = league.commissioner == commissioner.key() @ EscrowError::NotCommissioner,
+    )]
+    pub league: Account<'info, League>,
+
+    /// The wallet that created the league. No other key can start a season, and
+    /// this one can do nothing else.
+    pub commissioner: Signer<'info>,
 }
 
 #[derive(Accounts)]
@@ -793,4 +958,14 @@ pub enum EscrowError {
     // Rust toolchain to regenerate it with.
     #[msg("Refund unlock time is too far in the future")]
     RefundUnlockTooFar,
+    #[msg("Only the wallet that created this league may start its season")]
+    NotCommissioner,
+    #[msg("This league's season has already started")]
+    AlreadyStarted,
+    #[msg("The window to start this season has closed; its members may now be refunded")]
+    StartWindowClosed,
+    #[msg("The start deadline must be in the future")]
+    StartDeadlineNotInFuture,
+    #[msg("The start deadline must fall before the refund unlock")]
+    StartDeadlineAfterRefundUnlock,
 }

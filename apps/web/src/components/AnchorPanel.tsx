@@ -43,12 +43,23 @@ export function AnchorPanel({
   leagueId,
   rulesHash,
   maxTeams,
+  draftScheduledAt,
   pot,
 }: {
   leagueId: string;
   /** The hash as stored: 64 lower-case hex characters. */
   rulesHash: string;
   maxTeams: number;
+  /**
+   * The frozen draft time, unix seconds.
+   *
+   * Only a pot league uses it — it fixes when a league that never starts gives
+   * the stakes back — but it is required rather than optional, because a free
+   * league passing it costs nothing and an omitted one on a pot league would
+   * anchor a deadline the signed rules do not imply, which the anchor route
+   * then refuses permanently. There is no second chance at anchoring.
+   */
+  draftScheduledAt: number;
   pot: PotTerms | null;
 }) {
   const { connection } = useConnection();
@@ -91,6 +102,12 @@ export function AnchorPanel({
               ? new PublicKey(pot.feeRecipient)
               : PublicKey.default,
             maxTeams,
+            // The frozen draft time, from which `startDeadlineFor` derives when
+            // a league that never starts releases its stakes. Passed as the
+            // draft time rather than the deadline so this component computes
+            // nothing — the anchor route recomputes the same value from the
+            // signed rules and refuses an account that disagrees.
+            draftScheduledAt,
             payer: wallet.publicKey,
           })
         : await initializeFreeLeagueIx(program, {

@@ -134,15 +134,27 @@ async function anchorLeague(
   leagueId: string,
   rulesHash: string,
   rules: ReturnType<typeof buildNflPprRules>,
+  /**
+   * Only for the refund test below, which builds a league with a draft deep in
+   * the past so its unlock can be three seconds away. The derived deadline would
+   * then be in the past too, and `initialize_league` refuses that — a league
+   * cannot be created already failed.
+   */
+  startDeadline?: number,
 ) {
   const pot = rules.pot;
   if (!pot) throw new Error("expected a pot league");
   const ix = await initializeLeagueIx(program, {
+    ...(startDeadline === undefined ? {} : { startDeadline }),
     leagueId,
     rulesHash: hexToBytes(rulesHash),
     mint,
     buyInBaseUnits: pot.buyInBaseUnits,
     refundUnlockAt: pot.refundUnlockAt,
+    // The league's own draft time, not the module default. A test that shortens
+    // the refund unlock shifts the draft with it, and anchoring the default here
+    // would derive a start deadline past that unlock.
+    draftScheduledAt: rules.draft.scheduledAt,
     payoutBps: payoutArray(pot.payout),
     feeBps: pot.feeBps,
     feeRecipient: new anchor.web3.PublicKey(pot.feeRecipient),
@@ -262,7 +274,14 @@ describe("a completed refund verifies as a refund", () => {
       Math.floor(Date.now() / 1000) + 3,
       Math.floor(Date.now() / 1000) - 220 * 24 * 3600,
     );
-    const sig = await anchorLeague(league.id, league.rulesHash, rules);
+    // Two seconds out: inside the three-second unlock, and in the future, which
+    // the derived deadline could not be for a draft 220 days ago.
+    const sig = await anchorLeague(
+      league.id,
+      league.rulesHash,
+      rules,
+      Math.floor(Date.now() / 1000) + 2,
+    );
     await recordChainAnchor(db, league.id, {
       signature: sig,
       cluster: clusterOf(provider.connection),

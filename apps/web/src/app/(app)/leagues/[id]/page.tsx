@@ -186,6 +186,7 @@ export default async function LeaguePage({ params }: { params: Promise<{ id: str
           leagueId={league.id}
           rulesHash={stored.hash}
           maxTeams={stored.rules.league.maxTeams}
+          draftScheduledAt={stored.rules.draft.scheduledAt}
           pot={
             stored.rules.pot
               ? {

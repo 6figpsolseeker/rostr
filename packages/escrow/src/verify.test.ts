@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { anchorTermMismatches, expectedTermsFromRules } from "./verify.js";
+import { anchorTermMismatches, expectedTermsFromRules, verifyLeagueAnchor } from "./verify.js";
 import type { ExpectedTerms, OnChainLeague } from "./verify.js";
+import { startDeadlineFor } from "./start.js";
 import { PublicKey } from "@solana/web3.js";
 
 /**
@@ -15,6 +16,10 @@ const FEE_TO = "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin";
 
 const RECIPIENT = new PublicKey(FEE_TO);
 
+/** The frozen draft time these fixtures share, and its derived deadline. */
+const DRAFT_AT = 1_756_000_000;
+const START_DEADLINE = String(startDeadlineFor(DRAFT_AT));
+
 function onChain(overrides: Partial<OnChainLeague> = {}): OnChainLeague {
   return {
     address: PublicKey.default,
@@ -26,6 +31,9 @@ function onChain(overrides: Partial<OnChainLeague> = {}): OnChainLeague {
     feeBps: 100,
     feeRecipient: FEE_TO,
     payoutBps: [6000, 1500, 1000, 1000, 500],
+    startDeadline: START_DEADLINE,
+    started: false,
+    commissioner: FEE_TO,
     maxTeams: 12,
     memberCount: 0,
     ...overrides,
@@ -41,7 +49,73 @@ const EXPECTED: ExpectedTerms = {
   feeBps: 100,
   feeRecipient: FEE_TO,
   payoutBps: [6000, 1500, 1000, 1000, 500],
+  startDeadline: START_DEADLINE,
 };
+
+/** The rules half of the fixture, with the draft the deadline derives from. */
+const RULES_LEAGUE = { maxTeams: 12 } as const;
+const RULES_DRAFT = { scheduledAt: DRAFT_AT } as const;
+
+/**
+ * An account this build cannot read is not an account that is missing.
+ *
+ * They are indistinguishable at the fetch — Anchor answers `null` for one and
+ * throws for the other — and they mean opposite things to whoever reads the
+ * answer. `NOT_FOUND` means the anchor never landed and should be retried;
+ * `INCOMPATIBLE` means it landed under an older program layout and can never be
+ * used, because the address derives from the league's id and there is no
+ * `close`. Retrying is the one action guaranteed not to help.
+ *
+ * Reached on 2026-08-17, when the failed-league refund appended three fields to
+ * `League` (#170). Before that the decode threw past every handler as a 500.
+ */
+describe("verifyLeagueAnchor's two kinds of absence", () => {
+  const leagueId = "11111111-1111-4111-8111-111111111111";
+
+  const programThat = (fetchNullable: () => Promise<unknown>) =>
+    ({ account: { league: { fetchNullable } } }) as never;
+
+  it("reports NOT_FOUND for a league nobody has anchored", async () => {
+    const verdict = await verifyLeagueAnchor(
+      programThat(async () => null),
+      leagueId,
+      "a".repeat(64),
+    );
+    expect(verdict).toEqual({ ok: false, reason: "NOT_FOUND" });
+  });
+
+  it("reports INCOMPATIBLE for an account it cannot decode, and never NOT_FOUND", async () => {
+    const verdict = await verifyLeagueAnchor(
+      programThat(async () => {
+        throw new Error("Invalid account discriminator");
+      }),
+      leagueId,
+      "a".repeat(64),
+    );
+
+    expect(verdict.ok).toBe(false);
+    if (verdict.ok) return;
+    expect(verdict.reason).toBe("INCOMPATIBLE");
+    // The message has to say the thing a retry cannot fix, because the retry is
+    // what somebody reaching this will otherwise do.
+    if (verdict.reason !== "INCOMPATIBLE") return;
+    expect(verdict.detail).toMatch(/cannot be re-anchored|different version/i);
+  });
+
+  it("surfaces the failure as an answer rather than a throw", async () => {
+    // A throw here is a 500 on the anchor route, which tells the commissioner
+    // nothing and records nothing. The route can only decide with a verdict.
+    await expect(
+      verifyLeagueAnchor(
+        programThat(async () => {
+          throw new Error("unexpected end of buffer");
+        }),
+        leagueId,
+        "a".repeat(64),
+      ),
+    ).resolves.toBeDefined();
+  });
+});
 
 describe("anchorTermMismatches", () => {
   it("passes when every term matches the signed rules", () => {
@@ -154,6 +228,39 @@ describe("anchorTermMismatches", () => {
     expect(anchorTermMismatches(chain, free)).toEqual([]);
   });
 
+  /**
+   * The deadline decides when a failed league gives the money back, so it is a
+   * money term and belongs in this comparison.
+   *
+   * Anchored later than the rules imply, a failed league's members wait longer
+   * than they agreed to — up to the ordinary timelock, six months out. Anchored
+   * earlier, the escape hatch opens on a league that is about to start, and
+   * whoever withdraws first plays the season with nothing at risk.
+   */
+  it("catches a start deadline that differs from the signed rules", () => {
+    const later = String(Number(START_DEADLINE) + 30 * 24 * 3600);
+    const m = anchorTermMismatches(onChain({ startDeadline: later }), EXPECTED);
+    expect(m).toHaveLength(1);
+    expect(m[0]).toMatch(/startDeadline/);
+  });
+
+  it("does not compare a start deadline on a free league", () => {
+    // No vault, so nothing the deadline could release. `initialize_free_league`
+    // writes zero and the rules imply zero; comparing anything else here would
+    // refuse a legitimate free anchor, which is unrecoverable.
+    const free = onChain({
+      hasPot: false,
+      buyIn: "0",
+      refundUnlockAt: "0",
+      tokenMint: PublicKey.default.toBase58(),
+      feeBps: 0,
+      feeRecipient: PublicKey.default.toBase58(),
+      payoutBps: [0, 0, 0, 0, 0],
+      startDeadline: "0",
+    });
+    expect(anchorTermMismatches(free, { ...EXPECTED, hasPot: false })).toEqual([]);
+  });
+
   it("still catches a fee smuggled in against fee-free rules", () => {
     // The exemption above must not become a hole: `feeBps` is compared either
     // way, so a chain that charges a fee the rules do not is still refused.
@@ -188,7 +295,11 @@ describe("expectedTermsFromRules", () => {
   };
 
   it("agrees with an honestly anchored pot league", () => {
-    const expected = expectedTermsFromRules({ league: { maxTeams: 12 }, pot: POT });
+    const expected = expectedTermsFromRules({
+      league: RULES_LEAGUE,
+      draft: RULES_DRAFT,
+      pot: POT,
+    });
     expect(anchorTermMismatches(onChain(), expected)).toEqual([]);
   });
 
@@ -205,7 +316,8 @@ describe("expectedTermsFromRules", () => {
       POT.payout[3],
     ];
     const expected = expectedTermsFromRules({
-      league: { maxTeams: 12 },
+      league: RULES_LEAGUE,
+      draft: RULES_DRAFT,
       pot: { ...POT, payout: shuffled as typeof POT.payout },
     });
     expect(expected.payoutBps).toEqual([6000, 1500, 1000, 1000, 500]);
@@ -214,14 +326,19 @@ describe("expectedTermsFromRules", () => {
 
   it("carries a 64-bit refund unlock without losing it", () => {
     const expected = expectedTermsFromRules({
-      league: { maxTeams: 12 },
+      league: RULES_LEAGUE,
+      draft: RULES_DRAFT,
       pot: { ...POT, refundUnlockAt: 4_102_444_800 },
     });
     expect(expected.refundUnlockAt).toBe("4102444800");
   });
 
   it("builds a free league the way the route does, and it verifies", () => {
-    const expected = expectedTermsFromRules({ league: { maxTeams: 12 }, pot: null });
+    const expected = expectedTermsFromRules({
+      league: RULES_LEAGUE,
+      draft: RULES_DRAFT,
+      pot: null,
+    });
     expect(expected.hasPot).toBe(false);
 
     const free = onChain({
@@ -241,7 +358,8 @@ describe("expectedTermsFromRules", () => {
     // `undefined`, and `!== null` would call that a pot league — telling a
     // genuine free league its rules imply one, unresolvably.
     const expected = expectedTermsFromRules({
-      league: { maxTeams: 12 },
+      league: RULES_LEAGUE,
+      draft: RULES_DRAFT,
       pot: undefined as unknown as null,
     });
     expect(expected.hasPot).toBe(false);

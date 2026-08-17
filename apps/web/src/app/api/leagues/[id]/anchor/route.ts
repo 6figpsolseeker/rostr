@@ -153,27 +153,57 @@ export async function POST(
       // Deliberately specific. "Not found" means the transaction has not landed
       // — retry. "Hash mismatch" means the chain holds a different rule set,
       // which is not a retry, it is a league nobody should join.
-      return verdict.reason === "NOT_FOUND"
-        ? NextResponse.json(
-            {
-              error:
-                "No league account exists on-chain yet. If the transaction was just sent, " +
-                "give it a moment and try again.",
-              reason: verdict.reason,
-            },
-            { status: 409 },
-          )
-        : NextResponse.json(
-            {
-              error:
-                "The on-chain rules hash does not match this league's. Do not let anyone " +
-                "join: the chain holds a different rule set than the one shown here.",
-              reason: verdict.reason,
-              onChain: verdict.onChain,
-              expected: verdict.expected,
-            },
-            { status: 409 },
-          );
+      if (verdict.reason === "NOT_FOUND") {
+        return NextResponse.json(
+          {
+            error:
+              "No league account exists on-chain yet. If the transaction was just sent, " +
+              "give it a moment and try again.",
+            reason: verdict.reason,
+          },
+          { status: 409 },
+        );
+      }
+
+      /*
+        An account is there and this build cannot read it.
+
+        The third refusal, and it is the one that must not be confused with the
+        first: they are indistinguishable from a distance and mean opposite
+        things. `NOT_FOUND` invites a retry; this one has to say plainly that
+        retrying is the single action guaranteed not to work. The address
+        derives from the league's id, the program has no `close`, and those
+        bytes are there for good — so the league can only be recreated under a
+        new id.
+
+        Reachable when the program's account layout moves and a league was
+        anchored under the older one. Before this it escaped as a 500.
+      */
+      if (verdict.reason === "INCOMPATIBLE") {
+        return NextResponse.json(
+          {
+            error:
+              "This league was anchored by a different version of the escrow program and " +
+              "cannot be read. It cannot be re-anchored — the on-chain address comes from " +
+              "the league's id and nothing can free it. Create the league again.",
+            reason: verdict.reason,
+            detail: verdict.detail,
+          },
+          { status: 409 },
+        );
+      }
+
+      return NextResponse.json(
+        {
+          error:
+            "The on-chain rules hash does not match this league's. Do not let anyone " +
+            "join: the chain holds a different rule set than the one shown here.",
+          reason: verdict.reason,
+          onChain: verdict.onChain,
+          expected: verdict.expected,
+        },
+        { status: 409 },
+      );
     }
 
     // The hash matches, but the program stores the economic terms as a separate
