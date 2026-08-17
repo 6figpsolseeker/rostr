@@ -75,6 +75,13 @@ export default async function LeaguePage({ params }: { params: Promise<{ id: str
     `memberWallet` is the membership row and the team is written in the same
     transaction, so it answers "has a seat"; `resumable` is already "has a seat
     and no on-chain record", which is the fourth step still owed.
+
+    The last three are what stop the list naming a step that can never be taken.
+    `leagueState` and `seatsFree` are the same two facts `open` below is built
+    from, and `fieldLocked` is the frozen draft time against the server's clock —
+    the instant migration `0028` starts refusing every `teams` INSERT. Nothing in
+    this app moves a league out of FORMING when that time passes, so without them
+    the checklist would go on asking for a seat forever.
   */
   const setup = commissionerSetup({
     isCommissioner,
@@ -82,6 +89,9 @@ export default async function LeaguePage({ params }: { params: Promise<{ id: str
     anchored,
     hasTeam: myWallet !== null,
     onChainJoined: myWallet !== null && !resumable,
+    leagueState: league.state,
+    seatsFree: taken < stored.rules.league.maxTeams,
+    fieldLocked: Date.now() >= stored.rules.draft.scheduledAt * 1000,
   });
 
   // Whether the six tabs and the two buttons below lead anywhere for this
@@ -110,6 +120,10 @@ export default async function LeaguePage({ params }: { params: Promise<{ id: str
         tab 404s at them because they are not a member of it. Once the four
         steps are done `setup.complete` is true and this disappears — a
         permanently all-ticked list is noise on a screen people open weekly.
+
+        It stays when the steps can no longer be taken, and says so instead. A
+        commissioner who never joined their own league is not less entitled to
+        be told once it is too late to fix.
       */}
       {setup && !setup.complete ? (
         <CommissionerSetup

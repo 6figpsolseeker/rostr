@@ -322,17 +322,23 @@ export function CreateLeagueForm() {
         The one check this screen was missing.
 
         Everything above promises that the hash rendered in the freeze step is
-        the hash the server stores — the preview is built by the same
-        `buildNflPprRules` from the same inputs, and the comment at the top of
-        this file says the discrepancy "should be visible" if they ever
-        disagreed. Nothing made it visible. The two are built from separately
-        supplied values (the mint and the fee recipient come from server
-        configuration and are only *mirrored* into `NEXT_PUBLIC_*` here), so
-        drift is a configuration mistake away rather than hypothetical, and its
-        symptom is a commissioner who read and acknowledged one document while
-        their members sign another.
+        the hash the server stores. This file already noted that a divergence
+        *would* be visible — as two different hashes on two different screens —
+        and that is only true of someone who thinks to compare them. Nothing
+        surfaced it at the moment it matters.
 
-        Three lines, and the divergence stops the flow rather than being logged.
+        Drift is a configuration mistake away rather than hypothetical.
+        `FEE_RECIPIENT` is mirrored into `NEXT_PUBLIC_FEE_RECIPIENT`, two values
+        set independently that must agree; and the mint is derived on both sides
+        from `POT_MINTS`, keyed by a cluster the browser reads from
+        `NEXT_PUBLIC_SOLANA_CLUSTER` and **defaults to devnet when unset**, where
+        the server's `declaredCluster()` would have thrown. So an unset browser
+        variable on a mainnet deployment previews a devnet mint against a mainnet
+        freeze — and the symptom is a commissioner who read and acknowledged one
+        document while their members sign another.
+
+        Free leagues build `pot: null` on both sides and have no divergence
+        surface at all, so this cannot fire on them.
       */
       if (previewHash !== null && created.rulesHash !== previewHash) {
         setMismatch({
@@ -344,9 +350,11 @@ export function CreateLeagueForm() {
         return;
       }
 
-      // `replace`, not `push`. Back from the league would otherwise return to a
-      // filled-in freeze step whose only button creates a *second* league — and
-      // a league cannot be deleted, only dissolved.
+      // `replace`, not `push`, so the create page leaves the history stack.
+      // Back from a league should return to wherever the commissioner came from,
+      // not to the form that made it — a form that remounts empty (every piece
+      // of its state is `useState`, and this is a route change) and invites a
+      // second league, which cannot be deleted, only dissolved.
       router.replace(`/leagues/${created.id}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -366,6 +374,57 @@ export function CreateLeagueForm() {
   const potAvailable = POT_MINT !== null;
   const choicesSet =
     (name.trim() ? 1 : 0) + 6 + (withPot ? 2 : 0) + (potAvailable && !withPot ? 1 : 0);
+
+  /*
+    Once a league exists this screen has nothing left to offer, so it stops being
+    a form.
+
+    Rendering the banner *inside* the freeze step left "Back to the choices"
+    live: pressing it landed the commissioner on a configure step whose submit
+    button was permanently disabled, with the explanation no longer on screen and
+    nothing saying why. The only thing worth doing now is opening the league that
+    was created, so that is the only thing here.
+  */
+  if (mismatch) {
+    return (
+      <div className="mx-auto max-w-[860px]">
+        <h1 className="text-[38px] font-medium leading-[1.08] tracking-[-0.03em]">
+          The frozen rules are not the rules you read
+        </h1>
+        <p className="mt-4 max-w-[640px] text-[15.5px] leading-[1.6] text-nocturne-neutral-400">
+          The league was created — that cannot be undone, and its rules can never be amended —
+          but the hash the server stored differs from the one shown on the previous screen. So
+          this screen did not show you the document your members will sign. Read the stored rule
+          set before inviting anyone.
+        </p>
+        <p className="mt-4 max-w-[640px] text-[14px] leading-[1.6] text-nocturne-neutral-500">
+          This almost always means the browser and the server disagree about which chain this
+          deployment is on, or about the fee recipient. Both are build-time configuration and
+          neither can be fixed from here.
+        </p>
+
+        <dl className="mt-6 space-y-1 font-mono text-[11.5px] break-all text-nocturne-neutral-500">
+          <div>
+            <dt className="inline text-nocturne-neutral-600">shown to you </dt>
+            <dd className="inline">{mismatch.previewed}</dd>
+          </div>
+          <div>
+            <dt className="inline text-nocturne-neutral-600">frozen </dt>
+            <dd className="inline">{mismatch.frozen}</dd>
+          </div>
+        </dl>
+
+        {mismatch.id ? (
+          <a
+            href={`/leagues/${mismatch.id}`}
+            className="mt-8 inline-block rounded-[4px] border border-nocturne-accent px-[26px] py-3 text-[14.5px] text-nocturne-accent-200 transition-colors hover:bg-nocturne-accent/10"
+          >
+            Open the league and read what was stored
+          </a>
+        ) : null}
+      </div>
+    );
+  }
 
   if (step === "freeze") {
     return (
@@ -434,38 +493,6 @@ export function CreateLeagueForm() {
           </span>
         </label>
 
-        {mismatch ? (
-          <div className="mt-6 space-y-3 rounded-lg border border-red-500/40 bg-red-500/5 p-5">
-            <p className="text-[15px] font-medium text-red-300">
-              The frozen rules are not the rules you just read.
-            </p>
-            <p className="max-w-[620px] text-[13.5px] leading-[1.6] text-nocturne-neutral-400">
-              The league was created — that cannot be undone, and its rules cannot be amended —
-              but the hash the server stored differs from the one shown above, so this screen
-              did not show you the document your members will sign. Do not invite anyone until
-              you have read the stored rule set on the league page.
-            </p>
-            <dl className="space-y-1 font-mono text-[11.5px] break-all text-nocturne-neutral-500">
-              <div>
-                <dt className="inline text-nocturne-neutral-600">shown here </dt>
-                <dd className="inline">{mismatch.previewed}</dd>
-              </div>
-              <div>
-                <dt className="inline text-nocturne-neutral-600">frozen </dt>
-                <dd className="inline">{mismatch.frozen}</dd>
-              </div>
-            </dl>
-            {mismatch.id ? (
-              <a
-                href={`/leagues/${mismatch.id}`}
-                className="inline-block rounded-[4px] border border-nocturne-neutral-800 px-4 py-2 text-[13.5px] text-nocturne-neutral-300 transition-colors hover:text-nocturne-text"
-              >
-                Open the league and read what was stored
-              </a>
-            ) : null}
-          </div>
-        ) : null}
-
         {problems.length > 0 ? (
           <ul className="mt-6 space-y-1 text-[13.5px] text-nocturne-accent-300">
             {problems.map((problem) => (
@@ -478,9 +505,7 @@ export function CreateLeagueForm() {
         <form onSubmit={(e) => void submit(e)} className="mt-8">
           <button
             type="submit"
-            // Shut once a league exists, mismatch or not: this button creates,
-            // and pressing it again would create a second one.
-            disabled={!acknowledged || submitting || !preview || mismatch !== null}
+            disabled={!acknowledged || submitting || !preview}
             className="rounded-[4px] border border-nocturne-accent px-[26px] py-3 text-[14.5px] text-nocturne-accent-200 transition-colors hover:bg-nocturne-accent/10 disabled:cursor-not-allowed disabled:border-nocturne-neutral-800 disabled:text-nocturne-neutral-600"
           >
             {submitting ? "Freezing…" : "Freeze and create the league"}
