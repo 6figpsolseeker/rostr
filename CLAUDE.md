@@ -140,11 +140,26 @@ would have finalised **0–0, permanently**, because a finalised week is never r
 `docs/LIVE-SCORING.md` describes six automation jobs in the present tense and only one of
 them exists. Reading a plan as a description is how the claim above got written.
 
-**Now:** `syncGames` is wired into `pnpm db:sync` and the schedule is real. **Still
-outstanding:** `syncBoxScores` does not exist, so `stat_lines` is still empty and every
-player still scores zero. Sep 9 is not covered until that lands, and the adapter defects in
-issue #81 — which are latent only because nothing calls `getBoxScore` — become live the
-moment it does.
+**Corrected 2026-08-17, and this passage was the stale one.** It said `syncBoxScores` did
+not exist and that every player therefore scores zero. Both halves are now false, and the
+second was false in a way that reads as urgent — which is how it survived being repeated.
+
+`syncBoxScores` **exists** (`packages/db/src/box-scores.ts`, PR #95), `/api/cron/stats`
+calls it every ten minutes alongside `syncGames`, and `apps/web/vercel.json` schedules it.
+Issue #96 is closed and complete. `syncGames` is also wired into `pnpm db:sync`.
+
+`stat_lines` is empty in the deployed database for a much duller reason: **all 248 games
+are `SCHEDULED` and none is `FINAL`, because the 2026 season has not started.** There is
+nothing to ingest until 9 September. The pipeline has never had a finished game to run on,
+which is a different problem from not existing — and the honest description of the Sep 9
+risk is now **"the producer has never been exercised against a real box score"**, not
+"there is no producer".
+
+So what is actually outstanding for Sep 9 is **issue #81**. Its adapter defects were filed
+as latent "only because nothing calls `getBoxScore`" — something does now, so they are
+live and simply have not fired yet for want of a played game. Read that issue before the
+season starts, particularly defect 2: one unparseable field-goal string discards **every**
+player's line for the whole game, and a week that finalises that way is never rescored.
 
 - **Anchoring wired into the app** — `POST /api/leagues/[id]/anchor`, `AnchorPanel.tsx`,
   and `readOnlyEscrow()` in `apps/web/src/lib/escrow.ts`. The commissioner signs from
@@ -501,9 +516,12 @@ tests, and every docstring the change falsified rewritten in the same commit:
   `minHumans`, counting humans rather than rows. It was never an Aug 22 blocker; the draft path
   worked throughout.
 
-- **#75/#96 is the Sep 9 blocker.** `syncBoxScores` exists and no cron runs it, so `stat_lines`
-  is empty and **every player scores zero**. #81's adapter defects are latent _only_ because
-  nothing calls `getBoxScore` — land #81 first or in the same pass, or they go live together.
+- **#81 is the Sep 9 blocker, and #75/#96 no longer are.** Corrected 2026-08-17: `#96` is
+  closed and complete, `syncBoxScores` runs from `/api/cron/stats` every ten minutes, and
+  `stat_lines` is empty only because every game is still `SCHEDULED`. The producer exists;
+  what it has never done is run against a real finished game. #81's adapter defects were
+  filed as latent "because nothing calls `getBoxScore`" — something does, so they are live
+  and merely unfired.
 - **#79 part 3 is deferred on purpose.** The analysis is banked in a comment on the issue,
   including the two fixes that look right and are not. Do not "just" enumerate calendar dates.
 
