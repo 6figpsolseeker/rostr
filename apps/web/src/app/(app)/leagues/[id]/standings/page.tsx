@@ -61,21 +61,25 @@ export default async function StandingsPage({ params }: { params: Promise<{ id: 
 
   const Table = ({ rows, caption }: { rows: readonly StandingsRow[]; caption: string }) => (
     <section className="space-y-2">
-      <h2 className="text-sm font-medium text-white/70">{caption}</h2>
-      <ul className="divide-y divide-white/5 rounded border border-white/10">
+      <h2 className="text-sm font-medium text-nocturne-neutral-400">{caption}</h2>
+      <ul className="divide-y divide-nocturne-neutral-900 rounded border border-nocturne-neutral-900">
         {rows.map((row) => {
           const team = byId.get(row.teamId);
           return (
             <li
               key={row.teamId}
               className={`flex items-center gap-3 px-4 py-2.5 text-sm ${
-                row.teamId === mine?.teamId ? "bg-[--color-turf]/5" : ""
+                row.teamId === mine?.teamId ? "border border-nocturne-accent/5" : ""
               }`}
             >
-              <span className="w-6 text-xs text-white/30 tabular-nums">{row.seed}</span>
+              <span className="w-6 text-xs text-nocturne-neutral-600 tabular-nums">
+                {row.seed}
+              </span>
               <span className="min-w-0 flex-1 truncate">
                 {team?.name ?? row.teamId}
-                {team?.is_bot && <span className="ml-2 text-xs text-white/30">bot</span>}
+                {team?.is_bot && (
+                  <span className="ml-2 text-xs text-nocturne-neutral-600">bot</span>
+                )}
               </span>
 
               {/*
@@ -84,7 +88,7 @@ export default async function StandingsPage({ params }: { params: Promise<{ id: 
                 is the one place a manager can see the chain actually applied.
               */}
               {row.decidedBy && (
-                <span className="hidden text-xs text-white/30 sm:inline">
+                <span className="hidden text-xs text-nocturne-neutral-600 sm:inline">
                   on {TIEBREAKER_LABELS[row.decidedBy] ?? row.decidedBy.toLowerCase()}
                 </span>
               )}
@@ -94,7 +98,7 @@ export default async function StandingsPage({ params }: { params: Promise<{ id: 
                 {points(row.milliPointsFor)}
               </span>
               <span
-                className="hidden w-16 text-right text-white/40 tabular-nums sm:inline"
+                className="hidden w-16 text-right text-nocturne-neutral-600 tabular-nums sm:inline"
                 title="Points against"
               >
                 {points(row.milliPointsAgainst)}
@@ -109,11 +113,14 @@ export default async function StandingsPage({ params }: { params: Promise<{ id: 
   return (
     <div className="space-y-6">
       <header className="space-y-1">
-        <a href={`/leagues/${id}`} className="text-xs text-white/40 hover:text-white">
+        <a
+          href={`/leagues/${id}`}
+          className="text-xs text-nocturne-neutral-600 hover:text-nocturne-text"
+        >
           ← {league.name}
         </a>
         <h1 className="text-2xl font-semibold tracking-tight">Standings</h1>
-        <p className="text-sm text-white/50">
+        <p className="text-sm text-nocturne-neutral-500">
           {weeksPlayed === 0
             ? "No weeks scored yet."
             : `Through week ${weeksPlayed} of ${stored.rules.schedule.regularSeasonWeeks}.`}
@@ -127,7 +134,7 @@ export default async function StandingsPage({ params }: { params: Promise<{ id: 
 
       <Table rows={consolationField(standings, playoffTeams)} caption="Consolation bracket" />
 
-      <p className="text-xs text-white/30">
+      <p className="text-xs text-nocturne-neutral-600">
         The consolation bracket is still played. Missing the playoffs is not the end of the
         season.
       </p>

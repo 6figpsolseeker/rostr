@@ -32,7 +32,10 @@ export default async function LineupPage({
   return (
     <div className="space-y-6">
       <header className="space-y-1">
-        <a href={`/leagues/${id}`} className="text-xs text-white/40 hover:text-white">
+        <a
+          href={`/leagues/${id}`}
+          className="text-xs text-nocturne-neutral-600 hover:text-nocturne-text"
+        >
           ← {league.name}
         </a>
         <h1 className="text-2xl font-semibold tracking-tight">Lineup</h1>
@@ -41,11 +44,11 @@ export default async function LineupPage({
       {user ? (
         <LineupEditor leagueId={league.id} week={current} />
       ) : (
-        <section className="space-y-3 rounded border border-white/10 p-6">
-          <p className="text-sm text-white/60">Sign in to set your lineup.</p>
+        <section className="space-y-3 rounded border border-nocturne-neutral-900 p-6">
+          <p className="text-sm text-nocturne-neutral-400">Sign in to set your lineup.</p>
           <a
             href={`/signin?next=${encodeURIComponent(`/leagues/${id}/lineup`)}`}
-            className="inline-block rounded bg-[--color-turf] px-4 py-2 text-sm font-medium text-black"
+            className="inline-block rounded rounded-[4px] border border-nocturne-accent px-4 py-2 text-[13.5px] text-nocturne-accent-200 transition-colors hover:bg-nocturne-accent/10"
           >
             Sign in
           </a>

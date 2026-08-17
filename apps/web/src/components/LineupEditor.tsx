@@ -117,7 +117,7 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
   );
 
   if (error) return <p className="text-sm text-red-400">{error.message}</p>;
-  if (!data) return <p className="text-sm text-white/40">Loading your lineup…</p>;
+  if (!data) return <p className="text-sm text-nocturne-neutral-600">Loading your lineup…</p>;
 
   async function save(next: Slot[]): Promise<void> {
     setSaving(true);
@@ -206,7 +206,7 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
         <span className="text-2xl font-semibold tabular-nums">{points(starterPoints)}</span>
       </header>
 
-      <label className="flex items-start gap-3 rounded border border-white/10 px-4 py-3 text-sm">
+      <label className="flex items-start gap-3 rounded border border-nocturne-neutral-900 px-4 py-3 text-sm">
         <input
           type="checkbox"
           checked={data.autofill.enabled}
@@ -216,7 +216,7 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
         />
         <span>
           <span className="block">Fill my empty slots at kickoff</span>
-          <span className="block text-xs text-white/40">
+          <span className="block text-xs text-nocturne-neutral-600">
             {data.autofill.mode === "WEEKLY_PROJECTION"
               ? "Uses this week's projections. "
               : "Uses each player's season average. "}
@@ -238,7 +238,7 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
         </div>
       )}
 
-      <ul className="divide-y divide-white/5 rounded border border-white/10">
+      <ul className="divide-y divide-nocturne-neutral-900 rounded border border-nocturne-neutral-900">
         {data.slots.map((slot) => {
           const player = slot.playerId ? byId.get(slot.playerId) : null;
           const options = bench.filter((candidate) =>
@@ -250,14 +250,16 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
               key={`${slot.slotType}#${slot.slotIndex}`}
               className="flex items-center gap-3 px-4 py-3"
             >
-              <span className="w-12 text-xs font-medium text-white/50">{slot.slotType}</span>
+              <span className="w-12 text-xs font-medium text-nocturne-neutral-500">
+                {slot.slotType}
+              </span>
 
               <div className="min-w-0 flex-1">
                 <select
                   value={slot.playerId ?? ""}
                   disabled={slot.locked || saving}
                   onChange={(e) => assign(slot, e.target.value || null)}
-                  className="w-full rounded border border-white/15 bg-transparent px-2 py-1.5 text-sm disabled:opacity-50"
+                  className="w-full rounded border border-nocturne-neutral-800 bg-transparent px-2 py-1.5 text-sm disabled:opacity-50"
                 >
                   <option value="">— empty —</option>
                   {player && (
@@ -293,7 +295,7 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
               </div>
 
               <span
-                className={`w-24 text-right text-xs ${slot.locked ? "text-white/30" : "text-white/50"}`}
+                className={`w-24 text-right text-xs ${slot.locked ? "text-nocturne-neutral-600" : "text-nocturne-neutral-500"}`}
                 title={
                   slot.locksAt
                     ? `Locks at ${new Date(slot.locksAt * 1000).toLocaleString()}`
@@ -304,7 +306,7 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
               </span>
 
               <span
-                className="w-12 text-right text-sm tabular-nums text-white/50"
+                className="w-12 text-right text-sm tabular-nums text-nocturne-neutral-500"
                 title="Projected this week"
               >
                 {player?.projectedMilliPoints != null
@@ -321,28 +323,33 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
       </ul>
 
       <section className="space-y-2">
-        <h3 className="text-sm font-medium text-white/70">
-          Bench <span className="text-xs font-normal text-white/30">{bench.length}</span>
+        <h3 className="text-sm font-medium text-nocturne-neutral-400">
+          Bench{" "}
+          <span className="text-xs font-normal text-nocturne-neutral-600">{bench.length}</span>
         </h3>
         <ul className="space-y-1 text-xs">
           {bench.map((player) => (
             <li key={player.playerId} className="flex gap-3">
-              <span className="w-10 text-white/30">{player.positions.join("/")}</span>
+              <span className="w-10 text-nocturne-neutral-600">
+                {player.positions.join("/")}
+              </span>
               <span className="flex-1 truncate">{player.name}</span>
               {OUT_STATUSES.has(player.status.toUpperCase()) && (
                 <span className="text-amber-400/70">{player.status}</span>
               )}
-              {player.kickoffAt === null && <span className="text-white/30">bye</span>}
+              {player.kickoffAt === null && (
+                <span className="text-nocturne-neutral-600">bye</span>
+              )}
               {isBreakout(player) && (
                 <span
-                  className="rounded bg-[--color-turf]/20 px-1 text-[--color-turf]"
+                  className="rounded border border-nocturne-accent/20 px-1 text-nocturne-accent-300"
                   title={`Projected ${points(player.projectedMilliPoints ?? 0)} against a season average of ${points(player.averageMilliPoints ?? 0)}`}
                 >
                   ▲ projected up
                 </span>
               )}
               <span
-                className="w-10 text-right tabular-nums text-white/50"
+                className="w-10 text-right tabular-nums text-nocturne-neutral-500"
                 title="Projected this week"
               >
                 {player.projectedMilliPoints != null
@@ -357,7 +364,7 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
         </ul>
       </section>
 
-      <p className="text-xs text-white/30">
+      <p className="text-xs text-nocturne-neutral-600">
         Each slot locks when that player&rsquo;s game kicks off, not all at once — so a Thursday
         starter locking does not stop you moving anyone else.
       </p>

@@ -19,10 +19,10 @@ export default async function SignInPage({
     return (
       <div className="space-y-4">
         <h1 className="text-2xl font-semibold tracking-tight">Already signed in</h1>
-        <p className="text-sm text-white/60">
-          You are signed in as <span className="text-white">{user.email}</span>.
+        <p className="text-sm text-nocturne-neutral-400">
+          You are signed in as <span className="text-nocturne-text">{user.email}</span>.
         </p>
-        <a href="/" className="inline-block text-sm text-[--color-turf] hover:underline">
+        <a href="/" className="inline-block text-sm text-nocturne-accent-300 hover:underline">
           Go to leagues
         </a>
       </div>
@@ -33,7 +33,7 @@ export default async function SignInPage({
     <div className="max-w-md space-y-6">
       <div className="space-y-2">
         <h1 className="text-2xl font-semibold tracking-tight">Sign in</h1>
-        <p className="text-sm text-white/60">
+        <p className="text-sm text-nocturne-neutral-400">
           Enter your email and we will send a link. No password to forget or leak.
         </p>
       </div>
@@ -46,7 +46,7 @@ export default async function SignInPage({
 
       <SignInForm next={next ?? "/"} />
 
-      <p className="text-xs text-white/40">
+      <p className="text-xs text-nocturne-neutral-600">
         You will link a wallet after signing in. Email is how we reach you; the wallet is what
         signs your consent to a league&rsquo;s rules and holds any stake. Both are needed.
       </p>

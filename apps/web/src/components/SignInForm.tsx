@@ -41,10 +41,10 @@ export function SignInForm({ next }: { next: string }) {
 
   if (status === "sent") {
     return (
-      <div className="space-y-4 rounded border border-white/10 p-6">
+      <div className="space-y-4 rounded border border-nocturne-neutral-900 p-6">
         <p className="text-sm">
-          If <span className="text-white">{email}</span> can receive mail, a sign-in link is on
-          its way. It works once and expires in 24 hours.
+          If <span className="text-nocturne-text">{email}</span> can receive mail, a sign-in
+          link is on its way. It works once and expires in 24 hours.
         </p>
 
         {devLink && (
@@ -53,7 +53,10 @@ export function SignInForm({ next }: { next: string }) {
               No email provider is configured, so the link is shown here. Development only —
               this never appears in production.
             </p>
-            <a href={devLink} className="block text-xs break-all text-[--color-turf] underline">
+            <a
+              href={devLink}
+              className="block text-xs break-all text-nocturne-accent-300 underline"
+            >
               {devLink}
             </a>
           </div>
@@ -65,25 +68,25 @@ export function SignInForm({ next }: { next: string }) {
   return (
     <form onSubmit={(e) => void submit(e)} className="space-y-4">
       <label className="block text-sm">
-        <span className="mb-1 block text-white/60">Email</span>
+        <span className="mb-1 block text-nocturne-neutral-400">Email</span>
         <input
           type="email"
           required
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="w-full rounded border border-white/15 bg-transparent px-3 py-2"
+          className="w-full rounded border border-nocturne-neutral-800 bg-transparent px-3 py-2"
           placeholder="you@example.com"
         />
       </label>
 
       <label className="block text-sm">
-        <span className="mb-1 block text-white/60">
-          Display name <span className="text-white/30">(optional)</span>
+        <span className="mb-1 block text-nocturne-neutral-400">
+          Display name <span className="text-nocturne-neutral-600">(optional)</span>
         </span>
         <input
           value={displayName}
           onChange={(e) => setDisplayName(e.target.value)}
-          className="w-full rounded border border-white/15 bg-transparent px-3 py-2"
+          className="w-full rounded border border-nocturne-neutral-800 bg-transparent px-3 py-2"
           placeholder="What league-mates see"
         />
       </label>
@@ -91,7 +94,7 @@ export function SignInForm({ next }: { next: string }) {
       <button
         type="submit"
         disabled={status === "sending" || email.trim() === ""}
-        className="rounded bg-[--color-turf] px-4 py-2 text-sm font-medium text-black disabled:opacity-40"
+        className="rounded rounded-[4px] border border-nocturne-accent px-4 py-2 text-[13.5px] text-nocturne-accent-200 transition-colors hover:bg-nocturne-accent/10 disabled:opacity-40"
       >
         {status === "sending" ? "Sending…" : "Send sign-in link"}
       </button>

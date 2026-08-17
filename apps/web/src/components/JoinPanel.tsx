@@ -134,8 +134,10 @@ export function JoinPanel({
   // this would otherwise strand, since `open` counts their own team.
   if (!open && !resumable) {
     return (
-      <section className="rounded border border-white/10 p-6">
-        <p className="text-sm text-white/60">This league is not accepting members.</p>
+      <section className="rounded border border-nocturne-neutral-900 p-6">
+        <p className="text-sm text-nocturne-neutral-400">
+          This league is not accepting members.
+        </p>
       </section>
     );
   }
@@ -146,13 +148,13 @@ export function JoinPanel({
     return (
       <section className="space-y-3 rounded border border-amber-500/30 bg-amber-500/5 p-6">
         <h2 className="text-lg font-medium">Not open yet</h2>
-        <p className="text-sm text-white/70">
+        <p className="text-sm text-nocturne-neutral-400">
           These rules are not on-chain yet, so nobody can verify them — and nobody should agree
           to rules they cannot check. Until they are anchored, the only thing holding them still
           is this website&rsquo;s database, which is the arrangement this whole project exists
           to replace.
         </p>
-        <p className="text-sm text-white/50">
+        <p className="text-sm text-nocturne-neutral-500">
           {isCommissioner
             ? "You created this league, so anchoring it is yours to do."
             : "The commissioner needs to anchor them before anyone joins."}
@@ -163,15 +165,15 @@ export function JoinPanel({
 
   if (!signedIn) {
     return (
-      <section className="space-y-3 rounded border border-white/10 p-6">
+      <section className="space-y-3 rounded border border-nocturne-neutral-900 p-6">
         <h2 className="text-lg font-medium">Join {leagueName}</h2>
-        <p className="text-sm text-white/60">
+        <p className="text-sm text-nocturne-neutral-400">
           Sign in first. Joining records who agreed to these rules, so it needs an account as
           well as a wallet.
         </p>
         <a
           href={`/signin?next=${encodeURIComponent(`/leagues/${leagueId}`)}`}
-          className="inline-block rounded bg-[--color-turf] px-4 py-2 text-sm font-medium text-black"
+          className="inline-block rounded rounded-[4px] border border-nocturne-accent px-4 py-2 text-[13.5px] text-nocturne-accent-200 transition-colors hover:bg-nocturne-accent/10"
         >
           Sign in
         </a>
@@ -420,12 +422,12 @@ export function JoinPanel({
   }
 
   return (
-    <section className="space-y-4 rounded border border-white/10 p-6">
+    <section className="space-y-4 rounded border border-nocturne-neutral-900 p-6">
       <h2 className="text-lg font-medium">Join {leagueName}</h2>
 
       {!connected ? (
         <>
-          <p className="text-sm text-white/60">
+          <p className="text-sm text-nocturne-neutral-400">
             Connect a wallet to sign these rules. Signing is what records your consent — there
             is no checkbox.
           </p>
@@ -433,15 +435,15 @@ export function JoinPanel({
         </>
       ) : !isLinked ? (
         <div className="space-y-3">
-          <p className="text-sm text-white/60">
+          <p className="text-sm text-nocturne-neutral-400">
             Verify this wallet is yours by signing a one-time message. It moves no funds and
             approves no transaction.
           </p>
-          <p className="font-mono text-xs break-all text-white/40">{address}</p>
+          <p className="font-mono text-xs break-all text-nocturne-neutral-600">{address}</p>
           <button
             onClick={() => void linkWallet()}
             disabled={status === "linking"}
-            className="rounded bg-[--color-turf] px-4 py-2 text-sm font-medium text-black disabled:opacity-40"
+            className="rounded rounded-[4px] border border-nocturne-accent px-4 py-2 text-[13.5px] text-nocturne-accent-200 transition-colors hover:bg-nocturne-accent/10 disabled:opacity-40"
           >
             {status === "linking" ? "Waiting for your wallet…" : "Verify this wallet"}
           </button>
@@ -450,16 +452,18 @@ export function JoinPanel({
       ) : (
         <div className="space-y-4">
           {status === "done" ? (
-            <div className="space-y-2 rounded border border-[--color-turf]/30 bg-[--color-turf]/5 p-4">
-              <p className="text-sm text-white/80">
+            <div className="space-y-2 rounded border border-nocturne-accent/30 p-4">
+              <p className="text-sm text-nocturne-text/80">
                 Joined, on both sides. Your consent is recorded here and your{" "}
                 <code className="font-mono text-xs">Membership</code> account exists on-chain.
               </p>
-              <p className="text-xs text-white/40">Reload to see the league as a member.</p>
+              <p className="text-xs text-nocturne-neutral-600">
+                Reload to see the league as a member.
+              </p>
             </div>
           ) : status === "onchain" || status === "onchain-signing" ? (
-            <div className="space-y-3 rounded border border-[--color-turf]/30 bg-[--color-turf]/5 p-4">
-              <p className="text-sm text-white/80">
+            <div className="space-y-3 rounded border border-nocturne-accent/30 p-4">
+              <p className="text-sm text-nocturne-text/80">
                 {hasPot
                   ? "You are in. One approval left: it takes your seat on-chain and stakes your buy-in together, in a single transaction."
                   : "You are in. One approval left, to record your membership on-chain."}
@@ -469,13 +473,13 @@ export function JoinPanel({
                 // transaction reads as a failure when it is the safe outcome — the
                 // alternative leaves a seat taken and unpaid, and there is no
                 // instruction that gives a seat back.
-                <p className="text-xs text-white/40">
+                <p className="text-xs text-nocturne-neutral-600">
                   Both or neither. If the buy-in cannot be covered, the seat is not taken
                   either, and you can try again once your wallet is funded.
                 </p>
               )}
               {sentSignature !== null && (
-                <p className="text-xs text-white/40">
+                <p className="text-xs text-nocturne-neutral-600">
                   Your transaction already landed — this will not ask your wallet again, it just
                   re-sends the confirmation to us.
                 </p>
@@ -483,7 +487,7 @@ export function JoinPanel({
               <button
                 onClick={() => void onchainJoin()}
                 disabled={status === "onchain-signing"}
-                className="rounded bg-[--color-turf] px-4 py-2 text-sm font-medium text-black disabled:opacity-40"
+                className="rounded rounded-[4px] border border-nocturne-accent px-4 py-2 text-[13.5px] text-nocturne-accent-200 transition-colors hover:bg-nocturne-accent/10 disabled:opacity-40"
               >
                 {status === "onchain-signing"
                   ? "Waiting…"
@@ -498,11 +502,11 @@ export function JoinPanel({
           ) : (
             <>
               <label className="block text-sm">
-                <span className="mb-1 block text-white/60">Team name</span>
+                <span className="mb-1 block text-nocturne-neutral-400">Team name</span>
                 <input
                   value={teamName}
                   onChange={(e) => setTeamName(e.target.value)}
-                  className="w-full rounded border border-white/15 bg-transparent px-3 py-2"
+                  className="w-full rounded border border-nocturne-neutral-800 bg-transparent px-3 py-2"
                   placeholder="Your team"
                 />
               </label>
@@ -511,13 +515,13 @@ export function JoinPanel({
                 <button
                   onClick={() => void loadMessage()}
                   disabled={status === "loading" || teamName.trim() === ""}
-                  className="rounded bg-[--color-turf] px-4 py-2 text-sm font-medium text-black disabled:opacity-40"
+                  className="rounded rounded-[4px] border border-nocturne-accent px-4 py-2 text-[13.5px] text-nocturne-accent-200 transition-colors hover:bg-nocturne-accent/10 disabled:opacity-40"
                 >
                   {status === "loading" ? "Loading…" : "Review what you will sign"}
                 </button>
               ) : (
                 <>
-                  <pre className="overflow-x-auto rounded border border-white/10 bg-black/40 p-4 text-xs whitespace-pre-wrap">
+                  <pre className="overflow-x-auto rounded border border-nocturne-neutral-900 bg-black/40 p-4 text-xs whitespace-pre-wrap">
                     {message}
                   </pre>
                   <button
@@ -525,7 +529,7 @@ export function JoinPanel({
                     // `"done"` is handled by its own branch above, so it cannot
                     // reach here — TypeScript narrows it away.
                     disabled={status === "signing"}
-                    className="rounded bg-[--color-turf] px-4 py-2 text-sm font-medium text-black disabled:opacity-40"
+                    className="rounded rounded-[4px] border border-nocturne-accent px-4 py-2 text-[13.5px] text-nocturne-accent-200 transition-colors hover:bg-nocturne-accent/10 disabled:opacity-40"
                   >
                     {status === "signing" ? "Waiting for your wallet…" : "Sign and join"}
                   </button>

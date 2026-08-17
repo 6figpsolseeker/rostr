@@ -143,7 +143,7 @@ export default async function LeaguePage({ params }: { params: Promise<{ id: str
       )}
 
       {league.rules_uri && (
-        <p className="text-xs text-white/40">
+        <p className="text-xs text-nocturne-neutral-600">
           Rule document: <span className="font-mono break-all">{league.rules_uri}</span>
         </p>
       )}

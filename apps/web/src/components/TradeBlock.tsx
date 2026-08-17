@@ -113,7 +113,7 @@ export function TradeBlock({ leagueId }: { leagueId: string }) {
   );
 
   if (error) return <p className="text-sm text-red-400">{error.message}</p>;
-  if (!data) return <p className="text-sm text-white/40">Loading trades…</p>;
+  if (!data) return <p className="text-sm text-nocturne-neutral-600">Loading trades…</p>;
 
   const mine = data.teams.find((team) => team.teamId === data.myTeamId);
   const partner = data.teams.find((team) => team.teamId === withTeam);
@@ -161,9 +161,7 @@ export function TradeBlock({ leagueId }: { leagueId: string }) {
   return (
     <div className="space-y-8">
       {note && (
-        <p className="rounded border border-[--color-turf]/30 bg-[--color-turf]/5 px-4 py-3 text-sm">
-          {note}
-        </p>
+        <p className="rounded border border-nocturne-accent/30 px-4 py-3 text-sm">{note}</p>
       )}
       {failure && (
         <p className="rounded border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
@@ -172,7 +170,7 @@ export function TradeBlock({ leagueId }: { leagueId: string }) {
       )}
 
       {!data.enabled && (
-        <p className="rounded border border-white/10 px-4 py-3 text-sm text-white/60">
+        <p className="rounded border border-nocturne-neutral-900 px-4 py-3 text-sm text-nocturne-neutral-400">
           This league does not allow trades. That was frozen when it was created and cannot be
           changed.
         </p>
@@ -191,9 +189,9 @@ export function TradeBlock({ leagueId }: { leagueId: string }) {
       {/* --------------------------------------------------------------- */}
       {data.enabled && !pastDeadline && mine && (
         <section className="space-y-4">
-          <h2 className="text-sm font-medium text-white/70">Propose a trade</h2>
+          <h2 className="text-sm font-medium text-nocturne-neutral-400">Propose a trade</h2>
 
-          <label className="block text-xs text-white/50">
+          <label className="block text-xs text-nocturne-neutral-500">
             With
             <select
               value={withTeam}
@@ -201,7 +199,7 @@ export function TradeBlock({ leagueId }: { leagueId: string }) {
                 setWithTeam(e.target.value);
                 setTheyGive(new Set());
               }}
-              className="ml-2 rounded border border-white/15 bg-transparent px-2 py-1 text-sm"
+              className="ml-2 rounded border border-nocturne-neutral-800 bg-transparent px-2 py-1 text-sm"
             >
               <option value="">— choose a team —</option>
               {data.teams
@@ -245,14 +243,14 @@ export function TradeBlock({ leagueId }: { leagueId: string }) {
                 )
               }
               disabled={busy || iGive.size === 0 || theyGive.size === 0}
-              className="rounded bg-[--color-turf] px-4 py-2 text-sm font-medium text-black disabled:opacity-30"
+              className="rounded rounded-[4px] border border-nocturne-accent px-4 py-2 text-[13.5px] text-nocturne-accent-200 transition-colors hover:bg-nocturne-accent/10 disabled:opacity-30"
             >
               Send offer
             </button>
           )}
 
           {partner && (iGive.size === 0 || theyGive.size === 0) && (
-            <p className="text-xs text-white/40">
+            <p className="text-xs text-nocturne-neutral-600">
               Both sides have to give somebody up — a one-way transfer is not a trade.
             </p>
           )}
@@ -263,8 +261,10 @@ export function TradeBlock({ leagueId }: { leagueId: string }) {
       {/* Live trades                                                      */}
       {/* --------------------------------------------------------------- */}
       <section className="space-y-3">
-        <h2 className="text-sm font-medium text-white/70">Open trades</h2>
-        {open.length === 0 && <p className="text-sm text-white/40">Nothing on the table.</p>}
+        <h2 className="text-sm font-medium text-nocturne-neutral-400">Open trades</h2>
+        {open.length === 0 && (
+          <p className="text-sm text-nocturne-neutral-600">Nothing on the table.</p>
+        )}
 
         <ul className="space-y-3">
           {open.map((trade) => {
@@ -272,7 +272,10 @@ export function TradeBlock({ leagueId }: { leagueId: string }) {
               trade.proposerTeamId === data.myTeamId || trade.receiverTeamId === data.myTeamId;
 
             return (
-              <li key={trade.tradeId} className="space-y-3 rounded border border-white/10 p-4">
+              <li
+                key={trade.tradeId}
+                className="space-y-3 rounded border border-nocturne-neutral-900 p-4"
+              >
                 <div className="grid gap-2 text-sm sm:grid-cols-2">
                   <Side
                     label={teamNames.get(trade.proposerTeamId) ?? "?"}
@@ -285,7 +288,7 @@ export function TradeBlock({ leagueId }: { leagueId: string }) {
                 </div>
 
                 {trade.state === "ACCEPTED" && (
-                  <p className="text-xs text-white/50">
+                  <p className="text-xs text-nocturne-neutral-500">
                     Accepted — {closesIn(trade.vetoDeadline)}.{" "}
                     <span className={trade.vetoes > 0 ? "text-amber-300/80" : ""}>
                       {trade.vetoes} of {trade.vetoesRequired} vetoes
@@ -305,7 +308,7 @@ export function TradeBlock({ leagueId }: { leagueId: string }) {
                           )
                         }
                         disabled={busy}
-                        className="rounded bg-[--color-turf] px-3 py-1 text-xs font-medium text-black disabled:opacity-30"
+                        className="rounded border border-nocturne-accent px-3 py-1 text-xs font-medium text-black disabled:opacity-30"
                       >
                         Accept
                       </button>
@@ -314,7 +317,7 @@ export function TradeBlock({ leagueId }: { leagueId: string }) {
                           void act({ action: "DECLINE", tradeId: trade.tradeId }, "Declined.")
                         }
                         disabled={busy}
-                        className="rounded border border-white/15 px-3 py-1 text-xs disabled:opacity-30"
+                        className="rounded border border-nocturne-neutral-800 px-3 py-1 text-xs disabled:opacity-30"
                       >
                         Decline
                       </button>
@@ -327,7 +330,7 @@ export function TradeBlock({ leagueId }: { leagueId: string }) {
                         void act({ action: "WITHDRAW", tradeId: trade.tradeId }, "Withdrawn.")
                       }
                       disabled={busy}
-                      className="rounded border border-white/15 px-3 py-1 text-xs disabled:opacity-30"
+                      className="rounded border border-nocturne-neutral-800 px-3 py-1 text-xs disabled:opacity-30"
                     >
                       Withdraw
                     </button>
@@ -353,8 +356,8 @@ export function TradeBlock({ leagueId }: { leagueId: string }) {
 
       {settled.length > 0 && (
         <section className="space-y-2">
-          <h2 className="text-sm font-medium text-white/70">Settled</h2>
-          <ul className="space-y-1 text-xs text-white/50">
+          <h2 className="text-sm font-medium text-nocturne-neutral-400">Settled</h2>
+          <ul className="space-y-1 text-xs text-nocturne-neutral-500">
             {settled.map((trade) => (
               <li key={trade.tradeId} className="flex gap-2">
                 <span className="w-20 shrink-0 uppercase tracking-wide">
@@ -388,13 +391,13 @@ function Roster({
 }) {
   return (
     <div className="space-y-1">
-      <h3 className="text-xs font-medium text-white/50">{title}</h3>
-      <ul className="divide-y divide-white/5 rounded border border-white/10">
+      <h3 className="text-xs font-medium text-nocturne-neutral-500">{title}</h3>
+      <ul className="divide-y divide-nocturne-neutral-900 rounded border border-nocturne-neutral-900">
         {players.map((player) => (
           <li key={player.playerId}>
             <label
               className={`flex items-center gap-2 px-3 py-2 text-sm ${
-                player.locked ? "opacity-40" : "cursor-pointer hover:bg-white/5"
+                player.locked ? "opacity-40" : "cursor-pointer hover:bg-nocturne-surface"
               }`}
             >
               <input
@@ -403,9 +406,11 @@ function Roster({
                 onChange={() => onToggle(player.playerId)}
                 disabled={player.locked}
               />
-              <span className="w-9 text-xs text-white/40">{player.position}</span>
+              <span className="w-9 text-xs text-nocturne-neutral-600">{player.position}</span>
               <span className="flex-1 truncate">{player.name}</span>
-              {player.locked && <span className="text-xs text-white/30">in a trade</span>}
+              {player.locked && (
+                <span className="text-xs text-nocturne-neutral-600">in a trade</span>
+              )}
             </label>
           </li>
         ))}
@@ -417,7 +422,7 @@ function Roster({
 function Side({ label, players }: { label: string; players: string[] }) {
   return (
     <div>
-      <p className="text-xs text-white/40">{label} gives</p>
+      <p className="text-xs text-nocturne-neutral-600">{label} gives</p>
       <p>{players.join(", ") || "—"}</p>
     </div>
   );
