@@ -303,8 +303,11 @@ export const ESCROW_IDL: EscrowIdl = {
         {
           "name": "payer",
           "docs": [
-            "Pays rent. Holds no privileges afterwards — creating a league is not a",
-            "role, and this key is not recorded on the account."
+            "Pays rent, and is recorded as `league.commissioner`.",
+            "",
+            "This used to say the key held no privileges afterwards and was not",
+            "recorded. It is now recorded, and it holds exactly one: `start_season`.",
+            "That instruction changes no term and moves no token — see the field."
           ],
           "writable": true,
           "signer": true
@@ -557,6 +560,89 @@ export const ESCROW_IDL: EscrowIdl = {
         }
       ],
       "args": []
+    },
+    {
+      "name": "start_season",
+      "docs": [
+        "Declare that this league's season has begun, closing the failed-league",
+        "refund.",
+        "",
+        "## What this is for",
+        "",
+        "A league that is not ready at its draft time — short of its buy-ins, or",
+        "with an odd field — must give everyone their money back **then**, not in",
+        "six months. But this program cannot tell a failed league from a running",
+        "one: the roster, the draft and who has paid are Postgres facts, and",
+        "`rules_hash` is 32 opaque bytes to it. Something has to say so.",
+        "",
+        "So the default is failure. A league that was ready calls this inside its",
+        "grace window; a league that was not never does, and its members are",
+        "released automatically. **Doing nothing returns the money.**",
+        "",
+        "## The window is the whole safety argument",
+        "",
+        "This is illegal from exactly the instant the failed-league refund becomes",
+        "legal, so the two can never both be available. A league therefore cannot",
+        "be started with a partly-drained vault, and a member cannot be refunded",
+        "out of a season that has begun — the halves are complements rather than",
+        "two checks that have to agree with each other.",
+        "",
+        "## What it cannot do",
+        "",
+        "It changes no term, moves no token, and names no winner. Its only effect",
+        "is which of two refund schedules the members are on, and both of those",
+        "end with the member holding their own money. `drawDraftOrder` refuses to",
+        "draw a pot league until this has landed, which is what stops a",
+        "commissioner running a season with the escape hatch still open.",
+        "",
+        "Free leagues are excluded rather than exempted: no vault, so nothing to",
+        "release and nothing to protect."
+      ],
+      "discriminator": [
+        152,
+        173,
+        197,
+        144,
+        221,
+        79,
+        236,
+        62
+      ],
+      "accounts": [
+        {
+          "name": "league",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  101,
+                  97,
+                  103,
+                  117,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "league.league_id",
+                "account": "League"
+              }
+            ]
+          }
+        },
+        {
+          "name": "commissioner",
+          "docs": [
+            "The wallet that created the league. No other key can start a season, and",
+            "this one can do nothing else."
+          ],
+          "signer": true
+        }
+      ],
+      "args": []
     }
   ],
   "accounts": [
@@ -707,6 +793,31 @@ export const ESCROW_IDL: EscrowIdl = {
       "code": 6023,
       "name": "RefundUnlockTooFar",
       "msg": "Refund unlock time is too far in the future"
+    },
+    {
+      "code": 6024,
+      "name": "NotCommissioner",
+      "msg": "Only the wallet that created this league may start its season"
+    },
+    {
+      "code": 6025,
+      "name": "AlreadyStarted",
+      "msg": "This league's season has already started"
+    },
+    {
+      "code": 6026,
+      "name": "StartWindowClosed",
+      "msg": "The window to start this season has closed; its members may now be refunded"
+    },
+    {
+      "code": 6027,
+      "name": "StartDeadlineNotInFuture",
+      "msg": "The start deadline must be in the future"
+    },
+    {
+      "code": 6028,
+      "name": "StartDeadlineAfterRefundUnlock",
+      "msg": "The start deadline must fall before the refund unlock"
     }
   ],
   "types": [
@@ -791,6 +902,14 @@ export const ESCROW_IDL: EscrowIdl = {
           {
             "name": "max_teams",
             "type": "u8"
+          },
+          {
+            "name": "start_deadline",
+            "docs": [
+              "When the season must be declared started by. Appended, so the argument",
+              "order is stable. See the field on `League`."
+            ],
+            "type": "i64"
           }
         ]
       }
@@ -800,10 +919,16 @@ export const ESCROW_IDL: EscrowIdl = {
       "docs": [
         "The terms of a league, frozen at creation.",
         "",
-        "Deliberately absent: a commissioner authority. Nothing in this account may",
-        "change, so there is nobody who needs the right to change it. Adding an",
-        "authority field would create the exact attack docs/DECISIONS.md §",
-        "\"Commissioner powers are bounded by the contract\" exists to remove."
+        "**No term may change, and there is no authority that could change one.** That",
+        "is what docs/DECISIONS.md § \"Commissioner powers are bounded by the contract\"",
+        "asks for, and it still holds: the buy-in, the fee, its recipient, the payout",
+        "split, the mint and the refund date are written once and read forever.",
+        "",
+        "This paragraph used to say the account had no authority field at all. It has",
+        "one — `commissioner`, whose sole power is `start_season`, and whose sole",
+        "effect is which of two refund schedules a member is on. Both end with them",
+        "holding their own money. See the field for why that was the least bad way to",
+        "let a league that never started give the money back."
       ],
       "type": {
         "kind": "struct",
@@ -916,6 +1041,18 @@ export const ESCROW_IDL: EscrowIdl = {
           {
             "name": "bump",
             "type": "u8"
+          },
+          {
+            "name": "commissioner",
+            "type": "pubkey"
+          },
+          {
+            "name": "start_deadline",
+            "type": "i64"
+          },
+          {
+            "name": "started",
+            "type": "bool"
           }
         ]
       }

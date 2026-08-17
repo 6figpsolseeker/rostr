@@ -19,6 +19,7 @@ import { SystemProgram, type PublicKey, type TransactionInstruction } from "@sol
 
 import { ESCROW_IDL } from "./idl.js";
 import { leagueIdBytes, leaguePda, membershipPda, vaultPda } from "./program.js";
+import { startDeadlineFor } from "./start.js";
 import type { RostrEscrow } from "./types.js";
 
 /**
@@ -73,6 +74,25 @@ export type InitializeLeagueParams = {
    * choose, and a test must be able to express.
    */
   readonly refundUnlockAt: number | string;
+  /**
+   * The frozen draft time, unix seconds.
+   *
+   * Not the deadline itself: `startDeadlineFor` derives that, so the value
+   * anchored and the value `anchorTermMismatches` expects come from one line of
+   * code rather than two that have to agree.
+   */
+  readonly draftScheduledAt: number;
+  /**
+   * The deadline itself, overriding the derivation above.
+   *
+   * **Nothing in the app passes this**, and nothing should: the anchor route
+   * recomputes the expected value from the signed rules and refuses an account
+   * that differs, so a league anchored with anything else is one nobody can
+   * join. It exists for the same reason `refundUnlockAt` accepts a string — a
+   * test has to be able to express a league whose deadline falls in seconds,
+   * which no real draft time can produce.
+   */
+  readonly startDeadline?: number;
   readonly payoutBps: readonly number[];
   readonly feeBps: number;
   readonly feeRecipient: PublicKey;
@@ -97,6 +117,10 @@ export async function initializeLeagueIx(
       feeBps: params.feeBps,
       feeRecipient: params.feeRecipient,
       maxTeams: params.maxTeams,
+      // Derived from the frozen draft time, never chosen. `anchorTermMismatches`
+      // recomputes it from the signed rules and refuses an account that differs,
+      // so this is the only value that can survive the anchor route.
+      startDeadline: new BN(params.startDeadline ?? startDeadlineFor(params.draftScheduledAt)),
     })
     .accountsPartial({
       league,
@@ -187,6 +211,38 @@ export async function depositIx(
         params.memberTokenAccount ?? getAssociatedTokenAddressSync(params.mint, params.member),
       member: params.member,
       tokenProgram: TOKEN_PROGRAM_ID,
+    })
+    .instruction();
+}
+
+export type StartSeasonParams = {
+  readonly leagueId: string;
+  /** The wallet that created the league. No other key can send this. */
+  readonly commissioner: PublicKey;
+};
+
+/**
+ * Declare a league's season started, closing its failed-league refund.
+ *
+ * Sent once, by the commissioner, immediately before the draft order is drawn —
+ * `drawDraftOrder` refuses a pot league until the chain says `started`. Mark
+ * first and draw second, deliberately: drawing first and failing to mark would
+ * leave a live season whose members can withdraw out of it.
+ *
+ * It changes no term and moves no token. Its only effect is which of two refund
+ * schedules the members are on, and both end with them holding their own money.
+ * A league that is never marked releases every stake at its deadline — so the
+ * failure of this transaction is the safe direction, not the dangerous one.
+ */
+export async function startSeasonIx(
+  program: Program<RostrEscrow>,
+  params: StartSeasonParams,
+): Promise<TransactionInstruction> {
+  return program.methods
+    .startSeason()
+    .accountsPartial({
+      league: leaguePda(params.leagueId),
+      commissioner: params.commissioner,
     })
     .instruction();
 }

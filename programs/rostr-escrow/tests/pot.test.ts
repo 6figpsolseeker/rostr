@@ -12,6 +12,7 @@ import {
   refundStakeIx,
   vaultPda as clientVaultPda,
 } from "@rostr/escrow";
+import { START_GRACE_SECONDS } from "@rostr/escrow";
 import { beforeAll, describe, expect, it } from "vitest";
 import {
   type FreeLeagueArgs,
@@ -325,6 +326,11 @@ describe("the @rostr/escrow client", () => {
         mint,
         buyInBaseUnits: String(BUY_IN),
         refundUnlockAt: unlockAt,
+        // The deadline derives as draft + 48h and must land strictly inside the
+        // refund unlock, which this test sets three seconds out so it can sleep
+        // past it. So the draft has to sit a grace window and a little more
+        // before that.
+        draftScheduledAt: unlockAt - START_GRACE_SECONDS - 1,
         payoutBps: payoutArray([
           { prize: "CHAMPION", basisPoints: 6000 },
           { prize: "RUNNER_UP", basisPoints: 1500 },

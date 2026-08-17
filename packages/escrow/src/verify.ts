@@ -22,6 +22,7 @@ import type { Connection, PublicKey } from "@solana/web3.js";
 
 import { payoutArray } from "./instructions.js";
 import { leaguePda, membershipPda } from "./program.js";
+import { startDeadlineFor } from "./start.js";
 import type { RostrEscrow } from "./types.js";
 
 /** A league's frozen terms, as they exist on-chain. */
@@ -50,6 +51,17 @@ export interface OnChainLeague {
   readonly feeRecipient: string;
   /** Payout split in basis points, positional (see `PRIZE_ORDER`). */
   readonly payoutBps: readonly number[];
+  /**
+   * Unix seconds by which the season must be declared started, as a decimal
+   * string — same reasoning as `refundUnlockAt`: it is an `i64` the creator
+   * supplies, so `BN.toNumber()` would throw on the hostile value rather than
+   * letting the comparison that catches it run.
+   */
+  readonly startDeadline: string;
+  /** Whether the season was declared started before that deadline. */
+  readonly started: boolean;
+  /** Base58. The only key with an instruction on this account. */
+  readonly commissioner: string;
   readonly maxTeams: number;
   readonly memberCount: number;
 }
@@ -105,6 +117,9 @@ export async function fetchOnChainLeague(
     payoutBps: number[];
     maxTeams: number;
     memberCount: number;
+    startDeadline: { toString(): string };
+    started: boolean;
+    commissioner: PublicKey;
   };
 
   return {
@@ -117,6 +132,9 @@ export async function fetchOnChainLeague(
     feeBps: raw.feeBps,
     feeRecipient: raw.feeRecipient.toBase58(),
     payoutBps: [...raw.payoutBps],
+    startDeadline: raw.startDeadline.toString(),
+    started: raw.started,
+    commissioner: raw.commissioner.toBase58(),
     maxTeams: raw.maxTeams,
     memberCount: raw.memberCount,
   };
@@ -236,6 +254,19 @@ export interface ExpectedTerms {
   readonly feeBps: number;
   readonly feeRecipient: string;
   readonly payoutBps: readonly number[];
+  /**
+   * Unix seconds, as a decimal string.
+   *
+   * Compared for a **pot league only**, like the money fields — a free league
+   * carries zero, because there is no vault for the deadline to release.
+   *
+   * It belongs in this comparison for the same reason `refundUnlockAt` does:
+   * it decides when money moves. A creator who could anchor a later one than
+   * the rules imply would hold a failed league's stakes past the point members
+   * agreed to, and one who could anchor an earlier one could open the escape
+   * hatch on a league that was about to start.
+   */
+  readonly startDeadline: string;
 }
 
 /**
@@ -248,6 +279,8 @@ export interface ExpectedTerms {
  */
 export interface RulesLikeTerms {
   readonly league: { readonly maxTeams: number };
+  /** The frozen draft time, in unix seconds — `startDeadlineFor` reads it. */
+  readonly draft: { readonly scheduledAt: number };
   readonly pot: {
     readonly tokenMint: string;
     readonly buyInBaseUnits: string;
@@ -278,6 +311,9 @@ export function expectedTermsFromRules(rules: RulesLikeTerms): ExpectedTerms {
     feeBps: pot?.feeBps ?? 0,
     feeRecipient: pot?.feeRecipient ?? "",
     payoutBps: pot ? payoutArray(pot.payout) : [0, 0, 0, 0, 0],
+    // Zero for a free league, matching what `initialize_free_league` writes:
+    // there is no vault, so no deadline could release anything.
+    startDeadline: pot ? String(startDeadlineFor(rules.draft.scheduledAt)) : "0",
   };
 }
 
@@ -317,6 +353,10 @@ export function anchorTermMismatches(
   if (expected.hasPot && onChain.hasPot) {
     ne("buyIn", onChain.buyIn, expected.buyIn);
     ne("refundUnlockAt", onChain.refundUnlockAt, expected.refundUnlockAt);
+    // When a league that never starts releases its stakes. Anchored later than
+    // the rules imply, a failed league's members wait longer than they agreed
+    // to; anchored earlier, the escape hatch opens on a league about to begin.
+    ne("startDeadline", onChain.startDeadline, expected.startDeadline);
     ne("tokenMint", onChain.tokenMint, expected.tokenMint);
     ne("feeBps", onChain.feeBps, expected.feeBps);
 

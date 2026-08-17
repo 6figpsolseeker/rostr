@@ -55,13 +55,16 @@ export {
   joinLeagueIx,
   payoutArray,
   refundStakeIx,
+  startSeasonIx,
   type DepositParams,
   type InitializeFreeLeagueParams,
   type InitializeLeagueParams,
   type JoinLeagueParams,
   type PrizeKey,
   type RefundParams,
+  type StartSeasonParams,
 } from "./instructions.js";
+export { START_GRACE_SECONDS, startDeadlineFor } from "./start.js";
 export {
   ESCROW_PROGRAM_ID,
   leagueAddresses,

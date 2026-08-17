@@ -122,6 +122,7 @@ async function anchorOnChain(
     mint,
     buyInBaseUnits: pot.buyInBaseUnits,
     refundUnlockAt: pot.refundUnlockAt,
+    draftScheduledAt: DRAFT.scheduledAt,
     payoutBps: payoutArray(pot.payout),
     feeBps: pot.feeBps,
     feeRecipient: new anchor.web3.PublicKey(pot.feeRecipient),
@@ -279,6 +280,7 @@ describe("create -> anchor -> join", () => {
       // A year past what the rules say still diverges, which is what this test
       // is for, and is a value initialize_league will now actually accept.
       refundUnlockAt: String(refundUnlockFor(DRAFT.scheduledAt) + 365 * 24 * 3600),
+      draftScheduledAt: DRAFT.scheduledAt,
       payoutBps: payoutArray(pot.payout),
       feeBps: pot.feeBps,
       feeRecipient: new anchor.web3.PublicKey(pot.feeRecipient),

@@ -14,6 +14,10 @@ const TODAY = [
   "initialize_league",
   "join_league",
   "refund_stake",
+  // Added 2026-08-17 with the failed-league refund (#170). It closes a refund
+  // window; it pays nobody, so the gate below must stay shut — see the test
+  // that says so explicitly.
+  "start_season",
 ];
 
 const settled = { instructions: [...TODAY, "settle_league"].map((name) => ({ name })) };
@@ -21,6 +25,26 @@ const settled = { instructions: [...TODAY, "settle_league"].map((name) => ({ nam
 describe("settlementShipped", () => {
   it("is false for the program as it stands", () => {
     expect(settlementShipped(ESCROW_IDL)).toBe(false);
+  });
+
+  /**
+   * `start_season` must never read as settlement, and the margin is one letter.
+   *
+   * `SETTLEMENT_PREFIXES` matches on `startsWith`, and "start" and "settle"
+   * share their first two characters. Had the prefixes been looser — "s", or a
+   * substring match — adding this instruction would have silently opened the
+   * mainnet deposit gate on a program that still cannot pay a pot out, which is
+   * the exact failure the gate exists to prevent.
+   *
+   * It closes a refund window. It moves nothing to anybody.
+   */
+  it("does not count start_season, which pays nobody", () => {
+    expect(instructionNames(ESCROW_IDL)).toContain("start_season");
+    expect(settlementShipped(ESCROW_IDL)).toBe(false);
+    expect(potDepositGate("mainnet-beta", ESCROW_IDL)).toEqual({
+      open: false,
+      reason: "SETTLEMENT_NOT_SHIPPED",
+    });
   });
 
   it("is true once an instruction that pays a pot out exists", () => {

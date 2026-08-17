@@ -54,6 +54,7 @@ export type InitArgs = {
   feeBps: number;
   feeRecipient: anchor.web3.PublicKey;
   maxTeams: number;
+  startDeadline: anchor.BN;
 };
 
 export type FreeLeagueArgs = {
@@ -110,18 +111,60 @@ export const membershipPda = (
     program.programId,
   )[0];
 
-export const validArgs = (overrides: Partial<InitArgs> = {}): InitArgs => ({
-  leagueId: freshLeagueId(),
-  // Any non-zero 32 bytes stands in for a real SHA-256 of the canonical rules.
-  rulesHash: Array.from({ length: 32 }, (_, i) => (i + 1) % 256),
-  buyIn: new anchor.BN(10_000_000),
-  refundUnlockAt: new anchor.BN(Math.floor(Date.now() / 1000) + 365 * 24 * 3600),
-  payoutBps: [...DEFAULT_PAYOUT],
-  feeBps: DEFAULT_FEE_BPS,
-  feeRecipient: anchor.web3.Keypair.generate().publicKey,
-  maxTeams: 12,
-  ...overrides,
-});
+export const validArgs = (overrides: Partial<InitArgs> = {}): InitArgs => {
+  const base = {
+    leagueId: freshLeagueId(),
+    // Any non-zero 32 bytes stands in for a real SHA-256 of the canonical rules.
+    rulesHash: Array.from({ length: 32 }, (_, i) => (i + 1) % 256),
+    buyIn: new anchor.BN(10_000_000),
+    refundUnlockAt: new anchor.BN(Math.floor(Date.now() / 1000) + 365 * 24 * 3600),
+    payoutBps: [...DEFAULT_PAYOUT],
+    feeBps: DEFAULT_FEE_BPS,
+    feeRecipient: anchor.web3.Keypair.generate().publicKey,
+    maxTeams: 12,
+    ...overrides,
+  };
+
+  /*
+    The start deadline has to stay strictly inside the refund unlock, and many
+    tests here override the unlock to a few seconds out so they can sleep past
+    it. A fixed default would make every one of those fail at `initialize_league`
+    with `StartDeadlineAfterRefundUnlock` — so derive it from whatever unlock the
+    caller actually chose.
+
+    A week out for a realistic league; one second inside the unlock for the short
+    ones. Both satisfy `now < start_deadline < refund_unlock_at`.
+  */
+  // BN arithmetic throughout, never `.toNumber()`: one test deliberately passes
+  // `i64::MAX` as the unlock, and bn.js throws above 53 bits — which would abort
+  // that test here, in the fixture, instead of reaching the ceiling it exists to
+  // prove.
+  const week = new anchor.BN(Math.floor(Date.now() / 1000) + 7 * 24 * 3600);
+  const justInside = base.refundUnlockAt.subn(1);
+
+  return {
+    ...base,
+    startDeadline: overrides.startDeadline ?? (justInside.lt(week) ? justInside : week),
+  };
+};
+
+/**
+ * Declare a season started, which is what closes the failed-league refund.
+ *
+ * Signed by the provider wallet, which is the `payer` on `initialize_league` and
+ * therefore the league's recorded commissioner.
+ */
+export const startSeason = async (
+  program: anchor.Program,
+  league: anchor.web3.PublicKey,
+  commissioner?: anchor.web3.Keypair,
+): Promise<string> => {
+  const method = program.methods.startSeason().accounts({
+    league,
+    commissioner: commissioner?.publicKey ?? program.provider.publicKey,
+  });
+  return commissioner ? method.signers([commissioner]).rpc() : method.rpc();
+};
 
 export const validFreeArgs = (overrides: Partial<FreeLeagueArgs> = {}): FreeLeagueArgs => ({
   leagueId: freshLeagueId(),

@@ -99,6 +99,7 @@ async function anchorOnChain(
     mint,
     buyInBaseUnits: pot.buyInBaseUnits,
     refundUnlockAt: pot.refundUnlockAt,
+    draftScheduledAt: DRAFT.scheduledAt,
     payoutBps: payoutArray(pot.payout),
     feeBps: pot.feeBps,
     feeRecipient: new anchor.web3.PublicKey(pot.feeRecipient),
