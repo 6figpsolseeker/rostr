@@ -294,6 +294,127 @@ still needs Rust and a decision before Aug 22:
   below. Three independent sources of "which chain", no cross-check, and the most
   dangerous default sitting on the one that signs.
 
+### Handoff, 2026-08-16 — read this before picking anything up
+
+`main` is `1b62b61`, CI green, **no open PRs**, working tree clean, **1349 tests**.
+First commands, in this order:
+
+```bash
+git pull && CI=true corepack pnpm install
+pnpm db:status          # expect: applied through 0029
+pnpm test               # expect: 1349 passed, 2 skipped
+```
+
+**Nine PRs landed** (#150–#154, #161, #162, #164, #166). Three strands:
+
+**1. Scoring now matches ESPN exactly, and the old table was not close.** #154 is a
+breaking change — schemaVersion 5 → 6, new golden hash. Our D/ST paid **10** for a
+shutout against ESPN's **5**, stopped at −4 where ESPN reaches −5, had no
+yards-allowed ladder at all, and field goals stopped at 50+ with no penalty for a
+miss. The old table appears to have been transcribed from a page that has since
+moved.
+
+**Every value came from ESPN's own API, not documentation** — their public pages
+contradict each other and one dates from 2003. `leaguedefaults/3` returns 46
+scoring entries keyed by numeric stat id with **no labels**, so the ids were
+pinned by recomputing every player's weekly total and checking it against the
+total ESPN itself published. **11,507 of 11,507 player-weeks of 2025 reconcile
+exactly.** Do not re-derive this from a blog; the method is the only reason the
+numbers are trustworthy.
+
+Two scoring bugs fixed on the way, both found by comparing a full season against
+Sleeper and then verifying against ESPN's play-by-play:
+
+- #153 — `ret_td` was credited to `playerIDs[0]` under a comment claiming the
+  returner is named first. False: a successful two-point conversion puts its
+  passer first. **Sam Darnold, a quarterback, was paid 6 points for a punt
+  return** and the receiver who scored it got nothing. It held for 26 of the
+  season's 27 return touchdowns by luck.
+- #161 — a special-teams return touchdown paid the returner and **not the D/ST
+  unit**, which `RULES.md` also pays. Ten occurrences in six weeks.
+
+**2. The design handoff is in the repo** at `docs/design/` — twelve screens,
+thirty-seven states. **Read `docs/design/STATUS.md` before believing anything is
+built.** Two screens are built properly (landing, create league including the
+freeze step); the draft lobby is the owner's own work; **eight were converted
+mechanically** — colour and border tokens only, no layout or structural work, so
+they are consistent but not finished. Mobile (six screens, a genuinely different
+design) and amend-and-dissolve are not started.
+
+**Nothing here has been seen in a browser.** The production build compiles and the
+suite passes, which is not the same thing.
+
+**3. The database was repaired.** Four stat keys were missing after the scoring
+change and `games` was **completely empty** — no schedule at all, which makes
+`weekHasSchedule` false and `setLineup` refuse every lineup. Re-seeded, and the
+2026 season synced: 248 games, 1,017 players on the draft board.
+
+#### What is true about Aug 22, said plainly
+
+**The create → join → draft click-through has still never been done.** It was
+deferred repeatedly in favour of UI work, at the owner's explicit direction. The
+draft room is 778 lines that no test can render — `apps/web` has no jsdom, both
+vitest projects are node-environment — so _nobody knows whether a draft works
+end to end_. That is the deadline risk, not the styling.
+
+Doing it needs **two accounts and two Chrome profiles** (not incognito —
+extensions are disabled there). A league will not draft below `minHumans`, which
+is 2.
+
+#### Traps that cost real time today
+
+- **WSL crashed twice** (`Wsl/Service/E_UNEXPECTED`) and took the dev server with
+  it both times. `wsl --shutdown`, wait, restart.
+- **A dev server started from a tool session does not survive.** It must be run
+  from a terminal the owner keeps open. Symptom: the port answers for a while and
+  then silently stops.
+- **Never run `pnpm --filter @rostr/web build` while a dev server is running.**
+  They share `.next`, and the dev server then 500s with `Cannot find module
+'./vendor-chunks/...'`. Stop the server, `rm -rf apps/web/.next`, restart. This
+  cost an hour and looked like a code bug twice.
+- **`CI=true` is required** for anything running pnpm without a TTY, or it aborts
+  trying to purge `node_modules`.
+- **Stale servers on 3000/3001/3002** made half of them answer and half not. Check
+  which port is actually live before diagnosing anything.
+- **Deleting a league is impossible by design.** Every FK into `leagues` is ON
+  DELETE RESTRICT and `league_rules`/`league_scoring_rules`/`league_roster_slots`
+  carry DELETE triggers. Use the `DISSOLVED` state; four stale test leagues were
+  retired that way.
+
+#### Open issues, in the order worth doing them
+
+- **#165 — creating a league does not join it.** Has a **full implementation plan
+  in a comment**, from three independent reviews: the five-step sequence, why
+  steps 3 and 4 cannot be swapped, the batching trap that would put a seat
+  on-chain before consent, and a recommended sub-hour first slice. Start there.
+  #166 fixed the symptom (a nav offering eight doors that 404); the cause stands.
+- **#157** — provider stats that contradict themselves are ingested silently. Only
+  field goals are cross-checked today. Two cheap checks would have caught both
+  known cases without a season sweep or a second source.
+- **#155** — a two-point conversion receiver scores nothing when the provider omits
+  him from `playerIDs`. Note the obvious fix does not work, and the numeric
+  fields would double-count; the issue explains both.
+- **#160** — make the ESPN conformance check permanent. This is the machinery that
+  found most of the above, and it is most of what `RULES.md` §7's two-source
+  requirement needs.
+- **#158, #159, #163** — blocked-kick recoveries recognised by neither pattern; one
+  unexplained ESPN scoring category; no dissolve anywhere in the product.
+
+#### Corrections to earlier belief, recorded so they are not re-derived
+
+- **Seating the commissioner at creation does NOT close the draft-order grinding
+  hole.** The 1.64 mean pick belongs to whoever joins **last**, not the
+  commissioner specifically. Migration `0028` remains essential. #165's original
+  text claims otherwise and is wrong.
+- **`points allowed` is not the opponent's final score.** `RULES.md` used to say it
+  counted every point including the opponent's defensive scores. That was our rule
+  and is not ESPN's; the sentence was removed rather than reworded. On the game
+  originally cited as proof of a bug, Tank01 matched ESPN exactly.
+- **Renaming a stat key silently zeroes it for every league frozen before the
+  rename.** `fg_50_plus` → `fg_50_59` did exactly that to four leagues in the
+  deployed database. #162 makes stat keys append-only with a test; treat them like
+  migrations.
+
 ### Handoff to the main PC, 2026-08-14 evening
 
 **State on arrival.** `main` is `a9c20cf`, CI green, working tree clean, **no open PRs**, and
