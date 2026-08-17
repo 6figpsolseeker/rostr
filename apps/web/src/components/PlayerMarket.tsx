@@ -90,7 +90,7 @@ export function PlayerMarket({ leagueId }: { leagueId: string }) {
   );
 
   if (error) return <p className="text-sm text-red-400">{error.message}</p>;
-  if (!data) return <p className="text-sm text-white/40">Loading players…</p>;
+  if (!data) return <p className="text-sm text-nocturne-neutral-600">Loading players…</p>;
 
   async function act(body: unknown): Promise<void> {
     setBusy(true);
@@ -139,9 +139,7 @@ export function PlayerMarket({ leagueId }: { leagueId: string }) {
   return (
     <div className="space-y-6">
       {note && (
-        <p className="rounded border border-[--color-turf]/30 bg-[--color-turf]/5 px-4 py-3 text-sm">
-          {note}
-        </p>
+        <p className="rounded border border-nocturne-accent/30 px-4 py-3 text-sm">{note}</p>
       )}
       {failure && (
         <p className="rounded border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
@@ -151,9 +149,9 @@ export function PlayerMarket({ leagueId }: { leagueId: string }) {
 
       {data.claims.length > 0 && (
         <section className="space-y-2">
-          <h2 className="text-sm font-medium text-white/70">
+          <h2 className="text-sm font-medium text-nocturne-neutral-400">
             Your pending claims
-            <span className="ml-2 text-xs font-normal text-white/30">
+            <span className="ml-2 text-xs font-normal text-nocturne-neutral-600">
               blind — nobody sees them until they resolve
             </span>
           </h2>
@@ -167,7 +165,7 @@ export function PlayerMarket({ leagueId }: { leagueId: string }) {
                 <button
                   onClick={() => void act({ action: "CANCEL_CLAIM", claimId: claim.claimId })}
                   disabled={busy}
-                  className="text-white/40 hover:text-white disabled:opacity-30"
+                  className="text-nocturne-neutral-600 hover:text-nocturne-text disabled:opacity-30"
                 >
                   withdraw
                 </button>
@@ -185,8 +183,8 @@ export function PlayerMarket({ leagueId }: { leagueId: string }) {
               onClick={() => setPosition(slot)}
               className={`rounded px-2.5 py-1 text-xs font-medium ${
                 position === slot
-                  ? "bg-[--color-turf] text-black"
-                  : "border border-white/15 text-white/70 hover:text-white"
+                  ? "border border-nocturne-accent text-nocturne-accent-200"
+                  : "border border-nocturne-neutral-800 text-nocturne-neutral-400 hover:text-nocturne-text"
               }`}
             >
               {slot}
@@ -196,16 +194,16 @@ export function PlayerMarket({ leagueId }: { leagueId: string }) {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search"
-            className="ml-auto w-40 rounded border border-white/15 bg-transparent px-3 py-1 text-sm"
+            className="ml-auto w-40 rounded border border-nocturne-neutral-800 bg-transparent px-3 py-1 text-sm"
           />
         </div>
 
-        <label className="block text-xs text-white/50">
+        <label className="block text-xs text-nocturne-neutral-500">
           Drop to make room (optional)
           <select
             value={dropWith}
             onChange={(e) => setDropWith(e.target.value)}
-            className="ml-2 rounded border border-white/15 bg-transparent px-2 py-1 text-sm"
+            className="ml-2 rounded border border-nocturne-neutral-800 bg-transparent px-2 py-1 text-sm"
           >
             <option value="">— nobody —</option>
             {data.roster.map((player) => (
@@ -216,10 +214,12 @@ export function PlayerMarket({ leagueId }: { leagueId: string }) {
           </select>
         </label>
 
-        <ul className="divide-y divide-white/5 rounded border border-white/10">
+        <ul className="divide-y divide-nocturne-neutral-900 rounded border border-nocturne-neutral-900">
           {shown.map((player) => (
             <li key={player.playerId} className="flex items-center gap-3 px-4 py-2.5">
-              <span className="w-12 text-xs text-white/40">{player.positions.join("/")}</span>
+              <span className="w-12 text-xs text-nocturne-neutral-600">
+                {player.positions.join("/")}
+              </span>
               <span className="flex-1 truncate text-sm">{player.name}</span>
 
               {player.availability === "ON_WAIVERS" && (
@@ -235,7 +235,7 @@ export function PlayerMarket({ leagueId }: { leagueId: string }) {
                   })
                 }
                 disabled={busy || claimedIds.has(player.playerId)}
-                className="rounded bg-[--color-turf] px-3 py-1 text-xs font-medium text-black disabled:opacity-30"
+                className="rounded border border-nocturne-accent px-3 py-1 text-xs font-medium text-black disabled:opacity-30"
               >
                 {claimedIds.has(player.playerId)
                   ? "Claimed"
@@ -249,16 +249,16 @@ export function PlayerMarket({ leagueId }: { leagueId: string }) {
       </section>
 
       <section className="space-y-2">
-        <h2 className="text-sm font-medium text-white/70">Your roster</h2>
-        <ul className="divide-y divide-white/5 rounded border border-white/10">
+        <h2 className="text-sm font-medium text-nocturne-neutral-400">Your roster</h2>
+        <ul className="divide-y divide-nocturne-neutral-900 rounded border border-nocturne-neutral-900">
           {data.roster.map((player) => (
             <li key={player.playerId} className="flex items-center gap-3 px-4 py-2 text-sm">
-              <span className="w-12 text-xs text-white/40">{player.position}</span>
+              <span className="w-12 text-xs text-nocturne-neutral-600">{player.position}</span>
               <span className="flex-1 truncate">{player.name}</span>
               <button
                 onClick={() => void act({ action: "DROP", playerId: player.playerId })}
                 disabled={busy}
-                className="rounded border border-white/15 px-2 py-1 text-xs text-white/60 hover:text-white disabled:opacity-30"
+                className="rounded border border-nocturne-neutral-800 px-2 py-1 text-xs text-nocturne-neutral-400 hover:text-nocturne-text disabled:opacity-30"
               >
                 Drop
               </button>
@@ -267,7 +267,7 @@ export function PlayerMarket({ leagueId }: { leagueId: string }) {
         </ul>
       </section>
 
-      <p className="text-xs text-white/30">
+      <p className="text-xs text-nocturne-neutral-600">
         A player you drop goes to waivers unless you held him less than a day, in which case he
         is a free agent immediately. That rule stops anyone adding a player, cutting him, and
         re-adding him to skip the queue.

@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="_ds/nocturne-2cbfcdf4-7e1c-4bfa-8626-a61405078160/styles.css">
+<script src="_ds/nocturne-2cbfcdf4-7e1c-4bfa-8626-a61405078160/_ds_bundle.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
+<style>
+  html, body { margin: 0; padding: 0; background: var(--color-bg); }
+  body { font-family: var(--font-body); color: var(--color-text); -webkit-font-smoothing: antialiased; }
+  * { box-sizing: border-box; }
+  a { color: var(--color-accent); text-decoration: none; }
+  a:hover { color: var(--color-accent-400); }
+  a:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+</style>
+</helmet>
+
+<div style="background: var(--color-bg); min-width: 1280px;">
+
+  <div style="display: flex; align-items: baseline; gap: 14px; padding: 30px 28px 14px;">
+    <span style="font-family: ui-monospace, monospace; font-size: 11px; letter-spacing: 0.1em; color: var(--color-accent-500);">STATE 1</span>
+    <span style="font-family: var(--font-heading); font-size: 17px; font-weight: 500; letter-spacing: -0.02em;">Lobby — before the draw</span>
+    <span style="font-size: 13px; color: var(--color-neutral-600);">The order does not exist yet, and that is the point</span>
+  </div>
+  <div data-screen-label="Draft lobby" style="background: var(--color-bg); min-height: 100vh; min-width: 1280px; padding-bottom: 56px;">
+    <header style="display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 12px 28px; border-bottom: 1px solid var(--color-neutral-900);">
+      <div style="display: flex; align-items: center; gap: 18px;">
+        <span style="font-family: var(--font-heading); font-size: 17px; font-weight: 600; letter-spacing: -0.02em;">rostr</span>
+        <span style="width: 1px; height: 18px; background: var(--color-neutral-800);"></span>
+        <span style="font-size: 14.5px;">Dynasty of Dropped Passes</span>
+        <span style="font-size: 12px; color: var(--color-neutral-600);">Draft lobby</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <span class="tag tag-accent" style="font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase;">Rules frozen</span>
+        <span style="font-family: ui-monospace, monospace; font-size: 11.5px; color: var(--color-neutral-600);">0x7f3a…c19d</span>
+        <span style="width: 1px; height: 18px; background: var(--color-neutral-800);"></span>
+        <span style="font-family: ui-monospace, monospace; font-size: 12px; color: var(--color-neutral-400);">7xKq…4vNb</span>
+      </div>
+    </header>
+
+    <div style="display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 40px; padding: 48px 28px 0; max-width: 1360px; margin: 0 auto;">
+
+      <div style="min-width: 0;">
+        <span style="font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-600); color: var(--color-accent-500);">Waiting for the draw</span>
+        <div style="font-family: var(--font-heading); font-size: 76px; font-weight: 500; line-height: 1; letter-spacing: -0.04em; font-variant-numeric: tabular-nums; margin-top: 14px; color: var(--color-accent-300);">2:31</div>
+        <div style="height: 1px; width: 340px; margin-top: 24px; background: linear-gradient(90deg, var(--color-accent), transparent);"></div>
+        <h1 style="font-family: var(--font-heading); font-size: 30px; font-weight: 500; line-height: 1.14; letter-spacing: -0.026em; margin: 24px 0 0; max-width: 620px;">The order does not exist yet.</h1>
+        <p style="font-size: 15.5px; line-height: 1.62; color: var(--color-neutral-400); margin: 16px 0 0; max-width: 620px; text-wrap: pretty;">At 8:00 PM ET the field locks and the order is drawn from the first Solana block produced at or after that instant. That block has not been produced. Nobody can know the order in advance — not the commissioner, not rostr, not you.</p>
+        <p style="font-size: 15.5px; line-height: 1.62; color: var(--color-neutral-400); margin: 14px 0 0; max-width: 620px; text-wrap: pretty;">This is why the seed is not fixed in advance. If it were, a commissioner could add a bot, compute the resulting order on their own machine, remove it, add a differently-named one, and repeat until the order suited them — every order genuinely correct, the published one entirely normal-looking. They would simply have re-rolled in private.</p>
+
+        <div style="display: flex; gap: 12px; margin-top: 26px; padding: 16px 18px; border-radius: var(--radius-md); background: color-mix(in srgb, var(--color-accent) 8%, transparent); border: 1px solid var(--color-accent-800); max-width: 620px;">
+          <span style="flex: 0 0 auto; width: 5px; height: 5px; margin-top: 7px; border-radius: 50%; background: var(--color-accent);"></span>
+          <p style="font-size: 13px; line-height: 1.6; color: var(--color-accent-200); margin: 0;">The draw happens once. The database rejects a second one, positions cannot be edited, and the field locks the instant it runs — no team may join afterwards, and a late friend cannot be squeezed in.</p>
+        </div>
+
+        <div style="margin-top: 38px;">
+          <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--color-neutral-900); max-width: 620px;">
+            <span style="font-family: var(--font-heading); font-size: 18px; font-weight: 500; letter-spacing: -0.018em;">Who is here</span>
+            <span style="font-size: 12.5px; color: var(--color-neutral-600);">12 teams · 10 present · 2 away</span>
+          </div>
+          <div style="max-width: 620px; margin-top: 4px;">
+            <div style="display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 14px; padding: 11px 0; border-bottom: 1px solid var(--color-neutral-900);">
+              <span style="font-size: 13.5px; color: var(--color-accent-200);">Route 66 <span style="font-size: 11.5px; color: var(--color-neutral-600);">you · commissioner</span></span>
+              <span style="display: flex; align-items: center; gap: 7px; font-size: 11.5px; color: var(--color-accent-300);"><span style="width: 5px; height: 5px; border-radius: 50%; background: var(--color-accent);"></span>Present</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 14px; padding: 11px 0; border-bottom: 1px solid var(--color-neutral-900);">
+              <span style="font-size: 13.5px;">Backfield Ballers</span>
+              <span style="display: flex; align-items: center; gap: 7px; font-size: 11.5px; color: var(--color-neutral-400);"><span style="width: 5px; height: 5px; border-radius: 50%; background: var(--color-neutral-500);"></span>Present</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 14px; padding: 11px 0; border-bottom: 1px solid var(--color-neutral-900);">
+              <span style="font-size: 13.5px;">Hail Mary Inc.</span>
+              <span style="display: flex; align-items: center; gap: 7px; font-size: 11.5px; color: var(--color-neutral-400);"><span style="width: 5px; height: 5px; border-radius: 50%; background: var(--color-neutral-500);"></span>Present</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 14px; padding: 11px 0; border-bottom: 1px solid var(--color-neutral-900);">
+              <span style="font-size: 13.5px;">Pylon Co.</span>
+              <span style="display: flex; align-items: center; gap: 7px; font-size: 11.5px; color: var(--color-neutral-400);"><span style="width: 5px; height: 5px; border-radius: 50%; background: var(--color-neutral-500);"></span>Present</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 14px; padding: 11px 0; border-bottom: 1px solid var(--color-neutral-900);">
+              <span style="font-size: 13.5px;">Tuesday Night Regrets</span>
+              <span style="display: flex; align-items: center; gap: 7px; font-size: 11.5px; color: var(--color-neutral-400);"><span style="width: 5px; height: 5px; border-radius: 50%; background: var(--color-neutral-500);"></span>Present</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 14px; padding: 11px 0; border-bottom: 1px solid var(--color-neutral-900);">
+              <span style="font-size: 13.5px;">Gridiron Heresy</span>
+              <span style="display: flex; align-items: center; gap: 7px; font-size: 11.5px; color: var(--color-neutral-400);"><span style="width: 5px; height: 5px; border-radius: 50%; background: var(--color-neutral-500);"></span>Present</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 14px; padding: 11px 0; border-bottom: 1px solid var(--color-neutral-900);">
+              <span style="font-size: 13.5px;">Fourth and Long</span>
+              <span style="display: flex; align-items: center; gap: 7px; font-size: 11.5px; color: var(--color-neutral-400);"><span style="width: 5px; height: 5px; border-radius: 50%; background: var(--color-neutral-500);"></span>Present</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 14px; padding: 11px 0; border-bottom: 1px solid var(--color-neutral-900);">
+              <span style="font-size: 13.5px; color: var(--color-neutral-500);">Bye Week Blues</span>
+              <span style="display: flex; align-items: center; gap: 7px; font-size: 11.5px; color: var(--color-neutral-600);"><span style="width: 5px; height: 5px; border-radius: 50%; background: var(--color-neutral-700);"></span>Away — auto-pick will cover</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 14px; padding: 11px 0; border-bottom: 1px solid var(--color-neutral-900);">
+              <span style="font-size: 13.5px;">Audibles</span>
+              <span style="display: flex; align-items: center; gap: 7px; font-size: 11.5px; color: var(--color-neutral-400);"><span style="width: 5px; height: 5px; border-radius: 50%; background: var(--color-neutral-500);"></span>Present</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 14px; padding: 11px 0; border-bottom: 1px solid var(--color-neutral-900);">
+              <span style="font-size: 13.5px;">Red Zone Rentals</span>
+              <span style="display: flex; align-items: center; gap: 7px; font-size: 11.5px; color: var(--color-neutral-400);"><span style="width: 5px; height: 5px; border-radius: 50%; background: var(--color-neutral-500);"></span>Present</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 14px; padding: 11px 0; border-bottom: 1px solid var(--color-neutral-900);">
+              <span style="font-size: 13.5px; color: var(--color-neutral-500);">Play Action Only</span>
+              <span style="display: flex; align-items: center; gap: 7px; font-size: 11.5px; color: var(--color-neutral-600);"><span style="width: 5px; height: 5px; border-radius: 50%; background: var(--color-neutral-700);"></span>Away — auto-pick will cover</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 14px; padding: 11px 0;">
+              <span style="font-size: 13.5px;">Cover Two</span>
+              <span style="display: flex; align-items: center; gap: 7px; font-size: 11.5px; color: var(--color-neutral-400);"><span style="width: 5px; height: 5px; border-radius: 50%; background: var(--color-neutral-500);"></span>Present</span>
+            </div>
+          </div>
+          <p style="font-size: 12.5px; line-height: 1.55; color: var(--color-neutral-600); margin: 14px 0 0; max-width: 620px;">Being away does not cost you a pick. The clock is hard and expiry always results in a pick — the highest available player on your queue, or the best available at your most-needed position if the queue is empty.</p>
+        </div>
+      </div>
+
+      <aside style="position: sticky; top: 22px; align-self: start; display: flex; flex-direction: column; gap: 18px;">
+        <div class="card" style="padding: 0; overflow: hidden; background: var(--color-surface);">
+          <div style="padding: 16px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+            <span style="font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-600);">Your queue</span>
+            <p style="font-size: 12.5px; line-height: 1.5; color: var(--color-neutral-500); margin: 8px 0 0;">Build it now. It is what auto-pick reaches for.</p>
+          </div>
+            <div style="display: grid; grid-template-columns: 1fr auto; gap: 14px; padding: 9px 18px; border-bottom: 1px solid var(--color-neutral-900); font-size: 13px;">
+              <span style="color: var(--color-neutral-500);">Players queued</span>
+              <span style="text-align: right;">5</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr auto; gap: 14px; padding: 9px 18px; border-bottom: 1px solid var(--color-neutral-900); font-size: 13px;">
+              <span style="color: var(--color-neutral-500);">Pick clock</span>
+              <span style="text-align: right;">Fast · 90s</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr auto; gap: 14px; padding: 9px 18px; border-bottom: 1px solid var(--color-neutral-900); font-size: 13px;">
+              <span style="color: var(--color-neutral-500);">Auto-pick</span>
+              <span style="text-align: right;">On, and unavoidable</span>
+            </div>
+          <div style="padding: 14px 18px;">
+            <button type="button" class="btn btn-primary btn-block" style="font-size: 13.5px; padding: 10px 0;">Open the queue</button>
+          </div>
+        </div>
+
+        <div class="card" style="padding: 0; overflow: hidden; background: var(--color-surface);">
+          <div style="padding: 16px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+            <span style="font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-600);">Frozen rule set</span>
+          </div>
+            <div style="display: grid; grid-template-columns: 1fr auto; gap: 14px; padding: 9px 18px; border-bottom: 1px solid var(--color-neutral-900); font-size: 13px;">
+              <span style="color: var(--color-neutral-500);">Scoring</span>
+              <span style="text-align: right;">Full PPR</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr auto; gap: 14px; padding: 9px 18px; border-bottom: 1px solid var(--color-neutral-900); font-size: 13px;">
+              <span style="color: var(--color-neutral-500);">Roster</span>
+              <span style="text-align: right;">9 starters · 5 bench · 2 IR</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr auto; gap: 14px; padding: 9px 18px; border-bottom: 1px solid var(--color-neutral-900); font-size: 13px;">
+              <span style="color: var(--color-neutral-500);">Draft</span>
+              <span style="text-align: right;">Snake · 12 teams</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr auto; gap: 14px; padding: 9px 18px; border-bottom: 1px solid var(--color-neutral-900); font-size: 13px;">
+              <span style="color: var(--color-neutral-500);">Pot</span>
+              <span style="text-align: right;">None</span>
+            </div>
+          <div style="padding: 13px 18px; background: color-mix(in srgb, var(--color-accent) 5%, transparent);">
+            <div style="display: flex; align-items: center; justify-content: space-between; font-size: 11.5px;">
+              <span style="color: var(--color-neutral-600);">Rules hash</span>
+              <span style="font-family: ui-monospace, monospace; color: var(--color-accent-300);">0x7f3a…c19d</span>
+            </div>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <div style="height: 1px; margin: 46px 28px; background: linear-gradient(90deg, transparent, var(--color-neutral-800) 12%, var(--color-neutral-800) 88%, transparent);"></div>
+
+  <div style="display: flex; align-items: baseline; gap: 14px; padding: 30px 28px 14px;">
+    <span style="font-family: ui-monospace, monospace; font-size: 11px; letter-spacing: 0.1em; color: var(--color-accent-500);">STATE 2</span>
+    <span style="font-family: var(--font-heading); font-size: 17px; font-weight: 500; letter-spacing: -0.02em;">The draw</span>
+    <span style="font-size: 13px; color: var(--color-neutral-600);">One block, published inputs, anyone can recompute it</span>
+  </div>
+  <div data-screen-label="Order drawn" style="background: var(--color-bg); min-height: 100vh; min-width: 1280px; padding-bottom: 56px;">
+    <header style="display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 12px 28px; border-bottom: 1px solid var(--color-neutral-900);">
+      <div style="display: flex; align-items: center; gap: 18px;">
+        <span style="font-family: var(--font-heading); font-size: 17px; font-weight: 600; letter-spacing: -0.02em;">rostr</span>
+        <span style="width: 1px; height: 18px; background: var(--color-neutral-800);"></span>
+        <span style="font-size: 14.5px;">Dynasty of Dropped Passes</span>
+        <span style="font-size: 12px; color: var(--color-neutral-600);">Draft lobby · order drawn</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <span class="tag tag-accent" style="font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase;">Field locked</span>
+        <span style="font-family: ui-monospace, monospace; font-size: 11.5px; color: var(--color-neutral-600);">0x7f3a…c19d</span>
+        <span style="width: 1px; height: 18px; background: var(--color-neutral-800);"></span>
+        <span style="font-family: ui-monospace, monospace; font-size: 12px; color: var(--color-neutral-400);">7xKq…4vNb</span>
+      </div>
+    </header>
+
+    <div style="display: grid; grid-template-columns: minmax(0, 1fr) 452px; gap: 40px; padding: 44px 28px 0; max-width: 1400px; margin: 0 auto;">
+
+      <div style="min-width: 0;">
+        <span style="font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-600); color: var(--color-accent-500);">Drawn from block 312,884,109</span>
+        <h1 style="font-family: var(--font-heading); font-size: 40px; font-weight: 500; line-height: 1.08; letter-spacing: -0.03em; margin: 12px 0 0;">You pick fourth.</h1>
+        <div style="height: 1px; width: 300px; margin-top: 22px; background: linear-gradient(90deg, var(--color-accent), transparent);"></div>
+        <p style="font-size: 15.5px; line-height: 1.62; color: var(--color-neutral-400); margin: 22px 0 0; max-width: 600px; text-wrap: pretty;">The order came from the first Solana block produced at or after 8:00 PM ET. It was drawn once, the field is locked, and no position can be edited — the database refuses both.</p>
+
+        <div class="card" style="margin-top: 30px; padding: 0; overflow: hidden; background: var(--color-surface);">
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+            <span style="font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-600);">The order</span>
+            <span style="font-size: 11.5px; color: var(--color-neutral-600);">Snake — reverses every round</span>
+          </div>
+            <div style="display: grid; grid-template-columns: 44px 1fr auto; align-items: center; gap: 16px; padding: 13px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+              <span style="font-family: ui-monospace, monospace; font-size: 15px; color: var(--color-neutral-500); font-variant-numeric: tabular-nums;">01</span>
+              <span style="font-size: 14.5px;">Backfield Ballers</span>
+              <span style="font-family: ui-monospace, monospace; font-size: 12px; color: var(--color-neutral-600); font-variant-numeric: tabular-nums;">1.01 · 2.12</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 44px 1fr auto; align-items: center; gap: 16px; padding: 13px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+              <span style="font-family: ui-monospace, monospace; font-size: 15px; color: var(--color-neutral-500); font-variant-numeric: tabular-nums;">02</span>
+              <span style="font-size: 14.5px;">Hail Mary Inc.</span>
+              <span style="font-family: ui-monospace, monospace; font-size: 12px; color: var(--color-neutral-600); font-variant-numeric: tabular-nums;">1.02 · 2.11</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 44px 1fr auto; align-items: center; gap: 16px; padding: 13px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+              <span style="font-family: ui-monospace, monospace; font-size: 15px; color: var(--color-neutral-500); font-variant-numeric: tabular-nums;">03</span>
+              <span style="font-size: 14.5px;">Pylon Co.</span>
+              <span style="font-family: ui-monospace, monospace; font-size: 12px; color: var(--color-neutral-600); font-variant-numeric: tabular-nums;">1.03 · 2.10</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 44px 1fr auto; align-items: center; gap: 16px; padding: 13px 18px; border-bottom: 1px solid var(--color-neutral-900); background: color-mix(in srgb, var(--color-accent) 10%, transparent);">
+              <span style="font-family: ui-monospace, monospace; font-size: 15px; color: var(--color-accent-300); font-variant-numeric: tabular-nums;">04</span>
+              <span style="font-size: 14.5px; color: var(--color-accent-200);">Route 66 <span style="font-size: 11.5px; color: var(--color-accent-500);">you</span></span>
+              <span style="font-family: ui-monospace, monospace; font-size: 12px; color: var(--color-accent-400); font-variant-numeric: tabular-nums;">1.04 · 2.09</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 44px 1fr auto; align-items: center; gap: 16px; padding: 13px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+              <span style="font-family: ui-monospace, monospace; font-size: 15px; color: var(--color-neutral-500); font-variant-numeric: tabular-nums;">05</span>
+              <span style="font-size: 14.5px;">Tuesday Night Regrets</span>
+              <span style="font-family: ui-monospace, monospace; font-size: 12px; color: var(--color-neutral-600); font-variant-numeric: tabular-nums;">1.05 · 2.08</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 44px 1fr auto; align-items: center; gap: 16px; padding: 13px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+              <span style="font-family: ui-monospace, monospace; font-size: 15px; color: var(--color-neutral-500); font-variant-numeric: tabular-nums;">06</span>
+              <span style="font-size: 14.5px;">Gridiron Heresy</span>
+              <span style="font-family: ui-monospace, monospace; font-size: 12px; color: var(--color-neutral-600); font-variant-numeric: tabular-nums;">1.06 · 2.07</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 44px 1fr auto; align-items: center; gap: 16px; padding: 13px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+              <span style="font-family: ui-monospace, monospace; font-size: 15px; color: var(--color-neutral-500); font-variant-numeric: tabular-nums;">07</span>
+              <span style="font-size: 14.5px;">Fourth and Long</span>
+              <span style="font-family: ui-monospace, monospace; font-size: 12px; color: var(--color-neutral-600); font-variant-numeric: tabular-nums;">1.07 · 2.06</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 44px 1fr auto; align-items: center; gap: 16px; padding: 13px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+              <span style="font-family: ui-monospace, monospace; font-size: 15px; color: var(--color-neutral-500); font-variant-numeric: tabular-nums;">08</span>
+              <span style="font-size: 14.5px;">Bye Week Blues</span>
+              <span style="font-family: ui-monospace, monospace; font-size: 12px; color: var(--color-neutral-600); font-variant-numeric: tabular-nums;">1.08 · 2.05</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 44px 1fr auto; align-items: center; gap: 16px; padding: 13px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+              <span style="font-family: ui-monospace, monospace; font-size: 15px; color: var(--color-neutral-500); font-variant-numeric: tabular-nums;">09</span>
+              <span style="font-size: 14.5px;">Audibles</span>
+              <span style="font-family: ui-monospace, monospace; font-size: 12px; color: var(--color-neutral-600); font-variant-numeric: tabular-nums;">1.09 · 2.04</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 44px 1fr auto; align-items: center; gap: 16px; padding: 13px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+              <span style="font-family: ui-monospace, monospace; font-size: 15px; color: var(--color-neutral-500); font-variant-numeric: tabular-nums;">10</span>
+              <span style="font-size: 14.5px;">Red Zone Rentals</span>
+              <span style="font-family: ui-monospace, monospace; font-size: 12px; color: var(--color-neutral-600); font-variant-numeric: tabular-nums;">1.10 · 2.03</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 44px 1fr auto; align-items: center; gap: 16px; padding: 13px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+              <span style="font-family: ui-monospace, monospace; font-size: 15px; color: var(--color-neutral-500); font-variant-numeric: tabular-nums;">11</span>
+              <span style="font-size: 14.5px;">Play Action Only</span>
+              <span style="font-family: ui-monospace, monospace; font-size: 12px; color: var(--color-neutral-600); font-variant-numeric: tabular-nums;">1.11 · 2.02</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 44px 1fr auto; align-items: center; gap: 16px; padding: 13px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+              <span style="font-family: ui-monospace, monospace; font-size: 15px; color: var(--color-neutral-500); font-variant-numeric: tabular-nums;">12</span>
+              <span style="font-size: 14.5px;">Cover Two</span>
+              <span style="font-family: ui-monospace, monospace; font-size: 12px; color: var(--color-neutral-600); font-variant-numeric: tabular-nums;">1.12 · 2.01</span>
+            </div>
+          <div style="padding: 12px 18px; font-size: 11.5px; color: var(--color-neutral-600);">Twelve teams, so round 2 runs 12 back to 01. Your first two picks are 4th and 21st overall.</div>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 14px; margin-top: 26px;">
+          <button type="button" class="btn btn-primary" style="font-size: 14.5px; padding: 12px 22px;">Enter the draft room</button>
+          <span style="font-size: 12.5px; color: var(--color-neutral-500);">First pick in 4:00</span>
+        </div>
+      </div>
+
+      <aside style="position: sticky; top: 22px; align-self: start;">
+        <div class="card elev-md" style="padding: 22px; background: var(--color-surface);">
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <span style="font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-600);">Check it yourself</span>
+            <span class="tag tag-outline" style="font-size: 10px; padding: 2px 7px; color: var(--color-accent-300); border-color: var(--color-accent-700);">Verifiable</span>
+          </div>
+          <p style="font-size: 12.5px; line-height: 1.55; color: var(--color-neutral-400); margin: 11px 0 0;">Look the slot up on any Solana explorer. Confirm its block time is at or after the scheduled draft time and that the block before it is earlier — that makes it the only block this league could have used. Then recompute the shuffle.</p>
+
+          <div style="margin-top: 18px;">
+            <div style="display: grid; grid-template-columns: 148px 1fr; gap: 16px; padding: 11px 0; border-bottom: 1px solid var(--color-neutral-900); font-size: 13px;">
+              <span style="color: var(--color-neutral-500);">Slot</span>
+              <span style="font-family: ui-monospace, monospace; color: var(--color-accent-300); word-break: break-all;">312,884,109</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 148px 1fr; gap: 16px; padding: 11px 0; border-bottom: 1px solid var(--color-neutral-900); font-size: 13px;">
+              <span style="color: var(--color-neutral-500);">Blockhash</span>
+              <span style="font-family: ui-monospace, monospace; color: var(--color-neutral-300); word-break: break-all;">7Yk4mQ…tR9nDs2</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 148px 1fr; gap: 16px; padding: 11px 0; border-bottom: 1px solid var(--color-neutral-900); font-size: 13px;">
+              <span style="color: var(--color-neutral-500);">Block time</span>
+              <span style="font-family: ui-monospace, monospace; color: var(--color-neutral-300); word-break: break-all;">2026-08-22 20:00:03 ET</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 148px 1fr; gap: 16px; padding: 11px 0; border-bottom: 1px solid var(--color-neutral-900); font-size: 13px;">
+              <span style="color: var(--color-neutral-500);">Previous block</span>
+              <span style="font-family: ui-monospace, monospace; color: var(--color-neutral-300); word-break: break-all;">2026-08-22 19:59:58 ET</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 148px 1fr; gap: 16px; padding: 11px 0; border-bottom: 1px solid var(--color-neutral-900); font-size: 13px;">
+              <span style="color: var(--color-neutral-500);">Scheduled</span>
+              <span style="font-family: ui-monospace, monospace; color: var(--color-neutral-300); word-break: break-all;">2026-08-22 20:00:00 ET</span>
+            </div>
+          </div>
+
+          <div style="margin-top: 18px; padding: 13px 15px; border-radius: var(--radius-md); background: color-mix(in srgb, var(--color-accent) 7%, transparent); border: 1px solid var(--color-accent-800);">
+            <span style="font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-600); color: var(--color-accent-500);">The recipe</span>
+            <div style="font-family: ui-monospace, monospace; font-size: 11.5px; line-height: 1.75; color: var(--color-accent-200); margin-top: 9px; word-break: break-all;">seed = sha256("rostr:draft-order:v1:&lt;leagueId&gt;:&lt;rulesHash&gt;:&lt;slot&gt;:&lt;blockhash&gt;")</div>
+            <div style="font-family: ui-monospace, monospace; font-size: 11.5px; line-height: 1.75; color: var(--color-accent-200); margin-top: 7px;">order = snake shuffle over team IDs in join order</div>
+          </div>
+
+          <p style="font-size: 11.5px; line-height: 1.55; color: var(--color-neutral-600); margin: 14px 0 0;">The league ID and rules hash are mixed in, so two leagues drawing from the same block get unrelated orders.</p>
+
+          <div style="display: flex; gap: 10px; margin-top: 16px;">
+            <button type="button" class="btn" style="font-size: 12.5px; padding: 7px 14px; border-color: var(--color-neutral-800); color: var(--color-neutral-300);">Open in explorer</button>
+            <button type="button" class="btn btn-ghost" style="font-size: 12.5px; padding: 7px 14px; color: var(--color-neutral-400);">Copy the inputs</button>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:2200}}"></script>
+</body>
+</html>

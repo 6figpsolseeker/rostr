@@ -181,6 +181,25 @@ export function CreateLeagueForm() {
   const [error, setError] = useState<string | null>(null);
   const [problems, setProblems] = useState<readonly string[]>([]);
 
+  /**
+   * Two steps, and the second is a ceremony rather than a page.
+   *
+   * The design splits creation into the choices and **the freeze** — read the
+   * whole rule set, then sign. Keeping them in one component rather than two
+   * routes is deliberate: the rules being reviewed are built from state that
+   * lives here, and a route boundary would mean either serialising them through
+   * the URL or rebuilding them on the other side, which is a second place for
+   * the previewed hash to diverge from the frozen one.
+   */
+  const [step, setStep] = useState<"configure" | "freeze">("configure");
+
+  /**
+   * Gates the submit. Not decoration: `RULES.md` and this screen both promise
+   * the rules are shown in full before anyone commits, and the commissioner is
+   * the first person that applies to.
+   */
+  const [acknowledged, setAcknowledged] = useState(false);
+
   const clocks = mode === "FAST" ? FAST_CLOCKS : SLOW_CLOCKS;
 
   function changeDraftAt(next: string): void {
@@ -290,270 +309,457 @@ export function CreateLeagueForm() {
     }
   }
 
-  return (
-    <div className="space-y-8">
-      <form onSubmit={(e) => void submit(e)} className="space-y-6">
-        <label className="block text-sm">
-          <span className="mb-1 block text-white/60">League name</span>
-          <input
-            required
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="w-full rounded border border-white/15 bg-transparent px-3 py-2"
-            placeholder="The Money League"
-          />
-        </label>
+  const previewHash = useMemo(() => (preview ? hashLeagueRules(preview) : null), [preview]);
 
-        <fieldset className="space-y-2">
-          <legend className="mb-1 text-sm text-white/60">Who can join</legend>
-          <div className="flex gap-2">
-            {(["PRIVATE", "PUBLIC"] as const).map((option) => (
-              <button
-                key={option}
-                type="button"
-                onClick={() => setVisibility(option)}
-                className={`rounded px-3 py-1.5 text-sm ${
-                  visibility === option
-                    ? "bg-[--color-turf] text-black"
-                    : "border border-white/15 text-white/70"
-                }`}
-              >
-                {option === "PRIVATE" ? "Invite only" : "Anyone"}
-              </button>
-            ))}
-          </div>
-        </fieldset>
+  /**
+   * Which of the ten choices the commissioner has actually made.
+   *
+   * The design shows "8 set · 2 unavailable". `unavailable` is the pot pair —
+   * buy-in and payout — when the cluster has no pot token, which is the honest
+   * reading of a control that is disabled rather than merely untouched.
+   */
+  const potAvailable = POT_MINT !== null;
+  const choicesSet =
+    (name.trim() ? 1 : 0) + 6 + (withPot ? 2 : 0) + (potAvailable && !withPot ? 1 : 0);
 
-        <label className="block text-sm">
-          <span className="mb-1 block text-white/60">Draft date and time</span>
-          <input
-            type="datetime-local"
-            required
-            value={draftAt}
-            onChange={(e) => changeDraftAt(e.target.value)}
-            className="rounded border border-white/15 bg-transparent px-3 py-2"
-          />
-          <span className="mt-1 block text-xs text-white/40">
-            Frozen at creation and it cannot be moved. The draft order is drawn from the first
-            Solana block at or after this moment, so nobody — including you — can know it in
-            advance.
-          </span>
-        </label>
-
-        <fieldset className="space-y-2">
-          <legend className="mb-1 text-sm text-white/60">Draft pace</legend>
-          <div className="flex gap-2">
-            {(["SLOW", "FAST"] as const).map((option) => (
-              <button
-                key={option}
-                type="button"
-                onClick={() => switchMode(option)}
-                className={`rounded px-3 py-1.5 text-sm ${
-                  mode === option
-                    ? "bg-[--color-turf] text-black"
-                    : "border border-white/15 text-white/70"
-                }`}
-              >
-                {option === "SLOW" ? "Slow" : "Fast"}
-              </button>
-            ))}
-          </div>
-          <div className="flex flex-wrap gap-2 pt-1">
-            {clocks.map((clock) => (
-              <button
-                key={clock.seconds}
-                type="button"
-                onClick={() => setPickSeconds(clock.seconds)}
-                className={`rounded px-2.5 py-1 text-xs ${
-                  pickSeconds === clock.seconds
-                    ? "bg-white/15 text-white"
-                    : "border border-white/10 text-white/50"
-                }`}
-              >
-                {clock.label}
-              </button>
-            ))}
-          </div>
-        </fieldset>
-
-        <label className="block text-sm">
-          <span className="mb-1 block text-white/60">Trade deadline</span>
-          <select
-            value={tradeDeadlineWeek}
-            onChange={(e) => setTradeDeadlineWeek(Number(e.target.value))}
-            className="rounded border border-white/15 bg-transparent px-3 py-2"
-          >
-            {TRADE_DEADLINE_WEEKS.map((week) => (
-              <option key={week} value={week}>
-                End of week {week}
-                {week === 11 ? " (default)" : ""}
-              </option>
-            ))}
-          </select>
-          <span className="mt-1 block text-xs text-white/40">
-            Yours to set, once. After it passes nothing can be proposed, and an accepted trade
-            whose veto window closes later expires rather than executing — otherwise an
-            eliminated team could hand its roster to a contender.
-          </span>
-        </label>
-
-        <fieldset className="space-y-3 rounded border border-white/10 p-4">
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={withPot}
-              disabled={!POT_MINT}
-              onChange={(e) => setWithPot(e.target.checked)}
-            />
-            <span className={POT_MINT ? undefined : "text-white/40"}>Play for a pot</span>
-          </label>
-
-          {/*
-            Offered only where there is a token to denominate it in. The server
-            refuses a pot league on such a cluster, so an enabled checkbox here
-            would be a form that submits and fails — and the honest failure is
-            the one shown before anything is typed.
-          */}
-          {!POT_MINT && (
-            <p className="text-xs text-white/40">
-              Pot leagues are unavailable on this network — no pot token is configured for it.
-              Everything else works.
-            </p>
-          )}
-
-          {withPot && POT_MINT ? (
-            <div className="space-y-3">
-              <p className="rounded border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
-                The escrow contract holding this money has <strong>not been audited</strong>. Do
-                not put in more than you can lose. This warning is part of the rule set you and
-                every member sign.
-              </p>
-
-              <label className="block text-sm">
-                <span className="mb-1 block text-white/60">
-                  Buy-in per team (USDC) — {MIN_BUY_IN_USDC} to {MAX_BUY_IN_USDC}
-                </span>
-                {/*
-                  step is cents, not whole dollars. The program accepts any u64 between
-                  the two bounds, so a step of 1 would be the interface inventing a
-                  restriction the rules do not have — $12.50 is a legal pot.
-                */}
-                <input
-                  type="number"
-                  min={MIN_BUY_IN_USDC}
-                  max={MAX_BUY_IN_USDC}
-                  step="0.01"
-                  value={buyIn}
-                  onChange={(e) => setBuyIn(e.target.value)}
-                  className="w-32 rounded border border-white/15 bg-transparent px-3 py-2"
-                />
-                <span className="mt-1 block text-xs text-white/40">
-                  Any amount in that range, cents included. The ceiling is a limit on what a
-                  single league can lose while the escrow is unaudited, not a price.
-                </span>
-              </label>
-
-              {/*
-                Two shapes, both decidable in a league of any size. The old
-                five-way split paid a consolation winner and a third place, and
-                neither exists in a small league — which meant the pot could
-                never settle. See `NFL_DEFAULT_PAYOUT`.
-              */}
-              <fieldset className="block text-sm">
-                <legend className="mb-1 block text-white/60">Prize</legend>
-                <div className="flex flex-col gap-2">
-                  {(
-                    [
-                      [
-                        "SPLIT",
-                        "Split three ways",
-                        "70% champion, 20% runner-up, 10% best record",
-                      ],
-                      ["WINNER_TAKE_ALL", "Winner takes all", "100% to the champion"],
-                    ] as const
-                  ).map(([value, title, detail]) => (
-                    <label key={value} className="flex items-start gap-2">
-                      <input
-                        type="radio"
-                        name="payoutShape"
-                        value={value}
-                        checked={payoutShape === value}
-                        onChange={() => setPayoutShape(value)}
-                        className="mt-1"
-                      />
-                      <span>
-                        <span className="block">{title}</span>
-                        <span className="block text-xs text-white/40">{detail}</span>
-                      </span>
-                    </label>
-                  ))}
-                </div>
-                <span className="mt-1 block text-xs text-white/40">
-                  Frozen with the rest of the rules. Everyone who joins signs this split, and
-                  nobody — including you — can change it afterwards.
-                </span>
-              </fieldset>
-
-              <label className="block text-sm">
-                <span className="mb-1 block text-white/60">Refund unlock</span>
-                <input
-                  type="datetime-local"
-                  value={refundUnlock}
-                  onChange={(e) => {
-                    setRefundTouched(true);
-                    setRefundUnlock(e.target.value);
-                  }}
-                  className="rounded border border-white/15 bg-transparent px-3 py-2"
-                />
-                <span className="mt-1 block text-xs text-white/40">
-                  After this moment any member can withdraw their own stake, whatever state the
-                  league is in. It is the guarantee that funds can never be permanently stuck —
-                  set it comfortably after the championship.
-                </span>
-              </label>
-            </div>
-          ) : (
-            <p className="text-xs text-white/40">
-              A league with no pot plays for nothing but the record. Everything else works the
-              same.
-            </p>
-          )}
-        </fieldset>
-
-        {error && (
-          <div className="space-y-1 rounded border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
-            <p>{error}</p>
-            {problems.length > 0 && (
-              <ul className="list-inside list-disc text-xs">
-                {problems.map((problem) => (
-                  <li key={problem}>{problem}</li>
-                ))}
-              </ul>
-            )}
-          </div>
-        )}
-
+  if (step === "freeze") {
+    return (
+      <div className="mx-auto max-w-[860px]">
         <button
-          type="submit"
-          disabled={submitting || name.trim() === "" || preview === null}
-          className="rounded bg-[--color-turf] px-5 py-2.5 text-sm font-medium text-black disabled:opacity-40"
+          type="button"
+          onClick={() => setStep("configure")}
+          className="text-[13px] text-nocturne-neutral-500 hover:text-nocturne-text"
         >
-          {submitting ? "Creating…" : "Create league and freeze these rules"}
+          &larr; Back to the choices
         </button>
-      </form>
 
-      {preview && (
-        <section className="space-y-4">
-          <div>
-            <h2 className="text-lg font-medium">What you are freezing</h2>
-            <p className="text-sm text-white/50">
-              This updates as you change the settings above. The hash is what every member signs
-              to join, and what goes on chain.
+        <h1 className="mt-6 text-[38px] font-medium leading-[1.08] tracking-[-0.03em]">
+          The freeze
+        </h1>
+        <p className="mt-3 text-[15.5px] leading-[1.6] text-nocturne-neutral-400">
+          Where consent becomes cryptographic — read to the end, then sign.
+        </p>
+
+        <div className="mt-6 flex items-center gap-3 text-[11px] uppercase tracking-[0.14em]">
+          <span className="rounded-[4px] border border-nocturne-accent/40 px-2 py-1 text-nocturne-accent-300">
+            Step 1 of 2 · read
+          </span>
+          {previewHash ? (
+            <span className="font-mono text-[11.5px] normal-case tracking-normal text-nocturne-neutral-600">
+              {previewHash.slice(0, 6)}…{previewHash.slice(-4)}
+            </span>
+          ) : null}
+        </div>
+
+        {/*
+          The rule set, rendered by the same component the league page and the
+          join screen use.
+
+          **Not a copy of the design's table.** The handoff draws every scoring
+          value as literal text, and those values were already a day stale when
+          it arrived — see `docs/design/STATUS.md`. `RulesView` reads
+          `rules.scoring`, so this screen cannot say something the frozen
+          document does not.
+        */}
+        <div className="mt-8 rounded-lg bg-nocturne-surface p-7 shadow-[0_0_0_1px_#292b31]">
+          {preview && previewHash ? (
+            <RulesView rules={preview} hash={previewHash} />
+          ) : (
+            <p className="text-[14px] text-nocturne-neutral-500">
+              The rule set cannot be built from these choices. Go back and check the draft date.
             </p>
-          </div>
-          <RulesView rules={preview} hash={hashLeagueRules(preview)} />
-        </section>
-      )}
+          )}
+        </div>
+
+        <p className="mt-8 text-[13px] text-nocturne-neutral-600">End of the rule set.</p>
+
+        <label className="mt-6 flex items-start gap-3 text-[14.5px] leading-[1.6]">
+          <input
+            type="checkbox"
+            checked={acknowledged}
+            onChange={(e) => setAcknowledged(e.target.checked)}
+            className="mt-1"
+          />
+          <span>
+            I have read the rule set and understand it cannot be changed.
+            <span className="mt-1 block text-[13px] text-nocturne-neutral-600">
+              After this it cannot be amended without unanimous signed consent of every member
+              holding a stake. There is no commissioner override — not now, not later.
+            </span>
+          </span>
+        </label>
+
+        {problems.length > 0 ? (
+          <ul className="mt-6 space-y-1 text-[13.5px] text-nocturne-accent-300">
+            {problems.map((problem) => (
+              <li key={problem}>{problem}</li>
+            ))}
+          </ul>
+        ) : null}
+        {error ? <p className="mt-4 text-[14px] text-nocturne-accent-300">{error}</p> : null}
+
+        <form onSubmit={(e) => void submit(e)} className="mt-8">
+          <button
+            type="submit"
+            disabled={!acknowledged || submitting || !preview}
+            className="rounded-[4px] border border-nocturne-accent px-[26px] py-3 text-[14.5px] text-nocturne-accent-200 transition-colors hover:bg-nocturne-accent/10 disabled:cursor-not-allowed disabled:border-nocturne-neutral-800 disabled:text-nocturne-neutral-600"
+          >
+            {submitting ? "Freezing…" : "Freeze and create the league"}
+          </button>
+        </form>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <h1 className="text-[38px] font-medium leading-[1.08] tracking-[-0.03em]">
+        Create a league
+      </h1>
+      <p className="mt-3 text-[15.5px] text-nocturne-neutral-400">
+        Ten values are yours · everything else is disclosed, not configured
+      </p>
+
+      <div className="mt-11 grid gap-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,380px)] lg:items-start">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            setStep("freeze");
+          }}
+          className="space-y-11"
+        >
+          <Group index="01" title="League">
+            <Field
+              label="League name"
+              hint="Renameable until Week 1, then frozen with everything else."
+            >
+              <input
+                required
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Dynasty of Dropped Passes"
+                className="w-full rounded-[4px] border border-nocturne-neutral-800 bg-transparent px-3 py-2.5 text-[14.5px] outline-none focus:border-nocturne-accent"
+              />
+            </Field>
+
+            <Field label="Visibility" hint="Private is invite only. Public is open join.">
+              <Choices
+                options={[
+                  { value: "PRIVATE", label: "Private" },
+                  { value: "PUBLIC", label: "Public" },
+                ]}
+                value={visibility}
+                onChange={(v) => setVisibility(v as "PRIVATE" | "PUBLIC")}
+              />
+            </Field>
+          </Group>
+
+          <Group index="02" title="Draft" note="Snake, and the order is not yours to draw">
+            <Field
+              label="Scheduled draft time"
+              hint="The order is drawn from the first Solana block at or after this moment, so nobody — including you — can know it in advance. The field locks then too: nobody can join after it."
+            >
+              <input
+                type="datetime-local"
+                required
+                value={draftAt}
+                onChange={(e) => changeDraftAt(e.target.value)}
+                className="rounded-[4px] border border-nocturne-neutral-800 bg-transparent px-3 py-2.5 text-[14.5px] outline-none focus:border-nocturne-accent"
+              />
+            </Field>
+
+            <Field label="Pace" hint="Fast runs in one sitting. Slow runs over days.">
+              <Choices
+                options={[
+                  { value: "FAST", label: "Fast" },
+                  { value: "SLOW", label: "Slow" },
+                ]}
+                value={mode}
+                onChange={(v) => switchMode(v as "FAST" | "SLOW")}
+              />
+            </Field>
+
+            <Field
+              label="Pick clock"
+              hint="90 seconds is the floor. The clock is hard — expiry always results in a pick, so a draft never stalls."
+            >
+              <Choices
+                options={clocks.map((c) => ({ value: String(c.seconds), label: c.label }))}
+                value={String(pickSeconds)}
+                onChange={(v) => setPickSeconds(Number(v))}
+              />
+            </Field>
+          </Group>
+
+          <Group index="03" title="Field" note="Up to 12 teams, minimum 2 humans">
+            <p className="text-[13.5px] leading-[1.62] text-nocturne-neutral-500">
+              One bot is permitted, and only to square an odd field — never in a league with a
+              pot, because a bot has no wallet and paid no buy-in. Add it from the league page
+              once you know how many people turned up.
+            </p>
+          </Group>
+
+          <Group index="04" title="Transactions and lineups">
+            <Field
+              label="Trade deadline"
+              hint="Weeks 8–14. Without a deadline an eliminated team can hand its roster to a contender."
+            >
+              <select
+                value={tradeDeadlineWeek}
+                onChange={(e) => setTradeDeadlineWeek(Number(e.target.value))}
+                className="rounded-[4px] border border-nocturne-neutral-800 bg-nocturne-surface px-3 py-2.5 text-[14.5px] outline-none focus:border-nocturne-accent"
+              >
+                {TRADE_DEADLINE_WEEKS.map((week) => (
+                  <option key={week} value={week}>
+                    End of Week {week}
+                    {week === 11 ? " (default)" : ""}
+                  </option>
+                ))}
+              </select>
+            </Field>
+
+            <Field
+              label="Autofill ranking"
+              hint="How an empty slot is filled at lock, scored under this league's own rules."
+            >
+              <p className="text-[14px] text-nocturne-neutral-400">
+                This week&rsquo;s projection
+              </p>
+            </Field>
+          </Group>
+
+          <Group index="05" title="The pot" note={potAvailable ? "Optional" : "Not live yet"}>
+            <Choices
+              options={[
+                { value: "no", label: "No pot" },
+                { value: "yes", label: "Play for a pot" },
+              ]}
+              value={withPot ? "yes" : "no"}
+              onChange={(v) => setWithPot(v === "yes")}
+              disabled={!potAvailable}
+            />
+
+            {!potAvailable ? (
+              <p className="mt-3 text-[13.5px] leading-[1.62] text-nocturne-neutral-500">
+                This build has no pot token configured, so a pot league cannot be previewed here
+                — and the deposit button stays shut on mainnet until the program can pay a pot
+                back out.
+              </p>
+            ) : null}
+
+            {withPot ? (
+              <div className="mt-5 space-y-5">
+                <Field
+                  label="Buy-in per member"
+                  hint={`Between $${MIN_BUY_IN_USDC} and $${MAX_BUY_IN_USDC}, enforced on chain.`}
+                >
+                  <input
+                    value={buyIn}
+                    onChange={(e) => setBuyIn(e.target.value)}
+                    inputMode="decimal"
+                    className="w-32 rounded-[4px] border border-nocturne-neutral-800 bg-transparent px-3 py-2.5 text-[14.5px] outline-none focus:border-nocturne-accent"
+                  />
+                </Field>
+
+                <Field
+                  label="Payout shape"
+                  hint="The champion holds the largest single share either way. A 1% fee is taken once, at settlement."
+                >
+                  <Choices
+                    options={[
+                      { value: "SPLIT", label: "70 / 20 / 10" },
+                      { value: "WINNER_TAKE_ALL", label: "Winner takes all" },
+                    ]}
+                    value={payoutShape}
+                    onChange={(v) => setPayoutShape(v as "SPLIT" | "WINNER_TAKE_ALL")}
+                  />
+                </Field>
+
+                <Field
+                  label="Refund unlocks"
+                  hint="The unconditional escape hatch. It cannot open before the season can settle, and it is never charged a fee."
+                >
+                  <input
+                    type="datetime-local"
+                    value={refundUnlock}
+                    onChange={(e) => {
+                      setRefundUnlock(e.target.value);
+                      setRefundTouched(true);
+                    }}
+                    className="rounded-[4px] border border-nocturne-neutral-800 bg-transparent px-3 py-2.5 text-[14.5px] outline-none focus:border-nocturne-accent"
+                  />
+                </Field>
+              </div>
+            ) : null}
+          </Group>
+
+          <button
+            type="submit"
+            disabled={!name.trim() || !preview}
+            className="rounded-[4px] border border-nocturne-accent px-[26px] py-3 text-[14.5px] text-nocturne-accent-200 transition-colors hover:bg-nocturne-accent/10 disabled:cursor-not-allowed disabled:border-nocturne-neutral-800 disabled:text-nocturne-neutral-600"
+          >
+            Review and freeze
+          </button>
+        </form>
+
+        {/* The rail: what you cannot set, which is most of it. */}
+        <aside className="space-y-6 lg:sticky lg:top-8">
+          <section className="rounded-lg bg-nocturne-surface p-6 shadow-[0_0_0_1px_#292b31]">
+            <p className="text-[11px] uppercase tracking-[0.14em] text-nocturne-neutral-600">
+              Not yours to set
+            </p>
+            <dl className="mt-4 space-y-3 text-[13.5px] leading-[1.55]">
+              {[
+                ["Scoring", "Full PPR. Frozen at creation, like everything here."],
+                [
+                  "Roster",
+                  "QB, 2 RB, 2 WR, TE, FLEX, K, DEF. Nine starters, five bench, two IR.",
+                ],
+                ["Season", "Weeks 1–14, playoffs 15–17, championship in 17."],
+                ["Tiebreakers", "Fixed and deterministic. A coin flip cannot decide a pot."],
+                ["Waivers", "Rolling priority. Win a claim, go to the back."],
+                [
+                  "Trade veto",
+                  "48-hour window, one third of uninvolved managers. You get no override — not now, not later.",
+                ],
+                [
+                  "Fee",
+                  "1% of the pot, once, at settlement. Nothing on a deposit, nothing on a refund.",
+                ],
+              ].map(([label, value]) => (
+                <div key={label}>
+                  <dt className="text-nocturne-neutral-500">{label}</dt>
+                  <dd className="text-nocturne-neutral-400">{value}</dd>
+                </div>
+              ))}
+            </dl>
+          </section>
+
+          <section className="rounded-lg bg-nocturne-surface p-6 shadow-[0_0_0_1px_#292b31]">
+            <div className="flex items-center justify-between">
+              <p className="text-[11px] uppercase tracking-[0.14em] text-nocturne-neutral-600">
+                Rule set
+              </p>
+              <span className="text-[11.5px] text-nocturne-neutral-600">
+                {choicesSet} set{potAvailable ? "" : " · 2 unavailable"}
+              </span>
+            </div>
+            <dl className="mt-4 space-y-2 text-[13px]">
+              <Summary label="Name" value={name.trim() || "—"} />
+              <Summary
+                label="Visibility"
+                value={visibility === "PRIVATE" ? "Private" : "Public"}
+              />
+              <Summary label="Draft" value={draftAt.replace("T", ", ")} />
+              <Summary
+                label="Pace and clock"
+                value={`${mode === "FAST" ? "Fast" : "Slow"} · ${
+                  clocks.find((c) => c.seconds === pickSeconds)?.label ?? ""
+                }`}
+              />
+              <Summary label="Trade deadline" value={`End of Week ${tradeDeadlineWeek}`} />
+              <Summary label="Pot" value={withPot ? `$${buyIn} buy-in` : "None"} />
+              <Summary
+                label="Rules hash"
+                value={
+                  previewHash
+                    ? `${previewHash.slice(0, 6)}…${previewHash.slice(-4)}`
+                    : "computed at freeze"
+                }
+              />
+            </dl>
+            <p className="mt-4 text-[12.5px] leading-[1.55] text-nocturne-neutral-600">
+              This is the document that gets hashed. Members read it in full before joining.
+            </p>
+          </section>
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+function Group({
+  index,
+  title,
+  note,
+  children,
+}: {
+  index: string;
+  title: string;
+  note?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section>
+      <div className="flex items-baseline gap-3">
+        <span className="font-mono text-[11.5px] text-nocturne-accent-600">{index}</span>
+        <h2 className="text-[19px] font-medium tracking-[-0.018em]">{title}</h2>
+        {note ? <span className="text-[12.5px] text-nocturne-neutral-600">{note}</span> : null}
+      </div>
+      <div className="mt-5 space-y-5">{children}</div>
+    </section>
+  );
+}
+
+function Field({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <p className="mb-2 text-[13px] text-nocturne-neutral-500">{label}</p>
+      {children}
+      {hint ? (
+        <p className="mt-2 max-w-[560px] text-[12.5px] leading-[1.6] text-nocturne-neutral-600">
+          {hint}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function Choices({
+  options,
+  value,
+  onChange,
+  disabled,
+}: {
+  options: readonly { value: string; label: string }[];
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {options.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          disabled={disabled}
+          onClick={() => onChange(option.value)}
+          className={`rounded-[4px] border px-[14px] py-2 text-[13.5px] transition-colors ${
+            value === option.value
+              ? "border-nocturne-accent text-nocturne-accent-200"
+              : "border-nocturne-neutral-800 text-nocturne-neutral-400 hover:text-nocturne-text"
+          } disabled:cursor-not-allowed disabled:border-nocturne-neutral-900 disabled:text-nocturne-neutral-700`}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function Summary({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between gap-4">
+      <dt className="text-nocturne-neutral-600">{label}</dt>
+      <dd className="text-right text-nocturne-neutral-300">{value}</dd>
     </div>
   );
 }

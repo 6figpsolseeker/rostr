@@ -98,7 +98,7 @@ export function Scoreboard({ leagueId }: { leagueId: string }) {
   );
 
   if (error) return <p className="text-sm text-red-400">{error.message}</p>;
-  if (!data) return <p className="text-sm text-white/40">Loading scores…</p>;
+  if (!data) return <p className="text-sm text-nocturne-neutral-600">Loading scores…</p>;
 
   const mine = data.matchups.find(
     (m) => m.home.teamId === data.myTeamId || m.away?.teamId === data.myTeamId,
@@ -116,8 +116,8 @@ export function Scoreboard({ leagueId }: { leagueId: string }) {
             onClick={() => setWeek(n)}
             className={`rounded px-2 py-1 text-xs ${
               data.week === n
-                ? "bg-[--color-turf] text-black"
-                : "border border-white/10 text-white/50 hover:text-white"
+                ? "border border-nocturne-accent text-nocturne-accent-200"
+                : "border border-nocturne-neutral-900 text-nocturne-neutral-500 hover:text-nocturne-text"
             }`}
           >
             {n}
@@ -126,7 +126,7 @@ export function Scoreboard({ leagueId }: { leagueId: string }) {
       </div>
 
       {data.matchups.length === 0 && (
-        <p className="text-sm text-white/40">
+        <p className="text-sm text-nocturne-neutral-600">
           No fixtures for week {data.week}. The schedule is drawn when the draft finishes.
         </p>
       )}
@@ -135,7 +135,7 @@ export function Scoreboard({ leagueId }: { leagueId: string }) {
 
       {others.length > 0 && (
         <section className="space-y-2">
-          <h2 className="text-sm font-medium text-white/70">
+          <h2 className="text-sm font-medium text-nocturne-neutral-400">
             {mine ? "Around the league" : "This week"}
           </h2>
           <ul className="space-y-2">
@@ -158,11 +158,11 @@ function Header({ side, opponent }: { side: Side; opponent: Side | null }) {
 
   return (
     <div className="space-y-0.5">
-      <p className="truncate text-sm text-white/70">{side.name}</p>
-      <p className={`text-3xl font-semibold ${winning ? "text-[--color-turf]" : ""}`}>
+      <p className="truncate text-sm text-nocturne-neutral-400">{side.name}</p>
+      <p className={`text-3xl font-semibold ${winning ? "text-nocturne-accent-300" : ""}`}>
         {points(side.milliPoints)}
       </p>
-      <p className="text-xs text-white/40">
+      <p className="text-xs text-nocturne-neutral-600">
         {side.yetToPlay > 0 && `${side.yetToPlay} still to play`}
         {side.yetToPlay > 0 && side.inProgress > 0 && " · "}
         {side.inProgress > 0 && `${side.inProgress} playing`}
@@ -184,10 +184,10 @@ function FullMatchup({ matchup, myTeamId }: { matchup: Matchup; myTeamId: string
       : [matchup.home, matchup.away];
 
   return (
-    <section className="space-y-4 rounded border border-white/10 p-5">
+    <section className="space-y-4 rounded border border-nocturne-neutral-900 p-5">
       <div className="flex items-start justify-between gap-4">
         <Header side={left} opponent={right} />
-        <div className="pt-6 text-xs text-white/30">
+        <div className="pt-6 text-xs text-nocturne-neutral-600">
           {matchup.phase !== "REGULAR" && (
             <span className="mr-2 uppercase tracking-wide">{matchup.phase.toLowerCase()}</span>
           )}
@@ -198,7 +198,7 @@ function FullMatchup({ matchup, myTeamId }: { matchup: Matchup; myTeamId: string
             <Header side={right} opponent={left} />
           </div>
         ) : (
-          <p className="pt-6 text-sm text-white/40">Bye</p>
+          <p className="pt-6 text-sm text-nocturne-neutral-600">Bye</p>
         )}
       </div>
 
@@ -217,7 +217,7 @@ function FullMatchup({ matchup, myTeamId }: { matchup: Matchup; myTeamId: string
 
       <button
         onClick={() => setShowBench((on) => !on)}
-        className="text-xs text-white/40 hover:text-white"
+        className="text-xs text-nocturne-neutral-600 hover:text-nocturne-text"
       >
         {showBench ? "Hide bench" : "Show bench"}
       </button>
@@ -250,11 +250,11 @@ function Rows({
   const rows = Math.max(left.length, right.length);
 
   return (
-    <ul className={`divide-y divide-white/5 ${muted ? "opacity-50" : ""}`}>
+    <ul className={`divide-y divide-nocturne-neutral-900 ${muted ? "opacity-50" : ""}`}>
       {Array.from({ length: rows }, (_, i) => (
         <li key={i} className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 py-1.5">
           <Player line={left[i]} />
-          <span className="w-10 text-center text-[10px] uppercase tracking-wide text-white/25">
+          <span className="w-10 text-center text-[10px] uppercase tracking-wide text-nocturne-text/25">
             {left[i]?.slot ?? right[i]?.slot ?? ""}
           </span>
           <Player line={right[i]} align="right" />
@@ -266,10 +266,10 @@ function Rows({
 
 function OneSided({ lines, muted = false }: { lines: PlayerLine[]; muted?: boolean }) {
   return (
-    <ul className={`divide-y divide-white/5 ${muted ? "opacity-50" : ""}`}>
+    <ul className={`divide-y divide-nocturne-neutral-900 ${muted ? "opacity-50" : ""}`}>
       {lines.map((line) => (
         <li key={line.playerId} className="flex items-center gap-2 py-1.5">
-          <span className="w-10 text-[10px] uppercase tracking-wide text-white/25">
+          <span className="w-10 text-[10px] uppercase tracking-wide text-nocturne-text/25">
             {line.slot}
           </span>
           <Player line={line} />
@@ -295,7 +295,7 @@ function Player({
       {right && <Score line={line} />}
       <span className="min-w-0">
         <span className="truncate">{line.name || "—"}</span>{" "}
-        <span className="text-xs text-white/30">{line.position}</span>
+        <span className="text-xs text-nocturne-neutral-600">{line.position}</span>
       </span>
       {!right && <Score line={line} />}
     </span>
@@ -322,12 +322,12 @@ function Score({ line }: { line: PlayerLine }) {
     <span className="flex shrink-0 items-baseline gap-1.5">
       <span
         className={`tabular-nums ${
-          line.gameState === "IN_PROGRESS" ? "text-[--color-turf]" : ""
+          line.gameState === "IN_PROGRESS" ? "text-nocturne-accent-300" : ""
         }`}
       >
         {points(line.milliPoints)}
       </span>
-      {label && <span className="text-[10px] text-white/30">{label}</span>}
+      {label && <span className="text-[10px] text-nocturne-neutral-600">{label}</span>}
     </span>
   );
 }
@@ -336,21 +336,21 @@ function CompactMatchup({ matchup }: { matchup: Matchup }) {
   const { home, away } = matchup;
 
   return (
-    <div className="flex items-center gap-3 rounded border border-white/10 px-4 py-2 text-sm">
+    <div className="flex items-center gap-3 rounded border border-nocturne-neutral-900 px-4 py-2 text-sm">
       <span className="flex-1 truncate">{home.name}</span>
       <span
         className={`tabular-nums ${
-          away && home.milliPoints > away.milliPoints ? "text-[--color-turf]" : ""
+          away && home.milliPoints > away.milliPoints ? "text-nocturne-accent-300" : ""
         }`}
       >
         {points(home.milliPoints)}
       </span>
-      <span className="text-white/20">–</span>
+      <span className="text-nocturne-text/20">–</span>
       {away ? (
         <>
           <span
             className={`tabular-nums ${
-              home.milliPoints < away.milliPoints ? "text-[--color-turf]" : ""
+              home.milliPoints < away.milliPoints ? "text-nocturne-accent-300" : ""
             }`}
           >
             {points(away.milliPoints)}
@@ -358,7 +358,7 @@ function CompactMatchup({ matchup }: { matchup: Matchup }) {
           <span className="flex-1 truncate text-right">{away.name}</span>
         </>
       ) : (
-        <span className="flex-1 text-right text-white/30">bye</span>
+        <span className="flex-1 text-right text-nocturne-neutral-600">bye</span>
       )}
     </div>
   );

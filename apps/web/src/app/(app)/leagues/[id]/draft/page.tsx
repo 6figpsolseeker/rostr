@@ -20,7 +20,10 @@ export default async function DraftPage({ params }: { params: Promise<{ id: stri
   return (
     <div className="space-y-6">
       <header className="space-y-1">
-        <a href={`/leagues/${id}`} className="text-xs text-white/40 hover:text-white">
+        <a
+          href={`/leagues/${id}`}
+          className="text-xs text-nocturne-neutral-600 hover:text-nocturne-text"
+        >
           ← {league.name}
         </a>
         <h1 className="text-2xl font-semibold tracking-tight">Draft</h1>

@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="_ds/nocturne-2cbfcdf4-7e1c-4bfa-8626-a61405078160/styles.css">
+<script src="_ds/nocturne-2cbfcdf4-7e1c-4bfa-8626-a61405078160/_ds_bundle.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
+<style>
+  html, body { margin: 0; padding: 0; background: var(--color-bg); }
+  body { font-family: var(--font-body); color: var(--color-text); -webkit-font-smoothing: antialiased; }
+  * { box-sizing: border-box; }
+  a { color: var(--color-accent); text-decoration: none; }
+  a:hover { color: var(--color-accent-400); }
+  a:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  @keyframes rostrFade { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+</style>
+</helmet>
+
+<div style="background: var(--color-bg); min-height: 100vh; overflow-x: hidden;">
+
+  <sc-if value="{{ showSwitcher }}" hint-placeholder-val="{{ true }}"><div style="position: fixed; right: 16px; bottom: 16px; z-index: 60; display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 12px; background: rgba(35,37,50,0.92); backdrop-filter: blur(8px); border-radius: 999px; box-shadow: var(--shadow-md); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-neutral-500);">
+    <span>Hero</span>
+    <div style="display: flex; gap: 4px;">
+      <button type="button" onClick="{{ pickA }}" style="{{ tabAStyle }}">A</button>
+      <button type="button" onClick="{{ pickB }}" style="{{ tabBStyle }}">B</button>
+    </div>
+    <button type="button" onClick="{{ replay }}" style="border: 1px solid var(--color-neutral-800); background: transparent; color: var(--color-neutral-400); font: inherit; text-transform: none; letter-spacing: 0; padding: 4px 10px; border-radius: 999px; cursor: pointer;" style-hover="border-color: var(--color-accent-700); color: var(--color-accent-300);">Replay throw</button>
+  </div></sc-if>
+
+  <header class="nav" style="position: sticky; top: 0; z-index: 40; display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 14px 40px; background: rgba(22,24,38,0.86); backdrop-filter: blur(10px); border-bottom: 1px solid var(--color-neutral-900);">
+    <div style="display: flex; align-items: baseline; gap: 10px;">
+      <span style="font-family: var(--font-heading); font-size: 19px; font-weight: 600; letter-spacing: -0.02em;">rostr</span>
+      <span style="font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-600);">fantasy football</span>
+    </div>
+    <nav style="display: flex; align-items: center; gap: 28px; font-size: 13.5px; color: var(--color-neutral-400);">
+      <a href="#how" style="color: inherit;" style-hover="color: var(--color-text);">How it works</a>
+      <a href="#format" style="color: inherit;" style-hover="color: var(--color-text);">Format</a>
+      <a href="#trust" style="color: inherit;" style-hover="color: var(--color-text);">Why it's different</a>
+      <a href="https://github.com/6figpsolseeker/rostr" style="color: inherit;" style-hover="color: var(--color-text);">GitHub</a>
+      <a class="btn btn-primary" href="#start" style="font-size: 13px; padding: 8px 16px;">Create a league</a>
+    </nav>
+  </header>
+
+  <section data-screen-label="Hero" style="position: relative; padding: 96px 40px 0;">
+    <div ref="{{ heroRef }}" style="position: relative; max-width: 1180px; margin: 0 auto; min-height: 420px;">
+
+      <svg ref="{{ arcRef }}" width="100%" height="100%" preserveAspectRatio="none" style="position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; z-index: 1;">
+        <defs>
+          <linearGradient id="rostrArc" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="#9184d9" stop-opacity="0"></stop>
+            <stop offset="18%" stop-color="#9184d9" stop-opacity="0.9"></stop>
+            <stop offset="82%" stop-color="#9184d9" stop-opacity="0.9"></stop>
+            <stop offset="100%" stop-color="#9184d9" stop-opacity="0"></stop>
+          </linearGradient>
+        </defs>
+        <path ref="{{ pathRef }}" fill="none" stroke="url(#rostrArc)" stroke-width="1.5" stroke-linecap="round"></path>
+      </svg>
+
+      <div ref="{{ ballRef }}" style="position: absolute; left: 0; top: 0; width: 46px; height: 29px; z-index: 3; opacity: 0; pointer-events: none; border-radius: 50%; background: radial-gradient(ellipse at 32% 26%, #96603f 0%, #6d4028 46%, #402415 100%); box-shadow: inset 0 -3px 6px rgba(0,0,0,0.5), 0 0 22px rgba(145,132,217,0.35);">
+        <div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;">
+          <div style="position: relative; width: 17px; height: 2px; background: var(--color-neutral-200); border-radius: 1px; display: flex; align-items: center; justify-content: space-between;">
+            <div style="width: 1.5px; height: 6px; background: var(--color-neutral-200); border-radius: 1px;"></div>
+            <div style="width: 1.5px; height: 6px; background: var(--color-neutral-200); border-radius: 1px;"></div>
+            <div style="width: 1.5px; height: 6px; background: var(--color-neutral-200); border-radius: 1px;"></div>
+            <div style="width: 1.5px; height: 6px; background: var(--color-neutral-200); border-radius: 1px;"></div>
+          </div>
+        </div>
+      </div>
+
+      <div style="position: relative; z-index: 2; max-width: 760px;">
+        <div class="tag tag-outline" style="display: inline-flex; align-items: center; gap: 8px; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;">Pre-alpha · 2026 NFL season</div>
+        <h1 style="font-family: var(--font-heading); font-weight: 500; font-size: clamp(46px, 6.2vw, 86px); line-height: 1.02; letter-spacing: -0.035em; margin: 22px 0 0; text-wrap: pretty;">Your roster<br>is yours.</h1>
+        <div ref="{{ underlineRef }}" style="height: 1px; width: 0; margin-top: 26px; background: linear-gradient(90deg, transparent, var(--color-accent), transparent);"></div>
+        <p style="max-width: 560px; font-size: 18.5px; line-height: 1.62; color: var(--color-neutral-400); margin: 26px 0 0; text-wrap: pretty;">Drafted players are held in your wallet, not on a platform's server. League rules are frozen at creation and hashed on-chain. The champion is derived from the Week 17 result, not declared by an administrator.</p>
+        <div style="display: flex; align-items: center; gap: 14px; margin-top: 36px; flex-wrap: wrap;">
+          <a class="btn btn-primary" href="#start" style="font-size: 14.5px; padding: 12px 22px;">Create a free league</a>
+          <a class="btn btn-ghost" href="#how" style="font-size: 14.5px; padding: 12px 18px;">See how a season runs</a>
+        </div>
+        <div style="display: flex; gap: 22px; flex-wrap: wrap; margin-top: 42px; padding-bottom: 90px; font-size: 13px; color: var(--color-neutral-600);">
+          <span>Open source, MIT</span>
+          <span>Full PPR, 12 teams</span>
+          <span>Built for the Solana Seeker</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div style="height: 1px; max-width: 1180px; margin: 0 auto; background: linear-gradient(90deg, transparent, var(--color-neutral-800) 12%, var(--color-neutral-800) 88%, transparent);"></div>
+
+  <section data-screen-label="League home" style="padding: 84px 40px;">
+    <div style="max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 0.72fr) minmax(0, 1fr); gap: 56px; align-items: start;">
+      <div>
+        <div style="font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-accent-500);">Inside a league</div>
+        <h2 style="font-family: var(--font-heading); font-weight: 500; font-size: 34px; line-height: 1.14; letter-spacing: -0.025em; margin: 14px 0 0;">The week you already know how to read.</h2>
+        <p style="font-size: 15.5px; line-height: 1.62; color: var(--color-neutral-400); margin: 18px 0 0; text-wrap: pretty;">Matchups, projections, waiver order, a starting lineup that autofills if you miss kickoff. Nothing about the format is novel — the format is the part that works. What changes is who holds the rules.</p>
+        <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 26px; font-size: 14px; color: var(--color-neutral-400);">
+          <div style="display: flex; gap: 12px;"><span style="color: var(--color-accent-500);">—</span><span>Head-to-head weekly matchups, Weeks 1–14</span></div>
+          <div style="display: flex; gap: 12px;"><span style="color: var(--color-accent-500);">—</span><span>Rolling waiver priority: win a claim, go to the back</span></div>
+          <div style="display: flex; gap: 12px;"><span style="color: var(--color-accent-500);">—</span><span>Consolation bracket is played, so nobody is out of it</span></div>
+        </div>
+      </div>
+
+      <div class="card elev-md" style="padding: 0; overflow: hidden; background: var(--color-surface);">
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+          <div style="display: flex; align-items: baseline; gap: 10px;">
+            <span style="font-family: var(--font-heading); font-size: 14.5px; font-weight: 500;">Dynasty of Dropped Passes</span>
+            <span style="font-size: 11.5px; color: var(--color-neutral-600);">Week 3</span>
+          </div>
+          <span class="tag tag-accent" style="font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase;">Rules locked</span>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr auto 1fr; gap: 16px; align-items: center; padding: 20px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            <span style="font-size: 14px;">Route 66</span>
+            <span style="font-size: 11.5px; color: var(--color-neutral-600);">2–0 · proj 118.4</span>
+          </div>
+          <div style="display: flex; align-items: baseline; gap: 10px; font-family: var(--font-heading); font-variant-numeric: tabular-nums;">
+            <span style="font-size: 27px; color: var(--color-accent-300);">86.2</span>
+            <span style="font-size: 12px; color: var(--color-neutral-700);">vs</span>
+            <span style="font-size: 27px; color: var(--color-neutral-400);">71.9</span>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 4px; text-align: right;">
+            <span style="font-size: 14px;">Tuesday Night Regrets</span>
+            <span style="font-size: 11.5px; color: var(--color-neutral-600);">1–1 · proj 104.8</span>
+          </div>
+        </div>
+
+        <table class="table" style="width: 100%; font-size: 13px;">
+          <thead>
+            <tr>
+              <th style="text-align: left; font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--color-neutral-600);">Slot</th>
+              <th style="text-align: left; font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--color-neutral-600);">Starter</th>
+              <th style="text-align: right; font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--color-neutral-600);">Proj</th>
+              <th style="text-align: right; font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--color-neutral-600);">Pts</th>
+            </tr>
+          </thead>
+          <tbody style="font-variant-numeric: tabular-nums;">
+            <tr>
+              <td><span class="tag tag-neutral" style="font-size: 10px; padding: 2px 7px;">QB</span></td>
+              <td>J. Whitcombe <span style="color: var(--color-neutral-700);">PIT</span></td>
+              <td style="text-align: right; color: var(--color-neutral-500);">21.4</td>
+              <td style="text-align: right;">24.8</td>
+            </tr>
+            <tr>
+              <td><span class="tag tag-neutral" style="font-size: 10px; padding: 2px 7px;">RB</span></td>
+              <td>L. Marchetti <span style="color: var(--color-neutral-700);">MIN</span></td>
+              <td style="text-align: right; color: var(--color-neutral-500);">14.9</td>
+              <td style="text-align: right;">18.1</td>
+            </tr>
+            <tr>
+              <td><span class="tag tag-neutral" style="font-size: 10px; padding: 2px 7px;">WR</span></td>
+              <td>K. Osei-Bonsu <span style="color: var(--color-neutral-700);">LV</span></td>
+              <td style="text-align: right; color: var(--color-neutral-500);">16.2</td>
+              <td style="text-align: right;">9.4</td>
+            </tr>
+            <tr>
+              <td><span class="tag tag-accent" style="font-size: 10px; padding: 2px 7px;">FLEX</span></td>
+              <td>N. Osterberg <span style="color: var(--color-neutral-700);">CAR</span></td>
+              <td style="text-align: right; color: var(--color-neutral-500);">11.7</td>
+              <td style="text-align: right;">15.6</td>
+            </tr>
+            <tr>
+              <td><span class="tag tag-neutral" style="font-size: 10px; padding: 2px 7px;">TE</span></td>
+              <td>M. Lindqvist <span style="color: var(--color-neutral-700);">ARI</span></td>
+              <td style="text-align: right; color: var(--color-neutral-500);">9.3</td>
+              <td style="text-align: right;">—</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 13px 18px; border-top: 1px solid var(--color-neutral-900); font-size: 11.5px; color: var(--color-neutral-600);">
+          <span>Autolineup on · waiver priority 12 of 12</span>
+          <span style="font-family: ui-monospace, monospace; color: var(--color-neutral-700);">rules 0x7f3a…c19d</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section data-screen-label="Differentiators" id="trust" style="padding: 84px 40px;">
+    <div style="max-width: 1180px; margin: 0 auto;">
+      <div style="max-width: 640px;">
+        <div style="font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-accent-500);">Why it's different</div>
+        <h2 style="font-family: var(--font-heading); font-weight: 500; font-size: 40px; line-height: 1.1; letter-spacing: -0.028em; margin: 14px 0 0;">Every other fantasy platform asks you to trust an administrator.</h2>
+        <p style="font-size: 16px; line-height: 1.6; color: var(--color-neutral-400); margin: 16px 0 0;">This one doesn't. Four things move off the administrator's desk and into code.</p>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 20px; margin-top: 44px;">
+        <div class="card" style="padding: 26px; background: var(--color-surface); border-radius: var(--radius-md);">
+          <div style="font-family: ui-monospace, monospace; font-size: 11.5px; color: var(--color-accent-600);">01</div>
+          <h3 style="font-family: var(--font-heading); font-weight: 500; font-size: 21px; letter-spacing: -0.018em; margin: 12px 0 0;">Rules are immutable</h3>
+          <p style="font-size: 14.5px; line-height: 1.65; color: var(--color-neutral-400); margin: 12px 0 0; text-wrap: pretty;">A league's scoring, roster, payout split, and deadlines are frozen at creation and shown in full before anyone joins. The rule set is hashed on-chain and joining is a signed transaction referencing that hash — so consent is cryptographic, not a checkbox.</p>
+          <p style="font-size: 14.5px; line-height: 1.6; color: var(--color-accent-300); margin: 14px 0 0;">No commissioner can rewrite scoring in Week 10 because their team is losing.</p>
+        </div>
+
+        <div class="card" style="padding: 26px; background: var(--color-surface); border-radius: var(--radius-md);">
+          <div style="font-family: ui-monospace, monospace; font-size: 11.5px; color: var(--color-accent-600);">02</div>
+          <h3 style="font-family: var(--font-heading); font-weight: 500; font-size: 21px; letter-spacing: -0.018em; margin: 12px 0 0;">The pot is escrowed</h3>
+          <p style="font-size: 14.5px; line-height: 1.65; color: var(--color-neutral-400); margin: 12px 0 0; text-wrap: pretty;">Optional per league. Everyone deposits the same amount of the same token, and funds unlock only when the season resolves. No treasurer holding a Venmo balance until March.</p>
+          <p style="font-size: 13px; line-height: 1.55; color: var(--color-neutral-600); margin: 14px 0 0;">Not live yet — the escrow program is unwritten, so pot leagues cannot take a deposit today.</p>
+        </div>
+
+        <div class="card" style="padding: 26px; background: var(--color-surface); border-radius: var(--radius-md);">
+          <div style="font-family: ui-monospace, monospace; font-size: 11.5px; color: var(--color-accent-600);">03</div>
+          <h3 style="font-family: var(--font-heading); font-weight: 500; font-size: 21px; letter-spacing: -0.018em; margin: 12px 0 0;">Nobody declares a winner</h3>
+          <p style="font-size: 14.5px; line-height: 1.65; color: var(--color-neutral-400); margin: 12px 0 0; text-wrap: pretty;">The contract holds the bracket, the scores, and the rules, and derives the champion from the Week 17 result. There is no sign-off step to corrupt.</p>
+        </div>
+
+        <div class="card" style="padding: 26px; background: var(--color-surface); border-radius: var(--radius-md);">
+          <div style="font-family: ui-monospace, monospace; font-size: 11.5px; color: var(--color-accent-600);">04</div>
+          <h3 style="font-family: var(--font-heading); font-weight: 500; font-size: 21px; letter-spacing: -0.018em; margin: 12px 0 0;">Your roster is yours</h3>
+          <p style="font-size: 14.5px; line-height: 1.65; color: var(--color-neutral-400); margin: 12px 0 0; text-wrap: pretty;">Drafted players mint as Token-2022 NFTs held in your wallet. Trades move through an escrow with a 48-hour league veto window — they can't be front-run on a marketplace, and they can't be forced through by a commissioner.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section data-screen-label="How it works" id="how" style="padding: 84px 40px;">
+    <div style="max-width: 1180px; margin: 0 auto;">
+      <div style="max-width: 560px;">
+        <div style="font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-accent-500);">How it works</div>
+        <h2 style="font-family: var(--font-heading); font-weight: 500; font-size: 40px; line-height: 1.1; letter-spacing: -0.028em; margin: 14px 0 0;">Four steps, one season.</h2>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 30px; margin-top: 44px;">
+        <div style="display: flex; flex-direction: column; gap: 14px;">
+          <div style="height: 1px; background: linear-gradient(90deg, var(--color-accent), var(--color-accent-800));"></div>
+          <div style="font-family: ui-monospace, monospace; font-size: 11.5px; color: var(--color-neutral-600);">Step 1</div>
+          <h3 style="font-family: var(--font-heading); font-weight: 500; font-size: 19px; margin: 0;">Create or join</h3>
+          <p style="font-size: 14.5px; line-height: 1.62; color: var(--color-neutral-400); margin: 0;">Sign in with email, link a wallet by signature. Every rule is shown in full before you commit — then it's frozen.</p>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 14px;">
+          <div style="height: 1px; background: linear-gradient(90deg, var(--color-accent), var(--color-accent-800));"></div>
+          <div style="font-family: ui-monospace, monospace; font-size: 11.5px; color: var(--color-neutral-600);">Step 2</div>
+          <h3 style="font-family: var(--font-heading); font-weight: 500; font-size: 19px; margin: 0;">Draft</h3>
+          <p style="font-size: 14.5px; line-height: 1.62; color: var(--color-neutral-400); margin: 0;">Snake draft with the order drawn from a Solana block, so nobody picked it. Fast at 90 seconds a pick, or slow up to 24 hours. Queue players and let auto-pick cover you.</p>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 14px;">
+          <div style="height: 1px; background: linear-gradient(90deg, var(--color-accent), var(--color-accent-800));"></div>
+          <div style="font-family: ui-monospace, monospace; font-size: 11.5px; color: var(--color-neutral-600);">Step 3</div>
+          <h3 style="font-family: var(--font-heading); font-weight: 500; font-size: 19px; margin: 0;">Play the season</h3>
+          <p style="font-size: 14.5px; line-height: 1.62; color: var(--color-neutral-400); margin: 0;">Weeks 1–14, head-to-head. Set lineups, work the waiver wire, trade through the veto window. Schedule luck stays in, deliberately.</p>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 14px;">
+          <div style="height: 1px; background: linear-gradient(90deg, var(--color-accent), var(--color-accent-800));"></div>
+          <div style="font-family: ui-monospace, monospace; font-size: 11.5px; color: var(--color-neutral-600);">Step 4</div>
+          <h3 style="font-family: var(--font-heading); font-weight: 500; font-size: 19px; margin: 0;">Settle</h3>
+          <p style="font-size: 14.5px; line-height: 1.62; color: var(--color-neutral-400); margin: 0;">Playoffs Weeks 15–17, championship in Week 17. The contract reads the result and pays out. Nobody signs anything off.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section data-screen-label="Format" id="format" style="padding: 84px 40px;">
+    <div style="max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 0.6fr) minmax(0, 1fr); gap: 56px; align-items: start;">
+      <div>
+        <div style="font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-accent-500);">Format</div>
+        <h2 style="font-family: var(--font-heading); font-weight: 500; font-size: 34px; line-height: 1.14; letter-spacing: -0.025em; margin: 14px 0 0;">The default league, in full.</h2>
+        <p style="font-size: 15px; line-height: 1.62; color: var(--color-neutral-400); margin: 16px 0 0;">This is the whole rule set, not a summary of it. Full detail lives in <a href="https://github.com/6figpsolseeker/rostr/blob/main/docs/RULES.md">docs/RULES.md</a>.</p>
+      </div>
+      <table class="table" style="width: 100%; font-size: 14.5px;">
+        <tbody>
+          <tr>
+            <td style="width: 150px; color: var(--color-neutral-500); vertical-align: top;">Scoring</td>
+            <td>Full PPR. 4pt passing TD, 6pt rushing and receiving TD, 1pt per 25 passing yards, 1pt per 10 rushing or receiving yards, −2 per interception and lost fumble.</td>
+          </tr>
+          <tr>
+            <td style="color: var(--color-neutral-500); vertical-align: top;">Teams</td>
+            <td>12, minimum 2 humans. Bots fill the rest.</td>
+          </tr>
+          <tr>
+            <td style="color: var(--color-neutral-500); vertical-align: top;">Draft</td>
+            <td>Snake. Fast (90s minimum) or slow (up to 24h per pick).</td>
+          </tr>
+          <tr>
+            <td style="color: var(--color-neutral-500); vertical-align: top;">Season</td>
+            <td>Weeks 1–14 regular season, 15–17 playoffs, championship Week 17. Week 18 is excluded — NFL starters rest once seeding is settled.</td>
+          </tr>
+          <tr>
+            <td style="color: var(--color-neutral-500); vertical-align: top;">Matchups</td>
+            <td>Head-to-head, weekly.</td>
+          </tr>
+          <tr>
+            <td style="color: var(--color-neutral-500); vertical-align: top;">Waivers</td>
+            <td>Rolling priority. Win a claim, go to the back of the order.</td>
+          </tr>
+          <tr>
+            <td style="color: var(--color-neutral-500); vertical-align: top;">Consolation</td>
+            <td>Played, so eliminated teams still have something to play for. This is the anti-abandonment mechanism — punishment doesn't work on someone already guaranteed nothing.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section data-screen-label="Multi-sport" style="padding: 84px 40px;">
+    <div style="max-width: 1180px; margin: 0 auto;">
+      <div style="max-width: 860px;">
+        <div style="font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-accent-500);">Multi-sport</div>
+        <p style="font-family: var(--font-heading); font-weight: 500; font-size: clamp(24px, 3.1vw, 36px); line-height: 1.26; letter-spacing: -0.024em; margin: 20px 0 0; text-wrap: pretty;">Football ships first, but the schema does not know what football is. Sports are data — a registry of stat keys, positions, and lineup slots — never structure or code branches.</p>
+        <p style="font-size: 15px; line-height: 1.62; color: var(--color-neutral-400); margin: 22px 0 0; max-width: 560px;">Adding a sport should insert rows and write one provider adapter, with no migration and no change to scoring, drafting, trading, or settlement.</p>
+      </div>
+    </div>
+  </section>
+
+  <section data-screen-label="Close" id="start" style="margin: 40px 20px 0; border-radius: var(--radius-lg); background: radial-gradient(120% 140% at 12% 0%, var(--color-section-glow) 0%, var(--color-section) 46%, #1d2048 100%); padding: 84px 48px;">
+    <div style="max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 0.72fr); gap: 56px; align-items: end;">
+      <div>
+        <h2 style="font-family: var(--font-heading); font-weight: 500; font-size: clamp(34px, 4.4vw, 54px); line-height: 1.06; letter-spacing: -0.03em; margin: 0; text-wrap: pretty;">A league can be created, joined, and drafted end to end today.</h2>
+        <p style="font-size: 16.5px; line-height: 1.6; color: var(--color-accent-200); margin: 20px 0 0; max-width: 520px;">Nothing touches money yet. Bring eleven friends or two — bots fill the rest.</p>
+        <div style="display: flex; align-items: center; gap: 14px; margin-top: 34px; flex-wrap: wrap;">
+          <a class="btn btn-primary" href="#start" style="font-size: 15px; padding: 13px 24px; border-color: var(--color-accent-300); color: var(--color-accent-100);">Create a free league</a>
+          <a class="btn btn-ghost" href="https://github.com/6figpsolseeker/rostr" style="font-size: 15px; padding: 13px 18px; color: var(--color-accent-200);">Read the source</a>
+        </div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 12px; font-size: 13.5px; line-height: 1.55; color: var(--color-accent-300); border-left: 1px solid rgba(210,206,253,0.22); padding-left: 22px;">
+        <span>MIT licensed. 614 tests. Node ≥ 22.13 and pnpm to run it yourself.</span>
+        <span>Targeting the Solana Seeker dApp Store and the 2026 NFL season — kickoff September 10, drafts in late August.</span>
+      </div>
+    </div>
+  </section>
+
+  <footer style="max-width: 1180px; margin: 0 auto; padding: 40px; display: flex; align-items: center; justify-content: space-between; gap: 24px; flex-wrap: wrap; font-size: 13px; color: var(--color-neutral-600);">
+    <span style="font-family: var(--font-heading); font-size: 15px; font-weight: 600; color: var(--color-neutral-400);">rostr</span>
+    <div style="display: flex; gap: 24px; flex-wrap: wrap;">
+      <a href="https://github.com/6figpsolseeker/rostr">GitHub</a>
+      <a href="https://github.com/6figpsolseeker/rostr/blob/main/docs/RULES.md">Rules</a>
+      <a href="https://github.com/6figpsolseeker/rostr/blob/main/docs/DATA-MODEL.md">Data model</a>
+      <a href="https://github.com/6figpsolseeker/rostr/blob/main/docs/DECISIONS.md">Decisions</a>
+    </div>
+    <span>Pre-alpha. Not audited.</span>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;heroVariant&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;A&quot;,&quot;B&quot;],&quot;default&quot;:&quot;A&quot;,&quot;tsType&quot;:&quot;'A' | 'B'&quot;,&quot;section&quot;:&quot;Hero animation&quot;},&quot;showSwitcher&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Hero animation&quot;}}">
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { variant: props.heroVariant === 'B' ? 'B' : 'A' };
+    this.heroRef = React.createRef();
+    this.arcRef = React.createRef();
+    this.pathRef = React.createRef();
+    this.ballRef = React.createRef();
+    this.underlineRef = React.createRef();
+  }
+
+  componentDidMount() {
+    this.timer = setTimeout(() => this.play(), 260);
+    this.onResize = () => { if (this.done) this.settle(); };
+    window.addEventListener('resize', this.onResize);
+  }
+
+  componentWillUnmount() {
+    clearTimeout(this.timer);
+    cancelAnimationFrame(this.raf);
+    window.removeEventListener('resize', this.onResize);
+  }
+
+  geom() {
+    const hero = this.heroRef.current;
+    const w = hero ? hero.clientWidth : 1180;
+    const h = hero ? hero.clientHeight : 420;
+    const b = this.state.variant === 'B';
+    const ul = this.underlineRef.current;
+    // A rests exactly on the underline slot beneath the headline; B rests on the
+    // hairline that closes the hero. The half-pixel keeps the path bbox non-zero.
+    const ulY = ul ? ul.offsetTop + 0.5 : h * 0.395;
+    const ry = b ? h - 1.5 : ulY;
+    const ulW = 470;
+    return {
+      w, h, b,
+      x0: -70, y0: b ? h * 0.30 : h * 0.62,
+      cx: w * 0.46, cy: b ? -h * 0.22 : h * 0.02,
+      x1: w + 70, y1: b ? h * 0.90 : h * 0.40,
+      rx0: b ? 0 : 0, ry0: ry,
+      rx1: b ? w : ulW, ry1: ry + 0.5,
+      dur: b ? 1450 : 950
+    };
+  }
+
+  at(g, t) {
+    const u = 1 - t;
+    return {
+      x: u * u * g.x0 + 2 * u * t * g.cx + t * t * g.x1,
+      y: u * u * g.y0 + 2 * u * t * g.cy + t * t * g.y1
+    };
+  }
+
+  setPath(nums) {
+    const p = this.pathRef.current;
+    if (p) p.setAttribute('d', 'M ' + nums[0] + ' ' + nums[1] + ' Q ' + nums[2] + ' ' + nums[3] + ' ' + nums[4] + ' ' + nums[5]);
+  }
+
+  settle() {
+    const g = this.geom();
+    this.setPath([g.rx0, g.ry0, (g.rx0 + g.rx1) / 2, g.ry0, g.rx1, g.ry1]);
+  }
+
+  play() {
+    const ball = this.ballRef.current, path = this.pathRef.current;
+    if (!ball || !path) return;
+    this.done = false;
+    const g = this.geom();
+    const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduce) { this.settle(); ball.style.opacity = '0'; this.done = true; return; }
+
+    const flight = [g.x0, g.y0, g.cx, g.cy, g.x1, g.y1];
+    const rest = [g.rx0, g.ry0, (g.rx0 + g.rx1) / 2, g.ry0, g.rx1, g.ry1];
+    const start = performance.now();
+    const spins = g.b ? 2.6 : 3.4;
+
+    const step = (now) => {
+      const raw = Math.min(1, (now - start) / g.dur);
+      if (raw < 1) {
+        // ball travels the arc, trail draws behind it
+        const t = g.b ? 1 - Math.pow(1 - raw, 1.7) : raw;
+        const p = this.at(g, t);
+        ball.style.opacity = String(Math.min(1, t * 6, (1 - t) * 5 + 0.15));
+        ball.style.transform = 'translate(' + (p.x - 23) + 'px,' + (p.y - 14) + 'px) rotate(' + (t * 360 * spins) + 'deg)';
+        // partial quadratic via de Casteljau: draw only up to t
+        const m0 = { x: g.x0 + (g.cx - g.x0) * t, y: g.y0 + (g.cy - g.y0) * t };
+        const m1 = { x: g.cx + (g.x1 - g.cx) * t, y: g.cy + (g.y1 - g.cy) * t };
+        this.setPath([g.x0, g.y0, m0.x, m0.y, p.x, p.y]);
+        this.raf = requestAnimationFrame(step);
+        return;
+      }
+      // resolve: the flight arc relaxes into the resting line
+      const t2Start = performance.now();
+      const morph = (n) => {
+        const k = Math.min(1, (n - t2Start) / 520);
+        const e = 1 - Math.pow(1 - k, 3);
+        this.setPath(flight.map((v, i) => v + (rest[i] - v) * e));
+        ball.style.opacity = String(g.b ? 1 : 1 - e);
+        if (g.b) {
+          const rx = g.rx1 - 78, ry = g.ry1 - 30;
+          const fx = g.x1 - 23 + (rx - (g.x1 - 23)) * e;
+          const fy = g.y1 - 14 + (ry - (g.y1 - 14)) * e;
+          ball.style.transform = 'translate(' + fx + 'px,' + fy + 'px) rotate(' + (360 * spins + 28 * e) + 'deg)';
+        }
+        if (k < 1) this.raf = requestAnimationFrame(morph);
+        else this.done = true;
+      };
+      this.raf = requestAnimationFrame(morph);
+    };
+    this.raf = requestAnimationFrame(step);
+  }
+
+  pick(v) {
+    cancelAnimationFrame(this.raf);
+    const ul = this.underlineRef.current;
+    if (ul) ul.style.width = '0px';
+    this.setState({ variant: v }, () => { this.timer = setTimeout(() => this.play(), 60); });
+  }
+
+  tab(active) {
+    return 'border: 1px solid ' + (active ? 'var(--color-accent)' : 'var(--color-neutral-800)') +
+      '; background: ' + (active ? 'color-mix(in srgb, var(--color-accent) 18%, transparent)' : 'transparent') +
+      '; color: ' + (active ? 'var(--color-accent-200)' : 'var(--color-neutral-500)') +
+      '; font: inherit; width: 26px; height: 24px; border-radius: 6px; cursor: pointer; padding: 0;';
+  }
+
+  renderVals() {
+    const v = this.state.variant;
+    return {
+      heroRef: this.heroRef,
+      arcRef: this.arcRef,
+      pathRef: this.pathRef,
+      ballRef: this.ballRef,
+      underlineRef: this.underlineRef,
+      pickA: () => this.pick('A'),
+      pickB: () => this.pick('B'),
+      replay: () => { cancelAnimationFrame(this.raf); const ul = this.underlineRef.current; if (ul) ul.style.width = '0px'; this.play(); },
+      showSwitcher: this.props.showSwitcher !== false,
+      tabAStyle: this.tab(v === 'A'),
+      tabBStyle: this.tab(v === 'B')
+    };
+  }
+}
+</script>
+</body>
+</html>

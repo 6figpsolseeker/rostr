@@ -16,7 +16,10 @@ export function SessionBar({ email }: { email: string | null }) {
 
   if (!email) {
     return (
-      <a href="/signin" className="text-sm text-white/70 hover:text-white">
+      <a
+        href="/signin"
+        className="text-[13.5px] text-nocturne-neutral-400 transition-colors hover:text-nocturne-text"
+      >
         Sign in
       </a>
     );
@@ -29,14 +32,14 @@ export function SessionBar({ email }: { email: string | null }) {
   }
 
   return (
-    <div className="flex items-center gap-3 text-sm">
-      <span className="max-w-[16ch] truncate text-white/50" title={email}>
+    <div className="flex items-center gap-3 text-[13.5px]">
+      <span className="max-w-[16ch] truncate text-nocturne-neutral-600" title={email}>
         {email}
       </span>
       <button
         onClick={() => void signOut()}
         disabled={signingOut}
-        className="text-white/70 hover:text-white disabled:opacity-40"
+        className="text-nocturne-neutral-400 transition-colors hover:text-nocturne-text disabled:opacity-40"
       >
         {signingOut ? "Signing out…" : "Sign out"}
       </button>

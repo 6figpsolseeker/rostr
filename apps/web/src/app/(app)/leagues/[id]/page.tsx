@@ -6,6 +6,7 @@ import {
   getOnChainJoin,
   getWallets,
 } from "@rostr/db";
+import { LeagueChrome } from "@/components/LeagueChrome";
 import { RulesView } from "@/components/RulesView";
 import { JoinPanel } from "@/components/JoinPanel";
 import { AnchorPanel } from "@/components/AnchorPanel";
@@ -58,57 +59,38 @@ export default async function LeaguePage({ params }: { params: Promise<{ id: str
 
   return (
     <div className="space-y-10">
-      <header className="space-y-2">
-        <h1 className="text-3xl font-semibold tracking-tight">{league.name}</h1>
-        <p className="text-sm text-white/60">
-          {league.season} season · {taken}/{stored.rules.league.maxTeams} teams ·{" "}
-          {league.state.toLowerCase()}
-        </p>
-        <div className="flex gap-4">
-          <a
-            href={`/leagues/${league.id}/matchup`}
-            className="text-sm text-[--color-turf] hover:underline"
-          >
-            Scoreboard →
-          </a>
-          <a
-            href={`/leagues/${league.id}/draft`}
-            className="text-sm text-[--color-turf] hover:underline"
-          >
-            Draft room →
-          </a>
-          <a
-            href={`/leagues/${league.id}/lineup`}
-            className="text-sm text-[--color-turf] hover:underline"
-          >
-            Set lineup →
-          </a>
-          <a
-            href={`/leagues/${league.id}/players`}
-            className="text-sm text-[--color-turf] hover:underline"
-          >
-            Players →
-          </a>
-          <a
-            href={`/leagues/${league.id}/trades`}
-            className="text-sm text-[--color-turf] hover:underline"
-          >
-            Trades →
-          </a>
-          <a
-            href={`/leagues/${league.id}/standings`}
-            className="text-sm text-[--color-turf] hover:underline"
-          >
-            Standings →
-          </a>
-          <a
-            href={`/leagues/${league.id}/bracket`}
-            className="text-sm text-[--color-turf] hover:underline"
-          >
-            Bracket →
-          </a>
-        </div>
-      </header>
+      <LeagueChrome
+        leagueId={league.id}
+        name={league.name}
+        subtitle={`${league.season} season · ${taken}/${stored.rules.league.maxTeams} teams · ${league.state
+          .toLowerCase()
+          .replace("_", " ")}`}
+        rulesHash={stored.hash}
+        active=""
+      />
+
+      {/*
+        The draft and the bracket are not tabs.
+
+        The design's nav is the six screens a manager uses every week. A draft
+        happens once and a bracket only exists from Week 15, so putting either in
+        the permanent nav would leave a dead link for most of the season. They
+        are surfaced from the body instead, when there is something behind them.
+      */}
+      <div className="flex flex-wrap gap-3">
+        <a
+          href={`/leagues/${league.id}/draft`}
+          className="rounded-[4px] border border-nocturne-neutral-800 px-[14px] py-2 text-[13.5px] text-nocturne-neutral-400 transition-colors hover:text-nocturne-text"
+        >
+          Draft room
+        </a>
+        <a
+          href={`/leagues/${league.id}/bracket`}
+          className="rounded-[4px] border border-nocturne-neutral-800 px-[14px] py-2 text-[13.5px] text-nocturne-neutral-400 transition-colors hover:text-nocturne-text"
+        >
+          Playoff bracket
+        </a>
+      </div>
 
       {/*
         The rules render above the join control, always, and in full. A join
@@ -161,7 +143,7 @@ export default async function LeaguePage({ params }: { params: Promise<{ id: str
       )}
 
       {league.rules_uri && (
-        <p className="text-xs text-white/40">
+        <p className="text-xs text-nocturne-neutral-600">
           Rule document: <span className="font-mono break-all">{league.rules_uri}</span>
         </p>
       )}

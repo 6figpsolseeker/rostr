@@ -130,31 +130,31 @@ export function AnchorPanel({
   }
 
   if (done) {
-    return <p className="text-sm text-[--color-turf]">Anchored. Reloading…</p>;
+    return <p className="text-sm text-nocturne-accent-300">Anchored. Reloading…</p>;
   }
 
   return (
-    <section className="space-y-4 rounded border border-white/10 p-6">
+    <section className="space-y-4 rounded border border-nocturne-neutral-900 p-6">
       <div className="space-y-1">
         <h2 className="text-lg font-medium">Anchor these rules on-chain</h2>
-        <p className="text-sm text-white/60">
+        <p className="text-sm text-nocturne-neutral-400">
           Writes this league&rsquo;s rules hash to Solana, where anyone can check it against
           what they were shown. Until that exists, nobody can join.
         </p>
       </div>
 
       <dl className="grid gap-x-6 gap-y-1 text-xs sm:grid-cols-[auto_1fr]">
-        <dt className="text-white/40">Rules hash</dt>
-        <dd className="truncate font-mono text-white/70">{rulesHash}</dd>
-        <dt className="text-white/40">Pot</dt>
-        <dd className="text-white/70">
+        <dt className="text-nocturne-neutral-600">Rules hash</dt>
+        <dd className="truncate font-mono text-nocturne-neutral-400">{rulesHash}</dd>
+        <dt className="text-nocturne-neutral-600">Pot</dt>
+        <dd className="text-nocturne-neutral-400">
           {pot
             ? `${pot.buyInBaseUnits} base units per team`
             : "None — this league plays for pride"}
         </dd>
       </dl>
 
-      <p className="text-xs text-white/40">
+      <p className="text-xs text-nocturne-neutral-600">
         You sign this from your own wallet and pay the rent — a fraction of a cent. No key of
         ours is involved at any point, which is the reason this is a button rather than
         something that already happened.
@@ -167,7 +167,7 @@ export function AnchorPanel({
           type="button"
           onClick={() => void anchor()}
           disabled={busy}
-          className="rounded bg-[--color-turf] px-4 py-2 text-sm font-medium text-black disabled:opacity-50"
+          className="rounded rounded-[4px] border border-nocturne-accent px-4 py-2 text-[13.5px] text-nocturne-accent-200 transition-colors hover:bg-nocturne-accent/10 disabled:opacity-50"
         >
           {busy ? "Waiting for the chain…" : "Anchor on-chain"}
         </button>

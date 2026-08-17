@@ -277,13 +277,13 @@ export function DraftRoom({ leagueId, leagueName }: { leagueId: string; leagueNa
   }
 
   if (!data) {
-    return <p className="text-sm text-white/40">Loading the draft…</p>;
+    return <p className="text-sm text-nocturne-neutral-600">Loading the draft…</p>;
   }
 
   if (!draft) {
     return (
-      <section className="rounded border border-white/10 p-6">
-        <p className="text-sm text-white/60">
+      <section className="rounded border border-nocturne-neutral-900 p-6">
+        <p className="text-sm text-nocturne-neutral-400">
           No draft has been scheduled for {leagueName} yet.
         </p>
       </section>
@@ -317,8 +317,8 @@ export function DraftRoom({ leagueId, leagueName }: { leagueId: string; leagueNa
                 onClick={() => setPosition(slot)}
                 className={`rounded px-2.5 py-1 text-xs font-medium ${
                   position === slot
-                    ? "bg-[--color-turf] text-black"
-                    : "border border-white/15 text-white/70 hover:text-white"
+                    ? "border border-nocturne-accent text-nocturne-accent-200"
+                    : "border border-nocturne-neutral-800 text-nocturne-neutral-400 hover:text-nocturne-text"
                 }`}
               >
                 {slot}
@@ -328,16 +328,16 @@ export function DraftRoom({ leagueId, leagueName }: { leagueId: string; leagueNa
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search players"
-              className="ml-auto w-44 rounded border border-white/15 bg-transparent px-3 py-1 text-sm"
+              className="ml-auto w-44 rounded border border-nocturne-neutral-800 bg-transparent px-3 py-1 text-sm"
             />
           </div>
 
           {groups.length === 0 ? (
-            <p className="text-sm text-white/40">Nobody left matching that.</p>
+            <p className="text-sm text-nocturne-neutral-600">Nobody left matching that.</p>
           ) : (
             groups.map((group) => (
               <section key={group.position} className="space-y-1.5">
-                <h2 className="flex items-baseline gap-2 text-xs font-medium tracking-wide text-white/50 uppercase">
+                <h2 className="flex items-baseline gap-2 text-xs font-medium tracking-wide text-nocturne-neutral-500 uppercase">
                   {group.position}
                   <span className="text-[10px] normal-case">
                     {group.players.length} available · projected season points
@@ -367,7 +367,7 @@ export function DraftRoom({ leagueId, leagueName }: { leagueId: string; leagueNa
           )}
 
           {position === "ALL" && (
-            <p className="text-xs text-white/30">
+            <p className="text-xs text-nocturne-neutral-600">
               Showing the top 25 at each position. Pick a position above for the full list.
             </p>
           )}
@@ -424,12 +424,12 @@ function ClockBar({
 
   if (draft.status === "SCHEDULED" || draft.status === "PAUSED") {
     return (
-      <section className="flex flex-wrap items-center justify-between gap-4 rounded border border-white/10 p-6">
+      <section className="flex flex-wrap items-center justify-between gap-4 rounded border border-nocturne-neutral-900 p-6">
         <div className="space-y-1">
           <p className="text-lg font-medium">
             {draft.status === "PAUSED" ? "Draft paused" : "Draft not started"}
           </p>
-          <p className="text-sm text-white/50">
+          <p className="text-sm text-nocturne-neutral-500">
             Scheduled for {new Date(draft.scheduledAt).toLocaleString()} ·{" "}
             {draft.pickSeconds >= 3600
               ? `${Math.round(draft.pickSeconds / 3600)}h`
@@ -437,7 +437,7 @@ function ClockBar({
             per pick
           </p>
           {!draft.draw && (
-            <p className="text-xs text-white/40">
+            <p className="text-xs text-nocturne-neutral-600">
               The order is drawn from the first Solana block at or after the scheduled time, so
               it cannot be known in advance.
             </p>
@@ -447,7 +447,7 @@ function ClockBar({
           <button
             onClick={onStart}
             disabled={busy}
-            className="rounded bg-[--color-turf] px-4 py-2 text-sm font-medium text-black disabled:opacity-40"
+            className="rounded rounded-[4px] border border-nocturne-accent px-4 py-2 text-[13.5px] text-nocturne-accent-200 transition-colors hover:bg-nocturne-accent/10 disabled:opacity-40"
           >
             {busy ? "Starting…" : draft.draw ? "Resume draft" : "Draw order and start"}
           </button>
@@ -458,9 +458,9 @@ function ClockBar({
 
   if (draft.complete) {
     return (
-      <section className="rounded border border-white/10 p-6">
+      <section className="rounded border border-nocturne-neutral-900 p-6">
         <p className="text-lg font-medium">Draft complete</p>
-        <p className="text-sm text-white/50">
+        <p className="text-sm text-nocturne-neutral-500">
           {draft.totalPicks} picks over {draft.rounds} rounds.
         </p>
       </section>
@@ -472,23 +472,23 @@ function ClockBar({
   return (
     <section
       className={`flex flex-wrap items-center justify-between gap-4 rounded border p-6 ${
-        isMyTurn ? "border-[--color-turf] bg-[--color-turf]/5" : "border-white/10"
+        isMyTurn ? "border-nocturne-accent" : "border-nocturne-neutral-900"
       }`}
     >
       <div className="space-y-1">
-        <p className="text-sm text-white/50">
+        <p className="text-sm text-nocturne-neutral-500">
           Round {Math.ceil((draft.currentPickNumber ?? 1) / draft.order.length)} · Pick{" "}
           {draft.currentPickNumber} of {draft.totalPicks}
         </p>
         <p className="text-lg font-medium">
           {isMyTurn ? "You are on the clock" : `${team?.name ?? "…"} is on the clock`}
-          {team?.isBot && <span className="ml-2 text-xs text-white/40">bot</span>}
+          {team?.isBot && <span className="ml-2 text-xs text-nocturne-neutral-600">bot</span>}
         </p>
         {remaining === 0 && (
           // Says what is about to happen rather than leaving a dead button and a
           // 0:00 with no explanation. The pick is the auto-pick's from the
           // deadline onwards, and the server refuses a late manual one.
-          <p className="text-xs text-white/40">
+          <p className="text-xs text-nocturne-neutral-600">
             {isMyTurn ? "Your time is up — " : "Time is up — "}
             the auto-pick takes this one, stamped at the deadline it missed.
           </p>
@@ -522,7 +522,7 @@ function PlayerList({
   inLeague: boolean;
 }) {
   return (
-    <ul className="divide-y divide-white/5 rounded border border-white/10">
+    <ul className="divide-y divide-nocturne-neutral-900 rounded border border-nocturne-neutral-900">
       {players.map((player) => (
         <li key={player.id} className="flex items-center gap-3 px-4 py-2.5">
           <span
@@ -537,7 +537,7 @@ function PlayerList({
           </span>
           <span className="flex-1 truncate text-sm">{player.name}</span>
           <span
-            className="w-10 text-xs text-white/30 tabular-nums"
+            className="w-10 text-xs text-nocturne-neutral-600 tabular-nums"
             title="Average draft position"
           >
             {player.rank}
@@ -547,7 +547,7 @@ function PlayerList({
             <button
               onClick={() => onQueue(player.id)}
               disabled={busy}
-              className="rounded border border-white/15 px-2 py-1 text-xs text-white/60 hover:text-white disabled:opacity-40"
+              className="rounded border border-nocturne-neutral-800 px-2 py-1 text-xs text-nocturne-neutral-400 hover:text-nocturne-text disabled:opacity-40"
               title="Add to or remove from your queue"
             >
               {queue.includes(player.id) ? "Queued" : "Queue"}
@@ -557,7 +557,7 @@ function PlayerList({
           <button
             onClick={() => onPick(player.id)}
             disabled={!canPick || busy}
-            className="rounded bg-[--color-turf] px-3 py-1 text-xs font-medium text-black disabled:opacity-30"
+            className="rounded border border-nocturne-accent px-3 py-1 text-xs font-medium text-black disabled:opacity-30"
           >
             Draft
           </button>
@@ -590,15 +590,15 @@ function Queue({
 
   return (
     <section className="space-y-2">
-      <h2 className="text-sm font-medium text-white/70">
+      <h2 className="text-sm font-medium text-nocturne-neutral-400">
         Your queue
-        <span className="ml-2 text-xs font-normal text-white/30">
+        <span className="ml-2 text-xs font-normal text-nocturne-neutral-600">
           used if your clock runs out
         </span>
       </h2>
 
       {queue.length === 0 ? (
-        <p className="text-xs text-white/40">
+        <p className="text-xs text-nocturne-neutral-600">
           Empty. If your clock expires, the auto-pick takes the best available player who fits
           your roster instead.
         </p>
@@ -610,33 +610,33 @@ function Queue({
             return (
               <li
                 key={playerId}
-                className={`flex items-center gap-2 rounded border border-white/10 px-2 py-1.5 text-xs ${
+                className={`flex items-center gap-2 rounded border border-nocturne-neutral-900 px-2 py-1.5 text-xs ${
                   gone ? "opacity-40" : ""
                 }`}
               >
-                <span className="w-4 text-white/30">{index + 1}</span>
+                <span className="w-4 text-nocturne-neutral-600">{index + 1}</span>
                 <span className="flex-1 truncate">
                   {player?.name ?? playerId}
-                  {gone && <span className="ml-1 text-white/40">— taken</span>}
+                  {gone && <span className="ml-1 text-nocturne-neutral-600">— taken</span>}
                 </span>
                 <button
                   onClick={() => move(index, -1)}
                   disabled={busy || index === 0}
-                  className="px-1 text-white/40 hover:text-white disabled:opacity-20"
+                  className="px-1 text-nocturne-neutral-600 hover:text-nocturne-text disabled:opacity-20"
                 >
                   ↑
                 </button>
                 <button
                   onClick={() => move(index, 1)}
                   disabled={busy || index === queue.length - 1}
-                  className="px-1 text-white/40 hover:text-white disabled:opacity-20"
+                  className="px-1 text-nocturne-neutral-600 hover:text-nocturne-text disabled:opacity-20"
                 >
                   ↓
                 </button>
                 <button
                   onClick={() => onChange(queue.filter((id) => id !== playerId))}
                   disabled={busy}
-                  className="px-1 text-white/40 hover:text-white disabled:opacity-20"
+                  className="px-1 text-nocturne-neutral-600 hover:text-nocturne-text disabled:opacity-20"
                 >
                   ×
                 </button>
@@ -664,20 +664,23 @@ function MyRoster({
 
   return (
     <section className="space-y-2">
-      <h2 className="text-sm font-medium text-white/70">
-        Your roster <span className="text-xs font-normal text-white/30">{mine.length}</span>
+      <h2 className="text-sm font-medium text-nocturne-neutral-400">
+        Your roster{" "}
+        <span className="text-xs font-normal text-nocturne-neutral-600">{mine.length}</span>
       </h2>
       {mine.length === 0 ? (
-        <p className="text-xs text-white/40">Nothing yet.</p>
+        <p className="text-xs text-nocturne-neutral-600">Nothing yet.</p>
       ) : (
         <ul className="space-y-1 text-xs">
           {mine.map((pick) => {
             const player = byId.get(pick.playerId);
             return (
               <li key={pick.pickNumber} className="flex gap-2">
-                <span className="w-10 text-white/30">{player?.positions[0] ?? "—"}</span>
+                <span className="w-10 text-nocturne-neutral-600">
+                  {player?.positions[0] ?? "—"}
+                </span>
                 <span className="flex-1 truncate">{player?.name ?? pick.playerId}</span>
-                <span className="text-white/30">R{pick.round}</span>
+                <span className="text-nocturne-neutral-600">R{pick.round}</span>
               </li>
             );
           })}
@@ -701,19 +704,21 @@ function RecentPicks({
 
   return (
     <section className="space-y-2">
-      <h2 className="text-sm font-medium text-white/70">Recent picks</h2>
+      <h2 className="text-sm font-medium text-nocturne-neutral-400">Recent picks</h2>
       <ul className="space-y-1 text-xs">
         {recent.map((pick) => (
           <li key={pick.pickNumber} className="flex gap-2">
-            <span className="w-8 text-white/30 tabular-nums">{pick.pickNumber}</span>
+            <span className="w-8 text-nocturne-neutral-600 tabular-nums">
+              {pick.pickNumber}
+            </span>
             <span className="flex-1 truncate">
               {byId.get(pick.playerId)?.name ?? pick.playerId}
             </span>
-            <span className="max-w-[8ch] truncate text-white/40">
+            <span className="max-w-[8ch] truncate text-nocturne-neutral-600">
               {teams.get(pick.teamId)?.name ?? "—"}
             </span>
             {pick.source !== "MANUAL" && (
-              <span className="text-white/25" title={`Auto-picked: ${pick.source}`}>
+              <span className="text-nocturne-text/25" title={`Auto-picked: ${pick.source}`}>
                 auto
               </span>
             )}
@@ -737,39 +742,41 @@ function OrderPanel({
 
   return (
     <section className="space-y-2">
-      <h2 className="text-sm font-medium text-white/70">Draft order</h2>
+      <h2 className="text-sm font-medium text-nocturne-neutral-400">Draft order</h2>
       <ol className="space-y-1 text-xs">
         {draft.order.map((teamId, index) => (
           <li
             key={teamId}
-            className={`flex gap-2 ${teamId === myTeamId ? "text-[--color-turf]" : ""}`}
+            className={`flex gap-2 ${teamId === myTeamId ? "text-nocturne-accent-300" : ""}`}
           >
-            <span className="w-4 text-white/30">{index + 1}</span>
+            <span className="w-4 text-nocturne-neutral-600">{index + 1}</span>
             <span className="flex-1 truncate">{teams.get(teamId)?.name ?? teamId}</span>
-            {teams.get(teamId)?.isBot && <span className="text-white/25">bot</span>}
+            {teams.get(teamId)?.isBot && <span className="text-nocturne-text/25">bot</span>}
           </li>
         ))}
       </ol>
 
       {draft.draw && (
-        <details className="pt-2 text-xs text-white/40">
-          <summary className="cursor-pointer hover:text-white/70">
+        <details className="pt-2 text-xs text-nocturne-neutral-600">
+          <summary className="cursor-pointer hover:text-nocturne-neutral-400">
             How this order was decided
           </summary>
           <div className="space-y-2 pt-2">
             <p>
               Drawn from Solana slot{" "}
-              <span className="font-mono text-white/60">{draft.draw.slot}</span>, the first
-              block produced at or after the scheduled draft time. Nobody could know it while
-              teams were still joining.
+              <span className="font-mono text-nocturne-neutral-400">{draft.draw.slot}</span>,
+              the first block produced at or after the scheduled draft time. Nobody could know
+              it while teams were still joining.
             </p>
-            <p className="font-mono break-all text-white/50">{draft.draw.blockhash}</p>
+            <p className="font-mono break-all text-nocturne-neutral-500">
+              {draft.draw.blockhash}
+            </p>
             <p>
               Check it: look up that slot on any explorer, confirm its time is at or after the
               draft time and the block before it is earlier, then recompute
               <span className="font-mono"> sha256(rostr:draft-order:v1:…)</span>.
             </p>
-            <p className="font-mono break-all text-white/50">{draft.draw.seed}</p>
+            <p className="font-mono break-all text-nocturne-neutral-500">{draft.draw.seed}</p>
           </div>
         </details>
       )}

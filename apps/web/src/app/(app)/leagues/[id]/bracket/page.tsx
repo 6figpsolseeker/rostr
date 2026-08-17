@@ -89,8 +89,8 @@ export default async function BracketPage({ params }: { params: Promise<{ id: st
     const won = (teamId: string) => game.winnerTeamId === teamId;
 
     return (
-      <li className="rounded border border-white/10 px-4 py-3 text-sm">
-        <div className="mb-1 flex items-baseline justify-between text-xs text-white/40">
+      <li className="rounded border border-nocturne-neutral-900 px-4 py-3 text-sm">
+        <div className="mb-1 flex items-baseline justify-between text-xs text-nocturne-neutral-600">
           <span>{game.label}</span>
           <span>Week {game.week}</span>
         </div>
@@ -99,10 +99,14 @@ export default async function BracketPage({ params }: { params: Promise<{ id: st
           { teamId: game.awayTeamId, points: score?.away },
         ].map((side) => (
           <div key={side.teamId} className="flex items-baseline gap-3">
-            <span className={won(side.teamId) ? "flex-1 font-medium" : "flex-1 text-white/60"}>
+            <span
+              className={
+                won(side.teamId) ? "flex-1 font-medium" : "flex-1 text-nocturne-neutral-400"
+              }
+            >
               {nameOf(side.teamId)}
             </span>
-            <span className="tabular-nums text-white/50">
+            <span className="tabular-nums text-nocturne-neutral-500">
               {side.points === undefined ? "—" : (side.points / 1000).toFixed(1)}
             </span>
           </div>
@@ -118,9 +122,11 @@ export default async function BracketPage({ params }: { params: Promise<{ id: st
 
   const Round = ({ round }: { round: BracketRound }) => (
     <section className="space-y-2">
-      <h3 className="text-sm font-medium text-white/70">
+      <h3 className="text-sm font-medium text-nocturne-neutral-400">
         {round.label}
-        <span className="ml-2 text-xs font-normal text-white/30">Week {round.week}</span>
+        <span className="ml-2 text-xs font-normal text-nocturne-neutral-600">
+          Week {round.week}
+        </span>
       </h3>
       <ul className="space-y-2">
         {round.games.map((game) => (
@@ -128,7 +134,7 @@ export default async function BracketPage({ params }: { params: Promise<{ id: st
         ))}
       </ul>
       {round.byes.length > 0 && (
-        <p className="text-xs text-white/40">
+        <p className="text-xs text-nocturne-neutral-600">
           Bye: {round.byes.map((bye) => `${nameOf(bye.teamId)} (${bye.seed})`).join(", ")}
         </p>
       )}
@@ -138,11 +144,14 @@ export default async function BracketPage({ params }: { params: Promise<{ id: st
   return (
     <div className="space-y-8">
       <header className="space-y-1">
-        <a href={`/leagues/${id}`} className="text-xs text-white/40 hover:text-white">
+        <a
+          href={`/leagues/${id}`}
+          className="text-xs text-nocturne-neutral-600 hover:text-nocturne-text"
+        >
           ← {league.name}
         </a>
         <h1 className="text-2xl font-semibold tracking-tight">Bracket</h1>
-        <p className="text-sm text-white/50">
+        <p className="text-sm text-nocturne-neutral-500">
           Top {stored.rules.schedule.playoffTeams} qualify; the top{" "}
           {stored.rules.schedule.byeSeeds} sit out the first round. Every round reseeds, so the
           best remaining seed always draws the worst.
@@ -150,7 +159,7 @@ export default async function BracketPage({ params }: { params: Promise<{ id: st
       </header>
 
       {!seasonOver && (
-        <p className="rounded border border-white/10 px-4 py-3 text-sm text-white/60">
+        <p className="rounded border border-nocturne-neutral-900 px-4 py-3 text-sm text-nocturne-neutral-400">
           The bracket is drawn when the regular season finishes. Seeding it early would give a
           bracket that changes under the teams in it.
         </p>
@@ -166,9 +175,9 @@ export default async function BracketPage({ params }: { params: Promise<{ id: st
         deciding; it is the week not being decided yet.
       */}
       {!state?.champion && awaitingFinal && (
-        <section className="rounded border border-white/10 px-4 py-3">
-          <p className="text-sm text-white/70">Waiting on the correction window.</p>
-          <p className="mt-1 text-xs text-white/50">
+        <section className="rounded border border-nocturne-neutral-900 px-4 py-3">
+          <p className="text-sm text-nocturne-neutral-400">Waiting on the correction window.</p>
+          <p className="mt-1 text-xs text-nocturne-neutral-500">
             The games are played, but official stat corrections arrive for up to seven days and
             this week pays out. No champion is named until the week is final — which is the
             point: a result that can still change is not a result.
@@ -177,11 +186,11 @@ export default async function BracketPage({ params }: { params: Promise<{ id: st
       )}
 
       {state?.champion && (
-        <section className="rounded border border-[--color-turf]/30 bg-[--color-turf]/5 px-4 py-3">
+        <section className="rounded border border-nocturne-accent/30 px-4 py-3">
           <p className="text-sm">
             <strong>{nameOf(state.champion)}</strong> are champions.
           </p>
-          <p className="mt-1 text-xs text-white/50">
+          <p className="mt-1 text-xs text-nocturne-neutral-500">
             Runner-up {nameOf(state.runnerUp)}
             {state.thirdPlace ? `, third ${nameOf(state.thirdPlace)}` : ""}
             {state.consolationWinner ? `, consolation ${nameOf(state.consolationWinner)}` : ""}.
@@ -192,7 +201,7 @@ export default async function BracketPage({ params }: { params: Promise<{ id: st
 
       {state?.playoffs && (
         <div className="space-y-6">
-          <h2 className="text-sm font-medium uppercase tracking-wide text-white/50">
+          <h2 className="text-sm font-medium uppercase tracking-wide text-nocturne-neutral-500">
             Playoffs
           </h2>
           {state.playoffs.bracket.rounds.map((round) => (
@@ -200,7 +209,7 @@ export default async function BracketPage({ params }: { params: Promise<{ id: st
           ))}
           {state.playoffs.bracket.thirdPlaceGame && (
             <section className="space-y-2">
-              <h3 className="text-sm font-medium text-white/70">Third place</h3>
+              <h3 className="text-sm font-medium text-nocturne-neutral-400">Third place</h3>
               <ul className="space-y-2">
                 <Game game={state.playoffs.bracket.thirdPlaceGame} />
               </ul>
@@ -211,10 +220,10 @@ export default async function BracketPage({ params }: { params: Promise<{ id: st
 
       {state?.consolation && (
         <div className="space-y-6">
-          <h2 className="text-sm font-medium uppercase tracking-wide text-white/50">
+          <h2 className="text-sm font-medium uppercase tracking-wide text-nocturne-neutral-500">
             Consolation
           </h2>
-          <p className="text-xs text-white/40">
+          <p className="text-xs text-nocturne-neutral-600">
             It is played but unpaid. An eliminated team still has something to play for, which
             is the whole reason it exists.
           </p>

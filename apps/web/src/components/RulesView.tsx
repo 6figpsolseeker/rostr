@@ -25,12 +25,12 @@ export function RulesView({ rules, hash }: { rules: LeagueRules; hash: string })
 
 function Banner({ hash }: { hash: string }) {
   return (
-    <div className="rounded border border-[--color-turf]/40 bg-[--color-turf]/5 p-4">
+    <div className="rounded border border-nocturne-accent/40 border border-nocturne-accent/5 p-4">
       <p className="text-sm">
         These rules are <strong>final</strong>. They cannot be changed by anyone, including the
         commissioner, for the life of this league.
       </p>
-      <p className="mt-2 font-mono text-xs break-all text-white/50">{hash}</p>
+      <p className="mt-2 font-mono text-xs break-all text-nocturne-neutral-500">{hash}</p>
     </div>
   );
 }
@@ -38,7 +38,7 @@ function Banner({ hash }: { hash: string }) {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section>
-      <h3 className="mb-3 text-sm font-semibold tracking-wide text-white/50 uppercase">
+      <h3 className="mb-3 text-sm font-semibold tracking-wide text-nocturne-neutral-500 uppercase">
         {title}
       </h3>
       {children}
@@ -48,8 +48,8 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="flex justify-between border-b border-white/5 py-1.5 text-sm">
-      <span className="text-white/60">{label}</span>
+    <div className="flex justify-between border-b border-nocturne-neutral-900 py-1.5 text-sm">
+      <span className="text-nocturne-neutral-400">{label}</span>
       <span className="text-right font-medium">{value}</span>
     </div>
   );
@@ -107,7 +107,7 @@ function Scoring({ rules }: { rules: LeagueRules }) {
 
       {tiered.map((rule) => (
         <div key={rule.statKey} className="mt-4">
-          <p className="mb-2 text-sm text-white/60">
+          <p className="mb-2 text-sm text-nocturne-neutral-400">
             {STAT_LABELS[rule.statKey] ?? rule.statKey}
           </p>
           <div className="grid gap-x-8 sm:grid-cols-2">
@@ -240,7 +240,7 @@ function Pot({ rules }: { rules: LeagueRules }) {
   if (rules.pot === null) {
     return (
       <Section title="Prize pool">
-        <p className="text-sm text-white/60">
+        <p className="text-sm text-nocturne-neutral-400">
           This league plays for nothing. No buy-in, no escrow, no payouts.
         </p>
       </Section>
@@ -270,7 +270,7 @@ function Pot({ rules }: { rules: LeagueRules }) {
           />
         ))}
       </div>
-      <p className="mt-3 text-xs text-white/50">
+      <p className="mt-3 text-xs text-nocturne-neutral-500">
         Funds are held in escrow until the season resolves. After the refund unlock date any
         member may withdraw their own stake unilaterally, regardless of league state.
       </p>

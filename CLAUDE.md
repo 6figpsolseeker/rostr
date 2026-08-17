@@ -583,6 +583,49 @@ round trips, took minutes, and the connection died partway through. One query fo
 player map, then chunked multi-row upserts — 500 rows a chunk, because Postgres caps a
 statement at 65535 bind parameters.
 
+#### The draft lobby, and why the draw is now its own instruction
+
+`apps/web/src/app/(app)/leagues/[id]/lobby/`, `components/DraftLobby.tsx`,
+`lib/lobby.ts`, and `api/leagues/[id]/draft/draw/`. Built 2026-08-16 to the design in
+`docs/design/screens/Rostr Draft Lobby.dc.html`. Closes #138.
+
+**`/draft/start` draws the order and starts the clock in one press**, which is right for
+walking straight into the room and wrong for a lobby: the instant the order exists, position
+one is on the clock, so a league that pressed one button would burn ninety seconds of
+somebody's first pick while twelve people were still reading the blockhash. `/draft/draw` is
+the first half alone. **`/draft/start` is unchanged** — it still draws if the order is
+missing, so a commissioner who never opens the lobby gets exactly the behaviour they had.
+Both are idempotent on `ORDER_ALREADY_DRAWN`, both carry the same `STATUS` map, and the
+trigger makes a genuine second draw impossible either way.
+
+**The view model is `lib/lobby.ts`, not the component.** `apps/web` cannot render a
+component in a test — both vitest projects are node-environment with no jsdom — so what the
+screen decides lives where a test can reach it. Eleven tests; `lib/pot.ts` is the pattern.
+
+**Nothing here computes the snake.** Pick labels walk the engine's own `pickPosition`, the
+order comes from the recorded `draft_position`s, and the seed recipe is `explainOrderDraw`
+verbatim. The design handoff names the snake explicitly as a fact that must not be authored
+twice, and the first draft of `lobby.test.ts` proved the point by restating a 12-team
+example against a 4-team fixture and failing.
+
+**The countdown measures against the server's `now`, carried in the payload**, and takes
+only _elapsed_ time locally — the same rule the room's pick clock follows, for the same
+reason. Here a wrong clock costs only a wrong-looking countdown, because the server refuses
+an early draw regardless.
+
+**Presence is deliberately not rendered.** The design shows each seat as present or away and
+nothing in this product tracks that — no heartbeat, no socket. Inventing it on the one
+screen whose entire argument is that nothing here is invented would be the worst possible
+place for it. The copy carries the reassurance the presence list existed to deliver instead:
+being away costs nobody a pick.
+
+**Two facts the design shows and the schema does not hold:** the drawn block's own time, and
+the previous block's. `0010` records slot, blockhash, seed and `order_drawn_at` — the last
+being when the draw was _recorded_, which is not the block time and must not be labelled as
+one. The panel shows what is stored and points at an explorer for the rest, which is what
+`explainOrderDraw` already instructs. Storing both at draw time is a small migration and
+would complete the panel.
+
 #### The draft room
 
 `apps/web/src/components/DraftRoom.tsx` and `apps/web/src/app/api/leagues/[id]/draft/`.

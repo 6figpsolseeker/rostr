@@ -115,40 +115,40 @@ export default function ScoringPage() {
     <div className="space-y-12">
       <header className="space-y-4">
         <h1 className="text-3xl font-semibold tracking-tight">How scoring works</h1>
-        <p className="max-w-2xl text-white/70">
+        <p className="max-w-2xl text-nocturne-neutral-400">
           Your team scores points every week based on what your players actually did in their
           real NFL games. Add up your starters, and whoever scores more than their opponent that
           week wins.
         </p>
-        <p className="max-w-2xl text-sm text-white/50">
+        <p className="max-w-2xl text-sm text-nocturne-neutral-500">
           This is the default full-PPR table. Each league freezes its own copy when it is
           created, so always check that league&rsquo;s rules — they cannot be changed
           afterwards, but they can differ from these.
         </p>
       </header>
 
-      <section className="rounded border border-white/10 p-6">
+      <section className="rounded border border-nocturne-neutral-900 p-6">
         <h2 className="mb-3 text-lg font-medium">The short version</h2>
-        <ul className="space-y-2 text-sm text-white/70">
+        <ul className="space-y-2 text-sm text-nocturne-neutral-400">
           <li>
-            <strong className="text-white">Yards give you points slowly</strong> — 10 rushing or
-            receiving yards is 1 point, 25 passing yards is 1 point.
+            <strong className="text-nocturne-text">Yards give you points slowly</strong> — 10
+            rushing or receiving yards is 1 point, 25 passing yards is 1 point.
           </li>
           <li>
-            <strong className="text-white">Touchdowns are the big swing</strong> — 6 points, or
-            4 for throwing one.
+            <strong className="text-nocturne-text">Touchdowns are the big swing</strong> — 6
+            points, or 4 for throwing one.
           </li>
           <li>
-            <strong className="text-white">Every catch is worth a point.</strong> That is what
-            &ldquo;PPR&rdquo; means: point per reception.
+            <strong className="text-nocturne-text">Every catch is worth a point.</strong> That
+            is what &ldquo;PPR&rdquo; means: point per reception.
           </li>
           <li>
-            <strong className="text-white">Mistakes cost you</strong> — an interception or a
-            lost fumble is −2.
+            <strong className="text-nocturne-text">Mistakes cost you</strong> — an interception
+            or a lost fumble is −2.
           </li>
           <li>
-            <strong className="text-white">Only your starters count.</strong> Bench players
-            score nothing.
+            <strong className="text-nocturne-text">Only your starters count.</strong> Bench
+            players score nothing.
           </li>
         </ul>
       </section>
@@ -156,9 +156,9 @@ export default function ScoringPage() {
       {GROUPS.map((group) => (
         <section key={group.title}>
           <h2 className="mb-2 text-lg font-medium">{group.title}</h2>
-          <p className="mb-4 max-w-2xl text-sm text-white/60">{group.blurb}</p>
+          <p className="mb-4 max-w-2xl text-sm text-nocturne-neutral-400">{group.blurb}</p>
 
-          <div className="overflow-hidden rounded border border-white/10">
+          <div className="overflow-hidden rounded border border-nocturne-neutral-900">
             {group.keys.map((statKey) => {
               const milli = linear(statKey);
               if (milli === null) return null;
@@ -166,12 +166,14 @@ export default function ScoringPage() {
               return (
                 <div
                   key={statKey}
-                  className="flex items-baseline justify-between border-b border-white/5 px-4 py-2.5 text-sm last:border-0"
+                  className="flex items-baseline justify-between border-b border-nocturne-neutral-900 px-4 py-2.5 text-sm last:border-0"
                 >
                   <span>
                     {LABELS[statKey] ?? statKey}
                     {NOTES[statKey] && (
-                      <span className="ml-2 text-xs text-white/40">{NOTES[statKey]}</span>
+                      <span className="ml-2 text-xs text-nocturne-neutral-600">
+                        {NOTES[statKey]}
+                      </span>
                     )}
                   </span>
                   <span className={`font-mono font-medium ${milli < 0 ? "text-red-400" : ""}`}>
@@ -187,16 +189,16 @@ export default function ScoringPage() {
       {pointsAllowed && (
         <section>
           <h2 className="mb-2 text-lg font-medium">Defense: points allowed</h2>
-          <p className="mb-4 max-w-2xl text-sm text-white/60">
+          <p className="mb-4 max-w-2xl text-sm text-nocturne-neutral-400">
             On top of the plays above, your defense is scored on how many points the opposing
             offense put up against it. A shutout is worth a lot; getting blown out costs you.
           </p>
 
-          <div className="overflow-hidden rounded border border-white/10">
+          <div className="overflow-hidden rounded border border-nocturne-neutral-900">
             {pointsAllowed.tiers.map((tier) => (
               <div
                 key={`${tier.min}-${tier.max ?? "up"}`}
-                className="flex items-baseline justify-between border-b border-white/5 px-4 py-2.5 text-sm last:border-0"
+                className="flex items-baseline justify-between border-b border-nocturne-neutral-900 px-4 py-2.5 text-sm last:border-0"
               >
                 <span>
                   {tier.max === null
@@ -220,9 +222,9 @@ export default function ScoringPage() {
 
       <WorkedExamples />
 
-      <section className="rounded border border-white/10 p-6">
+      <section className="rounded border border-nocturne-neutral-900 p-6">
         <h2 className="mb-3 text-lg font-medium">Your starting lineup</h2>
-        <p className="mb-4 text-sm text-white/60">
+        <p className="mb-4 text-sm text-nocturne-neutral-400">
           Each week you start {NFL_PPR_ROSTER.starters.reduce((n, s) => n + s.count, 0)}{" "}
           players. Everyone else sits on your bench and scores nothing.
         </p>
@@ -231,14 +233,14 @@ export default function ScoringPage() {
             Array.from({ length: slot.count }, (_, i) => (
               <span
                 key={`${slot.slotType}-${i}`}
-                className="rounded border border-white/15 px-3 py-1 font-mono text-sm"
+                className="rounded border border-nocturne-neutral-800 px-3 py-1 font-mono text-sm"
               >
                 {slot.slotType}
               </span>
             )),
           )}
         </div>
-        <p className="mt-4 text-xs text-white/40">
+        <p className="mt-4 text-xs text-nocturne-neutral-600">
           FLEX takes a running back, receiver, or tight end — whoever you think will score most.
         </p>
       </section>
@@ -297,7 +299,7 @@ function WorkedExamples() {
   return (
     <section>
       <h2 className="mb-2 text-lg font-medium">Worked examples</h2>
-      <p className="mb-4 max-w-2xl text-sm text-white/60">
+      <p className="mb-4 max-w-2xl text-sm text-nocturne-neutral-400">
         Scored by the same engine that scores your real matchups.
       </p>
 
@@ -305,11 +307,11 @@ function WorkedExamples() {
         {examples.map((example) => (
           <div
             key={example.name}
-            className="flex items-baseline justify-between rounded border border-white/10 px-4 py-3"
+            className="flex items-baseline justify-between rounded border border-nocturne-neutral-900 px-4 py-3"
           >
             <div>
               <p className="text-sm font-medium">{example.name}</p>
-              <p className="text-xs text-white/50">{example.line}</p>
+              <p className="text-xs text-nocturne-neutral-500">{example.line}</p>
             </div>
             <span className="font-mono text-lg">
               {formatPoints(scorePlayer(example.stats, RULES))}

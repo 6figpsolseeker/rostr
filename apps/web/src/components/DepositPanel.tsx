@@ -54,8 +54,8 @@ export function DepositPanel({
   // does not belong in it — see the stake button below.
   if (!tokenMint) {
     return (
-      <section className="rounded border border-white/10 p-6">
-        <p className="text-sm text-white/60">
+      <section className="rounded border border-nocturne-neutral-900 p-6">
+        <p className="text-sm text-nocturne-neutral-400">
           This league plays for pride, so there is nothing to stake.
         </p>
       </section>
@@ -159,13 +159,13 @@ export function DepositPanel({
   }
 
   return (
-    <section className="space-y-4 rounded border border-white/10 p-6">
+    <section className="space-y-4 rounded border border-nocturne-neutral-900 p-6">
       <h2 className="text-lg font-medium">Your stake</h2>
-      <p className="text-sm text-white/60">
+      <p className="text-sm text-nocturne-neutral-400">
         Staking moves the buy-in from your wallet into the league vault. Refund is open once the
         timelock passes — and is unconditional, so your stake can never be stuck.
       </p>
-      <p className="text-xs text-white/40">
+      <p className="text-xs text-nocturne-neutral-600">
         Joining normally stakes for you in the same approval. This is here for a stake that was
         interrupted, or one from before that was true.
       </p>
@@ -185,7 +185,7 @@ export function DepositPanel({
               type="button"
               onClick={() => void stake()}
               disabled={busy !== null || done === "deposit"}
-              className="rounded bg-[--color-turf] px-4 py-2 text-sm font-medium text-black disabled:opacity-50"
+              className="rounded rounded-[4px] border border-nocturne-accent px-4 py-2 text-[13.5px] text-nocturne-accent-200 transition-colors hover:bg-nocturne-accent/10 disabled:opacity-50"
             >
               {busy === "deposit"
                 ? "Waiting for the chain…"
@@ -194,7 +194,7 @@ export function DepositPanel({
                   : "Stake buy-in"}
             </button>
           ) : (
-            <p className="text-sm text-white/60">
+            <p className="text-sm text-nocturne-neutral-400">
               Staking is not open yet. The escrow program has no payout instruction, so a buy-in
               taken now could only come back out through the timelock refund — and this app will
               not take money for prizes it cannot award.
@@ -206,7 +206,7 @@ export function DepositPanel({
             onClick={() => void refund()}
             disabled={busy !== null || !refundOpen || done === "refund"}
             title={refundOpen ? undefined : "Refund unlocks after the timelock"}
-            className="rounded border border-white/20 px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
+            className="rounded border border-nocturne-neutral-800 px-4 py-2 text-sm font-medium text-nocturne-text disabled:opacity-40"
           >
             {busy === "refund"
               ? "Waiting for the chain…"

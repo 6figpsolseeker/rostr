@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="_ds/nocturne-2cbfcdf4-7e1c-4bfa-8626-a61405078160/styles.css">
+<script src="_ds/nocturne-2cbfcdf4-7e1c-4bfa-8626-a61405078160/_ds_bundle.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
+<style>
+  html, body { margin: 0; padding: 0; background: var(--color-bg); }
+  body { font-family: var(--font-body); color: var(--color-text); -webkit-font-smoothing: antialiased; }
+  * { box-sizing: border-box; }
+  a { color: var(--color-accent); text-decoration: none; }
+  a:hover { color: var(--color-accent-400); }
+  a:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+</style>
+</helmet>
+
+<div style="background: var(--color-bg); min-width: 1280px;">
+
+  <div style="display: flex; align-items: baseline; gap: 14px; padding: 30px 28px 14px;">
+    <span style="font-family: ui-monospace, monospace; font-size: 11px; letter-spacing: 0.1em; color: var(--color-accent-500);">STATE 1</span>
+    <span style="font-family: var(--font-heading); font-size: 17px; font-weight: 500; letter-spacing: -0.02em;">Setting the lineup</span>
+    <span style="font-size: 13px; color: var(--color-neutral-600);">A receiver picked up · only eligible slots are lit</span>
+  </div>
+  <div data-screen-label="Set lineup" style="background: var(--color-bg); min-height: 100vh; min-width: 1280px; padding-bottom: 56px;">
+    <header style="border-bottom: 1px solid var(--color-neutral-900);">
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 12px 28px;">
+        <div style="display: flex; align-items: center; gap: 18px;">
+          <span style="font-family: var(--font-heading); font-size: 17px; font-weight: 600; letter-spacing: -0.02em;">rostr</span>
+          <span style="width: 1px; height: 18px; background: var(--color-neutral-800);"></span>
+          <span style="font-size: 14.5px;">Route 66</span>
+          <span style="font-size: 12px; color: var(--color-neutral-600);">Week 4 lineup · Sun 11:40 AM ET · nothing locked yet</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <span style="font-family: ui-monospace, monospace; font-size: 11.5px; color: var(--color-neutral-600);">0x7f3a…c19d</span>
+          <span style="width: 1px; height: 18px; background: var(--color-neutral-800);"></span>
+          <span style="font-family: ui-monospace, monospace; font-size: 12px; color: var(--color-neutral-400);">7xKq…4vNb</span>
+        </div>
+      </div>
+      <nav style="display: flex; align-items: center; gap: 26px; padding: 0 28px 11px;">
+        <a href="#" style="font-size: 13.5px; color: var(--color-neutral-500); padding-bottom: 3px;" style-hover="color: var(--color-text);">Home</a>
+        <a href="#" style="font-size: 13.5px; color: var(--color-neutral-500); padding-bottom: 3px;" style-hover="color: var(--color-text);">Matchup</a>
+        <a href="#" style="font-size: 13.5px; color: var(--color-text); box-shadow: inset 0 -1px 0 var(--color-accent); padding-bottom: 3px;" style-hover="color: var(--color-text);">My team</a>
+        <a href="#" style="font-size: 13.5px; color: var(--color-neutral-500); padding-bottom: 3px;" style-hover="color: var(--color-text);">Players</a>
+        <a href="#" style="font-size: 13.5px; color: var(--color-neutral-500); padding-bottom: 3px;" style-hover="color: var(--color-text);">Trades</a>
+        <a href="#" style="font-size: 13.5px; color: var(--color-neutral-500); padding-bottom: 3px;" style-hover="color: var(--color-text);">Standings</a>
+      </nav>
+    </header>
+
+    <div style="display: grid; grid-template-columns: minmax(0, 1fr) 420px; gap: 28px; padding: 30px 28px 0; max-width: 1440px; margin: 0 auto;">
+
+      <div style="min-width: 0;">
+        <div style="display: flex; align-items: end; justify-content: space-between; gap: 20px;">
+          <div>
+            <h1 style="font-family: var(--font-heading); font-size: 28px; font-weight: 500; letter-spacing: -0.026em; margin: 0;">Set your Week 4 lineup</h1>
+            <p style="font-size: 14px; line-height: 1.6; color: var(--color-neutral-400); margin: 10px 0 0; max-width: 540px;">You have picked up <span style="color: var(--color-accent-200);">D. Achterberg</span>. Three slots take a wide receiver — both WR slots and FLEX. The rest are marked not eligible.</p>
+          </div>
+          <div class="seg" role="radiogroup" aria-label="Week" style="flex: 0 0 auto;">
+            <label class="seg-opt"><input type="radio" name="ln-week">W3</label>
+            <label class="seg-opt"><input type="radio" name="ln-week" checked="checked">W4</label>
+            <label class="seg-opt"><input type="radio" name="ln-week">W5</label>
+          </div>
+        </div>
+
+        <div class="card elev-md" style="margin-top: 24px; padding: 0; overflow: hidden; background: var(--color-surface);">
+          <div style="display: grid; grid-template-columns: 58px 1fr 92px 56px 84px; gap: 12px; padding: 9px 18px; border-bottom: 1px solid var(--color-neutral-900); font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-600); font-size: 10px;">
+            <span>Slot</span><span>Starter</span><span>Kickoff</span><span style="text-align: right;">Proj</span><span></span>
+          </div>
+            <div style="display: grid; grid-template-columns: 58px 1fr 92px 56px 84px; align-items: center; gap: 12px; padding: 11px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+              <span class="tag tag-neutral" style="font-size: 10px; padding: 2px 7px; justify-self: start;">QB</span>
+              <span style="font-size: 13.5px;">J. Whitcombe <span style="font-size: 11.5px; color: var(--color-neutral-600);">PIT</span></span>
+              <span style="font-size: 11.5px; color: var(--color-neutral-600);">Sun 1:00</span>
+              <span style="text-align: right; font-size: 13px; color: var(--color-neutral-400); font-variant-numeric: tabular-nums;">21.8</span>
+              <span style="text-align: right;"><span style="font-size: 11px; color: var(--color-neutral-500);">Not eligible</span></span>
+            </div>
+            <div style="display: grid; grid-template-columns: 58px 1fr 92px 56px 84px; align-items: center; gap: 12px; padding: 11px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+              <span class="tag tag-neutral" style="font-size: 10px; padding: 2px 7px; justify-self: start;">RB</span>
+              <span style="font-size: 13.5px;">L. Marchetti <span style="font-size: 11.5px; color: var(--color-neutral-600);">MIN</span></span>
+              <span style="font-size: 11.5px; color: var(--color-neutral-600);">Sun 1:00</span>
+              <span style="text-align: right; font-size: 13px; color: var(--color-neutral-400); font-variant-numeric: tabular-nums;">15.4</span>
+              <span style="text-align: right;"><span style="font-size: 11px; color: var(--color-neutral-500);">Not eligible</span></span>
+            </div>
+            <div style="display: grid; grid-template-columns: 58px 1fr 92px 56px 84px; align-items: center; gap: 12px; padding: 11px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+              <span class="tag tag-neutral" style="font-size: 10px; padding: 2px 7px; justify-self: start;">RB</span>
+              <span style="font-size: 13.5px;">A. Villanueva <span style="font-size: 11.5px; color: var(--color-neutral-600);">TEN</span></span>
+              <span style="font-size: 11.5px; color: var(--color-neutral-600);">Sun 4:05</span>
+              <span style="text-align: right; font-size: 13px; color: var(--color-neutral-400); font-variant-numeric: tabular-nums;">13.9</span>
+              <span style="text-align: right;"><span style="font-size: 11px; color: var(--color-neutral-500);">Not eligible</span></span>
+            </div>
+            <div style="display: grid; grid-template-columns: 58px 1fr 92px 56px 84px; align-items: center; gap: 12px; padding: 11px 18px; border-bottom: 1px solid var(--color-neutral-900); background: color-mix(in srgb, var(--color-accent) 10%, transparent); box-shadow: inset 0 0 0 1px var(--color-accent);">
+              <span class="tag tag-accent" style="font-size: 10px; padding: 2px 7px; justify-self: start;">WR</span>
+              <span style="font-size: 13.5px;">K. Osei-Bonsu <span style="font-size: 11.5px; color: var(--color-neutral-600);">LV</span></span>
+              <span style="font-size: 11.5px; color: var(--color-neutral-600);">Sun 4:25</span>
+              <span style="text-align: right; font-size: 13px; color: var(--color-neutral-400); font-variant-numeric: tabular-nums;">16.0</span>
+              <span style="text-align: right;"><button type="button" class="btn btn-primary" style="font-size: 11.5px; padding: 4px 11px;">Place here</button></span>
+            </div>
+            <div style="display: grid; grid-template-columns: 58px 1fr 92px 56px 84px; align-items: center; gap: 12px; padding: 11px 18px; border-bottom: 1px solid var(--color-neutral-900); background: color-mix(in srgb, var(--color-accent) 10%, transparent); box-shadow: inset 0 0 0 1px var(--color-accent);">
+              <span class="tag tag-accent" style="font-size: 10px; padding: 2px 7px; justify-self: start;">WR</span>
+              <span style="font-size: 13.5px;">W. Adeyemi <span style="font-size: 11.5px; color: var(--color-neutral-600);">SF</span></span>
+              <span style="font-size: 11.5px; color: var(--color-neutral-600);">Sun 1:00</span>
+              <span style="text-align: right; font-size: 13px; color: var(--color-neutral-400); font-variant-numeric: tabular-nums;">12.6</span>
+              <span style="text-align: right;"><button type="button" class="btn btn-primary" style="font-size: 11.5px; padding: 4px 11px;">Place here</button></span>
+            </div>
+            <div style="display: grid; grid-template-columns: 58px 1fr 92px 56px 84px; align-items: center; gap: 12px; padding: 11px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+              <span class="tag tag-neutral" style="font-size: 10px; padding: 2px 7px; justify-self: start;">TE</span>
+              <span style="font-size: 13.5px;">M. Lindqvist <span style="font-size: 11.5px; color: var(--color-neutral-600);">ARI</span></span>
+              <span style="font-size: 11.5px; color: var(--color-neutral-600);">Sun 1:00</span>
+              <span style="text-align: right; font-size: 13px; color: var(--color-neutral-400); font-variant-numeric: tabular-nums;">9.1</span>
+              <span style="text-align: right;"><span style="font-size: 11px; color: var(--color-neutral-500);">Not eligible</span></span>
+            </div>
+            <div style="display: grid; grid-template-columns: 58px 1fr 92px 56px 84px; align-items: center; gap: 12px; padding: 11px 18px; border-bottom: 1px solid var(--color-neutral-900); background: color-mix(in srgb, var(--color-accent) 10%, transparent); box-shadow: inset 0 0 0 1px var(--color-accent);">
+              <span class="tag tag-accent" style="font-size: 10px; padding: 2px 7px; justify-self: start;">FLEX</span>
+              <span style="font-size: 13.5px;">N. Osterberg <span style="font-size: 11.5px; color: var(--color-neutral-600);">CAR</span></span>
+              <span style="font-size: 11.5px; color: var(--color-neutral-600);">Sun 1:00</span>
+              <span style="text-align: right; font-size: 13px; color: var(--color-neutral-400); font-variant-numeric: tabular-nums;">11.9</span>
+              <span style="text-align: right;"><button type="button" class="btn btn-primary" style="font-size: 11.5px; padding: 4px 11px;">Place here</button></span>
+            </div>
+            <div style="display: grid; grid-template-columns: 58px 1fr 92px 56px 84px; align-items: center; gap: 12px; padding: 11px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+              <span class="tag tag-neutral" style="font-size: 10px; padding: 2px 7px; justify-self: start;">K</span>
+              <span style="font-size: 13.5px;">R. Duclos <span style="font-size: 11.5px; color: var(--color-neutral-600);">NO</span></span>
+              <span style="font-size: 11.5px; color: var(--color-neutral-600);">Sun 1:00</span>
+              <span style="text-align: right; font-size: 13px; color: var(--color-neutral-400); font-variant-numeric: tabular-nums;">8.3</span>
+              <span style="text-align: right;"><span style="font-size: 11px; color: var(--color-neutral-500);">Not eligible</span></span>
+            </div>
+            <div style="display: grid; grid-template-columns: 58px 1fr 92px 56px 84px; align-items: center; gap: 12px; padding: 11px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+              <span class="tag tag-neutral" style="font-size: 10px; padding: 2px 7px; justify-self: start;">DEF</span>
+              <span style="font-size: 13.5px;">Pittsburgh <span style="font-size: 11.5px; color: var(--color-neutral-600);"></span></span>
+              <span style="font-size: 11.5px; color: var(--color-neutral-600);">Sun 1:00</span>
+              <span style="text-align: right; font-size: 13px; color: var(--color-neutral-400); font-variant-numeric: tabular-nums;">10.1</span>
+              <span style="text-align: right;"><span style="font-size: 11px; color: var(--color-neutral-500);">Not eligible</span></span>
+            </div>
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 13px 18px; background: color-mix(in srgb, var(--color-accent) 6%, transparent);">
+            <span style="font-size: 12px; color: var(--color-neutral-500);">Nine starters · projected total</span>
+            <span style="font-family: var(--font-heading); font-size: 20px; font-variant-numeric: tabular-nums;">119.1</span>
+          </div>
+        </div>
+
+        <p style="font-size: 12.5px; line-height: 1.6; color: var(--color-neutral-600); margin: 16px 0 0; max-width: 620px;">FLEX takes a running back, receiver or tight end, which is why it lights up alongside the two receiver slots. Placing Achterberg in FLEX would move Osterberg to your bench.</p>
+      </div>
+
+      <aside style="display: flex; flex-direction: column; gap: 18px;">
+        <div class="card" style="padding: 0; overflow: hidden; background: var(--color-surface);">
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 13px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+            <span style="font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-600);">Bench</span>
+            <span style="font-size: 11.5px; color: var(--color-neutral-600);">5 of 5 · scores nothing</span>
+          </div>
+            <div style="display: grid; grid-template-columns: 46px 1fr 58px 50px; align-items: center; gap: 10px; padding: 10px 18px; border-bottom: 1px solid var(--color-neutral-900); background: color-mix(in srgb, var(--color-accent) 14%, transparent); box-shadow: inset 0 0 0 1px var(--color-accent);">
+              <span class="tag tag-accent" style="font-size: 10px; padding: 2px 7px; justify-self: start;">WR</span>
+              <span style="font-size: 13px; color: var(--color-accent-200);">D. Achterberg <span style="font-size: 11px; color: var(--color-neutral-600);">NO</span></span>
+              <span style="font-size: 11px; color: var(--color-neutral-600);">Sun 1:00</span>
+              <span style="text-align: right; font-size: 12.5px; color: var(--color-neutral-400); font-variant-numeric: tabular-nums;">14.7</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 46px 1fr 58px 50px; align-items: center; gap: 10px; padding: 10px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+              <span class="tag tag-neutral" style="font-size: 10px; padding: 2px 7px; justify-self: start;">TE</span>
+              <span style="font-size: 13px;">C. Ibarra <span style="font-size: 11px; color: var(--color-neutral-600);">NYG</span></span>
+              <span style="font-size: 11px; color: var(--color-neutral-600);">Sun 1:00</span>
+              <span style="text-align: right; font-size: 12.5px; color: var(--color-neutral-400); font-variant-numeric: tabular-nums;">8.8</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 46px 1fr 58px 50px; align-items: center; gap: 10px; padding: 10px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+              <span class="tag tag-neutral" style="font-size: 10px; padding: 2px 7px; justify-self: start;">RB</span>
+              <span style="font-size: 13px;">T. Bergström <span style="font-size: 11px; color: var(--color-neutral-600);">HOU</span></span>
+              <span style="font-size: 11px; color: var(--color-neutral-600);">Sun 4:05</span>
+              <span style="text-align: right; font-size: 12.5px; color: var(--color-neutral-400); font-variant-numeric: tabular-nums;">7.2</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 46px 1fr 58px 50px; align-items: center; gap: 10px; padding: 10px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+              <span class="tag tag-neutral" style="font-size: 10px; padding: 2px 7px; justify-self: start;">WR</span>
+              <span style="font-size: 13px;">P. Håkansson <span style="font-size: 11px; color: var(--color-neutral-600);">DEN</span></span>
+              <span style="font-size: 11px; color: var(--color-neutral-600);">Sun 4:25</span>
+              <span style="text-align: right; font-size: 12.5px; color: var(--color-neutral-400); font-variant-numeric: tabular-nums;">10.4</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 46px 1fr 58px 50px; align-items: center; gap: 10px; padding: 10px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+              <span class="tag tag-neutral" style="font-size: 10px; padding: 2px 7px; justify-self: start;">WR</span>
+              <span style="font-size: 13px;">E. Nwachukwu <span style="font-size: 11px; color: var(--color-neutral-600);">JAX</span></span>
+              <span style="font-size: 11px; color: var(--color-neutral-600);">Bye</span>
+              <span style="text-align: right; font-size: 12.5px; color: var(--color-neutral-400); font-variant-numeric: tabular-nums;">—</span>
+            </div>
+          <div style="padding: 11px 18px; font-size: 11.5px; color: var(--color-neutral-600);">Selected: D. Achterberg. Pick a lit slot, or <a href="#">put him back</a>.</div>
+        </div>
+
+        <div class="card" style="padding: 0; overflow: hidden; background: var(--color-surface);">
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 13px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+            <span style="font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-600);">Injured reserve</span>
+            <span style="font-size: 11.5px; color: var(--color-neutral-600);">1 of 2</span>
+          </div>
+            <div style="display: grid; grid-template-columns: 46px 1fr 58px 50px; align-items: center; gap: 10px; padding: 10px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+              <span class="tag tag-neutral" style="font-size: 10px; padding: 2px 7px; justify-self: start;">RB</span>
+              <span style="font-size: 13px;">S. Baptiste <span style="font-size: 11px; color: var(--color-neutral-600);">CLE</span></span>
+              <span style="font-size: 11px; color: var(--color-neutral-600);">Out</span>
+              <span style="text-align: right; font-size: 12.5px; color: var(--color-neutral-400); font-variant-numeric: tabular-nums;">—</span>
+            </div>
+          <div style="padding: 11px 18px; font-size: 11.5px; color: var(--color-neutral-600);">IR holds only players officially designated out, and does not count against your roster limit.</div>
+        </div>
+
+        <div class="card" style="padding: 18px 20px; background: var(--color-surface);">
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <span style="font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-600);">Autofill</span>
+            <div class="seg" role="radiogroup" aria-label="Autofill" style="flex: 0 0 auto;">
+              <label class="seg-opt"><input type="radio" name="ln-af" checked="checked">On</label>
+              <label class="seg-opt"><input type="radio" name="ln-af">Off</label>
+            </div>
+          </div>
+          <p style="font-size: 12px; line-height: 1.55; color: var(--color-neutral-400); margin: 12px 0 0;">Any slot you leave empty is filled at lock — highest projection eligible for that slot, scarce slots first, ties broken by player ID.</p>
+          <p style="font-size: 12px; line-height: 1.55; color: var(--color-neutral-600); margin: 9px 0 0;">This is yours alone, not a league rule, and you can change it whenever you like. Off means an empty slot stays empty and scores nothing.</p>
+        </div>
+
+        <div style="display: flex; gap: 10px;">
+          <button type="button" class="btn btn-primary" style="flex: 1 1 auto; font-size: 14px; padding: 11px 0;">Save lineup</button>
+          <button type="button" class="btn btn-ghost" style="flex: 0 0 auto; font-size: 14px; padding: 11px 16px; color: var(--color-neutral-400);">Discard</button>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <div style="height: 1px; margin: 46px 28px; background: linear-gradient(90deg, transparent, var(--color-neutral-800) 12%, var(--color-neutral-800) 88%, transparent);"></div>
+
+  <div style="display: flex; align-items: baseline; gap: 14px; padding: 30px 28px 14px;">
+    <span style="font-family: ui-monospace, monospace; font-size: 11px; letter-spacing: 0.1em; color: var(--color-accent-500);">STATE 2</span>
+    <span style="font-family: var(--font-heading); font-size: 17px; font-weight: 500; letter-spacing: -0.02em;">Partially locked</span>
+    <span style="font-size: 13px; color: var(--color-neutral-600);">Kickoffs have started · autofill names who it will start, and when</span>
+  </div>
+  <div data-screen-label="Lineup partially locked" style="background: var(--color-bg); min-height: 100vh; min-width: 1280px; padding-bottom: 56px;">
+    <header style="border-bottom: 1px solid var(--color-neutral-900);">
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 12px 28px;">
+        <div style="display: flex; align-items: center; gap: 18px;">
+          <span style="font-family: var(--font-heading); font-size: 17px; font-weight: 600; letter-spacing: -0.02em;">rostr</span>
+          <span style="width: 1px; height: 18px; background: var(--color-neutral-800);"></span>
+          <span style="font-size: 14.5px;">Route 66</span>
+          <span style="font-size: 12px; color: var(--color-neutral-600);">Week 4 lineup · Sun 3:52 PM ET · seven slots locked</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <span style="font-family: ui-monospace, monospace; font-size: 11.5px; color: var(--color-neutral-600);">0x7f3a…c19d</span>
+          <span style="width: 1px; height: 18px; background: var(--color-neutral-800);"></span>
+          <span style="font-family: ui-monospace, monospace; font-size: 12px; color: var(--color-neutral-400);">7xKq…4vNb</span>
+        </div>
+      </div>
+      <nav style="display: flex; align-items: center; gap: 26px; padding: 0 28px 11px;">
+        <a href="#" style="font-size: 13.5px; color: var(--color-neutral-500); padding-bottom: 3px;" style-hover="color: var(--color-text);">Home</a>
+        <a href="#" style="font-size: 13.5px; color: var(--color-neutral-500); padding-bottom: 3px;" style-hover="color: var(--color-text);">Matchup</a>
+        <a href="#" style="font-size: 13.5px; color: var(--color-text); box-shadow: inset 0 -1px 0 var(--color-accent); padding-bottom: 3px;" style-hover="color: var(--color-text);">My team</a>
+        <a href="#" style="font-size: 13.5px; color: var(--color-neutral-500); padding-bottom: 3px;" style-hover="color: var(--color-text);">Players</a>
+        <a href="#" style="font-size: 13.5px; color: var(--color-neutral-500); padding-bottom: 3px;" style-hover="color: var(--color-text);">Trades</a>
+        <a href="#" style="font-size: 13.5px; color: var(--color-neutral-500); padding-bottom: 3px;" style-hover="color: var(--color-text);">Standings</a>
+      </nav>
+    </header>
+
+    <div style="display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 11px 28px; background: color-mix(in srgb, var(--color-accent) 12%, transparent); border-bottom: 1px solid var(--color-accent-800);">
+      <div style="display: flex; align-items: center; gap: 11px; font-size: 13.5px; color: var(--color-accent-200);">
+        <span style="width: 5px; height: 5px; border-radius: 50%; background: var(--color-accent);"></span>
+        <span>Your WR slot is empty and locks in <span style="color: var(--color-accent-100); font-variant-numeric: tabular-nums;">33 minutes</span>. Autofill will start <span style="color: var(--color-accent-100);">P. Håkansson</span> — the highest projection you have left who is eligible.</span>
+      </div>
+      <button type="button" class="btn btn-ghost" style="font-size: 12.5px; padding: 6px 13px; color: var(--color-accent-200);">Choose someone else</button>
+    </div>
+
+    <div style="display: grid; grid-template-columns: minmax(0, 1fr) 420px; gap: 28px; padding: 30px 28px 0; max-width: 1440px; margin: 0 auto;">
+
+      <div style="min-width: 0;">
+        <h1 style="font-family: var(--font-heading); font-size: 28px; font-weight: 500; letter-spacing: -0.026em; margin: 0;">Seven slots have locked.</h1>
+        <p style="font-size: 14px; line-height: 1.6; color: var(--color-neutral-400); margin: 10px 0 0; max-width: 600px;">Osei-Bonsu was ruled out at 2:10 this afternoon, so a receiver slot is open. Each slot locks at the kickoff of that player’s own game, not at a league-wide deadline. A locked player cannot be moved for this week — including out of a slot you would rather fill differently.</p>
+
+        <div class="card elev-md" style="margin-top: 24px; padding: 0; overflow: hidden; background: var(--color-surface);">
+          <div style="display: grid; grid-template-columns: 58px 1fr 92px 56px 84px; gap: 12px; padding: 9px 18px; border-bottom: 1px solid var(--color-neutral-900); font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-600); font-size: 10px;">
+            <span>Slot</span><span>Starter</span><span>Kickoff</span><span style="text-align: right;">Proj</span><span></span>
+          </div>
+            <div style="display: grid; grid-template-columns: 58px 1fr 92px 56px 84px; align-items: center; gap: 12px; padding: 11px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+              <span class="tag tag-neutral" style="font-size: 10px; padding: 2px 7px; justify-self: start; opacity: 0.55;">QB</span>
+              <span style="font-size: 13.5px; color: var(--color-neutral-400);">J. Whitcombe <span style="font-size: 11.5px; color: var(--color-neutral-600);">PIT</span></span>
+              <span style="font-size: 11.5px; color: var(--color-neutral-600);">Sun 1:00</span>
+              <span style="text-align: right; font-size: 13px; color: var(--color-neutral-400); font-variant-numeric: tabular-nums;">21.8</span>
+              <span style="text-align: right;"><span style="display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--color-neutral-500);"><span style="width: 4px; height: 4px; border-radius: 50%; background: var(--color-neutral-700);"></span>Locked</span></span>
+            </div>
+            <div style="display: grid; grid-template-columns: 58px 1fr 92px 56px 84px; align-items: center; gap: 12px; padding: 11px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+              <span class="tag tag-neutral" style="font-size: 10px; padding: 2px 7px; justify-self: start; opacity: 0.55;">RB</span>
+              <span style="font-size: 13.5px; color: var(--color-neutral-400);">L. Marchetti <span style="font-size: 11.5px; color: var(--color-neutral-600);">MIN</span></span>
+              <span style="font-size: 11.5px; color: var(--color-neutral-600);">Sun 1:00</span>
+              <span style="text-align: right; font-size: 13px; color: var(--color-neutral-400); font-variant-numeric: tabular-nums;">15.4</span>
+              <span style="text-align: right;"><span style="display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--color-neutral-500);"><span style="width: 4px; height: 4px; border-radius: 50%; background: var(--color-neutral-700);"></span>Locked</span></span>
+            </div>
+            <div style="display: grid; grid-template-columns: 58px 1fr 92px 56px 84px; align-items: center; gap: 12px; padding: 11px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+              <span class="tag tag-neutral" style="font-size: 10px; padding: 2px 7px; justify-self: start;">RB</span>
+              <span style="font-size: 13.5px;">A. Villanueva <span style="font-size: 11.5px; color: var(--color-neutral-600);">TEN</span></span>
+              <span style="font-size: 11.5px; color: var(--color-neutral-600);">Sun 4:05</span>
+              <span style="text-align: right; font-size: 13px; color: var(--color-neutral-400); font-variant-numeric: tabular-nums;">13.9</span>
+              <span style="text-align: right;"><button type="button" class="btn btn-ghost" style="font-size: 11.5px; padding: 4px 11px; color: var(--color-neutral-400);">Move</button></span>
+            </div>
+            <div style="display: grid; grid-template-columns: 58px 1fr 92px 56px 84px; align-items: center; gap: 12px; padding: 11px 18px; border-bottom: 1px solid var(--color-neutral-900); background: color-mix(in srgb, var(--color-accent) 8%, transparent); box-shadow: inset 0 0 0 1px var(--color-accent-700);">
+              <span class="tag tag-accent" style="font-size: 10px; padding: 2px 7px; justify-self: start;">WR</span>
+              <span style="font-size: 13.5px; color: var(--color-accent-200);">Empty — autofill will act</span>
+              <span style="font-size: 11.5px; color: var(--color-neutral-600);">Sun 4:25</span>
+              <span style="text-align: right; font-size: 13px; color: var(--color-neutral-400); font-variant-numeric: tabular-nums;">—</span>
+              <span style="text-align: right;"><button type="button" class="btn btn-primary" style="font-size: 11.5px; padding: 4px 11px;">Fill</button></span>
+            </div>
+            <div style="display: grid; grid-template-columns: 58px 1fr 92px 56px 84px; align-items: center; gap: 12px; padding: 11px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+              <span class="tag tag-neutral" style="font-size: 10px; padding: 2px 7px; justify-self: start; opacity: 0.55;">WR</span>
+              <span style="font-size: 13.5px; color: var(--color-neutral-400);">W. Adeyemi <span style="font-size: 11.5px; color: var(--color-neutral-600);">SF</span></span>
+              <span style="font-size: 11.5px; color: var(--color-neutral-600);">Sun 1:00</span>
+              <span style="text-align: right; font-size: 13px; color: var(--color-neutral-400); font-variant-numeric: tabular-nums;">12.6</span>
+              <span style="text-align: right;"><span style="display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--color-neutral-500);"><span style="width: 4px; height: 4px; border-radius: 50%; background: var(--color-neutral-700);"></span>Locked</span></span>
+            </div>
+            <div style="display: grid; grid-template-columns: 58px 1fr 92px 56px 84px; align-items: center; gap: 12px; padding: 11px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+              <span class="tag tag-neutral" style="font-size: 10px; padding: 2px 7px; justify-self: start; opacity: 0.55;">TE</span>
+              <span style="font-size: 13.5px; color: var(--color-neutral-400);">M. Lindqvist <span style="font-size: 11.5px; color: var(--color-neutral-600);">ARI</span></span>
+              <span style="font-size: 11.5px; color: var(--color-neutral-600);">Sun 1:00</span>
+              <span style="text-align: right; font-size: 13px; color: var(--color-neutral-400); font-variant-numeric: tabular-nums;">9.1</span>
+              <span style="text-align: right;"><span style="display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--color-neutral-500);"><span style="width: 4px; height: 4px; border-radius: 50%; background: var(--color-neutral-700);"></span>Locked</span></span>
+            </div>
+            <div style="display: grid; grid-template-columns: 58px 1fr 92px 56px 84px; align-items: center; gap: 12px; padding: 11px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+              <span class="tag tag-neutral" style="font-size: 10px; padding: 2px 7px; justify-self: start; opacity: 0.55;">FLEX</span>
+              <span style="font-size: 13.5px; color: var(--color-neutral-400);">N. Osterberg <span style="font-size: 11.5px; color: var(--color-neutral-600);">CAR</span></span>
+              <span style="font-size: 11.5px; color: var(--color-neutral-600);">Sun 1:00</span>
+              <span style="text-align: right; font-size: 13px; color: var(--color-neutral-400); font-variant-numeric: tabular-nums;">11.9</span>
+              <span style="text-align: right;"><span style="display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--color-neutral-500);"><span style="width: 4px; height: 4px; border-radius: 50%; background: var(--color-neutral-700);"></span>Locked</span></span>
+            </div>
+            <div style="display: grid; grid-template-columns: 58px 1fr 92px 56px 84px; align-items: center; gap: 12px; padding: 11px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+              <span class="tag tag-neutral" style="font-size: 10px; padding: 2px 7px; justify-self: start; opacity: 0.55;">K</span>
+              <span style="font-size: 13.5px; color: var(--color-neutral-400);">R. Duclos <span style="font-size: 11.5px; color: var(--color-neutral-600);">NO</span></span>
+              <span style="font-size: 11.5px; color: var(--color-neutral-600);">Sun 1:00</span>
+              <span style="text-align: right; font-size: 13px; color: var(--color-neutral-400); font-variant-numeric: tabular-nums;">8.3</span>
+              <span style="text-align: right;"><span style="display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--color-neutral-500);"><span style="width: 4px; height: 4px; border-radius: 50%; background: var(--color-neutral-700);"></span>Locked</span></span>
+            </div>
+            <div style="display: grid; grid-template-columns: 58px 1fr 92px 56px 84px; align-items: center; gap: 12px; padding: 11px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+              <span class="tag tag-neutral" style="font-size: 10px; padding: 2px 7px; justify-self: start; opacity: 0.55;">DEF</span>
+              <span style="font-size: 13.5px; color: var(--color-neutral-400);">Pittsburgh <span style="font-size: 11.5px; color: var(--color-neutral-600);"></span></span>
+              <span style="font-size: 11.5px; color: var(--color-neutral-600);">Sun 1:00</span>
+              <span style="text-align: right; font-size: 13px; color: var(--color-neutral-400); font-variant-numeric: tabular-nums;">10.1</span>
+              <span style="text-align: right;"><span style="display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--color-neutral-500);"><span style="width: 4px; height: 4px; border-radius: 50%; background: var(--color-neutral-700);"></span>Locked</span></span>
+            </div>
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 13px 18px; background: color-mix(in srgb, var(--color-accent) 6%, transparent);">
+            <span style="font-size: 12px; color: var(--color-neutral-500);">Eight filled · projected total</span>
+            <span style="font-family: var(--font-heading); font-size: 20px; font-variant-numeric: tabular-nums;">103.1</span>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 12px; margin-top: 22px; padding: 16px 18px; border-radius: var(--radius-md); background: color-mix(in srgb, var(--color-accent) 8%, transparent); border: 1px solid var(--color-accent-800); max-width: 700px;">
+          <span style="flex: 0 0 auto; width: 5px; height: 5px; margin-top: 7px; border-radius: 50%; background: var(--color-accent);"></span>
+          <p style="font-size: 13px; line-height: 1.6; color: var(--color-accent-200); margin: 0;">Nobody forfeits anything for not showing up. There is no abandonment rule, no strikes, and no forfeiture — a slot you leave empty simply gets filled for you. Turning autofill off is the only way to score nothing there, which is why it is not the default.</p>
+        </div>
+
+        <p style="font-size: 12.5px; line-height: 1.6; color: var(--color-neutral-600); margin: 18px 0 0; max-width: 700px;">The projection used is recorded with your lineup, so the decision autofill made on your behalf is checkable after the fact. It is scored under this league's own frozen rules rather than the provider's — a season average cannot know that this week's opponent has the worst run defence in the league.</p>
+      </div>
+
+      <aside style="display: flex; flex-direction: column; gap: 18px;">
+        <div class="card elev-md" style="padding: 20px; background: var(--color-surface);">
+          <span style="font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-600);">Autofill will start</span>
+          <div style="display: flex; align-items: baseline; gap: 10px; margin-top: 10px;">
+            <span style="font-family: var(--font-heading); font-size: 19px; font-weight: 500; letter-spacing: -0.02em;">P. Håkansson</span>
+            <span class="tag tag-accent" style="font-size: 10px; padding: 2px 7px;">WR</span>
+          </div>
+          <div style="font-size: 12px; color: var(--color-neutral-600); margin-top: 5px;">DEN · projected 10.4 · kicks off 4:25</div>
+          <div style="display: flex; flex-direction: column; gap: 9px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--color-neutral-900); font-size: 12px;">
+            <div style="display: flex; justify-content: space-between;"><span style="color: var(--color-neutral-500);">Also eligible</span><span style="color: var(--color-neutral-400);">E. Nwachukwu</span></div>
+            <div style="display: flex; justify-content: space-between;"><span style="color: var(--color-neutral-500);">Why not him</span><span style="color: var(--color-neutral-400);">On bye</span></div>
+            <div style="display: flex; justify-content: space-between;"><span style="color: var(--color-neutral-500);">Acts at</span><span style="color: var(--color-neutral-300);">Sun 4:25 PM ET</span></div>
+          </div>
+          <button type="button" class="btn btn-primary btn-block" style="margin-top: 16px; font-size: 13.5px; padding: 10px 0;">Start Håkansson now</button>
+          <p style="font-size: 11.5px; line-height: 1.5; color: var(--color-neutral-600); margin: 10px 0 0;">Setting it yourself always overrides autofill. It only ever touches slots you left empty.</p>
+        </div>
+
+        <div class="card" style="padding: 0; overflow: hidden; background: var(--color-surface);">
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 13px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+            <span style="font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-600);">Bench</span>
+            <span style="font-size: 11.5px; color: var(--color-neutral-600);">2 still movable</span>
+          </div>
+            <div style="display: grid; grid-template-columns: 46px 1fr 58px 50px; align-items: center; gap: 10px; padding: 10px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+              <span class="tag tag-neutral" style="font-size: 10px; padding: 2px 7px; justify-self: start;">WR</span>
+              <span style="font-size: 13px;">P. Håkansson <span style="font-size: 11px; color: var(--color-neutral-600);">DEN</span></span>
+              <span style="font-size: 11px; color: var(--color-neutral-600);">Sun 4:25</span>
+              <span style="text-align: right; font-size: 12.5px; color: var(--color-neutral-400); font-variant-numeric: tabular-nums;">10.4</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 46px 1fr 58px 50px; align-items: center; gap: 10px; padding: 10px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+              <span class="tag tag-neutral" style="font-size: 10px; padding: 2px 7px; justify-self: start;">RB</span>
+              <span style="font-size: 13px;">T. Bergström <span style="font-size: 11px; color: var(--color-neutral-600);">HOU</span></span>
+              <span style="font-size: 11px; color: var(--color-neutral-600);">Sun 4:05</span>
+              <span style="text-align: right; font-size: 12.5px; color: var(--color-neutral-400); font-variant-numeric: tabular-nums;">7.2</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 46px 1fr 58px 50px; align-items: center; gap: 10px; padding: 10px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+              <span class="tag tag-neutral" style="font-size: 10px; padding: 2px 7px; justify-self: start; opacity: 0.55;">WR</span>
+              <span style="font-size: 13px; color: var(--color-neutral-500);">D. Achterberg <span style="font-size: 11px; color: var(--color-neutral-600);">NO</span></span>
+              <span style="font-size: 11px; color: var(--color-neutral-600);">Locked</span>
+              <span style="text-align: right; font-size: 12.5px; color: var(--color-neutral-400); font-variant-numeric: tabular-nums;">14.7</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 46px 1fr 58px 50px; align-items: center; gap: 10px; padding: 10px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+              <span class="tag tag-neutral" style="font-size: 10px; padding: 2px 7px; justify-self: start; opacity: 0.55;">TE</span>
+              <span style="font-size: 13px; color: var(--color-neutral-500);">C. Ibarra <span style="font-size: 11px; color: var(--color-neutral-600);">NYG</span></span>
+              <span style="font-size: 11px; color: var(--color-neutral-600);">Locked</span>
+              <span style="text-align: right; font-size: 12.5px; color: var(--color-neutral-400); font-variant-numeric: tabular-nums;">8.8</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 46px 1fr 58px 50px; align-items: center; gap: 10px; padding: 10px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+              <span class="tag tag-neutral" style="font-size: 10px; padding: 2px 7px; justify-self: start; opacity: 0.55;">WR</span>
+              <span style="font-size: 13px; color: var(--color-neutral-500);">E. Nwachukwu <span style="font-size: 11px; color: var(--color-neutral-600);">JAX</span></span>
+              <span style="font-size: 11px; color: var(--color-neutral-600);">Bye</span>
+              <span style="text-align: right; font-size: 12.5px; color: var(--color-neutral-400); font-variant-numeric: tabular-nums;">—</span>
+            </div>
+          <div style="padding: 11px 18px; font-size: 11.5px; color: var(--color-neutral-600);">Achterberg's game kicked off at 1:00, so he cannot be started now — the reason to set a lineup early.</div>
+        </div>
+
+        <div class="card" style="padding: 0; overflow: hidden; background: var(--color-surface);">
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 13px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+            <span style="font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-600);">Injured reserve</span>
+            <span style="font-size: 11.5px; color: var(--color-neutral-600);">2 of 2</span>
+          </div>
+            <div style="display: grid; grid-template-columns: 46px 1fr 58px 50px; align-items: center; gap: 10px; padding: 10px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+              <span class="tag tag-neutral" style="font-size: 10px; padding: 2px 7px; justify-self: start;">WR</span>
+              <span style="font-size: 13px;">K. Osei-Bonsu <span style="font-size: 11px; color: var(--color-neutral-600);">LV</span></span>
+              <span style="font-size: 11px; color: var(--color-neutral-600);">Out</span>
+              <span style="text-align: right; font-size: 12.5px; color: var(--color-neutral-400); font-variant-numeric: tabular-nums;">—</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 46px 1fr 58px 50px; align-items: center; gap: 10px; padding: 10px 18px; border-bottom: 1px solid var(--color-neutral-900);">
+              <span class="tag tag-neutral" style="font-size: 10px; padding: 2px 7px; justify-self: start;">RB</span>
+              <span style="font-size: 13px;">S. Baptiste <span style="font-size: 11px; color: var(--color-neutral-600);">CLE</span></span>
+              <span style="font-size: 11px; color: var(--color-neutral-600);">Out</span>
+              <span style="text-align: right; font-size: 12.5px; color: var(--color-neutral-400); font-variant-numeric: tabular-nums;">—</span>
+            </div>
+          <div style="padding: 11px 18px; font-size: 11.5px; color: var(--color-neutral-600);">Osei-Bonsu was designated out at 2:10 PM and moved here, which is what left the WR slot open. IR does not count against your roster limit.</div>
+        </div>
+
+        <div class="card" style="padding: 18px 20px; background: transparent; box-shadow: 0 0 0 1px var(--color-neutral-900);">
+          <span style="font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-600);">Week 4 · your matchup</span>
+          <div style="display: flex; align-items: baseline; justify-content: space-between; margin-top: 11px;">
+            <span style="font-size: 13px; color: var(--color-accent-200);">Route 66</span>
+            <span style="font-family: var(--font-heading); font-size: 17px; font-variant-numeric: tabular-nums; color: var(--color-accent-300);">41.6</span>
+          </div>
+          <div style="display: flex; align-items: baseline; justify-content: space-between; margin-top: 8px;">
+            <span style="font-size: 13px;">Audibles</span>
+            <span style="font-family: var(--font-heading); font-size: 17px; font-variant-numeric: tabular-nums; color: var(--color-neutral-400);">52.3</span>
+          </div>
+          <p style="font-size: 11.5px; line-height: 1.55; color: var(--color-neutral-600); margin: 12px 0 0; padding-top: 12px; border-top: 1px solid var(--color-neutral-900);">Provisional. Week 4 finalises 48 hours after its last game.</p>
+        </div>
+      </aside>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:2400}}"></script>
+</body>
+</html>
