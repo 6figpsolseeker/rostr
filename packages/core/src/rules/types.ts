@@ -287,6 +287,43 @@ export type PotRules = {
   readonly feeBps: number;
   /** Where the fee is paid. Frozen at creation like everything else. */
   readonly feeRecipient: string;
+  /**
+   * The key allowed to post this league's finalised scores on-chain.
+   *
+   * ## Why it is a signed term rather than our configuration
+   *
+   * No contract can watch an NFL game, so settlement has exactly one trusted
+   * role: whoever posts the scores. `docs/RULES.md` §7 already concedes the
+   * oracle exists — what it did not do was name it. An unnamed trusted party in
+   * a document whose entire claim is "these rules are fixed and you can check
+   * them" is the one gap members cannot inspect.
+   *
+   * So it is here, in the hashed set, seen before anyone joins and signed with
+   * everything else. Same argument as `feeRecipient` one field up, and a
+   * stronger case: the fee is 1% and this decides where 100% goes.
+   *
+   * ## What it does not let the poster do
+   *
+   * Post **scores**, and nothing else. The contract derives the champion,
+   * runner-up and best record from them (`derive.rs`, `bracket.rs`), so there is
+   * no instruction that takes a winner. The poster cannot change a term, move a
+   * token, or pay anybody — and if they never act at all, every stake returns at
+   * `refundUnlockAt`.
+   *
+   * ## Frozen, and what that costs
+   *
+   * Unrotatable for the life of the league, deliberately: a rotatable key is an
+   * authority with a second authority behind it. Losing it means this league
+   * cannot settle and refunds instead, which is the correct failure. **Point it
+   * at a multisig rather than a raw key** — a Squads vault address derives from
+   * the multisig account, so the signer set behind it can change without the
+   * address moving. See `docs/SETTLEMENT.md` §6.
+   *
+   * Supplied by the server at creation, **never from a request**, exactly as
+   * `feeRecipient` and `tokenMint` are: a client that could name this key could
+   * name its own and take the pot.
+   */
+  readonly settlementOracle: string;
 };
 
 // ---------------------------------------------------------------------------
@@ -361,6 +398,8 @@ export type LeagueRules = {
    * 5 → 6 aligned the scoring table with ESPN — `fg_50_plus` split, `fg_missed`
    *       and `def_yds_allowed` added, the points-allowed ladder replaced.
    * 6 → 7 added `def_2pt_ret`, a defensive two-point conversion return.
+   * 7 → 8 added `pot.settlementOracle` — the key allowed to post finalised
+   *       scores, which members now sign rather than having to trust.
    *
    * This list stopped at 3 → 4 for two versions, which made it look as though
    * nothing had moved since. The changelog that decides anything is the dated
@@ -375,7 +414,7 @@ export type LeagueRules = {
    * one does, a schema change means supporting both versions — the rules of a
    * created league can never be re-encoded.
    */
-  readonly schemaVersion: 7;
+  readonly schemaVersion: 8;
   readonly sportKey: string;
   readonly seasonYear: number;
   readonly scoring: readonly ScoringRule[];

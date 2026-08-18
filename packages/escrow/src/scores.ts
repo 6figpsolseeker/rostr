@@ -22,14 +22,13 @@
  * courtesy, the same way `joinLeague` refusing an unanchored league is what
  * makes `anchorTermMismatches` load-bearing rather than advisory.
  *
- * ## What is deliberately not compared yet
+ * ## The oracle key is compared too, since schemaVersion 8
  *
- * **`oracle`** — the key allowed to post scores. It should be a term members
- * sign, which means it belongs in the hashed rule set, which is a schemaVersion
- * move (6 → 7). Until that lands there is nothing to compare it against, and the
- * commissioner who creates the account picks it freely. `docs/SETTLEMENT.md` §6
- * sets out why that matters; do not read the absence of a check here as a
- * finding that one is unnecessary.
+ * It was not, for as long as it took to move the schema. Until then the
+ * commissioner who created the account chose freely who could post their
+ * league's scores, which is the whole of the attack `docs/SETTLEMENT.md` §6
+ * describes: name your own key, post the scores that make you champion, and
+ * every other check in the system passes.
  */
 
 import type { Program } from "@coral-xyz/anchor";
@@ -136,6 +135,8 @@ export async function fetchOnChainScores(
 
 /** The subset of a rule set this comparison reads. */
 export interface ScoreTermRules {
+  /** `null` for a free league, which has no settlement and no oracle. */
+  readonly pot: { readonly settlementOracle: string } | null;
   readonly schedule: {
     readonly regularSeasonWeeks: number;
     readonly playoffWeeks: readonly number[];
@@ -146,6 +147,8 @@ export interface ScoreTermRules {
 }
 
 export interface ExpectedScoreTerms {
+  /** Base58, or `null` for a free league. */
+  readonly oracle: string | null;
   readonly tiebreakers: readonly number[];
   readonly playoffWeeks: readonly number[];
   readonly regularSeasonWeeks: number;
@@ -173,6 +176,7 @@ export function expectedScoreTerms(
   const field = Math.min(rules.schedule.playoffTeams, teamCount);
 
   return {
+    oracle: rules.pot?.settlementOracle ?? null,
     tiebreakers: rules.schedule.tiebreakers.map((name) => {
       const value = TIEBREAKER_DISCRIMINANTS[name];
       // Refused rather than defaulted: a tiebreaker nobody recognises must not
@@ -213,6 +217,20 @@ export function scoresTermMismatches(
   const out: string[] = [];
   const same = (a: readonly number[], b: readonly number[]): boolean =>
     a.length === b.length && a.every((value, index) => value === b[index]);
+
+  /*
+    The oracle first, because it is the one that decides everything else.
+
+    Whoever holds this key posts the scores the champion is derived from, so a
+    key nobody signed is a league whose result was decided by a stranger — and
+    every other check here would pass while that was true. It is compared
+    against the signed document rather than against our own configuration for
+    the same reason `anchorTermMismatches` compares the fee recipient that way:
+    what matters is that members agreed to it, not that we recognise it.
+  */
+  if (expected.oracle !== null && onChain.oracle !== expected.oracle) {
+    out.push(`settlementOracle: chain has ${onChain.oracle}, rules say ${expected.oracle}`);
+  }
 
   if (!same(onChain.tiebreakers, expected.tiebreakers)) {
     out.push(

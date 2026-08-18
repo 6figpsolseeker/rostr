@@ -42,6 +42,7 @@ const POT: PotRules = {
   refundUnlockAt: 1_773_000_000,
   feeBps: NFL_DEFAULT_FEE_BPS,
   feeRecipient: "6dNUCTMTgoHhbfgDzKtiPvBpJ2LzMwGqBpKmUDgQtNMK",
+  settlementOracle: "US517G5965aydkZ46HS38QLi7UQiSojurfbQfKCELFx",
 };
 
 function rules(overrides: Partial<LeagueRules> = {}): LeagueRules {

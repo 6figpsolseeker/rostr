@@ -1108,6 +1108,16 @@ export type RostrEscrow = {
       "code": 6045,
       "name": "duplicateRosterEntry",
       "msg": "The same team or wallet appears twice in the roster"
+    },
+    {
+      "code": 6046,
+      "name": "oracleIsCommissioner",
+      "msg": "The score poster may not be the commissioner, who holds a stake in the result"
+    },
+    {
+      "code": 6047,
+      "name": "oracleMissing",
+      "msg": "A league whose scores nobody may post could never be settled"
     }
   ],
   "types": [

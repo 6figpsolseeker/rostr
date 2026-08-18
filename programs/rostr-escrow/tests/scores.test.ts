@@ -278,6 +278,42 @@ describe("the payee roster", () => {
     );
   });
 
+  it("refuses an oracle that is the commissioner", async () => {
+    /*
+      The commissioner writes this account, so without this check they could
+      name themselves and post the scores that decide a pot they hold a stake
+      in — `docs/RULES.md` §9's "not permitted, ever: anything that touches a
+      roster, a score, a standing, or the pot", in one transaction.
+
+      Off-chain the key comes from server configuration and the draw compares it
+      against the signed rules, which is the stronger check. This one binds a
+      caller who never touched our service.
+    */
+    const args = validArgs({ buyIn: new anchor.BN(BUY_IN) });
+    const league = await initialize(args);
+    const a = await stakedMember(league, args.rulesHash);
+    const b = await stakedMember(league, args.rulesHash);
+
+    await expectError(
+      initScores(league, [a, b], [TEAM_A, TEAM_B], provider.wallet.publicKey),
+      "OracleIsCommissioner",
+    );
+  });
+
+  it("refuses an empty oracle", async () => {
+    // The default pubkey cannot sign, so a league naming it could never have a
+    // score posted and would fall to the timelock refund with no earlier signal.
+    const args = validArgs({ buyIn: new anchor.BN(BUY_IN) });
+    const league = await initialize(args);
+    const a = await stakedMember(league, args.rulesHash);
+    const b = await stakedMember(league, args.rulesHash);
+
+    await expectError(
+      initScores(league, [a, b], [TEAM_A, TEAM_B], anchor.web3.PublicKey.default),
+      "OracleMissing",
+    );
+  });
+
   it("refuses once the season has started", async () => {
     // The roster has to exist while members can still act on it being wrong.
     // After `start_season` the failed-league refund is shut, so a roster written

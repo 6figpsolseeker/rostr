@@ -359,6 +359,38 @@ The fee is **1%, taken once at settlement** — decided 2026-08-07, documented i
 address it pays to. That address is the Squads **vault**; see the multisig entry above,
 which is where the decision actually lives.
 
+### ⬜ Settlement oracle address (`SETTLEMENT_ORACLE`, `NEXT_PUBLIC_SETTLEMENT_ORACLE`)
+
+**Blocks:** creating any pot league at all. The route returns 503 without it, in **every**
+environment rather than only production — see below.
+**Needed by:** **Aug 22**, with the first pot league.
+
+The key permitted to post a league's finalised scores on-chain. Settlement has exactly one
+trusted role, because no contract can watch a football game, and this is it — so as of
+schemaVersion 8 it is part of the hashed rule set and members sign it before joining.
+
+What it can do is post **scores**. The contract derives the champion, runner-up and best
+record from them (`derive.rs`, `bracket.rs`), so no instruction takes a winner; it cannot
+change a rule, move a token, or pay anybody, and if it never acts every stake returns at the
+refund unlock.
+
+**Refused in every environment, unlike `FEE_RECIPIENT`.** A fee-free league is a real
+league, so an unset fee recipient degrades gracefully. There is no graceful version of this:
+a pot nobody may post scores for can never be settled, its members wait out the timelock for
+money they should have won, and the rules are frozen so it can never be corrected. A locally
+created league in that state is one somebody eventually tries to settle.
+
+**Use the Squads vault address, not a raw key** — the same one as the fee recipient is fine.
+The value is frozen per league and cannot be rotated, so a raw key that is lost or stolen
+means every league naming it refunds instead of settling. A vault address derives from the
+multisig account, so the signer set behind it can change without the address moving. Verified
+against Squads v4's execution model; see `docs/SETTLEMENT.md` §6, which also records the
+trap — never authorise posting by reading the `instruction_sysvar`, which under a multisig
+returns the Squads program id rather than the authority.
+
+Set both variables together. The browser one feeds the rules preview on the create screen,
+and the form compares the hash it previewed against the hash the server froze.
+
 ### ⬜ Pin the USDC mint in the program before mainnet
 
 **Blocks:** nothing. The service half shipped, and it is what closes the reachable

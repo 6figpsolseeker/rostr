@@ -78,6 +78,17 @@ const POT_MINT = potMintFor(
  */
 const FEE_RECIPIENT = process.env.NEXT_PUBLIC_FEE_RECIPIENT ?? "";
 
+/**
+ * Mirrors the server's `SETTLEMENT_ORACLE`, and must equal it.
+ *
+ * Same arrangement as the fee recipient above and the same hazard: two values
+ * set independently that have to agree, where disagreeing means the hash this
+ * form previews is not the hash the server freezes. The banner at the end of the
+ * submit path is what catches that — it compares the two and stops being a form
+ * rather than letting a league exist whose preview was a different document.
+ */
+const SETTLEMENT_ORACLE = process.env.NEXT_PUBLIC_SETTLEMENT_ORACLE ?? "";
+
 // The bounds are defined in base units, because that is what the program
 // enforces. USDC's six decimals are the only reason these divide cleanly, and
 // the same six decimals are why the program requires them.
@@ -254,6 +265,7 @@ export function CreateLeagueForm() {
       // but it makes a liar of this screen. They are set together.
       feeBps: FEE_RECIPIENT ? NFL_DEFAULT_FEE_BPS : 0,
       feeRecipient: FEE_RECIPIENT,
+      settlementOracle: SETTLEMENT_ORACLE,
     };
   }, [withPot, buyIn, refundUnlock, payoutShape]);
 

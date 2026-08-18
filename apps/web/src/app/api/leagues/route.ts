@@ -147,6 +147,35 @@ export async function POST(request: Request): Promise<NextResponse> {
     );
   }
 
+  /*
+    And the settlement oracle, from configuration for the same reason and with a
+    stronger case: the fee recipient decides where 1% goes, this decides who may
+    post the scores that decide where 100% goes. A client that could name it
+    would name its own key and take the pot.
+
+    **Required outright rather than defaulted to empty**, unlike the fee. A
+    fee-free league is a real league; a pot with nobody permitted to post its
+    scores can never settle at all, and its members would be waiting on the
+    timelock refund months later with no way to correct it. Refusing to create
+    the league is the only recoverable answer — everything after creation is
+    frozen.
+
+    Refused in every environment, not only production. A locally-created pot
+    league that could never settle is a league somebody will eventually try to
+    settle, and the failure would surface in January rather than now.
+  */
+  const settlementOracle = process.env.SETTLEMENT_ORACLE ?? "";
+  if (body.pot && !settlementOracle) {
+    return NextResponse.json(
+      {
+        error:
+          "Pot leagues are unavailable: SETTLEMENT_ORACLE is not configured, so no " +
+          "league created now could ever have its scores posted. See docs/SETUP-REQUIRED.md.",
+      },
+      { status: 503 },
+    );
+  }
+
   // **And the token, for the same reason, which was the one that got missed.**
   // The fee recipient decides where 1% goes; the mint decides what the money
   // *is*, and it used to arrive in the request body and go into the frozen
@@ -218,6 +247,8 @@ export async function POST(request: Request): Promise<NextResponse> {
         refundUnlockAt: body.pot.refundUnlockAt,
         feeBps: feeRecipient ? NFL_DEFAULT_FEE_BPS : 0,
         feeRecipient,
+        // Non-empty here: the guard above returned 503 otherwise.
+        settlementOracle,
       }
     : null;
 

@@ -94,6 +94,7 @@ async function createPotLeague(name: string) {
       refundUnlockAt: refundUnlockFor(DRAFT.scheduledAt),
       feeBps: NFL_DEFAULT_FEE_BPS,
       feeRecipient: anchor.web3.Keypair.generate().publicKey.toBase58(),
+      settlementOracle: "US517G5965aydkZ46HS38QLi7UQiSojurfbQfKCELFx",
     },
   });
 

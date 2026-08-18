@@ -1379,9 +1379,33 @@ that cannot be settled. And **`TIEBREAKER_DISCRIMINANTS` is written out rather t
 from the union's declaration order**, which is the lesson `PRIZE_ORDER` paid for: the two
 agree today and nothing makes them, so a reordered union would renumber the chain silently.
 
-**What it still cannot compare is `oracle`**, the key allowed to post scores. That belongs
-in the hashed rule set so members sign it, which is a schemaVersion move — until then the
-commissioner picks it freely, and `docs/SETTLEMENT.md` §6 is where that gap is written down.
+**And the oracle key is a signed term as of schemaVersion 8** — `pot.settlementOracle`,
+added 2026-08-18. Members sign the key permitted to post their league's scores, `RulesView`
+shows it above the join control with a sentence saying what it can and cannot do, and the
+draw refuses a settlement account naming a different one.
+
+That closes the commissioner-as-oracle attack twice over: the value comes from
+`SETTLEMENT_ORACLE` on the server and never from the request — the same treatment
+`FEE_RECIPIENT` and the mint get, and a stronger case, since the fee is 1% and this decides
+where 100% goes — and `initialize_scores` refuses on-chain when the oracle equals the
+commissioner.
+
+**Required in every environment, unlike the fee.** A fee-free league is a real league; a pot
+nobody may post scores for can never settle, and its members wait out the timelock for money
+they should have won. The create route returns 503 rather than freeze that into a document
+nobody can amend.
+
+**Point it at a Squads vault, not a raw key.** The value is frozen per league, so a lost key
+means that league refunds instead of settling — but a vault address derives from the
+multisig account, so the signers behind it can change without the address moving. Verified;
+see `docs/SETTLEMENT.md` §6.
+
+**A correction worth not re-deriving: one signing key does not contradict
+`requiredOracleSources: 2`.** An outside review said it did and this file's design doc
+repeated it before anyone checked. They count different things — that field counts
+independent _providers_ whose data must agree, and the oracle is the key that _posts_ the
+agreed figure. What is true is that `requiredOracleSources` is enforced nowhere at all,
+which is a separate, older, `botsAllowed`-class gap.
 
 Two Anchor mechanics cost a build cycle each and are commented in place: `#[program]`
 resolves `Accounts` structs from the **crate root**, so a submodule needs a `pub use`; and
@@ -2764,6 +2788,19 @@ Six things that have each cost an hour and will cost it again:
   an RPC one, so it is a second flake rather than the one #115 is chasing — do not close
   #115 on this. Re-run before investigating; if it recurs on the same test twice, it is not
   this.
+
+- **Adding a test to one program file can break a timing-sensitive test in another.**
+  vitest runs the program suites **concurrently against one validator**, so a heavier suite
+  slows every transaction in it. On 2026-08-18 two new tests in `scores.test.ts` made
+  `failed-league.test.ts` fail with `StartWindowClosed` — that test set a **three-second**
+  start window and then ran five transactions of setup before the call that had to land
+  inside it, which was always going to lose the race eventually.
+
+  **Fix the window, not the flake.** A retry would have hidden a test that proved less than
+  it claimed. The rule: if a test needs an instruction to land inside a deadline, the
+  deadline must fit the _setup_ with room, and the wait afterwards should be computed from
+  the deadline rather than being a fixed `sleep`. Failing that way is loud and cheap; the
+  alternative is a suite that goes red whenever somebody adds a test somewhere else.
 
 - **A long-running local validator drifts behind the wall clock, and timelock tests
   start failing for no reason.** After ~4 hours one had produced 10,176 slots where

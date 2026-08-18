@@ -1122,6 +1122,16 @@ export const ESCROW_IDL: EscrowIdl = {
       "code": 6045,
       "name": "DuplicateRosterEntry",
       "msg": "The same team or wallet appears twice in the roster"
+    },
+    {
+      "code": 6046,
+      "name": "OracleIsCommissioner",
+      "msg": "The score poster may not be the commissioner, who holds a stake in the result"
+    },
+    {
+      "code": 6047,
+      "name": "OracleMissing",
+      "msg": "A league whose scores nobody may post could never be settled"
     }
   ],
   "types": [

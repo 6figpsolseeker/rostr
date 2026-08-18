@@ -18,7 +18,10 @@ import {
  * a hostile settlement account and a drawn season.
  */
 
+const ORACLE = "US517G5965aydkZ46HS38QLi7UQiSojurfbQfKCELFx";
+
 const RULES: ScoreTermRules = {
+  pot: { settlementOracle: ORACLE },
   schedule: {
     regularSeasonWeeks: 14,
     playoffWeeks: [15, 16, 17],
@@ -31,7 +34,7 @@ const RULES: ScoreTermRules = {
 const onChain = (overrides: Partial<OnChainScores> = {}): OnChainScores => ({
   address: PublicKey.default,
   league: PublicKey.default.toBase58(),
-  oracle: PublicKey.default.toBase58(),
+  oracle: ORACLE,
   roster: Array.from({ length: 12 }, (_, i) => ({
     teamIdHex: String(i).padStart(32, "0"),
     wallet: PublicKey.default.toBase58(),
@@ -114,6 +117,30 @@ describe("scoresTermMismatches", () => {
 
   it("is empty when the account agrees with the signed rules", () => {
     expect(scoresTermMismatches(onChain(), expected)).toEqual([]);
+  });
+
+  it("catches an oracle nobody signed", () => {
+    /*
+      The one that decides everything else. Whoever holds this key posts the
+      scores the champion is derived from, so an account naming a different key
+      is a league whose result will be decided by somebody members never agreed
+      to — and every other check here would pass while that was true.
+
+      It is the attack `docs/SETTLEMENT.md` §6 describes: the commissioner writes
+      the settlement account, so without this they name their own key and post
+      the scores that make themselves champion.
+    */
+    const stranger = PublicKey.default.toBase58();
+    const [first] = scoresTermMismatches(onChain({ oracle: stranger }), expected);
+    expect(first).toMatch(/settlementOracle/);
+  });
+
+  it("does not check an oracle for a free league, which has none", () => {
+    const free = expectedScoreTerms({ ...RULES, pot: null }, 12);
+    expect(free.oracle).toBeNull();
+    expect(
+      scoresTermMismatches(onChain({ oracle: PublicKey.default.toBase58() }), free),
+    ).toEqual([]);
   });
 
   it("catches a reordered tiebreaker chain", () => {

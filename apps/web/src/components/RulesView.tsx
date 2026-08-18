@@ -260,6 +260,17 @@ function Pot({ rules }: { rules: LeagueRules }) {
           label="Refund unlocks"
           value={new Date(pot.refundUnlockAt * 1000).toLocaleDateString()}
         />
+        {/*
+          Rendered because it is signed, and signed because settlement has
+          exactly one trusted role and a member should be able to see who holds
+          it before they join. The sentence below says what it can and cannot do
+          — a key without that context reads as an administrator, which is the
+          opposite of what it is.
+        */}
+        <Row
+          label="Scores posted by"
+          value={<span className="font-mono text-xs break-all">{pot.settlementOracle}</span>}
+        />
       </div>
       <div className="mt-4 grid gap-x-8 sm:grid-cols-2">
         {pot.payout.map((share) => (
@@ -270,6 +281,13 @@ function Pot({ rules }: { rules: LeagueRules }) {
           />
         ))}
       </div>
+      <p className="mt-3 text-xs text-nocturne-neutral-500">
+        No contract can watch a football game, so the key above is the one permitted to post
+        this league&rsquo;s finalised scores. It posts scores only — the contract works out the
+        champion, the runner-up and the best record from them, so there is no way for anyone to
+        name a winner. It cannot change a rule, move a token, or pay anybody; and if it never
+        acts, every stake is returned.
+      </p>
       <p className="mt-3 text-xs text-nocturne-neutral-500">
         Funds are held in escrow until the season resolves. After the refund unlock date any
         member may withdraw their own stake unilaterally, regardless of league state.

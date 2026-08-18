@@ -1,10 +1,10 @@
 # Settlement — how a pot pays out without anyone declaring a winner
 
-**Status: G7 is complete apart from the oracle key.** Both derivation kernels
+**Status: G7 is complete.** Both derivation kernels
 now exist — `derive.rs` for seeding, `bracket.rs` for the ladder — each pinned to the
 TypeScript by a generated corpus, and **no instruction calls either.** G7 has landed — `scores.rs` holds the payee roster and the posted results, and the draw
-refuses an account that disagrees with the signed rules. What is missing is the oracle key
-as a signed term (§6, a schemaVersion move) and then D6/G9, the payout. Issue #28 tracks the chain.
+refuses an account that disagrees with the signed rules. The oracle key is a signed term as of
+schemaVersion 8, so the comparison covers it too. What is missing is D6/G9, the payout. Issue #28 tracks the chain.
 
 **Revised 2026-08-17, after three independent reviews of the first draft.** Section 8
 records what that draft got wrong, because two of its errors were the kind that look
@@ -245,19 +245,44 @@ authority over money.
 
 ## 6. The oracle key
 
-### Two signers, because the signed rules already say so
+### Resolved 2026-08-18: option (a), one signer, and it is in the hashed rules
 
-`requiredOracleSources` is a field of the hashed, member-signed rule set
-(`packages/core/src/rules/types.ts:323`), defaults to `2`
-(`packages/core/src/rules/nfl-ppr.ts:172`), and **validation refuses a pot league below 2**
-(`packages/core/src/rules/validate.ts:701`).
+`pot.settlementOracle` landed with schemaVersion 8. Members sign the key, `RulesView`
+renders it above the join control with a sentence saying what it can and cannot do, and
+`scoresTermMismatches` refuses a `Scores` account naming a different one. The
+commissioner-as-oracle attack below is closed twice over: the key comes from server
+configuration and never from the request, and `initialize_scores` refuses on-chain when the
+oracle equals the commissioner.
 
-The first draft recommended one required signer with a second optional slot. That would have
-every pot league signing a document asserting two sources while the program enforced one —
-two fields encoding one fact, disagreeing, which is exactly why `botsAllowed` was deleted.
+**One signer, not two.** The two-slot argument this section used to make rested on a
+conflation — see below.
 
-**So it is 2-of-2, or `requiredOracleSources` changes deliberately and `RULES.md` §7 says
-so.** Not a slot left empty.
+### One signer, and `requiredOracleSources` is a different fact — corrected 2026-08-18
+
+This section previously said a single signing key would contradict
+`requiredOracleSources: 2` in the hashed rules, and therefore that settlement had to be
+2-of-2. **That was wrong, and it came from a review finding this document repeated without
+checking.**
+
+The two count different things. `requiredOracleSources` is "independent **providers** that
+must agree before a week finalises" — Tank01 against Sleeper or ESPN, a claim about the
+data. `settlementOracle` is the key that **posts** the agreed result. One key transmitting
+a figure two providers agree on satisfies the rule exactly; the field says nothing about how
+many signatures carry it.
+
+So a single signer is shipped, and it contradicts nothing.
+
+**What is true, and is a real gap, is that `requiredOracleSources` is enforced nowhere.**
+G4 and G5 are unbuilt, nothing in ingest or finalisation reads the field, and `RULES.md` §7
+promises members the check happens. That is a pre-existing broken promise of the
+`botsAllowed` class — §11 lists it — and it is not made better or worse by this change.
+
+**Two signing keys remain the strongest version and are still worth reaching**, for a reason
+this section had right even while its argument was wrong: with two independent parties
+signing, "two providers agreed" stops being our claim and becomes something the program
+enforces. That needs a second party to hold the second key, and adding a second slot later
+means a schema move on a league that may hold money — so it is a decision with a deadline of
+its own, just not the deadline this section asserted.
 
 ### The key comes from server configuration, never from the creator
 

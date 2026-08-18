@@ -67,6 +67,7 @@ const POT: PotRules = {
   refundUnlockAt: SCHEDULED_SECONDS + 200 * 24 * 3600,
   feeBps: NFL_DEFAULT_FEE_BPS,
   feeRecipient: "6dNUCTMTgoHhbfgDzKtiPvBpJ2LzMwGqBpKmUDgQtNMK",
+  settlementOracle: "US517G5965aydkZ46HS38QLi7UQiSojurfbQfKCELFx",
 };
 
 function keypair(seed: number): { secret: Uint8Array; address: string } {

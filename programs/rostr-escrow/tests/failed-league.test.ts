@@ -210,7 +210,22 @@ describe("a league that never starts", () => {
 
 describe("a league that starts", () => {
   it("closes the failed-league refund, leaving only the timelock", async () => {
-    const args = failingSoon();
+    /*
+      A wider window than `failingSoon`, and the width is the point.
+
+      Every other test here wants the window to shut, so three seconds is
+      generous. This one needs `start_season` to land *inside* it, and the setup
+      before that call is five transactions — initialise, airdrop, create the
+      token account, mint, join, deposit. On a busy validator that is comfortably
+      more than three seconds, and the test then fails with `StartWindowClosed`
+      on a league that behaved perfectly.
+
+      It failed exactly that way on 2026-08-18, when two unrelated tests were
+      added to another file and made the validator busy enough to lose the race.
+      Widening the window fixes it properly; a retry would have hidden it.
+    */
+    const deadline = Math.floor(Date.now() / 1000) + 30;
+    const args = failingSoon({ startDeadline: new anchor.BN(deadline) });
     const league = await initialize(args);
     const member = await fundedMember(provider, mint, BUY_IN);
 
@@ -220,7 +235,18 @@ describe("a league that starts", () => {
     // Inside the window, so this lands.
     await startSeason(program, league);
 
-    await sleep(5000);
+    /*
+      Then wait out the rest of the window, however long the setup took, so the
+      assertion below is made on a league whose start window has genuinely shut.
+
+      `refund_stake` would refuse anyway — its second opening is
+      `!started && now >= start_deadline`, and `started` is true — so this is not
+      load-bearing for the result. It is load-bearing for what the test *proves*:
+      without it the case is "a started league cannot refund yet", which the
+      timelock alone would give you.
+    */
+    const remaining = (deadline + 2) * 1000 - Date.now();
+    if (remaining > 0) await sleep(remaining);
 
     // The window has shut, but the season began — so the only way out is the
     // ordinary timelock, a year from now. Without this the season would be

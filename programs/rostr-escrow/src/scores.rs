@@ -279,6 +279,25 @@ pub fn initialize_scores(ctx: Context<InitializeScores>, args: InitializeScoresA
         (args.first_round_byes as usize) < count,
         EscrowError::FieldTooSmall
     );
+    /*
+      And the oracle is not the commissioner.
+
+      The commissioner writes this account, so without this they could name
+      themselves and post the scores that decide a pot they hold a stake in —
+      `docs/RULES.md` §9's "not permitted, ever: anything that touches a roster,
+      a score, a standing, or the pot", in one transaction.
+
+      Off-chain the key comes from server configuration and the draw compares it
+      against the signed rules, which is the stronger check. This is the one that
+      binds a caller who never touched our service, and it costs a comparison.
+    */
+    require_keys_neq!(
+        args.oracle,
+        league.commissioner,
+        EscrowError::OracleIsCommissioner
+    );
+    require_keys_neq!(args.oracle, Pubkey::default(), EscrowError::OracleMissing);
+
     // Every discriminant has to be one this build understands, checked now
     // rather than in December: an unknown tiebreaker written here would make the
     // derivation refuse forever, on an account that can never be rewritten.

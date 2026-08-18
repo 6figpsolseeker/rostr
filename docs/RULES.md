@@ -578,6 +578,16 @@ No one declares a winner. The contract holds the bracket, the scores, and the ru
 vote, and no discretion.
 
 Stats reach the chain through an oracle, since no contract can observe an NFL game.
+**That oracle is named in the rules you sign** — `pot.settlementOracle`, shown with the
+buy-in and the payout split above the join control. It is the one trusted role in
+settlement, and the honest thing is to let you see whose key it is rather than to leave it
+unstated.
+
+What it can do is post **scores**. The contract derives the champion, the runner-up and the
+best record from them, so no instruction anywhere takes a winner. It cannot change a rule,
+move a token, or pay anybody. If it never acts at all, every stake returns at the refund
+unlock. It is frozen for the life of the league like everything else here, which means it
+also cannot be swapped for someone else's key later.
 Two independent providers must agree before a week's scores finalise; disagreement
 freezes that week for review.
 

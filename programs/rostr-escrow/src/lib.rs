@@ -1101,4 +1101,8 @@ pub enum EscrowError {
     NotAMembership,
     #[msg("The same team or wallet appears twice in the roster")]
     DuplicateRosterEntry,
+    #[msg("The score poster may not be the commissioner, who holds a stake in the result")]
+    OracleIsCommissioner,
+    #[msg("A league whose scores nobody may post could never be settled")]
+    OracleMissing,
 }

@@ -261,7 +261,7 @@ export function buildNflPprRules(overrides: NflPprOverrides): LeagueRules {
   const pot = overrides.pot ?? null;
 
   return structuredClone({
-    schemaVersion: 7,
+    schemaVersion: 8,
     sportKey: "nfl",
     seasonYear: overrides.seasonYear,
     scoring: NFL_PPR_SCORING,

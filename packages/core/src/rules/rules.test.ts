@@ -33,6 +33,7 @@ const FIXTURE_POT: PotRules = {
   refundUnlockAt: 1_773_000_000,
   feeBps: NFL_DEFAULT_FEE_BPS,
   feeRecipient: "6dNUCTMTgoHhbfgDzKtiPvBpJ2LzMwGqBpKmUDgQtNMK",
+  settlementOracle: "US517G5965aydkZ46HS38QLi7UQiSojurfbQfKCELFx",
 };
 
 const FIXTURE: LeagueRules = buildNflPprRules({
@@ -211,6 +212,35 @@ describe("validateLeagueRules", () => {
       (d.league as { maxTeams: number }).maxTeams = MAX_TEAMS_PER_LEAGUE;
     });
     expect(validateLeagueRules(ok, NFL)).toEqual([]);
+  });
+
+  /**
+   * The oracle is required, unlike the fee recipient one field up.
+   *
+   * A fee-free league is a real league, so an empty recipient is legal. There is
+   * no equivalent here: a pot nobody may post scores for can never be settled,
+   * and its members wait out the timelock for money they should have won. The
+   * only recoverable moment is before creation.
+   */
+  it("rejects a pot with no settlement oracle", () => {
+    const bad = mutate((d) => {
+      (d.pot as { settlementOracle: string }).settlementOracle = "";
+    });
+    expect(validateLeagueRules(bad, NFL)).toContainEqual(
+      expect.stringContaining("settlement oracle"),
+    );
+  });
+
+  it("rejects a settlement oracle that is not an address", () => {
+    // Same check the mint gets, and for a sharper reason: a truncated paste here
+    // freezes into a document nobody can amend, and the key it names cannot
+    // sign, so the league is unsettleable from the moment it is created.
+    const bad = mutate((d) => {
+      (d.pot as { settlementOracle: string }).settlementOracle = "not-an-address";
+    });
+    expect(validateLeagueRules(bad, NFL)).toContainEqual(
+      expect.stringContaining("settlement oracle"),
+    );
   });
 
   it("rejects an unknown stat key", () => {
@@ -904,8 +934,32 @@ describe("hashLeagueRules", () => {
     //   deliberate and it is loud. And the four dissolved leagues do not gain
     //   the rule, because frozen rules cannot be migrated; nothing can be done
     //   about that and nothing should be.
+    //
+    // Moved 2026-08-18: schemaVersion 7 -> 8, adding `pot.settlementOracle` —
+    //   the key permitted to post a league's finalised scores on-chain.
+    //
+    //   **This one is a promise rather than a number.** `docs/RULES.md` §7 says
+    //   the contract derives the champion and that stats reach the chain through
+    //   an oracle. It named the oracle nowhere, so members were signing a
+    //   document with exactly one trusted party in it and no way to see who.
+    //   Now they sign the key, it is rendered above the join control with
+    //   everything else, and `scoresTermMismatches` refuses a settlement account
+    //   naming a different one — which is what closes the attack in
+    //   `docs/SETTLEMENT.md` §6, where a commissioner names their own key and
+    //   posts the scores that make themselves champion.
+    //
+    //   **Unlike 6 -> 7 this is not a safe addition to an existing league**, and
+    //   the distinction is worth keeping straight. That one added a scoring key,
+    //   and a frozen league that never heard of it simply scores it zero. This
+    //   adds a field settlement *requires*: a league frozen without it has no
+    //   signed oracle, so nothing may ever post its scores and its only exit is
+    //   the timelock refund. The four dissolved test leagues are in that state
+    //   and it does not matter, because they are dissolved. It would matter for
+    //   a live one, which is why this moves now — while every anchored league is
+    //   disposable and `league_onchain_stakes` is empty — and could not move
+    //   later.
     expect(hashLeagueRules(FIXTURE)).toBe(
-      "01e0dad789032549089087829bf1177569cf968610018c04dff31d00ef33b2bb",
+      "34902406ca6e98967da17dc53bf63da250d47819d507d792098da037aa8195ac",
     );
   });
 });

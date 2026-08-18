@@ -288,6 +288,7 @@ describe("a pot league too small for a consolation bracket", () => {
     refundUnlockAt: 1_773_000_000,
     feeBps: 100,
     feeRecipient: "6dNUCTMTgoHhbfgDzKtiPvBpJ2LzMwGqBpKmUDgQtNMK",
+    settlementOracle: "US517G5965aydkZ46HS38QLi7UQiSojurfbQfKCELFx",
   } as unknown as LeagueRules["pot"];
 
   it("settles a six-member league on the default payout", async () => {
@@ -642,6 +643,7 @@ describe("the third-place game is played whether or not it pays", () => {
           refundUnlockAt: 1_773_000_000,
           feeBps: 100,
           feeRecipient: "6dNUCTMTgoHhbfgDzKtiPvBpJ2LzMwGqBpKmUDgQtNMK",
+          settlementOracle: "US517G5965aydkZ46HS38QLi7UQiSojurfbQfKCELFx",
         } as unknown as LeagueRules["pot"],
         league: { ...base.league, maxBots: 0 },
       },

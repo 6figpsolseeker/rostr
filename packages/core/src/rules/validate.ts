@@ -669,6 +669,24 @@ function validatePot(rules: LeagueRules, out: string[]): void {
     out.push("a pot fee requires a recipient");
   }
 
+  /*
+    The settlement oracle is required, unlike the fee recipient.
+
+    A fee-free league is a real league, so an empty recipient is legal. There is
+    no equivalent for this: a pot with nobody permitted to post its scores can
+    never be settled, and the only exit left is the timelock refund months later.
+    Better to refuse the league than to freeze one.
+
+    Only the shape is checked here, because `validateLeagueRules` is a pure
+    function of the frozen document and has no way to know which key is ours —
+    that is the create route's job, and it supplies this from server
+    configuration rather than from the request for the same reason it supplies
+    the mint and the fee recipient.
+  */
+  if (!isPublicKeyLike(pot.settlementOracle)) {
+    out.push("pot requires a settlement oracle address");
+  }
+
   if (pot.payout.length === 0) {
     out.push("pot defines no payout shares");
     return;
