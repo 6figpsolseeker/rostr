@@ -17,6 +17,7 @@ import {
   earliestRefundUnlock,
   latestRefundUnlock,
   MIN_DRAFT_LEAD_SECONDS,
+  MAX_TEAMS_PER_LEAGUE,
   validateLeagueRules,
 } from "./validate.js";
 
@@ -181,6 +182,35 @@ describe("validateLeagueRules", () => {
 
   it("accepts the default rule set", () => {
     expect(validateLeagueRules(FIXTURE, NFL)).toEqual([]);
+  });
+
+  /**
+   * The ceiling, which did not exist until 2026-08-17.
+   *
+   * `docs/RULES.md` §3 caps a league at twelve and nothing enforced it, so a
+   * twenty-team pot league was creatable and anchorable. The cost lands at
+   * settlement rather than at scheduling: the on-chain derivation kernels size
+   * fixed arrays to their own `MAX_TEAMS` and refuse above it, so such a league
+   * plays a whole season and then cannot be settled at all — its members falling
+   * to the timelock refund with no earlier signal. Frozen rules mean the only
+   * moment this is fixable is before creation.
+   */
+  it("rejects a league above the twelve-team cap", () => {
+    const bad = mutate((d) => {
+      (d.league as { maxTeams: number }).maxTeams = MAX_TEAMS_PER_LEAGUE + 1;
+    });
+    expect(validateLeagueRules(bad, NFL)).toContainEqual(
+      expect.stringContaining(`maxTeams cannot exceed ${MAX_TEAMS_PER_LEAGUE}`),
+    );
+  });
+
+  it("accepts a league at exactly the cap", () => {
+    // The negative control, and the default: `NFL_PPR` ships `maxTeams: 12`, so
+    // an off-by-one here would refuse every league the product actually creates.
+    const ok = mutate((d) => {
+      (d.league as { maxTeams: number }).maxTeams = MAX_TEAMS_PER_LEAGUE;
+    });
+    expect(validateLeagueRules(ok, NFL)).toEqual([]);
   });
 
   it("rejects an unknown stat key", () => {

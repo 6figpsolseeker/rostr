@@ -804,6 +804,56 @@ export type RostrEscrow = {
       "code": 6028,
       "name": "startDeadlineAfterRefundUnlock",
       "msg": "The start deadline must fall before the refund unlock"
+    },
+    {
+      "code": 6029,
+      "name": "leagueTooLarge",
+      "msg": "A league may have at most twelve teams; above that it could never be settled"
+    },
+    {
+      "code": 6030,
+      "name": "noTiebreakers",
+      "msg": "Seeding requires at least one tiebreaker"
+    },
+    {
+      "code": 6031,
+      "name": "tiebreakersExhausted",
+      "msg": "Tiebreakers were exhausted with teams still tied; the chain must end in a deterministic one"
+    },
+    {
+      "code": 6032,
+      "name": "unknownTeam",
+      "msg": "A result names a team that is not in this league"
+    },
+    {
+      "code": 6033,
+      "name": "unknownTiebreaker",
+      "msg": "Unknown tiebreaker discriminant"
+    },
+    {
+      "code": 6034,
+      "name": "tooManyTeams",
+      "msg": "More teams than this program can settle"
+    },
+    {
+      "code": 6035,
+      "name": "malformedSchedule",
+      "msg": "Two results occupy the same week and team"
+    },
+    {
+      "code": 6036,
+      "name": "fieldTooSmall",
+      "msg": "A bracket needs at least two teams and fewer byes than teams"
+    },
+    {
+      "code": 6037,
+      "name": "notEnoughWeeks",
+      "msg": "This field needs more weeks than the bracket window has"
+    },
+    {
+      "code": 6038,
+      "name": "bracketInvariant",
+      "msg": "The playoff ladder reached a state it should not be able to reach"
     }
   ],
   "types": [

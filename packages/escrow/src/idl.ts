@@ -818,6 +818,56 @@ export const ESCROW_IDL: EscrowIdl = {
       "code": 6028,
       "name": "StartDeadlineAfterRefundUnlock",
       "msg": "The start deadline must fall before the refund unlock"
+    },
+    {
+      "code": 6029,
+      "name": "LeagueTooLarge",
+      "msg": "A league may have at most twelve teams; above that it could never be settled"
+    },
+    {
+      "code": 6030,
+      "name": "NoTiebreakers",
+      "msg": "Seeding requires at least one tiebreaker"
+    },
+    {
+      "code": 6031,
+      "name": "TiebreakersExhausted",
+      "msg": "Tiebreakers were exhausted with teams still tied; the chain must end in a deterministic one"
+    },
+    {
+      "code": 6032,
+      "name": "UnknownTeam",
+      "msg": "A result names a team that is not in this league"
+    },
+    {
+      "code": 6033,
+      "name": "UnknownTiebreaker",
+      "msg": "Unknown tiebreaker discriminant"
+    },
+    {
+      "code": 6034,
+      "name": "TooManyTeams",
+      "msg": "More teams than this program can settle"
+    },
+    {
+      "code": 6035,
+      "name": "MalformedSchedule",
+      "msg": "Two results occupy the same week and team"
+    },
+    {
+      "code": 6036,
+      "name": "FieldTooSmall",
+      "msg": "A bracket needs at least two teams and fewer byes than teams"
+    },
+    {
+      "code": 6037,
+      "name": "NotEnoughWeeks",
+      "msg": "This field needs more weeks than the bracket window has"
+    },
+    {
+      "code": 6038,
+      "name": "BracketInvariant",
+      "msg": "The playoff ladder reached a state it should not be able to reach"
     }
   ],
   "types": [

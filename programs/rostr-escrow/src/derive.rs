@@ -40,8 +40,17 @@ use anchor_lang::prelude::*;
 /// The most teams a league may have for settlement to be derivable.
 ///
 /// `docs/RULES.md` § 3 caps a league at twelve; this leaves headroom without
-/// letting the account layouts grow. Nothing enforces it yet — the check
-/// belongs at `initialize_league` and lands with the accounts that need it.
+/// letting the account layouts grow.
+///
+/// **This is the kernels' capacity, not the league cap** — those are
+/// `MAX_TEAMS_PER_LEAGUE` in `lib.rs` and `packages/core/src/rules/validate.ts`,
+/// both twelve, and both now enforce it at creation. The headroom here is
+/// deliberate slack between "what a league may be" and "what this code can
+/// hold", so raising the cap later is a constant and not a layout change.
+///
+/// The comment here used to end "Nothing enforces it yet — the check belongs at
+/// `initialize_league`". It does now, and until 2026-08-17 a twenty-team pot
+/// league was creatable, anchorable, and unsettleable.
 pub const MAX_TEAMS: usize = 16;
 
 /// Regular-season weeks a league may have. Sized to the NFL, with room.
@@ -78,21 +87,25 @@ impl Tiebreaker {
     }
 }
 
-#[error_code]
-pub enum DeriveError {
-    #[msg("Seeding requires at least one tiebreaker")]
-    NoTiebreakers,
-    #[msg("Tiebreakers were exhausted with teams still tied; the chain must end in a deterministic one")]
-    TiebreakersExhausted,
-    #[msg("A result names a team that is not in this league")]
-    UnknownTeam,
-    #[msg("Unknown tiebreaker discriminant")]
-    UnknownTiebreaker,
-    #[msg("More teams than this program can settle")]
-    TooManyTeams,
-    #[msg("Two results occupy the same week and team")]
-    MalformedSchedule,
-}
+/// The derivation kernels' refusals.
+///
+/// **A re-export of [`crate::EscrowError`], not an enum of its own**, and that is
+/// load-bearing rather than tidy. Anchor emits exactly one `#[error_code]` enum
+/// into the IDL, so a second one does not sit alongside the first — it silently
+/// *replaces* it. Adding `bracket.rs` proved that on 2026-08-17: `pnpm idl:sync`
+/// rewrote codes 6000-6007 from `RulesHashMissing`, `BuyInZero` and the rest of
+/// the escrow errors to `NoTiebreakers`, `TiebreakersExhausted` and the rest of
+/// these, with no warning and a green build. Every client mapping a code back to
+/// a name would have been wrong about every refusal the program can actually
+/// return.
+///
+/// The comment this replaces called that collision latent and said splitting the
+/// ranges could wait for its own commit. It could not.
+///
+/// The name survives because it still reads correctly at the use sites — these
+/// are the derivation's refusals — and because `DeriveError::TooManyTeams` says
+/// more at a glance than the qualified original would.
+pub use crate::EscrowError as DeriveError;
 
 /// One completed game. A bye is represented by `away == None` and counts for
 /// nothing at all — not a game, not a point, not a record.

@@ -66,6 +66,7 @@ export { encodeLeagueRules, hashLeagueRules, verifyLeagueRulesHash } from "./rul
 export {
   draftDateProblem,
   earliestRefundUnlock,
+  MAX_TEAMS_PER_LEAGUE,
   MIN_DRAFT_LEAD_SECONDS,
   latestRefundUnlock,
   validateLeagueRules,

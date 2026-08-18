@@ -28,6 +28,20 @@ const SLOW_PICK_SECONDS = [3600, 14_400, 28_800, 86_400];
 const MIN_PAYING_FINALIZATION_HOURS = 168;
 
 /**
+ * The most teams a league may have. `docs/RULES.md` §3.
+ *
+ * Exported because the escrow program mirrors it and the two must not drift —
+ * the program's bound is what binds callers who never touch this service, and
+ * this one is what gives a creator the error before their rules are frozen.
+ *
+ * **It is a settlement bound, not a scheduling one.** The round robin handles
+ * any size; the on-chain derivation kernels do not, because their fixed arrays
+ * are sized to a constant and `compute_records` refuses above it. A league over
+ * this cap plays a full season and then cannot be settled at all.
+ */
+export const MAX_TEAMS_PER_LEAGUE = 12;
+
+/**
  * How long after the last prize could possibly be settled the timelock refund
  * must stay shut.
  *
@@ -723,6 +737,26 @@ function validateLeagueSize(rules: LeagueRules, out: string[]): void {
   if (l.minHumans < 2) out.push("a league requires at least 2 humans");
   if (l.maxTeams < l.minHumans) out.push("maxTeams cannot be below minHumans");
   if (l.maxTeams < 2) out.push("maxTeams must be at least 2");
+
+  /*
+    And a ceiling, which there was not one of until 2026-08-17.
+
+    `docs/RULES.md` §3 caps a league at twelve and nothing enforced it, so a
+    twenty-team pot league was creatable and anchorable. The cost is not the
+    schedule — the round robin handles any size — it is that **settlement could
+    never complete**: the on-chain derivation kernels size their fixed arrays to
+    `MAX_TEAMS`, and `compute_records` refuses `TooManyTeams` above it. A league
+    over the cap would play a full season and then fall to the timelock refund,
+    with no earlier signal at all.
+
+    Frozen rules mean this is only ever fixable *before* creation, which is why
+    it belongs here and in `initialize_league` rather than at settlement. The
+    program carries the same bound so it binds every caller, not only the ones
+    who came through this service.
+  */
+  if (l.maxTeams > MAX_TEAMS_PER_LEAGUE) {
+    out.push(`maxTeams cannot exceed ${MAX_TEAMS_PER_LEAGUE}`);
+  }
 
   if (!Number.isSafeInteger(l.maxBots) || l.maxBots < 0) {
     out.push("maxBots must be a non-negative whole number");

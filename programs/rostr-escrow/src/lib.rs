@@ -33,18 +33,30 @@ use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
 
 declare_id!("FtXXoS8G6N3dmhijp2kZGpmX6GmNtDk6cGj9h7eoK5NC");
 
+/// The playoff ladder, derived rather than declared — the second half of the
+/// kernel `derive` starts. Champion, runner-up, third place.
+///
+/// Pinned to `buildBracket` by `bracket-corpus.json`, in the pattern the
+/// standings corpus established. See `docs/SETTLEMENT.md`.
+pub mod bracket;
+
 /// Seeding, derived rather than declared — the first half of issue #28.
 ///
-/// **No instruction calls it yet, deliberately.** `docs/RULES.md` § 7 requires
-/// the contract to derive the champion from posted scores, which needs the
-/// standings this computes; posting those scores needs the dual-source oracle
-/// (G4–G5) that does not exist. So the kernel lands first, alone, where it can
-/// be reviewed against the TypeScript that decides the same question today and
-/// nothing depends on it being right yet.
+/// **No instruction calls either kernel yet, deliberately.** `docs/RULES.md` § 7
+/// requires the contract to derive the champion from posted scores, which needs
+/// the standings this computes; posting those scores needs the dual-source
+/// oracle (G4–G5) that does not exist. So the kernels land first, alone, where
+/// they can be reviewed against the TypeScript that decides the same question
+/// today and nothing depends on them being right yet.
 ///
-/// It changes no account, no instruction and no IDL, so it cannot move
+/// They change no account and no instruction, so they cannot move
 /// `potDepositGate` — mainnet stays shut until an instruction named `settle`
 /// exists, which is several commits away.
+///
+/// **This used to say "and no IDL", and that is no longer true.** Their refusals
+/// are variants of [`EscrowError`], so the IDL's error block grows with them.
+/// The alternative — a second `#[error_code]` enum — does not add to the IDL,
+/// it replaces it; see the comment on those variants.
 pub mod derive;
 
 /// Number of prizes in a payout split. Fixed at five by the rule schema:
@@ -124,6 +136,28 @@ pub const MAX_FEE_BPS: u16 = 500;
 /// Smallest league that can meaningfully play.
 pub const MIN_TEAMS: u8 = 2;
 
+/// Largest league this program can settle. `docs/RULES.md` §3, and
+/// **not the same constant as `derive::MAX_TEAMS`**, which is the kernels'
+/// array capacity and carries headroom above this. Named for the TypeScript it
+/// mirrors so the two cannot be confused at a glance.
+///
+/// `MAX_TEAMS_PER_LEAGUE` in `packages/core/src/rules/validate.ts`.
+///
+/// **A settlement bound, not a scheduling one**, and it had no on-chain half
+/// until 2026-08-17. `max_teams` is published and not enforced against the
+/// roster (see the field), but this is a different question: the derivation
+/// kernels in `derive.rs` and `bracket.rs` size fixed arrays to `MAX_TEAMS` and
+/// refuse above it, so a league anchored over this cap would play a whole season
+/// and then be **unsettleable** — its members falling to the timelock refund
+/// with no earlier signal.
+///
+/// Checked here rather than only off-chain for the same reason the buy-in bounds
+/// are: it binds every caller, not only the ones who came through our front end.
+/// Checked at creation rather than at settlement because the rules are frozen —
+/// a bound applied later could only ever trap money in a league that already
+/// exists.
+pub const MAX_TEAMS_PER_LEAGUE: u8 = 12;
+
 /// Furthest into the future a refund unlock may be set, measured from the moment
 /// the league account is created. Two years.
 ///
@@ -167,6 +201,10 @@ pub mod rostr_escrow {
         );
 
         require!(args.max_teams >= MIN_TEAMS, EscrowError::LeagueTooSmall);
+        require!(
+            args.max_teams <= MAX_TEAMS_PER_LEAGUE,
+            EscrowError::LeagueTooLarge
+        );
 
         // Without this the cap above means a different amount of money for every
         // token. See POT_MINT_DECIMALS.
@@ -360,6 +398,10 @@ pub mod rostr_escrow {
     ) -> Result<()> {
         require!(args.rules_hash != [0u8; 32], EscrowError::RulesHashMissing);
         require!(args.max_teams >= MIN_TEAMS, EscrowError::LeagueTooSmall);
+        require!(
+            args.max_teams <= MAX_TEAMS_PER_LEAGUE,
+            EscrowError::LeagueTooLarge
+        );
 
         let league = &mut ctx.accounts.league;
         league.league_id = args.league_id;
@@ -968,4 +1010,41 @@ pub enum EscrowError {
     StartDeadlineNotInFuture,
     #[msg("The start deadline must fall before the refund unlock")]
     StartDeadlineAfterRefundUnlock,
+    // Appended, like everything above it — the discriminants are wire values a
+    // client maps back to a name, so appending is safe and renumbering is not.
+    #[msg("A league may have at most twelve teams; above that it could never be settled")]
+    LeagueTooLarge,
+    // ---------------------------------------------------------------------
+    // The derivation kernels' refusals — `derive.rs` and `bracket.rs`. They live
+    // here, in the one error enum, and that is not a stylistic choice.
+    //
+    // **Anchor emits exactly one `#[error_code]` enum into the IDL.** A second
+    // one does not sit alongside the first, it silently *replaces* it. When
+    // `bracket.rs` landed on 2026-08-17 with `DeriveError` still separate,
+    // `pnpm idl:sync` rewrote codes 6000-6007 from `RulesHashMissing`,
+    // `BuyInZero` and the rest of the escrow errors into `NoTiebreakers` and
+    // friends — no warning, green build, and every client mapping a code back to
+    // a name wrong about every refusal the program can actually return.
+    //
+    // `derive.rs` re-exports this as `DeriveError` so the use sites still read
+    // as the derivation's own refusals. See the comment there.
+    // ---------------------------------------------------------------------
+    #[msg("Seeding requires at least one tiebreaker")]
+    NoTiebreakers,
+    #[msg("Tiebreakers were exhausted with teams still tied; the chain must end in a deterministic one")]
+    TiebreakersExhausted,
+    #[msg("A result names a team that is not in this league")]
+    UnknownTeam,
+    #[msg("Unknown tiebreaker discriminant")]
+    UnknownTiebreaker,
+    #[msg("More teams than this program can settle")]
+    TooManyTeams,
+    #[msg("Two results occupy the same week and team")]
+    MalformedSchedule,
+    #[msg("A bracket needs at least two teams and fewer byes than teams")]
+    FieldTooSmall,
+    #[msg("This field needs more weeks than the bracket window has")]
+    NotEnoughWeeks,
+    #[msg("The playoff ladder reached a state it should not be able to reach")]
+    BracketInvariant,
 }

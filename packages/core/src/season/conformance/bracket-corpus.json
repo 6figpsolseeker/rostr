@@ -1,0 +1,1224 @@
+{
+  "cases": [
+    {
+      "name": "four teams, two rounds, played out",
+      "why": "The base case. Round one pairs 1v4 and 2v3; whoever wins meets in the final. Everything else here is a deviation from this shape, so if this is wrong nothing below means anything.",
+      "field": [
+        "00000000-0000-4000-8000-000000000001",
+        "00000000-0000-4000-8000-000000000002",
+        "00000000-0000-4000-8000-000000000003",
+        "00000000-0000-4000-8000-000000000004"
+      ],
+      "weeks": [
+        16,
+        17
+      ],
+      "firstRoundByes": 0,
+      "results": [
+        {
+          "week": 16,
+          "homeTeamId": "00000000-0000-4000-8000-000000000001",
+          "awayTeamId": "00000000-0000-4000-8000-000000000004",
+          "homeMilliPoints": 110000,
+          "awayMilliPoints": 100000
+        },
+        {
+          "week": 16,
+          "homeTeamId": "00000000-0000-4000-8000-000000000002",
+          "awayTeamId": "00000000-0000-4000-8000-000000000003",
+          "homeMilliPoints": 90000,
+          "awayMilliPoints": 95000
+        },
+        {
+          "week": 17,
+          "homeTeamId": "00000000-0000-4000-8000-000000000001",
+          "awayTeamId": "00000000-0000-4000-8000-000000000003",
+          "homeMilliPoints": 120000,
+          "awayMilliPoints": 118000
+        }
+      ],
+      "thirdPlace": false,
+      "rounds": [
+        {
+          "week": 16,
+          "round": 1,
+          "games": [
+            {
+              "homeTeamId": "00000000-0000-4000-8000-000000000001",
+              "awayTeamId": "00000000-0000-4000-8000-000000000004",
+              "winnerTeamId": "00000000-0000-4000-8000-000000000001",
+              "decidedBySeed": false
+            },
+            {
+              "homeTeamId": "00000000-0000-4000-8000-000000000002",
+              "awayTeamId": "00000000-0000-4000-8000-000000000003",
+              "winnerTeamId": "00000000-0000-4000-8000-000000000003",
+              "decidedBySeed": false
+            }
+          ],
+          "byes": [],
+          "survivors": [
+            "00000000-0000-4000-8000-000000000001",
+            "00000000-0000-4000-8000-000000000003"
+          ]
+        },
+        {
+          "week": 17,
+          "round": 2,
+          "games": [
+            {
+              "homeTeamId": "00000000-0000-4000-8000-000000000001",
+              "awayTeamId": "00000000-0000-4000-8000-000000000003",
+              "winnerTeamId": "00000000-0000-4000-8000-000000000001",
+              "decidedBySeed": false
+            }
+          ],
+          "byes": [],
+          "survivors": [
+            "00000000-0000-4000-8000-000000000001"
+          ]
+        }
+      ],
+      "champion": "00000000-0000-4000-8000-000000000001",
+      "runnerUp": "00000000-0000-4000-8000-000000000003",
+      "thirdPlaceGame": null,
+      "thirdPlaceHolder": null
+    },
+    {
+      "name": "six teams with two byes — the default playoff shape",
+      "why": "`playoffTeams: 6` with `byeSeeds: 2` is what a default league actually plays, so a kernel that only handles powers of two is wrong for the common case rather than for an edge.",
+      "field": [
+        "00000000-0000-4000-8000-000000000001",
+        "00000000-0000-4000-8000-000000000002",
+        "00000000-0000-4000-8000-000000000003",
+        "00000000-0000-4000-8000-000000000004",
+        "00000000-0000-4000-8000-000000000005",
+        "00000000-0000-4000-8000-000000000006"
+      ],
+      "weeks": [
+        15,
+        16,
+        17
+      ],
+      "firstRoundByes": 2,
+      "results": [
+        {
+          "week": 15,
+          "homeTeamId": "00000000-0000-4000-8000-000000000003",
+          "awayTeamId": "00000000-0000-4000-8000-000000000006",
+          "homeMilliPoints": 100000,
+          "awayMilliPoints": 90000
+        },
+        {
+          "week": 15,
+          "homeTeamId": "00000000-0000-4000-8000-000000000004",
+          "awayTeamId": "00000000-0000-4000-8000-000000000005",
+          "homeMilliPoints": 88000,
+          "awayMilliPoints": 99000
+        },
+        {
+          "week": 16,
+          "homeTeamId": "00000000-0000-4000-8000-000000000001",
+          "awayTeamId": "00000000-0000-4000-8000-000000000005",
+          "homeMilliPoints": 105000,
+          "awayMilliPoints": 101000
+        },
+        {
+          "week": 16,
+          "homeTeamId": "00000000-0000-4000-8000-000000000002",
+          "awayTeamId": "00000000-0000-4000-8000-000000000003",
+          "homeMilliPoints": 97000,
+          "awayMilliPoints": 99000
+        },
+        {
+          "week": 17,
+          "homeTeamId": "00000000-0000-4000-8000-000000000001",
+          "awayTeamId": "00000000-0000-4000-8000-000000000003",
+          "homeMilliPoints": 130000,
+          "awayMilliPoints": 121000
+        }
+      ],
+      "thirdPlace": false,
+      "rounds": [
+        {
+          "week": 15,
+          "round": 1,
+          "games": [
+            {
+              "homeTeamId": "00000000-0000-4000-8000-000000000003",
+              "awayTeamId": "00000000-0000-4000-8000-000000000006",
+              "winnerTeamId": "00000000-0000-4000-8000-000000000003",
+              "decidedBySeed": false
+            },
+            {
+              "homeTeamId": "00000000-0000-4000-8000-000000000004",
+              "awayTeamId": "00000000-0000-4000-8000-000000000005",
+              "winnerTeamId": "00000000-0000-4000-8000-000000000005",
+              "decidedBySeed": false
+            }
+          ],
+          "byes": [
+            "00000000-0000-4000-8000-000000000001",
+            "00000000-0000-4000-8000-000000000002"
+          ],
+          "survivors": [
+            "00000000-0000-4000-8000-000000000001",
+            "00000000-0000-4000-8000-000000000002",
+            "00000000-0000-4000-8000-000000000003",
+            "00000000-0000-4000-8000-000000000005"
+          ]
+        },
+        {
+          "week": 16,
+          "round": 2,
+          "games": [
+            {
+              "homeTeamId": "00000000-0000-4000-8000-000000000001",
+              "awayTeamId": "00000000-0000-4000-8000-000000000005",
+              "winnerTeamId": "00000000-0000-4000-8000-000000000001",
+              "decidedBySeed": false
+            },
+            {
+              "homeTeamId": "00000000-0000-4000-8000-000000000002",
+              "awayTeamId": "00000000-0000-4000-8000-000000000003",
+              "winnerTeamId": "00000000-0000-4000-8000-000000000003",
+              "decidedBySeed": false
+            }
+          ],
+          "byes": [],
+          "survivors": [
+            "00000000-0000-4000-8000-000000000001",
+            "00000000-0000-4000-8000-000000000003"
+          ]
+        },
+        {
+          "week": 17,
+          "round": 3,
+          "games": [
+            {
+              "homeTeamId": "00000000-0000-4000-8000-000000000001",
+              "awayTeamId": "00000000-0000-4000-8000-000000000003",
+              "winnerTeamId": "00000000-0000-4000-8000-000000000001",
+              "decidedBySeed": false
+            }
+          ],
+          "byes": [],
+          "survivors": [
+            "00000000-0000-4000-8000-000000000001"
+          ]
+        }
+      ],
+      "champion": "00000000-0000-4000-8000-000000000001",
+      "runnerUp": "00000000-0000-4000-8000-000000000003",
+      "thirdPlaceGame": null,
+      "thirdPlaceHolder": null
+    },
+    {
+      "name": "every round reseeds, so an upset changes who the top seed meets",
+      "why": "The discriminating case against a fixed ladder. Seed 8 beats seed 1 in round one; the survivors are 2, 3, 4 and 8, so reseeding pairs 2v8 and 3v4. A fixed ladder would carry 8 into seed 1's slot and pair 8v4 and 2v3 — different games, and eventually a different champion.",
+      "field": [
+        "00000000-0000-4000-8000-000000000001",
+        "00000000-0000-4000-8000-000000000002",
+        "00000000-0000-4000-8000-000000000003",
+        "00000000-0000-4000-8000-000000000004",
+        "00000000-0000-4000-8000-000000000005",
+        "00000000-0000-4000-8000-000000000006",
+        "00000000-0000-4000-8000-000000000007",
+        "00000000-0000-4000-8000-000000000008"
+      ],
+      "weeks": [
+        15,
+        16,
+        17
+      ],
+      "firstRoundByes": 0,
+      "results": [
+        {
+          "week": 15,
+          "homeTeamId": "00000000-0000-4000-8000-000000000001",
+          "awayTeamId": "00000000-0000-4000-8000-000000000008",
+          "homeMilliPoints": 90000,
+          "awayMilliPoints": 95000
+        },
+        {
+          "week": 15,
+          "homeTeamId": "00000000-0000-4000-8000-000000000002",
+          "awayTeamId": "00000000-0000-4000-8000-000000000007",
+          "homeMilliPoints": 110000,
+          "awayMilliPoints": 100000
+        },
+        {
+          "week": 15,
+          "homeTeamId": "00000000-0000-4000-8000-000000000003",
+          "awayTeamId": "00000000-0000-4000-8000-000000000006",
+          "homeMilliPoints": 105000,
+          "awayMilliPoints": 99000
+        },
+        {
+          "week": 15,
+          "homeTeamId": "00000000-0000-4000-8000-000000000004",
+          "awayTeamId": "00000000-0000-4000-8000-000000000005",
+          "homeMilliPoints": 102000,
+          "awayMilliPoints": 98000
+        },
+        {
+          "week": 16,
+          "homeTeamId": "00000000-0000-4000-8000-000000000002",
+          "awayTeamId": "00000000-0000-4000-8000-000000000008",
+          "homeMilliPoints": 115000,
+          "awayMilliPoints": 110000
+        },
+        {
+          "week": 16,
+          "homeTeamId": "00000000-0000-4000-8000-000000000003",
+          "awayTeamId": "00000000-0000-4000-8000-000000000004",
+          "homeMilliPoints": 108000,
+          "awayMilliPoints": 112000
+        },
+        {
+          "week": 17,
+          "homeTeamId": "00000000-0000-4000-8000-000000000002",
+          "awayTeamId": "00000000-0000-4000-8000-000000000004",
+          "homeMilliPoints": 125000,
+          "awayMilliPoints": 120000
+        }
+      ],
+      "thirdPlace": false,
+      "rounds": [
+        {
+          "week": 15,
+          "round": 1,
+          "games": [
+            {
+              "homeTeamId": "00000000-0000-4000-8000-000000000001",
+              "awayTeamId": "00000000-0000-4000-8000-000000000008",
+              "winnerTeamId": "00000000-0000-4000-8000-000000000008",
+              "decidedBySeed": false
+            },
+            {
+              "homeTeamId": "00000000-0000-4000-8000-000000000002",
+              "awayTeamId": "00000000-0000-4000-8000-000000000007",
+              "winnerTeamId": "00000000-0000-4000-8000-000000000002",
+              "decidedBySeed": false
+            },
+            {
+              "homeTeamId": "00000000-0000-4000-8000-000000000003",
+              "awayTeamId": "00000000-0000-4000-8000-000000000006",
+              "winnerTeamId": "00000000-0000-4000-8000-000000000003",
+              "decidedBySeed": false
+            },
+            {
+              "homeTeamId": "00000000-0000-4000-8000-000000000004",
+              "awayTeamId": "00000000-0000-4000-8000-000000000005",
+              "winnerTeamId": "00000000-0000-4000-8000-000000000004",
+              "decidedBySeed": false
+            }
+          ],
+          "byes": [],
+          "survivors": [
+            "00000000-0000-4000-8000-000000000002",
+            "00000000-0000-4000-8000-000000000003",
+            "00000000-0000-4000-8000-000000000004",
+            "00000000-0000-4000-8000-000000000008"
+          ]
+        },
+        {
+          "week": 16,
+          "round": 2,
+          "games": [
+            {
+              "homeTeamId": "00000000-0000-4000-8000-000000000002",
+              "awayTeamId": "00000000-0000-4000-8000-000000000008",
+              "winnerTeamId": "00000000-0000-4000-8000-000000000002",
+              "decidedBySeed": false
+            },
+            {
+              "homeTeamId": "00000000-0000-4000-8000-000000000003",
+              "awayTeamId": "00000000-0000-4000-8000-000000000004",
+              "winnerTeamId": "00000000-0000-4000-8000-000000000004",
+              "decidedBySeed": false
+            }
+          ],
+          "byes": [],
+          "survivors": [
+            "00000000-0000-4000-8000-000000000002",
+            "00000000-0000-4000-8000-000000000004"
+          ]
+        },
+        {
+          "week": 17,
+          "round": 3,
+          "games": [
+            {
+              "homeTeamId": "00000000-0000-4000-8000-000000000002",
+              "awayTeamId": "00000000-0000-4000-8000-000000000004",
+              "winnerTeamId": "00000000-0000-4000-8000-000000000002",
+              "decidedBySeed": false
+            }
+          ],
+          "byes": [],
+          "survivors": [
+            "00000000-0000-4000-8000-000000000002"
+          ]
+        }
+      ],
+      "champion": "00000000-0000-4000-8000-000000000002",
+      "runnerUp": "00000000-0000-4000-8000-000000000004",
+      "thirdPlaceGame": null,
+      "thirdPlaceHolder": null
+    },
+    {
+      "name": "equal points send the higher seed through",
+      "why": "The one place bracket scoring differs from the regular season, where a tie is a real outcome both teams keep. `RULES.md` §5 advances the higher seed, and `decidedBySeed` has to say so — a bracket game that looks like an ordinary win when it was a coin-flip on seeding is a screen lying to the loser.",
+      "field": [
+        "00000000-0000-4000-8000-000000000001",
+        "00000000-0000-4000-8000-000000000002",
+        "00000000-0000-4000-8000-000000000003",
+        "00000000-0000-4000-8000-000000000004"
+      ],
+      "weeks": [
+        16,
+        17
+      ],
+      "firstRoundByes": 0,
+      "results": [
+        {
+          "week": 16,
+          "homeTeamId": "00000000-0000-4000-8000-000000000001",
+          "awayTeamId": "00000000-0000-4000-8000-000000000004",
+          "homeMilliPoints": 100000,
+          "awayMilliPoints": 100000
+        },
+        {
+          "week": 16,
+          "homeTeamId": "00000000-0000-4000-8000-000000000002",
+          "awayTeamId": "00000000-0000-4000-8000-000000000003",
+          "homeMilliPoints": 100000,
+          "awayMilliPoints": 100000
+        },
+        {
+          "week": 17,
+          "homeTeamId": "00000000-0000-4000-8000-000000000001",
+          "awayTeamId": "00000000-0000-4000-8000-000000000002",
+          "homeMilliPoints": 111000,
+          "awayMilliPoints": 111000
+        }
+      ],
+      "thirdPlace": false,
+      "rounds": [
+        {
+          "week": 16,
+          "round": 1,
+          "games": [
+            {
+              "homeTeamId": "00000000-0000-4000-8000-000000000001",
+              "awayTeamId": "00000000-0000-4000-8000-000000000004",
+              "winnerTeamId": "00000000-0000-4000-8000-000000000001",
+              "decidedBySeed": true
+            },
+            {
+              "homeTeamId": "00000000-0000-4000-8000-000000000002",
+              "awayTeamId": "00000000-0000-4000-8000-000000000003",
+              "winnerTeamId": "00000000-0000-4000-8000-000000000002",
+              "decidedBySeed": true
+            }
+          ],
+          "byes": [],
+          "survivors": [
+            "00000000-0000-4000-8000-000000000001",
+            "00000000-0000-4000-8000-000000000002"
+          ]
+        },
+        {
+          "week": 17,
+          "round": 2,
+          "games": [
+            {
+              "homeTeamId": "00000000-0000-4000-8000-000000000001",
+              "awayTeamId": "00000000-0000-4000-8000-000000000002",
+              "winnerTeamId": "00000000-0000-4000-8000-000000000001",
+              "decidedBySeed": true
+            }
+          ],
+          "byes": [],
+          "survivors": [
+            "00000000-0000-4000-8000-000000000001"
+          ]
+        }
+      ],
+      "champion": "00000000-0000-4000-8000-000000000001",
+      "runnerUp": "00000000-0000-4000-8000-000000000002",
+      "thirdPlaceGame": null,
+      "thirdPlaceHolder": null
+    },
+    {
+      "name": "the ladder stops at the first round holding an unscored game",
+      "why": "Who plays next genuinely is not known yet, so the round must not be invented. A kernel that padded the remaining rounds with empty games would derive a champion from a season that has not finished.",
+      "field": [
+        "00000000-0000-4000-8000-000000000001",
+        "00000000-0000-4000-8000-000000000002",
+        "00000000-0000-4000-8000-000000000003",
+        "00000000-0000-4000-8000-000000000004"
+      ],
+      "weeks": [
+        16,
+        17
+      ],
+      "firstRoundByes": 0,
+      "results": [
+        {
+          "week": 16,
+          "homeTeamId": "00000000-0000-4000-8000-000000000001",
+          "awayTeamId": "00000000-0000-4000-8000-000000000004",
+          "homeMilliPoints": 110000,
+          "awayMilliPoints": 100000
+        }
+      ],
+      "thirdPlace": false,
+      "rounds": [
+        {
+          "week": 16,
+          "round": 1,
+          "games": [
+            {
+              "homeTeamId": "00000000-0000-4000-8000-000000000001",
+              "awayTeamId": "00000000-0000-4000-8000-000000000004",
+              "winnerTeamId": "00000000-0000-4000-8000-000000000001",
+              "decidedBySeed": false
+            },
+            {
+              "homeTeamId": "00000000-0000-4000-8000-000000000002",
+              "awayTeamId": "00000000-0000-4000-8000-000000000003",
+              "winnerTeamId": null,
+              "decidedBySeed": false
+            }
+          ],
+          "byes": [],
+          "survivors": null
+        }
+      ],
+      "champion": null,
+      "runnerUp": null,
+      "thirdPlaceGame": null,
+      "thirdPlaceHolder": null
+    },
+    {
+      "name": "half-scored semifinals produce no third-place game",
+      "why": "The trap `buildThirdPlace` documents. The ladder stops at the semifinal, so the second-to-last round *built* is the quarterfinal — pairing its losers would invent a third-place game between two teams knocked out a round earlier. The semifinal is found by round number, never by taking the last round built.",
+      "field": [
+        "00000000-0000-4000-8000-000000000001",
+        "00000000-0000-4000-8000-000000000002",
+        "00000000-0000-4000-8000-000000000003",
+        "00000000-0000-4000-8000-000000000004",
+        "00000000-0000-4000-8000-000000000005",
+        "00000000-0000-4000-8000-000000000006",
+        "00000000-0000-4000-8000-000000000007",
+        "00000000-0000-4000-8000-000000000008"
+      ],
+      "weeks": [
+        15,
+        16,
+        17
+      ],
+      "firstRoundByes": 0,
+      "results": [
+        {
+          "week": 15,
+          "homeTeamId": "00000000-0000-4000-8000-000000000001",
+          "awayTeamId": "00000000-0000-4000-8000-000000000008",
+          "homeMilliPoints": 110000,
+          "awayMilliPoints": 100000
+        },
+        {
+          "week": 15,
+          "homeTeamId": "00000000-0000-4000-8000-000000000002",
+          "awayTeamId": "00000000-0000-4000-8000-000000000007",
+          "homeMilliPoints": 110000,
+          "awayMilliPoints": 100000
+        },
+        {
+          "week": 15,
+          "homeTeamId": "00000000-0000-4000-8000-000000000003",
+          "awayTeamId": "00000000-0000-4000-8000-000000000006",
+          "homeMilliPoints": 110000,
+          "awayMilliPoints": 100000
+        },
+        {
+          "week": 15,
+          "homeTeamId": "00000000-0000-4000-8000-000000000004",
+          "awayTeamId": "00000000-0000-4000-8000-000000000005",
+          "homeMilliPoints": 110000,
+          "awayMilliPoints": 100000
+        },
+        {
+          "week": 16,
+          "homeTeamId": "00000000-0000-4000-8000-000000000001",
+          "awayTeamId": "00000000-0000-4000-8000-000000000004",
+          "homeMilliPoints": 105000,
+          "awayMilliPoints": 100000
+        }
+      ],
+      "thirdPlace": true,
+      "rounds": [
+        {
+          "week": 15,
+          "round": 1,
+          "games": [
+            {
+              "homeTeamId": "00000000-0000-4000-8000-000000000001",
+              "awayTeamId": "00000000-0000-4000-8000-000000000008",
+              "winnerTeamId": "00000000-0000-4000-8000-000000000001",
+              "decidedBySeed": false
+            },
+            {
+              "homeTeamId": "00000000-0000-4000-8000-000000000002",
+              "awayTeamId": "00000000-0000-4000-8000-000000000007",
+              "winnerTeamId": "00000000-0000-4000-8000-000000000002",
+              "decidedBySeed": false
+            },
+            {
+              "homeTeamId": "00000000-0000-4000-8000-000000000003",
+              "awayTeamId": "00000000-0000-4000-8000-000000000006",
+              "winnerTeamId": "00000000-0000-4000-8000-000000000003",
+              "decidedBySeed": false
+            },
+            {
+              "homeTeamId": "00000000-0000-4000-8000-000000000004",
+              "awayTeamId": "00000000-0000-4000-8000-000000000005",
+              "winnerTeamId": "00000000-0000-4000-8000-000000000004",
+              "decidedBySeed": false
+            }
+          ],
+          "byes": [],
+          "survivors": [
+            "00000000-0000-4000-8000-000000000001",
+            "00000000-0000-4000-8000-000000000002",
+            "00000000-0000-4000-8000-000000000003",
+            "00000000-0000-4000-8000-000000000004"
+          ]
+        },
+        {
+          "week": 16,
+          "round": 2,
+          "games": [
+            {
+              "homeTeamId": "00000000-0000-4000-8000-000000000001",
+              "awayTeamId": "00000000-0000-4000-8000-000000000004",
+              "winnerTeamId": "00000000-0000-4000-8000-000000000001",
+              "decidedBySeed": false
+            },
+            {
+              "homeTeamId": "00000000-0000-4000-8000-000000000002",
+              "awayTeamId": "00000000-0000-4000-8000-000000000003",
+              "winnerTeamId": null,
+              "decidedBySeed": false
+            }
+          ],
+          "byes": [],
+          "survivors": null
+        }
+      ],
+      "champion": null,
+      "runnerUp": null,
+      "thirdPlaceGame": null,
+      "thirdPlaceHolder": null
+    },
+    {
+      "name": "third place is played in the championship week by the losing semifinalists",
+      "why": "It is a prize, not a step: nobody advances out of it, so it sits beside the ladder rather than in it. The higher seed is home, and the pairing is the two semifinal losers — not the two teams that happen to be left over.",
+      "field": [
+        "00000000-0000-4000-8000-000000000001",
+        "00000000-0000-4000-8000-000000000002",
+        "00000000-0000-4000-8000-000000000003",
+        "00000000-0000-4000-8000-000000000004"
+      ],
+      "weeks": [
+        16,
+        17
+      ],
+      "firstRoundByes": 0,
+      "results": [
+        {
+          "week": 16,
+          "homeTeamId": "00000000-0000-4000-8000-000000000001",
+          "awayTeamId": "00000000-0000-4000-8000-000000000004",
+          "homeMilliPoints": 110000,
+          "awayMilliPoints": 100000
+        },
+        {
+          "week": 16,
+          "homeTeamId": "00000000-0000-4000-8000-000000000002",
+          "awayTeamId": "00000000-0000-4000-8000-000000000003",
+          "homeMilliPoints": 90000,
+          "awayMilliPoints": 95000
+        },
+        {
+          "week": 17,
+          "homeTeamId": "00000000-0000-4000-8000-000000000001",
+          "awayTeamId": "00000000-0000-4000-8000-000000000003",
+          "homeMilliPoints": 120000,
+          "awayMilliPoints": 118000
+        },
+        {
+          "week": 17,
+          "homeTeamId": "00000000-0000-4000-8000-000000000002",
+          "awayTeamId": "00000000-0000-4000-8000-000000000004",
+          "homeMilliPoints": 101000,
+          "awayMilliPoints": 99000
+        }
+      ],
+      "thirdPlace": true,
+      "rounds": [
+        {
+          "week": 16,
+          "round": 1,
+          "games": [
+            {
+              "homeTeamId": "00000000-0000-4000-8000-000000000001",
+              "awayTeamId": "00000000-0000-4000-8000-000000000004",
+              "winnerTeamId": "00000000-0000-4000-8000-000000000001",
+              "decidedBySeed": false
+            },
+            {
+              "homeTeamId": "00000000-0000-4000-8000-000000000002",
+              "awayTeamId": "00000000-0000-4000-8000-000000000003",
+              "winnerTeamId": "00000000-0000-4000-8000-000000000003",
+              "decidedBySeed": false
+            }
+          ],
+          "byes": [],
+          "survivors": [
+            "00000000-0000-4000-8000-000000000001",
+            "00000000-0000-4000-8000-000000000003"
+          ]
+        },
+        {
+          "week": 17,
+          "round": 2,
+          "games": [
+            {
+              "homeTeamId": "00000000-0000-4000-8000-000000000001",
+              "awayTeamId": "00000000-0000-4000-8000-000000000003",
+              "winnerTeamId": "00000000-0000-4000-8000-000000000001",
+              "decidedBySeed": false
+            }
+          ],
+          "byes": [],
+          "survivors": [
+            "00000000-0000-4000-8000-000000000001"
+          ]
+        }
+      ],
+      "champion": "00000000-0000-4000-8000-000000000001",
+      "runnerUp": "00000000-0000-4000-8000-000000000003",
+      "thirdPlaceGame": {
+        "homeTeamId": "00000000-0000-4000-8000-000000000002",
+        "awayTeamId": "00000000-0000-4000-8000-000000000004",
+        "winnerTeamId": "00000000-0000-4000-8000-000000000002",
+        "decidedBySeed": false
+      },
+      "thirdPlaceHolder": "00000000-0000-4000-8000-000000000002"
+    },
+    {
+      "name": "third place is not built when the league does not play it",
+      "why": "The negative control for the case above. `thirdPlace: false` must yield no game even when the semifinals resolved and the fixture for it exists in the results — otherwise a league that never agreed to the prize would have a holder derived for it.",
+      "field": [
+        "00000000-0000-4000-8000-000000000001",
+        "00000000-0000-4000-8000-000000000002",
+        "00000000-0000-4000-8000-000000000003",
+        "00000000-0000-4000-8000-000000000004"
+      ],
+      "weeks": [
+        16,
+        17
+      ],
+      "firstRoundByes": 0,
+      "results": [
+        {
+          "week": 16,
+          "homeTeamId": "00000000-0000-4000-8000-000000000001",
+          "awayTeamId": "00000000-0000-4000-8000-000000000004",
+          "homeMilliPoints": 110000,
+          "awayMilliPoints": 100000
+        },
+        {
+          "week": 16,
+          "homeTeamId": "00000000-0000-4000-8000-000000000002",
+          "awayTeamId": "00000000-0000-4000-8000-000000000003",
+          "homeMilliPoints": 90000,
+          "awayMilliPoints": 95000
+        },
+        {
+          "week": 17,
+          "homeTeamId": "00000000-0000-4000-8000-000000000001",
+          "awayTeamId": "00000000-0000-4000-8000-000000000003",
+          "homeMilliPoints": 120000,
+          "awayMilliPoints": 118000
+        },
+        {
+          "week": 17,
+          "homeTeamId": "00000000-0000-4000-8000-000000000002",
+          "awayTeamId": "00000000-0000-4000-8000-000000000004",
+          "homeMilliPoints": 101000,
+          "awayMilliPoints": 99000
+        }
+      ],
+      "thirdPlace": false,
+      "rounds": [
+        {
+          "week": 16,
+          "round": 1,
+          "games": [
+            {
+              "homeTeamId": "00000000-0000-4000-8000-000000000001",
+              "awayTeamId": "00000000-0000-4000-8000-000000000004",
+              "winnerTeamId": "00000000-0000-4000-8000-000000000001",
+              "decidedBySeed": false
+            },
+            {
+              "homeTeamId": "00000000-0000-4000-8000-000000000002",
+              "awayTeamId": "00000000-0000-4000-8000-000000000003",
+              "winnerTeamId": "00000000-0000-4000-8000-000000000003",
+              "decidedBySeed": false
+            }
+          ],
+          "byes": [],
+          "survivors": [
+            "00000000-0000-4000-8000-000000000001",
+            "00000000-0000-4000-8000-000000000003"
+          ]
+        },
+        {
+          "week": 17,
+          "round": 2,
+          "games": [
+            {
+              "homeTeamId": "00000000-0000-4000-8000-000000000001",
+              "awayTeamId": "00000000-0000-4000-8000-000000000003",
+              "winnerTeamId": "00000000-0000-4000-8000-000000000001",
+              "decidedBySeed": false
+            }
+          ],
+          "byes": [],
+          "survivors": [
+            "00000000-0000-4000-8000-000000000001"
+          ]
+        }
+      ],
+      "champion": "00000000-0000-4000-8000-000000000001",
+      "runnerUp": "00000000-0000-4000-8000-000000000003",
+      "thirdPlaceGame": null,
+      "thirdPlaceHolder": null
+    },
+    {
+      "name": "a bracket plays the last weeks of its window, not the first",
+      "why": "A four-team bracket in a three-week window plays 16 and 17. It must finish in the championship week because that is the week the payout settles — and the week-15 result below is a real fixture between the same two teams that must be ignored entirely.",
+      "field": [
+        "00000000-0000-4000-8000-000000000001",
+        "00000000-0000-4000-8000-000000000002",
+        "00000000-0000-4000-8000-000000000003",
+        "00000000-0000-4000-8000-000000000004"
+      ],
+      "weeks": [
+        15,
+        16,
+        17
+      ],
+      "firstRoundByes": 0,
+      "results": [
+        {
+          "week": 15,
+          "homeTeamId": "00000000-0000-4000-8000-000000000001",
+          "awayTeamId": "00000000-0000-4000-8000-000000000004",
+          "homeMilliPoints": 10000,
+          "awayMilliPoints": 200000
+        },
+        {
+          "week": 16,
+          "homeTeamId": "00000000-0000-4000-8000-000000000001",
+          "awayTeamId": "00000000-0000-4000-8000-000000000004",
+          "homeMilliPoints": 110000,
+          "awayMilliPoints": 100000
+        },
+        {
+          "week": 16,
+          "homeTeamId": "00000000-0000-4000-8000-000000000002",
+          "awayTeamId": "00000000-0000-4000-8000-000000000003",
+          "homeMilliPoints": 95000,
+          "awayMilliPoints": 90000
+        },
+        {
+          "week": 17,
+          "homeTeamId": "00000000-0000-4000-8000-000000000001",
+          "awayTeamId": "00000000-0000-4000-8000-000000000002",
+          "homeMilliPoints": 120000,
+          "awayMilliPoints": 118000
+        }
+      ],
+      "thirdPlace": false,
+      "rounds": [
+        {
+          "week": 16,
+          "round": 1,
+          "games": [
+            {
+              "homeTeamId": "00000000-0000-4000-8000-000000000001",
+              "awayTeamId": "00000000-0000-4000-8000-000000000004",
+              "winnerTeamId": "00000000-0000-4000-8000-000000000001",
+              "decidedBySeed": false
+            },
+            {
+              "homeTeamId": "00000000-0000-4000-8000-000000000002",
+              "awayTeamId": "00000000-0000-4000-8000-000000000003",
+              "winnerTeamId": "00000000-0000-4000-8000-000000000002",
+              "decidedBySeed": false
+            }
+          ],
+          "byes": [],
+          "survivors": [
+            "00000000-0000-4000-8000-000000000001",
+            "00000000-0000-4000-8000-000000000002"
+          ]
+        },
+        {
+          "week": 17,
+          "round": 2,
+          "games": [
+            {
+              "homeTeamId": "00000000-0000-4000-8000-000000000001",
+              "awayTeamId": "00000000-0000-4000-8000-000000000002",
+              "winnerTeamId": "00000000-0000-4000-8000-000000000001",
+              "decidedBySeed": false
+            }
+          ],
+          "byes": [],
+          "survivors": [
+            "00000000-0000-4000-8000-000000000001"
+          ]
+        }
+      ],
+      "champion": "00000000-0000-4000-8000-000000000001",
+      "runnerUp": "00000000-0000-4000-8000-000000000002",
+      "thirdPlaceGame": null,
+      "thirdPlaceHolder": null
+    },
+    {
+      "name": "a stored result is found whichever way round it is recorded",
+      "why": "Which team a stored row calls home is the database's business; a bracket game is looked up by its pair. The points must still attribute by the *result's* own orientation — reading them positionally instead would hand every reversed row's score to the wrong team.",
+      "field": [
+        "00000000-0000-4000-8000-000000000001",
+        "00000000-0000-4000-8000-000000000002",
+        "00000000-0000-4000-8000-000000000003",
+        "00000000-0000-4000-8000-000000000004"
+      ],
+      "weeks": [
+        16,
+        17
+      ],
+      "firstRoundByes": 0,
+      "results": [
+        {
+          "week": 16,
+          "homeTeamId": "00000000-0000-4000-8000-000000000004",
+          "awayTeamId": "00000000-0000-4000-8000-000000000001",
+          "homeMilliPoints": 100000,
+          "awayMilliPoints": 110000
+        },
+        {
+          "week": 16,
+          "homeTeamId": "00000000-0000-4000-8000-000000000003",
+          "awayTeamId": "00000000-0000-4000-8000-000000000002",
+          "homeMilliPoints": 95000,
+          "awayMilliPoints": 90000
+        },
+        {
+          "week": 17,
+          "homeTeamId": "00000000-0000-4000-8000-000000000003",
+          "awayTeamId": "00000000-0000-4000-8000-000000000001",
+          "homeMilliPoints": 118000,
+          "awayMilliPoints": 120000
+        }
+      ],
+      "thirdPlace": false,
+      "rounds": [
+        {
+          "week": 16,
+          "round": 1,
+          "games": [
+            {
+              "homeTeamId": "00000000-0000-4000-8000-000000000001",
+              "awayTeamId": "00000000-0000-4000-8000-000000000004",
+              "winnerTeamId": "00000000-0000-4000-8000-000000000001",
+              "decidedBySeed": false
+            },
+            {
+              "homeTeamId": "00000000-0000-4000-8000-000000000002",
+              "awayTeamId": "00000000-0000-4000-8000-000000000003",
+              "winnerTeamId": "00000000-0000-4000-8000-000000000003",
+              "decidedBySeed": false
+            }
+          ],
+          "byes": [],
+          "survivors": [
+            "00000000-0000-4000-8000-000000000001",
+            "00000000-0000-4000-8000-000000000003"
+          ]
+        },
+        {
+          "week": 17,
+          "round": 2,
+          "games": [
+            {
+              "homeTeamId": "00000000-0000-4000-8000-000000000001",
+              "awayTeamId": "00000000-0000-4000-8000-000000000003",
+              "winnerTeamId": "00000000-0000-4000-8000-000000000001",
+              "decidedBySeed": false
+            }
+          ],
+          "byes": [],
+          "survivors": [
+            "00000000-0000-4000-8000-000000000001"
+          ]
+        }
+      ],
+      "champion": "00000000-0000-4000-8000-000000000001",
+      "runnerUp": "00000000-0000-4000-8000-000000000003",
+      "thirdPlaceGame": null,
+      "thirdPlaceHolder": null
+    },
+    {
+      "name": "five teams with three byes",
+      "why": "Exercises `byesNeeded` in a later round rather than the signed first-round count: one game in round one, then four alive and none needed. A kernel that applied the first-round bye count to every round would sit the top three out twice.",
+      "field": [
+        "00000000-0000-4000-8000-000000000001",
+        "00000000-0000-4000-8000-000000000002",
+        "00000000-0000-4000-8000-000000000003",
+        "00000000-0000-4000-8000-000000000004",
+        "00000000-0000-4000-8000-000000000005"
+      ],
+      "weeks": [
+        15,
+        16,
+        17
+      ],
+      "firstRoundByes": 3,
+      "results": [
+        {
+          "week": 15,
+          "homeTeamId": "00000000-0000-4000-8000-000000000004",
+          "awayTeamId": "00000000-0000-4000-8000-000000000005",
+          "homeMilliPoints": 90000,
+          "awayMilliPoints": 100000
+        },
+        {
+          "week": 16,
+          "homeTeamId": "00000000-0000-4000-8000-000000000001",
+          "awayTeamId": "00000000-0000-4000-8000-000000000005",
+          "homeMilliPoints": 110000,
+          "awayMilliPoints": 100000
+        },
+        {
+          "week": 16,
+          "homeTeamId": "00000000-0000-4000-8000-000000000002",
+          "awayTeamId": "00000000-0000-4000-8000-000000000003",
+          "homeMilliPoints": 95000,
+          "awayMilliPoints": 99000
+        },
+        {
+          "week": 17,
+          "homeTeamId": "00000000-0000-4000-8000-000000000001",
+          "awayTeamId": "00000000-0000-4000-8000-000000000003",
+          "homeMilliPoints": 130000,
+          "awayMilliPoints": 125000
+        }
+      ],
+      "thirdPlace": false,
+      "rounds": [
+        {
+          "week": 15,
+          "round": 1,
+          "games": [
+            {
+              "homeTeamId": "00000000-0000-4000-8000-000000000004",
+              "awayTeamId": "00000000-0000-4000-8000-000000000005",
+              "winnerTeamId": "00000000-0000-4000-8000-000000000005",
+              "decidedBySeed": false
+            }
+          ],
+          "byes": [
+            "00000000-0000-4000-8000-000000000001",
+            "00000000-0000-4000-8000-000000000002",
+            "00000000-0000-4000-8000-000000000003"
+          ],
+          "survivors": [
+            "00000000-0000-4000-8000-000000000001",
+            "00000000-0000-4000-8000-000000000002",
+            "00000000-0000-4000-8000-000000000003",
+            "00000000-0000-4000-8000-000000000005"
+          ]
+        },
+        {
+          "week": 16,
+          "round": 2,
+          "games": [
+            {
+              "homeTeamId": "00000000-0000-4000-8000-000000000001",
+              "awayTeamId": "00000000-0000-4000-8000-000000000005",
+              "winnerTeamId": "00000000-0000-4000-8000-000000000001",
+              "decidedBySeed": false
+            },
+            {
+              "homeTeamId": "00000000-0000-4000-8000-000000000002",
+              "awayTeamId": "00000000-0000-4000-8000-000000000003",
+              "winnerTeamId": "00000000-0000-4000-8000-000000000003",
+              "decidedBySeed": false
+            }
+          ],
+          "byes": [],
+          "survivors": [
+            "00000000-0000-4000-8000-000000000001",
+            "00000000-0000-4000-8000-000000000003"
+          ]
+        },
+        {
+          "week": 17,
+          "round": 3,
+          "games": [
+            {
+              "homeTeamId": "00000000-0000-4000-8000-000000000001",
+              "awayTeamId": "00000000-0000-4000-8000-000000000003",
+              "winnerTeamId": "00000000-0000-4000-8000-000000000001",
+              "decidedBySeed": false
+            }
+          ],
+          "byes": [],
+          "survivors": [
+            "00000000-0000-4000-8000-000000000001"
+          ]
+        }
+      ],
+      "champion": "00000000-0000-4000-8000-000000000001",
+      "runnerUp": "00000000-0000-4000-8000-000000000003",
+      "thirdPlaceGame": null,
+      "thirdPlaceHolder": null
+    },
+    {
+      "name": "two teams, one week",
+      "why": "The smallest legal bracket, and the boundary `FIELD_TOO_SMALL` sits directly above. A kernel with an off-by-one in the field check refuses this or accepts a field of one.",
+      "field": [
+        "00000000-0000-4000-8000-000000000001",
+        "00000000-0000-4000-8000-000000000002"
+      ],
+      "weeks": [
+        17
+      ],
+      "firstRoundByes": 0,
+      "results": [
+        {
+          "week": 17,
+          "homeTeamId": "00000000-0000-4000-8000-000000000001",
+          "awayTeamId": "00000000-0000-4000-8000-000000000002",
+          "homeMilliPoints": 120000,
+          "awayMilliPoints": 118000
+        }
+      ],
+      "thirdPlace": false,
+      "rounds": [
+        {
+          "week": 17,
+          "round": 1,
+          "games": [
+            {
+              "homeTeamId": "00000000-0000-4000-8000-000000000001",
+              "awayTeamId": "00000000-0000-4000-8000-000000000002",
+              "winnerTeamId": "00000000-0000-4000-8000-000000000001",
+              "decidedBySeed": false
+            }
+          ],
+          "byes": [],
+          "survivors": [
+            "00000000-0000-4000-8000-000000000001"
+          ]
+        }
+      ],
+      "champion": "00000000-0000-4000-8000-000000000001",
+      "runnerUp": "00000000-0000-4000-8000-000000000002",
+      "thirdPlaceGame": null,
+      "thirdPlaceHolder": null
+    },
+    {
+      "name": "a field of one is refused",
+      "why": "A one-team bracket has no game to play and would otherwise crown its only entrant unopposed. This is reachable: nothing ties `playoffTeams` to how many people actually joined.",
+      "field": [
+        "00000000-0000-4000-8000-000000000001"
+      ],
+      "weeks": [
+        17
+      ],
+      "firstRoundByes": 0,
+      "results": [],
+      "thirdPlace": false,
+      "refusal": "FIELD_TOO_SMALL"
+    },
+    {
+      "name": "a bye count equal to the field is refused",
+      "why": "Every team sitting out leaves no game and no way to eliminate anyone. The bound is `0 <= byes < field.length`, and the upper end is the half a plausible implementation gets wrong.",
+      "field": [
+        "00000000-0000-4000-8000-000000000001",
+        "00000000-0000-4000-8000-000000000002",
+        "00000000-0000-4000-8000-000000000003",
+        "00000000-0000-4000-8000-000000000004"
+      ],
+      "weeks": [
+        16,
+        17
+      ],
+      "firstRoundByes": 4,
+      "results": [],
+      "thirdPlace": false,
+      "refusal": "FIELD_TOO_SMALL"
+    },
+    {
+      "name": "a window too short for the field is refused",
+      "why": "Eight teams need three rounds. Refusing is right and the alternative is worse than it looks — truncating to the weeks available would crown whoever happened to be leading when the window ran out.",
+      "field": [
+        "00000000-0000-4000-8000-000000000001",
+        "00000000-0000-4000-8000-000000000002",
+        "00000000-0000-4000-8000-000000000003",
+        "00000000-0000-4000-8000-000000000004",
+        "00000000-0000-4000-8000-000000000005",
+        "00000000-0000-4000-8000-000000000006",
+        "00000000-0000-4000-8000-000000000007",
+        "00000000-0000-4000-8000-000000000008"
+      ],
+      "weeks": [
+        16,
+        17
+      ],
+      "firstRoundByes": 0,
+      "results": [],
+      "thirdPlace": false,
+      "refusal": "NOT_ENOUGH_WEEKS"
+    },
+    {
+      "name": "an odd number left to pair is an invariant failure, not a league's problem",
+      "why": "Five teams with no byes leaves five to pair. `INVARIANT` rather than `FIELD_TOO_SMALL` is the whole point of the distinction: this is our bug in the ladder that decides who is paid, and it must never be filed under that league's problem and forgotten.",
+      "field": [
+        "00000000-0000-4000-8000-000000000001",
+        "00000000-0000-4000-8000-000000000002",
+        "00000000-0000-4000-8000-000000000003",
+        "00000000-0000-4000-8000-000000000004",
+        "00000000-0000-4000-8000-000000000005"
+      ],
+      "weeks": [
+        15,
+        16,
+        17
+      ],
+      "firstRoundByes": 0,
+      "results": [],
+      "thirdPlace": false,
+      "refusal": "INVARIANT"
+    }
+  ]
+}
