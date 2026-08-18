@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { getLeagueRules, loadDraft, teamForUser } from "@rostr/db";
+import { getChainState, getLeagueRules, loadDraft, teamForUser } from "@rostr/db";
 import { DraftLobby } from "@/components/DraftLobby";
 import { LeagueChrome } from "@/components/LeagueChrome";
 import { db } from "@/lib/db";
@@ -89,6 +89,16 @@ export default async function LobbyPage({ params }: { params: Promise<{ id: stri
       )
     : [{ count: 0 }];
 
+  /*
+    Whether the chain has been told this season is starting.
+
+    Recorded only after `/start-season` read `League.started` back off the
+    account, and it is what `drawDraftOrder` refuses a pot league without — so
+    reading the same row here is what stops the lobby offering a draw the server
+    will decline. Free leagues never have it and never need it.
+  */
+  const chain = await getChainState(client, id);
+
   const view = buildLobbyView({
     leagueId: league.id,
     rulesHash: stored.hash,
@@ -107,6 +117,7 @@ export default async function LobbyPage({ params }: { params: Promise<{ id: stri
     })),
     hasPot: stored.rules.pot !== null,
     unfundedMembers: Number(unfunded?.count ?? 0),
+    seasonStarted: chain?.seasonStartedAt != null,
     draw: draft.draw
       ? {
           slot: draft.draw.slot,
@@ -147,6 +158,19 @@ export default async function LobbyPage({ params }: { params: Promise<{ id: stri
         rounds={draft.rounds}
         drawBlocker={view.drawBlocker}
         readiness={view.readiness}
+        // Instants cross into the client as ISO strings here, the same way
+        // `scheduledAt` and `serverNow` do — one convention rather than two.
+        seasonStart={
+          view.seasonStart.state === "OPEN"
+            ? {
+                state: "OPEN",
+                closesAt: view.seasonStart.closesAt.toISOString(),
+                blockedBy: view.seasonStart.blockedBy,
+              }
+            : view.seasonStart.state === "MISSED"
+              ? { state: "MISSED", closedAt: view.seasonStart.closedAt.toISOString() }
+              : { state: view.seasonStart.state }
+        }
         verification={
           view.verification
             ? {

@@ -25,10 +25,28 @@ function input(overrides: Partial<LobbyInput> = {}): LobbyInput {
     ],
     hasPot: false,
     unfundedMembers: 0,
+    seasonStarted: false,
     draw: null,
     ...overrides,
   };
 }
+
+/**
+ * A pot league that is ready in every respect except the one under test.
+ *
+ * Four teams, everyone staked, the draft time passed. Anything left is the
+ * season start.
+ */
+const potReady = {
+  teams: evenTeams(),
+  hasPot: true,
+  unfundedMembers: 0,
+  now: new Date(SCHEDULED.getTime() + 1000),
+  isCommissioner: true,
+};
+
+/** The start window is the draft time plus 48 hours — `START_GRACE_SECONDS`. */
+const WINDOW_CLOSES = new Date(SCHEDULED.getTime() + 48 * 3600 * 1000);
 
 /** An even field, so the readiness rules are not tripped incidentally. */
 function evenTeams() {
@@ -269,5 +287,169 @@ describe("drawBlocker, once the draft time has passed", () => {
 
   it("lets a ready league draw", () => {
     expect(buildLobbyView(input({ ...atDrawTime, teams: evenTeams() })).drawBlocker).toBeNull();
+  });
+});
+
+/**
+ * Declaring the season started, which is what shuts the escrow's failed-league
+ * refund.
+ *
+ * `refund_stake` opens two ways and `League.started` is the only thing between
+ * them, so a pot league that draws without it plays the whole season with an
+ * escape hatch open: a member could withdraw their stake in week 3 and keep
+ * playing for the pot. The draw refuses until it lands, and this is the screen's
+ * copy of that rule.
+ */
+describe("seasonStart", () => {
+  it("is NOT_REQUIRED for a free league, whatever else is true", () => {
+    // A free league has no vault. Asking its commissioner for a wallet approval
+    // that protects nothing would be a popup for its own sake.
+    expect(buildLobbyView(input({ teams: evenTeams() })).seasonStart).toEqual({
+      state: "NOT_REQUIRED",
+    });
+  });
+
+  it("is OPEN and unblocked for a pot league that is ready", () => {
+    const view = buildLobbyView(input(potReady));
+    expect(view.seasonStart).toEqual({
+      state: "OPEN",
+      closesAt: WINDOW_CLOSES,
+      blockedBy: [],
+    });
+  });
+
+  it("closes 48 hours after the draft time, not after the draw", () => {
+    // The deadline is `startDeadlineFor(scheduledAt)` — the same value the
+    // anchor route compares the on-chain account against, so the screen and the
+    // chain cannot mean different instants.
+    const view = buildLobbyView(input(potReady));
+    expect(view.seasonStart).toMatchObject({ closesAt: WINDOW_CLOSES });
+  });
+
+  it("is STARTED once the chain has been told", () => {
+    const view = buildLobbyView(input({ ...potReady, seasonStarted: true }));
+    expect(view.seasonStart).toEqual({ state: "STARTED" });
+  });
+
+  it("is MISSED from the deadline itself, matching the program's `<`", () => {
+    // `start_season` requires `now < start_deadline`, so a button offered *at*
+    // the deadline sends a transaction the chain rejects.
+    const at = buildLobbyView(input({ ...potReady, now: WINDOW_CLOSES }));
+    expect(at.seasonStart).toEqual({ state: "MISSED", closedAt: WINDOW_CLOSES });
+
+    const justBefore = buildLobbyView(
+      input({ ...potReady, now: new Date(WINDOW_CLOSES.getTime() - 1000) }),
+    );
+    expect(justBefore.seasonStart).toMatchObject({ state: "OPEN" });
+  });
+
+  it("stays STARTED past the deadline", () => {
+    // Nothing unsets `started`, so the window closing does not un-start a season
+    // that began. A view that flipped to MISSED here would tell a live league
+    // its money was refundable.
+    const view = buildLobbyView(
+      input({ ...potReady, seasonStarted: true, now: WINDOW_CLOSES }),
+    );
+    expect(view.seasonStart).toEqual({ state: "STARTED" });
+  });
+});
+
+/**
+ * And it is refused while anything else is outstanding, which is not a
+ * courtesy: marking a league started closes the failed-league refund
+ * permanently, so doing it to a league that then cannot draw converts a
+ * two-day wait into a wait of months on money nobody will ever play for.
+ */
+describe("seasonStart.blockedBy", () => {
+  it("waits for the field to lock", () => {
+    // Before the draft time somebody can still join and not stake, so "ready" is
+    // not yet a settled fact about this league.
+    const view = buildLobbyView(input({ ...potReady, now: new Date(SCHEDULED.getTime() - 1) }));
+    expect(view.seasonStart).toMatchObject({ blockedBy: ["TOO_EARLY"] });
+  });
+
+  it("waits for every member to stake", () => {
+    const view = buildLobbyView(input({ ...potReady, unfundedMembers: 2 }));
+    expect(view.seasonStart).toMatchObject({ blockedBy: ["POT_NOT_FUNDED"] });
+  });
+
+  it("reports every outstanding condition, not the first", () => {
+    // They all have to hold and the button cannot be un-pressed, so learning
+    // about the second one after fixing the first may be learning too late.
+    const view = buildLobbyView(
+      input({
+        ...potReady,
+        teams: [team(null, "Alone")],
+        unfundedMembers: 1,
+        now: new Date(SCHEDULED.getTime() - 1),
+      }),
+    );
+    expect(view.seasonStart).toMatchObject({
+      blockedBy: ["TOO_EARLY", "BELOW_MIN_HUMANS", "ODD_FIELD", "POT_NOT_FUNDED"],
+    });
+  });
+});
+
+/**
+ * The draw's own view of the same fact, which has to stay in the server's
+ * order — `drawDraftOrder` checks the season start **last**, after the field
+ * and the funding.
+ */
+describe("drawBlocker and the season start", () => {
+  it("blocks a ready pot league that has not started its season", () => {
+    const view = buildLobbyView(input(potReady));
+    expect(view.drawBlocker).toEqual({
+      code: "SEASON_NOT_STARTED",
+      closesAt: WINDOW_CLOSES,
+    });
+  });
+
+  it("lets a started pot league draw", () => {
+    const view = buildLobbyView(input({ ...potReady, seasonStarted: true }));
+    expect(view.drawBlocker).toBeNull();
+  });
+
+  it("never asks a free league to start a season", () => {
+    expect(buildLobbyView(input({ ...potReady, hasPot: false })).drawBlocker).toBeNull();
+  });
+
+  it("names the unpaid member ahead of the season start, as the server does", () => {
+    // The more useful fact, and the one that has to be fixed first — pressing
+    // start on this league would freeze the stakes that *were* paid.
+    const view = buildLobbyView(input({ ...potReady, unfundedMembers: 1 }));
+    expect(view.drawBlocker).toEqual({ code: "POT_NOT_FUNDED", unfunded: 1 });
+  });
+
+  it("reports a missed window as its own reason, not as 'not started'", () => {
+    // One is "press this next" and the other is "this league is over". A single
+    // code would leave the screen inviting a transaction the chain refuses.
+    const view = buildLobbyView(input({ ...potReady, now: WINDOW_CLOSES }));
+    expect(view.drawBlocker).toEqual({
+      code: "START_WINDOW_MISSED",
+      closedAt: WINDOW_CLOSES,
+    });
+  });
+});
+
+describe("readiness and a missed start window", () => {
+  it("tells everybody, not only the commissioner", () => {
+    // `DrawControl` renders nothing at all for a member, so without this a
+    // member's only signal that their money is sitting refundable in a league
+    // that will never play would be a draft that silently never happens.
+    const view = buildLobbyView(input({ ...potReady, now: WINDOW_CLOSES }));
+    expect(view.readiness).toEqual([{ code: "START_WINDOW_MISSED", closedAt: WINDOW_CLOSES }]);
+  });
+
+  it("puts it first, ahead of problems that no longer matter", () => {
+    const view = buildLobbyView(
+      input({ ...potReady, teams: [team(null, "Alone")], now: WINDOW_CLOSES }),
+    );
+    expect(view.readiness[0]).toMatchObject({ code: "START_WINDOW_MISSED" });
+  });
+
+  it("says nothing while the window is still open", () => {
+    // A pot league that simply has not pressed the button yet is not a league in
+    // trouble, and an amber panel on every lobby would train people to ignore it.
+    expect(buildLobbyView(input(potReady)).readiness).toEqual([]);
   });
 });

@@ -215,6 +215,17 @@ export default async function LeaguePage({ params }: { params: Promise<{ id: str
         anchored={anchored}
         isCommissioner={isCommissioner}
         hasPot={stored.rules.pot !== null}
+        /*
+          The same gate `DepositPanel` gets, and it was missing here (#168).
+
+          `JoinPanel` batches `deposit` with `join_league`, so passing only
+          `hasPot` applied the gate to the stake button almost nobody uses and
+          bypassed it on the join, which is the path every new member takes. Two
+          props rather than one boolean: the join must still succeed with the
+          gate shut — the field locks at the frozen draft time and nothing
+          dissolves a league — so only the stake half is omitted.
+        */
+        depositsOpen={depositsOpen()}
         tokenMint={stored.rules.pot?.tokenMint ?? null}
         resumable={resumable}
       />

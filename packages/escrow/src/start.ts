@@ -54,3 +54,57 @@ export const START_GRACE_SECONDS = 48 * 60 * 60;
 export function startDeadlineFor(draftScheduledAt: number): number {
   return draftScheduledAt + START_GRACE_SECONDS;
 }
+
+/**
+ * Where a league stands in its start window.
+ *
+ * - `NOT_REQUIRED` — a free league. `start_season` requires `has_pot`, so there
+ *   is no instruction to send and no vault for it to protect.
+ * - `STARTED` — the chain says so. The failed-league refund is shut and the
+ *   ordinary timelock is the only way out, which is the point.
+ * - `OPEN` — not started, and it still can be.
+ * - `MISSED` — not started, and it no longer can be. Every stake is refundable
+ *   from this instant and the season cannot begin. See below.
+ */
+export type SeasonStartState = "NOT_REQUIRED" | "STARTED" | "OPEN" | "MISSED";
+
+export interface SeasonStartInput {
+  readonly hasPot: boolean;
+  /** Whether `start_season` has landed. */
+  readonly started: boolean;
+  /** Unix seconds — `startDeadlineFor(rules.draft.scheduledAt)`. */
+  readonly startDeadline: number;
+  /** Unix seconds. */
+  readonly now: number;
+}
+
+/**
+ * Which of the four states a league's season start is in.
+ *
+ * ## `MISSED` is a real state, not an error case
+ *
+ * `start_season` is refused from exactly the instant the failed-league refund
+ * opens — `require!(now < league.start_deadline)` against
+ * `!started && now >= start_deadline` — so the two are complements and can never
+ * both be legal. That is what makes the design safe: a league cannot be declared
+ * started with a partly-drained vault.
+ *
+ * The cost of that safety is a commissioner who leaves it late. Two days after
+ * the draft time the season **cannot** be started, the field has been locked
+ * since the draft time and nothing can dissolve the league — so what remains is
+ * a league that will never play and stakes that are all refundable. There is no
+ * recovery instruction and there should not be one; every extra condition on
+ * `refund_stake` is a new way for money to become permanently stuck.
+ *
+ * So this state exists to be **rendered**, not handled. A screen that shows only
+ * a dead button leaves people waiting for a draft that is not coming while their
+ * money sits recoverable and unclaimed.
+ *
+ * The boundary is taken from the program: `<` opens, `>=` closes. A UI that
+ * offered the button at the deadline would send a transaction the chain rejects.
+ */
+export function seasonStartState(input: SeasonStartInput): SeasonStartState {
+  if (!input.hasPot) return "NOT_REQUIRED";
+  if (input.started) return "STARTED";
+  return input.now < input.startDeadline ? "OPEN" : "MISSED";
+}

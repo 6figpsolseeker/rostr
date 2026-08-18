@@ -9,6 +9,7 @@ import {
   escrowProgram,
   hexToBytes,
   joinLeagueIx,
+  joinPlan,
   leaguePda,
   membershipPda,
 } from "@rostr/escrow";
@@ -32,12 +33,28 @@ import bs58 from "bs58";
  *
  * And then a fifth step, the on-chain half (issues #26 and #27): after consent
  * is recorded in Postgres, the member signs `join_league` — **and `deposit`, in
- * the same transaction, when the league has a pot** — from their own wallet, so
- * the program's `Membership` account exists and holds their stake. Without it,
- * `deposit` and `refund_stake` have no account to act on. The server does not
- * take the client's word for it: `/join-onchain` and `/deposit` each read the
- * `Membership` PDA back before recording, and both derive the wallet from the
- * caller's own consent row rather than from anything sent here.
+ * the same transaction, when the league has a pot and this deployment is taking
+ * buy-ins** — from their own wallet, so the program's `Membership` account
+ * exists and holds their stake. Without it, `deposit` and `refund_stake` have no
+ * account to act on. The server does not take the client's word for it:
+ * `/join-onchain` and `/deposit` each read the `Membership` PDA back before
+ * recording, and both derive the wallet from the caller's own consent row rather
+ * than from anything sent here.
+ *
+ * ## The deposit gate applies here, and this is the path it was missing (#168)
+ *
+ * `potDepositGate` shuts a mainnet buy-in until the program has an instruction
+ * that can pay it back out. It was applied to `DepositPanel`'s stake button and
+ * **not** to this batch, which is the path every new member takes — so the gate
+ * was enforced on the control almost nobody uses and bypassed on the one
+ * everybody does.
+ *
+ * What it does *not* do is refuse the join. The field locks at the frozen draft
+ * time on INSERT **and** DELETE (migration `0028`) and nothing dissolves a
+ * league, so a member turned away here has no second chance at the seat. The
+ * seat is taken and the stake alone is omitted — which is the `deposited == 0`
+ * state the retry below already understands and `DepositPanel` already exists to
+ * finish.
  *
  * One approval rather than two, because four wallet popups is where a new member
  * gives up — see `onchainJoin`. The on-chain member count is **not** the reason
@@ -86,6 +103,7 @@ export function JoinPanel({
   isCommissioner,
   resumable = false,
   hasPot,
+  depositsOpen,
   tokenMint,
 }: {
   leagueId: string;
@@ -103,8 +121,19 @@ export function JoinPanel({
    * step is still owed. Server-resolved, so it survives a reload.
    */
   resumable?: boolean;
-  /** Whether the fifth step also has to move money. */
+  /** Whether this league plays for a pot at all. */
   hasPot: boolean;
+  /**
+   * Whether this deployment should invite a buy-in — `depositsOpen()` in
+   * `lib/pot.ts`, resolved on the server, the same value `DepositPanel` gets.
+   *
+   * **Deliberately a second boolean rather than folded into `hasPot`.** They
+   * answer different questions — "is there a pot" and "should we take money for
+   * it" — and the screen has to be able to say the second sentence without
+   * claiming the first is false. A free league and a pot league whose staking is
+   * deferred are not the same thing to the person reading it.
+   */
+  depositsOpen: boolean;
   /** The pot token mint. Required when `hasPot`, null for a free league. */
   tokenMint: string | null;
 }) {
@@ -128,6 +157,18 @@ export function JoinPanel({
 
   const address = publicKey?.toBase58() ?? null;
   const isLinked = address !== null && linked.includes(address);
+
+  /**
+   * Whether *this* approval will move money — the copy's version of
+   * `joinPlan(...).sendStake`, which cannot be used here because it needs the
+   * member's on-chain account and this renders before anything is read.
+   *
+   * It can over-promise in one direction only: a member who has already staked
+   * is still offered "Confirm and stake", and the plan then sends the join
+   * alone. That was true before the gate existed and is a wrong label rather
+   * than a wrong transaction.
+   */
+  const stakesNow = hasPot && depositsOpen;
 
   // A member who still owes the on-chain half keeps the panel even once the
   // league is full — the member who took the final seat is precisely the one
@@ -314,6 +355,12 @@ export function JoinPanel({
    * second stake. So the account is read first and only the missing half is
    * sent. That covers the interrupted attempt, the reload that loses in-memory
    * state, and the member who joined on-chain before this batching existed.
+   *
+   * **That decision is `joinPlan` in `@rostr/escrow`, not four booleans here.**
+   * It decides what to send *and* what to record, in one place, because #168 is
+   * what happens when those two drift apart — and because a component cannot be
+   * rendered in a test in this app, so a decision taken inline is verified only
+   * by being run in production.
    */
   async function onchainJoin(): Promise<void> {
     if (!publicKey || !signTransaction || !address) return;
@@ -329,25 +376,30 @@ export function JoinPanel({
       const program = escrowProgram(provider);
       const membershipAddress = membershipPda(leaguePda(leagueId), publicKey);
 
-      // The account itself, not just whether it exists: `deposited` is what says
-      // if the stake half is still owed, and a member part-way through needs
-      // exactly the half they are missing.
+      // The account itself, not just whether it exists: `deposited` says whether
+      // the stake half is still owed, and `refunded` says whether the server
+      // could confirm it if we asked. A member part-way through needs exactly
+      // the half they are missing and no POST they cannot pass.
       const existing = await program.account["membership"]?.fetchNullable(membershipAddress);
-      const staked =
-        existing !== null && existing !== undefined
-          ? BigInt((existing as { deposited: { toString(): string } }).deposited.toString()) >
-            0n
-          : false;
+      const raw =
+        existing === null || existing === undefined
+          ? null
+          : (existing as { deposited: { toString(): string }; refunded: boolean });
 
-      const needsJoin = !existing;
-      const needsStake = hasPot && !staked;
+      const plan = joinPlan({
+        membership: raw
+          ? { deposited: BigInt(raw.deposited.toString()), refunded: raw.refunded }
+          : null,
+        hasPot,
+        depositsOpen,
+      });
 
       // Send only if there is something to send. `sentSignature` covers a POST
       // that failed after the transaction landed; re-signing there would turn a
       // recoverable failure into a permanent dead end.
       let signature = sentSignature;
 
-      if (signature === null && !needsJoin && !needsStake) {
+      if (signature === null && plan.nothingToSend) {
         // Nothing owed on-chain, so a previous attempt landed and its POST did
         // not — the case this retry path exists for. A reload loses
         // `sentSignature`, so the creating transaction is recovered from the
@@ -369,7 +421,7 @@ export function JoinPanel({
       if (signature === null) {
         const tx = new Transaction();
 
-        if (needsJoin) {
+        if (plan.sendJoin) {
           tx.add(
             await joinLeagueIx(program, {
               leagueId,
@@ -378,7 +430,7 @@ export function JoinPanel({
             }),
           );
         }
-        if (needsStake) {
+        if (plan.sendStake) {
           if (!tokenMint) {
             throw new Error(
               "This league has a pot but no token mint, so the stake cannot be sent",
@@ -407,7 +459,11 @@ export function JoinPanel({
       // member's own consent row. A body field would let anyone write anyone
       // else's record.
       await record(`/api/leagues/${leagueId}/join-onchain`, signature, "on-chain join");
-      if (hasPot) {
+      // `plan.recordStake`, never `hasPot`. `/deposit` reads the `Membership`
+      // account back, so posting it for a stake this transaction did not send
+      // is not a failed record — it is a 409 on a join that worked, with a retry
+      // button that posts the same thing again.
+      if (plan.recordStake) {
         await record(`/api/leagues/${leagueId}/deposit`, signature, "deposit");
       }
 
@@ -464,11 +520,11 @@ export function JoinPanel({
           ) : status === "onchain" || status === "onchain-signing" ? (
             <div className="space-y-3 rounded border border-nocturne-accent/30 p-4">
               <p className="text-sm text-nocturne-text/80">
-                {hasPot
+                {stakesNow
                   ? "You are in. One approval left: it takes your seat on-chain and stakes your buy-in together, in a single transaction."
                   : "You are in. One approval left, to record your membership on-chain."}
               </p>
-              {hasPot && (
+              {stakesNow && (
                 // Said plainly because it is the surprising half. An all-or-nothing
                 // transaction reads as a failure when it is the safe outcome — the
                 // alternative leaves a seat taken and unpaid, and there is no
@@ -476,6 +532,21 @@ export function JoinPanel({
                 <p className="text-xs text-nocturne-neutral-600">
                   Both or neither. If the buy-in cannot be covered, the seat is not taken
                   either, and you can try again once your wallet is funded.
+                </p>
+              )}
+              {hasPot && !depositsOpen && (
+                /*
+                  A pot league whose staking is deferred, said without repeating
+                  the reason. `depositsOpen()` is false both when the program has
+                  no payout instruction and when this deployment cannot say which
+                  chain it is on, and `DepositPanel` — one section down the same
+                  page — already states the program's side of it. Two copies of
+                  one explanation are two things to keep true.
+                */
+                <p className="text-xs text-nocturne-neutral-600">
+                  This league has a pot, but buy-ins are not being taken yet, so this approval
+                  takes your seat only. Your money stays in your wallet. Your stake panel says
+                  when it can be staked and why it cannot be now.
                 </p>
               )}
               {sentSignature !== null && (
@@ -493,7 +564,7 @@ export function JoinPanel({
                   ? "Waiting…"
                   : sentSignature !== null
                     ? "Retry confirmation"
-                    : hasPot
+                    : stakesNow
                       ? "Confirm and stake"
                       : "Confirm on-chain"}
               </button>

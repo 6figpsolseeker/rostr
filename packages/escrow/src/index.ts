@@ -30,6 +30,7 @@ export {
   verifyOnChainDeposit,
   verifyOnChainJoin,
   verifyOnChainRefund,
+  verifyOnChainSeasonStart,
   type AnchorVerdict,
   type DepositVerdict,
   type ExpectedTerms,
@@ -38,7 +39,14 @@ export {
   type OnChainMembership,
   type RefundVerdict,
   type RulesLikeTerms,
+  type SeasonStartVerdict,
 } from "./verify.js";
+export {
+  joinPlan,
+  type JoinPlan,
+  type JoinPlanInput,
+  type MembershipState,
+} from "./join-plan.js";
 export {
   SETTLEMENT_PREFIXES,
   instructionNames,
@@ -65,7 +73,13 @@ export {
   type RefundParams,
   type StartSeasonParams,
 } from "./instructions.js";
-export { START_GRACE_SECONDS, startDeadlineFor } from "./start.js";
+export {
+  START_GRACE_SECONDS,
+  seasonStartState,
+  startDeadlineFor,
+  type SeasonStartInput,
+  type SeasonStartState,
+} from "./start.js";
 export {
   ESCROW_PROGRAM_ID,
   leagueAddresses,
