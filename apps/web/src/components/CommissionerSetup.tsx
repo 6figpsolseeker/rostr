@@ -1,4 +1,5 @@
 import type { CommissionerSetupView, SetupBlocker, SetupStepKey } from "@/lib/setup";
+import { withZone } from "@/lib/when";
 
 /**
  * The commissioner's own checklist, on the league page.
@@ -48,27 +49,6 @@ const COPY: Record<SetupStepKey, { title: string; detail: string }> = {
       "One approval, which also stakes your buy-in if this league has a pot. Both or neither.",
   },
 };
-
-/**
- * Formatted with the zone named, because the value is the **server's** clock.
- *
- * This is a server component and `toLocaleString()` runs in Node's locale — UTC
- * on Vercel — while the commissioner picked the draft time in their own zone in
- * a `datetime-local` field. Rendering an unlabelled wall-clock instant would be
- * silently wrong for everyone outside that zone, and off by a day boundary for an
- * evening draft. Naming the zone makes it correct rather than merely careful.
- *
- * `RulesView` renders this same instant the same unlabelled way, on this same
- * page. That is worth fixing there too and is not this change's job; the two do
- * not contradict each other, since one carries the zone and the other omits it.
- */
-function withZone(at: Date): string {
-  return at.toLocaleString(undefined, {
-    dateStyle: "long",
-    timeStyle: "short",
-    timeZoneName: "short",
-  });
-}
 
 const BLOCKED: Record<SetupBlocker["code"], string> = {
   LEAGUE_CLOSED: "it is no longer forming",
