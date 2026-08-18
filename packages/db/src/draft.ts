@@ -70,6 +70,10 @@ export class DraftPersistenceError extends Error {
       | "ODD_FIELD"
       // A pot league whose vault does not hold every member's stake.
       | "POT_NOT_FUNDED"
+      // A pot league whose season has not been declared started on-chain, so
+      // the failed-league refund is still open. See the check in
+      // `drawDraftOrder`.
+      | "SEASON_NOT_STARTED"
       | "RULES_MISSING"
       | "NOT_IN_PROGRESS"
       | "ALREADY_STARTED"
@@ -228,6 +232,14 @@ export interface DrawOrderInput {
  * promises auto-dissolve with refunds for a league that never reaches two
  * humans, and nothing implements that yet (#137). A stake is still returned by
  * the unconditional timelock refund, which no part of this touches.
+ *
+ * ## And a pot league must have told the chain its season is starting
+ *
+ * The last of the four refusals, and the one with money directly behind it:
+ * `refund_stake` opens early for a league that never started, so a pot league
+ * that draws without `start_season` having landed plays its whole season with
+ * the escape hatch open. See the check itself for why the order is mark-first,
+ * draw-second and why the fact is read from a column rather than an account.
  */
 export async function drawDraftOrder(
   db: SqlClient,
@@ -382,6 +394,60 @@ export async function drawDraftOrder(
             `pot is not full. A pot league cannot draft against a vault that does not hold ` +
             `every member's stake.`,
           "POT_NOT_FUNDED",
+        );
+      }
+
+      /*
+        And it drafts only once the chain has been told the season is starting.
+
+        `refund_stake` has two openings and `League.started` is the only thing
+        that separates them:
+
+            timelock_open = now >= refund_unlock_at             -- months away
+            failed_open   = !started && now >= start_deadline   -- draft + 48h
+
+        The second exists so a league that never got off the ground returns
+        everyone's money in days rather than months. Its cost is that a league
+        which *did* get off the ground and was never marked started spends the
+        whole season with that door open: any member could withdraw their entire
+        stake in week 3 while keeping their roster, their standings place and
+        their claim on the pot, and play out the year with nothing at risk. That
+        is precisely what the timelock exists to prevent, and until 2026-08-18
+        nothing in this app ever sent `start_season`, so it was true of every pot
+        league that ever drafted.
+
+        **Mark first, draw second, and the order is the whole point.** Drawing
+        first and failing to mark leaves a live season with the escape hatch
+        open, and there is no undo — the draw is write-once by trigger. Marking
+        first and failing to draw is recoverable: the draw can be pressed again,
+        and a league that is genuinely starting is what `start_season` asserts.
+
+        Read from `leagues.season_started_at`, which `/start-season` writes only
+        after reading `League.started` back off the account — the chain's answer,
+        recorded, exactly as the funding check above reads a stake recorded only
+        after `/deposit` read `Membership.deposited`. An RPC call inside this
+        transaction would hold a row lock across a network round trip and would
+        make the function that decides whether a league may draft untestable
+        without a validator.
+
+        **Last of the four refusals, deliberately.** All of them have to be true
+        at once, and this is the only one the commissioner should act on *after*
+        the others are settled: marking a season started on a league that then
+        fails to draft closes the failed-league refund on money that will never
+        be played for, and leaves it locked until the ordinary timelock months
+        later. So a commissioner who is missing a member is told that, not this.
+      */
+      const [started] = await tx.query<{ season_started_at: Date | null }>(
+        "SELECT season_started_at FROM leagues WHERE id = $1",
+        [input.leagueId],
+      );
+      if (!started?.season_started_at) {
+        throw new DraftPersistenceError(
+          `This league's season has not been declared started on-chain. Until it is, the ` +
+            `escrow's failed-league refund stays open, and any member could withdraw their ` +
+            `stake mid-season while still playing for the pot. The commissioner sends ` +
+            `start_season from their own wallet, and it has to land before the order is drawn.`,
+          "SEASON_NOT_STARTED",
         );
       }
     }

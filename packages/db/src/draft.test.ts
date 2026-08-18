@@ -5,11 +5,13 @@ import {
   deriveOrderSeed,
   generateDraftOrder,
   NFL,
+  NFL_DEFAULT_FEE_BPS,
+  NFL_DEFAULT_PAYOUT,
   NFL_PPR_ROSTER,
   totalPicks,
 } from "@rostr/core";
 import type { DraftablePlayer, DraftRules, LeagueRules } from "@rostr/core";
-import { createLeague } from "./leagues.js";
+import { createLeague, recordSeasonStart } from "./leagues.js";
 import { createUser } from "./identity.js";
 import { seedSport } from "./sports.js";
 import { addBot } from "./membership.js";
@@ -1504,5 +1506,124 @@ describe("the draw refuses a field below minHumans", () => {
     const order = await scheduled(fx);
 
     expect(order).toHaveLength(2);
+  });
+});
+
+/**
+ * A pot league does not draft until the chain has been told its season is
+ * starting.
+ *
+ * `refund_stake` has two openings and `League.started` is the only thing
+ * separating them:
+ *
+ *     timelock_open = now >= refund_unlock_at            -- months away
+ *     failed_open   = !started && now >= start_deadline  -- draft time + 48h
+ *
+ * The second exists so a league that never gets going returns everyone's money
+ * in days. Its cost is that a league which *did* get going and was never marked
+ * started spends the whole season on that schedule: any member could withdraw
+ * their entire stake in week 3 while keeping their roster, their standings place
+ * and their claim on the pot. Until 2026-08-18 nothing in the app ever sent
+ * `start_season`, so that was true of every pot league that ever drafted.
+ *
+ * **Mark first, draw second.** Drawing first and failing to mark is
+ * unrecoverable — the draw is write-once by trigger — while marking first and
+ * failing to draw simply means pressing the button again.
+ */
+describe("the draw refuses a pot league whose season has not started", () => {
+  /**
+   * The same fixture as `setup`, with a pot.
+   *
+   * `refundUnlockAt` is derived rather than a literal because the floor is
+   * derived: `earliestRefundUnlock` is roughly the draft plus 186 days, and
+   * `SCHEDULED` moves with the clock.
+   */
+  async function potLeague(teamCount = 4): Promise<Fixture> {
+    db = await createTestDatabase();
+    await seedSport(db, NFL);
+
+    const commissioner = await createUser(db, "commish@example.com", "Commish");
+    const rules = buildNflPprRules({
+      seasonYear: 2026,
+      draft: DRAFT,
+      pot: {
+        tokenMint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        buyInBaseUnits: "50000000",
+        payout: NFL_DEFAULT_PAYOUT,
+        refundUnlockAt: SCHEDULED_SECONDS + 200 * 24 * 3600,
+        feeBps: NFL_DEFAULT_FEE_BPS,
+        feeRecipient: "6dNUCTMTgoHhbfgDzKtiPvBpJ2LzMwGqBpKmUDgQtNMK",
+      },
+    }) as LeagueRules;
+
+    const league = await createLeague(db, NFL, {
+      name: "The Money League",
+      commissionerId: commissioner.id,
+      rules,
+    });
+
+    const teamIds: string[] = [];
+    for (let i = 0; i < teamCount; i++) {
+      const team = await addTestTeam(db, league.id, `Manager ${i + 1}`);
+      teamIds.push(team.teamId);
+    }
+
+    await createDraftRecord(db, scheduleArgs(league.id));
+
+    return { client: db, leagueId: league.id, teamIds, pool: new Map() };
+  }
+
+  const draw = (fx: Fixture) =>
+    drawDraftOrder(fx.client, { leagueId: fx.leagueId, beacon: BEACON, now: DRAW_TIME });
+
+  it("refuses a pot league with everything else in order", async () => {
+    // Four managers, an even field, and nobody owing a stake — so the only thing
+    // left is the one this describe block is about.
+    const fx = await potLeague();
+
+    await expect(draw(fx)).rejects.toMatchObject({ code: "SEASON_NOT_STARTED" });
+  });
+
+  it("says what the commissioner has to do and why", async () => {
+    // The only string anybody sees about this, and it has to name both the
+    // action and the consequence of skipping it.
+    const fx = await potLeague();
+
+    await expect(draw(fx)).rejects.toThrow(/start_season/);
+    await expect(draw(fx)).rejects.toThrow(/withdraw their stake mid-season/);
+  });
+
+  it("draws once the season start is recorded", async () => {
+    const fx = await potLeague();
+    // The real recorder rather than a hand-written UPDATE, so a fixture cannot
+    // reach a state the application could not produce — the same reason the
+    // membership fixtures call `recordChainAnchor`.
+    await recordSeasonStart(fx.client, fx.leagueId, {
+      signature: "5".repeat(88),
+      cluster: "localnet",
+    });
+
+    await expect(draw(fx)).resolves.toMatchObject({ order: expect.any(Array) });
+  });
+
+  it("checks it last, after the field", async () => {
+    // A commissioner who is a manager short is told *that*, not told to press a
+    // button which — pressed — would close the automatic refund on stakes that
+    // will never be played for, and nothing can reopen it.
+    const fx = await potLeague(3);
+
+    await expect(draw(fx)).rejects.toMatchObject({ code: "ODD_FIELD" });
+  });
+
+  it("never asks a free league for one", async () => {
+    // A free league has no vault, so there is nothing for `start_season` to
+    // protect — and the program refuses it outright without `has_pot`. Requiring
+    // it here would make every free league undraftable.
+    const fx = await setup(4);
+    await createDraftRecord(fx.client, scheduleArgs(fx.leagueId));
+
+    await expect(
+      drawDraftOrder(fx.client, { leagueId: fx.leagueId, beacon: BEACON, now: DRAW_TIME }),
+    ).resolves.toBeDefined();
   });
 });

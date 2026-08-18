@@ -15,6 +15,7 @@ export {
   getLeagueRules,
   LeagueValidationError,
   recordChainAnchor,
+  recordSeasonStart,
   setRulesUri,
   verifyStoredRules,
   type ChainAnchor,

@@ -242,6 +242,68 @@ export async function verifyLeagueAnchor(
   return { ok: true, league };
 }
 
+export type SeasonStartVerdict =
+  | { readonly ok: true; readonly startDeadline: string }
+  | { readonly ok: false; readonly reason: "NOT_FOUND" }
+  | { readonly ok: false; readonly reason: "INCOMPATIBLE"; readonly detail: string }
+  /**
+   * A free league. `start_season` requires `has_pot`, so there is no instruction
+   * to send and nothing could ever have set this — kept separate from
+   * `NOT_STARTED` because one is "try again" and the other is "not applicable".
+   */
+  | { readonly ok: false; readonly reason: "NO_POT" }
+  | { readonly ok: false; readonly reason: "NOT_STARTED"; readonly startDeadline: string };
+
+/**
+ * Confirm a league's season has actually been declared started on-chain.
+ *
+ * The commissioner signs `start_season` from their own wallet and then tells us
+ * it happened. **A report is not evidence** — a signature proves some
+ * transaction occurred, not which — so this reads `League.started` back, exactly
+ * as the anchor, join and deposit routes read what they depend on.
+ *
+ * ## Why anything reads this at all
+ *
+ * `refund_stake` has two openings, and `started` is the only thing separating
+ * them: the ordinary timelock, and `!started && now >= start_deadline` for a
+ * league that never began. The second is what returns a failed league's money in
+ * days rather than months, and it is **also** what would let a member withdraw
+ * out of a live season while keeping their roster, their standings place and
+ * their claim on the pot. Which of those a league gets is decided by whether
+ * this instruction ever landed.
+ *
+ * So `drawDraftOrder` refuses a pot league until this is true. Mark first, draw
+ * second: drawing first and failing to mark leaves a running season with the
+ * escape hatch open, while marking first and failing to draw is recoverable —
+ * the draw can be retried, and the league genuinely is starting.
+ *
+ * There is deliberately **no clock here.** Whether the window is still open is a
+ * separate question with a separate answer (`seasonStartState`), and folding it
+ * in would make this function disagree with itself across a two-day boundary
+ * about a fact — "the chain says started" — that never changes once true.
+ */
+export async function verifyOnChainSeasonStart(
+  program: Program<RostrEscrow>,
+  leagueId: string,
+): Promise<SeasonStartVerdict> {
+  let league: OnChainLeague | null;
+  try {
+    league = await fetchOnChainLeague(program, leagueId);
+  } catch (error) {
+    if (error instanceof IncompatibleLeagueAccountError) {
+      return { ok: false, reason: "INCOMPATIBLE", detail: error.message };
+    }
+    throw error;
+  }
+  if (!league) return { ok: false, reason: "NOT_FOUND" };
+  if (!league.hasPot) return { ok: false, reason: "NO_POT" };
+  if (!league.started) {
+    return { ok: false, reason: "NOT_STARTED", startDeadline: league.startDeadline };
+  }
+
+  return { ok: true, startDeadline: league.startDeadline };
+}
+
 export type JoinVerdict =
   | {
       readonly ok: true;

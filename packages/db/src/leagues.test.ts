@@ -13,6 +13,7 @@ import {
   getLeagueRules,
   LeagueValidationError,
   recordChainAnchor,
+  recordSeasonStart,
   setRulesUri,
   verifyStoredRules,
 } from "./leagues.js";
@@ -369,6 +370,103 @@ describe("the on-chain anchor", () => {
   it("returns nothing for a league that does not exist", async () => {
     const { client } = await setup();
     expect(await getChainState(client, "00000000-0000-4000-8000-000000000000")).toBeNull();
+  });
+});
+
+/**
+ * And the same again for the season start, which is a different fact with the
+ * same properties.
+ *
+ * `League.started` is set once by the program and never unset. It decides which
+ * of two refund schedules a pot league's members are on — the ordinary timelock,
+ * or the failed-league opening 48 hours after the draft time — so a record that
+ * could be cleared or re-pointed is a record that could be made to disagree with
+ * the chain about whether a season ever began. `drawDraftOrder` reads it.
+ */
+describe("the season start on-chain", () => {
+  const anchor = { signature: "5xSig".padEnd(88, "a"), cluster: "localnet" };
+  const start = { signature: "6".repeat(88), cluster: "localnet" };
+
+  async function league(client: PGliteClient, commissionerId: string) {
+    return createLeague(client, NFL, { name: "L", commissionerId, rules: rules() });
+  }
+
+  it("starts unrecorded, because starting a season is a separate signature", async () => {
+    const { client, commissionerId } = await setup();
+    const created = await league(client, commissionerId);
+
+    const state = await getChainState(client, created.id);
+    expect(state?.seasonStartedAt).toBeNull();
+    expect(state?.seasonStartSignature).toBeNull();
+    expect(state?.seasonStartCluster).toBeNull();
+  });
+
+  it("records the transaction that started the season", async () => {
+    const { client, commissionerId } = await setup();
+    const created = await league(client, commissionerId);
+
+    await recordSeasonStart(client, created.id, start);
+
+    const state = await getChainState(client, created.id);
+    expect(state?.seasonStartedAt).toBeInstanceOf(Date);
+    expect(state?.seasonStartSignature).toBe(start.signature);
+    expect(state?.seasonStartCluster).toBe("localnet");
+  });
+
+  it("cannot be rewritten to point at a different transaction", async () => {
+    const { client, commissionerId } = await setup();
+    const created = await league(client, commissionerId);
+    await recordSeasonStart(client, created.id, start);
+
+    await expect(
+      recordSeasonStart(client, created.id, { signature: "other", cluster: "mainnet-beta" }),
+    ).rejects.toThrow(/season started/);
+
+    const state = await getChainState(client, created.id);
+    expect(state?.seasonStartSignature).toBe(start.signature);
+  });
+
+  it("cannot be cleared, which is the direction that matters most", async () => {
+    // Clearing it reopens the failed-league refund on a running season — the
+    // exact state that lets a member withdraw their stake and keep playing for
+    // the pot. The chain would still say started; only our record would lie.
+    const { client, commissionerId } = await setup();
+    const created = await league(client, commissionerId);
+    await recordSeasonStart(client, created.id, start);
+
+    await expect(
+      client.query(
+        `UPDATE leagues
+            SET season_started_at = NULL, season_start_signature = NULL,
+                season_start_cluster = NULL
+          WHERE id = $1`,
+        [created.id],
+      ),
+    ).rejects.toThrow(/season started/);
+  });
+
+  it("refuses a timestamp with no transaction behind it", async () => {
+    const { client, commissionerId } = await setup();
+    const created = await league(client, commissionerId);
+
+    await expect(
+      client.query("UPDATE leagues SET season_started_at = now() WHERE id = $1", [created.id]),
+    ).rejects.toThrow();
+  });
+
+  it("leaves the anchor alone", async () => {
+    // Two triggers on one table, and each has to ignore the other's columns —
+    // otherwise recording a season start on an anchored league would raise from
+    // the anchor's trigger and nothing could ever draft.
+    const { client, commissionerId } = await setup();
+    const created = await league(client, commissionerId);
+    await recordChainAnchor(client, created.id, anchor);
+
+    await expect(recordSeasonStart(client, created.id, start)).resolves.toBeUndefined();
+
+    const state = await getChainState(client, created.id);
+    expect(state?.signature).toBe(anchor.signature);
+    expect(state?.seasonStartSignature).toBe(start.signature);
   });
 });
 

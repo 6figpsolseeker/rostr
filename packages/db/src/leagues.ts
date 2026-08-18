@@ -181,17 +181,64 @@ export async function recordChainAnchor(
   );
 }
 
+/**
+ * Record that a league's season has been declared started on-chain.
+ *
+ * **Call this only after reading `League.started` back off the account.** The
+ * signature arrives from a browser and a browser can claim anything; what makes
+ * this a fact rather than a report is that the caller checked the chain.
+ * `verifyOnChainSeasonStart` in `@rostr/escrow` is that check, and
+ * `/api/leagues/[id]/start-season` is the only caller.
+ *
+ * ## What the record is for
+ *
+ * `refund_stake` opens two ways — the ordinary timelock, and
+ * `!started && now >= start_deadline` for a league that never began — and
+ * `League.started` is the only thing that separates them. A pot league that
+ * drafts without this having landed spends its whole season with the escape
+ * hatch open: any member could withdraw their stake and keep playing for the
+ * pot. `drawDraftOrder` refuses a pot league until this row exists, which is
+ * why it has to be a row rather than an RPC call — see migration `0031`.
+ *
+ * Written once, by trigger, so it holds against psql too. Re-posting after a
+ * lost response is handled by the route returning early on the existing record
+ * rather than by a second write.
+ */
+export async function recordSeasonStart(
+  db: SqlClient,
+  leagueId: string,
+  start: ChainAnchor,
+): Promise<void> {
+  await db.query(
+    `UPDATE leagues
+        SET season_started_at = now(), season_start_signature = $1, season_start_cluster = $2
+      WHERE id = $3`,
+    [start.signature, start.cluster, leagueId],
+  );
+}
+
 export interface LeagueChainState {
   readonly anchoredAt: Date | null;
   readonly signature: string | null;
   readonly cluster: string | null;
+  /**
+   * When `start_season` was recorded, or `null` if it never was.
+   *
+   * Always `null` for a free league: the program refuses `start_season` without
+   * a pot, so there is no transaction that could set it.
+   */
+  readonly seasonStartedAt: Date | null;
+  readonly seasonStartSignature: string | null;
+  readonly seasonStartCluster: string | null;
 }
 
 /**
- * Whether a league's rules are on-chain yet.
+ * Whether a league's rules are on-chain yet, and whether its season has been
+ * declared started.
  *
  * Members should not be asked to consent to a rule set they cannot verify, so
- * this gates joining.
+ * the first of those gates joining. The second gates the draw of a pot league —
+ * see `recordSeasonStart`.
  */
 export async function getChainState(
   db: SqlClient,
@@ -201,8 +248,12 @@ export async function getChainState(
     chain_anchored_at: Date | null;
     chain_signature: string | null;
     chain_cluster: string | null;
+    season_started_at: Date | null;
+    season_start_signature: string | null;
+    season_start_cluster: string | null;
   }>(
-    `SELECT chain_anchored_at, chain_signature, chain_cluster
+    `SELECT chain_anchored_at, chain_signature, chain_cluster,
+            season_started_at, season_start_signature, season_start_cluster
        FROM leagues WHERE id = $1`,
     [leagueId],
   );
@@ -213,6 +264,9 @@ export async function getChainState(
     anchoredAt: row.chain_anchored_at,
     signature: row.chain_signature,
     cluster: row.chain_cluster,
+    seasonStartedAt: row.season_started_at,
+    seasonStartSignature: row.season_start_signature,
+    seasonStartCluster: row.season_start_cluster,
   };
 }
 

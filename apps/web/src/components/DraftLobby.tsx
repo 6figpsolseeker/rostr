@@ -2,6 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useConnection, useWallet } from "@solana/wallet-adapter-react";
+import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
+import { Transaction } from "@solana/web3.js";
+import { AnchorProvider, type Wallet } from "@coral-xyz/anchor";
+import { escrowProgram, startSeasonIx } from "@rostr/escrow";
 
 /**
  * The lobby, in its two states: before the draw and after it.
@@ -39,6 +44,11 @@ export interface DraftLobbyProps {
     | { readonly code: "BELOW_MIN_HUMANS"; readonly humans: number; readonly required: number }
     | { readonly code: "ODD_FIELD"; readonly teams: number }
     | { readonly code: "POT_NOT_FUNDED"; readonly unfunded: number }
+    // Both carry a date in `lib/lobby.ts` and neither needs one here: the
+    // deadline is rendered from `seasonStart`, which is the one place this
+    // screen learns about the start window.
+    | { readonly code: "SEASON_NOT_STARTED" }
+    | { readonly code: "START_WINDOW_MISSED" }
     | { readonly code: "ALREADY_DRAWN" }
     | null;
   /**
@@ -55,7 +65,27 @@ export interface DraftLobbyProps {
     | { readonly code: "BELOW_MIN_HUMANS"; readonly humans: number; readonly required: number }
     | { readonly code: "ODD_FIELD"; readonly teams: number; readonly canUseBot: boolean }
     | { readonly code: "POT_NOT_FUNDED"; readonly unfunded: number }
+    | { readonly code: "START_WINDOW_MISSED" }
   )[];
+  /**
+   * Whether this league still owes the chain a `start_season`, and whether it
+   * can still send one. See `SeasonStart` in `lib/lobby.ts` for why a
+   * commissioner has to press anything at all.
+   *
+   * ISO strings rather than `Date`s, like `scheduledAt` and `serverNow` above,
+   * so every instant crossing into this component crosses the same way.
+   */
+  readonly seasonStart:
+    | { readonly state: "NOT_REQUIRED" }
+    | { readonly state: "STARTED" }
+    | {
+        readonly state: "OPEN";
+        readonly closesAt: string;
+        readonly blockedBy: readonly (
+          "TOO_EARLY" | "BELOW_MIN_HUMANS" | "ODD_FIELD" | "POT_NOT_FUNDED"
+        )[];
+      }
+    | { readonly state: "MISSED"; readonly closedAt: string };
   readonly verification: {
     readonly slot: number;
     readonly blockhash: string;
@@ -146,7 +176,11 @@ function BeforeDraw(props: DraftLobbyProps & { remaining: number }) {
           the draft is; this says whether there will be one — and after that
           instant nothing here can be fixed by anybody.
         */}
-        <Readiness readiness={props.readiness} scheduledAt={props.scheduledAt} />
+        <Readiness
+          readiness={props.readiness}
+          scheduledAt={props.scheduledAt}
+          seasonStart={props.seasonStart}
+        />
         <section className="rounded-[14px] border border-nocturne-neutral-800 bg-nocturne-surface p-7">
           <p className="text-[10.5px] uppercase tracking-[0.14em] text-nocturne-neutral-500">
             Waiting for the draw
@@ -179,6 +213,13 @@ function BeforeDraw(props: DraftLobbyProps & { remaining: number }) {
             </p>
           </div>
 
+          {/*
+            Above the draw, because it comes before it: `drawDraftOrder` refuses
+            a pot league until the chain has been told the season is starting,
+            and the reverse order would leave a live season whose members can
+            still withdraw out of it.
+          */}
+          <SeasonStartControl {...props} />
           <DrawControl {...props} />
         </section>
 
@@ -188,6 +229,145 @@ function BeforeDraw(props: DraftLobbyProps & { remaining: number }) {
       <aside className="space-y-4 lg:sticky lg:top-[22px] lg:self-start">
         <Facts {...props} />
       </aside>
+    </div>
+  );
+}
+
+/**
+ * Declaring the season started — the pot league's first of two presses.
+ *
+ * **The commissioner signs, not us.** `start_season` is signed by the wallet
+ * that anchored the league, from their own extension; there is no server keypair
+ * anywhere in this flow and none may be added. The server is told afterwards and
+ * reads `League.started` back off the account before recording it.
+ *
+ * ## What the button changes
+ *
+ * Nothing about the league's terms, and no token. Its only effect is which of
+ * two refund schedules the members are on — and both end with everyone holding
+ * their own money. A league that is never marked releases every stake 48 hours
+ * after its draft time; a league that is marked holds them until the ordinary
+ * timelock, which is what a season being played for a pot requires.
+ *
+ * ## Why it is refused while anything else is outstanding
+ *
+ * Nothing unsets `started`. A commissioner who marks a league that then fails to
+ * draw — short, odd, or a member who never staked, none of which can be fixed
+ * once the field locks — has turned a two-day wait into a wait of months, on
+ * money that will never be played for. So the button appears only when the draw
+ * itself would succeed the moment it lands.
+ *
+ * Rendered for the commissioner alone, like the draw. A member cannot send this
+ * transaction: the program constrains the signer to `league.commissioner`.
+ */
+function SeasonStartControl(props: DraftLobbyProps) {
+  const router = useRouter();
+  const { connection } = useConnection();
+  const wallet = useWallet();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const season = props.seasonStart;
+
+  // A free league, a league already marked, and a league past its window all
+  // have no button. The last of those is not silent — `Readiness` says what
+  // happened, to everybody, because it is not only the commissioner's problem.
+  if (season.state !== "OPEN") return null;
+  if (!props.isCommissioner) return null;
+
+  const blocked = season.blockedBy.length > 0;
+
+  async function start() {
+    if (!wallet.publicKey || !wallet.signTransaction) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const provider = new AnchorProvider(connection, wallet as unknown as Wallet, {
+        commitment: "confirmed",
+      });
+      const program = escrowProgram(provider);
+
+      const tx = new Transaction().add(
+        await startSeasonIx(program, {
+          leagueId: props.leagueId,
+          commissioner: wallet.publicKey,
+        }),
+      );
+      const signature = await provider.sendAndConfirm(tx, [], { commitment: "confirmed" });
+
+      // The server does NOT take our word for it — it reads `League.started`
+      // back off the account before recording anything.
+      const response = await fetch(`/api/leagues/${props.leagueId}/start-season`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ signature }),
+      });
+      if (!response.ok) {
+        const body = (await response.json().catch(() => ({}))) as { error?: string };
+        throw new Error(body.error ?? "The server could not verify the season start");
+      }
+
+      // The draw gate is rendered server-side, so the page has to come back for
+      // the next button to appear.
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mt-7 border-t border-nocturne-neutral-800 pt-6">
+      <h3 className="text-[15px] font-medium">First, tell the chain the season is starting</h3>
+      <div className="mt-3 space-y-3 text-[13px] leading-relaxed text-nocturne-neutral-400">
+        <p>
+          The escrow returns every stake automatically to a league that never gets going — two
+          days after the draft time, with no vote and nobody to ask. That is what protects a
+          league which fails to fill. It has to be switched off before a real season begins, or
+          any member could take their buy-in back in week three and carry on playing for the
+          pot.
+        </p>
+        <p>
+          One approval, from the wallet that anchored this league. It moves no money and changes
+          no rule — it only chooses which refund date your members are on. The draw is refused
+          until it lands.
+        </p>
+        <p className="text-nocturne-neutral-500">
+          It has to be sent by {stamp(season.closesAt)}. After that this league cannot start and
+          cannot draft, and every stake becomes refundable.
+        </p>
+      </div>
+
+      {!wallet.connected ? (
+        <div className="mt-5">
+          <WalletMultiButton />
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => void start()}
+          disabled={blocked || busy}
+          className="mt-5 rounded-[4px] border border-nocturne-accent px-[18px] py-[10px] text-[13.5px] text-nocturne-accent transition-colors hover:bg-nocturne-accent/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nocturne-accent disabled:cursor-not-allowed disabled:border-nocturne-neutral-800 disabled:text-nocturne-neutral-600"
+        >
+          {busy ? "Waiting for the chain…" : "Start the season"}
+        </button>
+      )}
+
+      {/*
+        Full contrast beside a dimmed button — the affordance carries the
+        disabled state, the explanation does not. It names the consequence rather
+        than the condition, because the conditions are already listed above in
+        `Readiness` and repeating them here would be two copies to keep true.
+      */}
+      {blocked && (
+        <p className="mt-3 text-[13px] text-nocturne-neutral-400">
+          {season.blockedBy.includes("TOO_EARLY") && season.blockedBy.length === 1
+            ? `Not yet — this waits until the field locks at ${clockTime(props.scheduledAt)}, because until then somebody can still join without staking.`
+            : "Not while this league is short of what it needs to draft. Starting the season now would close the automatic refund on money that would never be played for, and nothing can reopen it."}
+        </p>
+      )}
+      {error && <p className="mt-3 text-[13px] text-nocturne-accent-300">{error}</p>}
     </div>
   );
 }
@@ -265,6 +445,19 @@ function DrawControl(props: DraftLobbyProps) {
           buy-in. The draw waits until the pot holds every member&rsquo;s stake.
         </p>
       )}
+      {props.drawBlocker?.code === "SEASON_NOT_STARTED" && (
+        <p className="mt-3 text-[13px] text-nocturne-neutral-400">
+          The season has not been declared started on-chain yet. That is the approval above, and
+          the draw waits for it — otherwise this league would play a season with the automatic
+          refund still open.
+        </p>
+      )}
+      {props.drawBlocker?.code === "START_WINDOW_MISSED" && (
+        <p className="mt-3 text-[13px] text-nocturne-neutral-400">
+          This league can no longer be started, so it can no longer draft. Every stake is
+          refundable now — see above.
+        </p>
+      )}
       {error && <p className="mt-3 text-[13px] text-nocturne-accent-300">{error}</p>}
     </div>
   );
@@ -283,12 +476,23 @@ function DrawControl(props: DraftLobbyProps) {
  * nothing on its own; "this league will not draft, and every buy-in comes back"
  * is the sentence that makes somebody do something today.
  */
-function Readiness(props: { readiness: DraftLobbyProps["readiness"]; scheduledAt: string }) {
+function Readiness(props: {
+  readiness: DraftLobbyProps["readiness"];
+  scheduledAt: string;
+  seasonStart: DraftLobbyProps["seasonStart"];
+}) {
   if (props.readiness.length === 0) return null;
+
+  // Past tense, and a different sentence. Everything else on this list is
+  // something to go and fix before the deadline; this is the deadline having
+  // passed, and telling people to hurry would be worse than saying nothing.
+  const over = props.seasonStart.state === "MISSED";
 
   return (
     <section className="mb-8 space-y-3 rounded-lg border border-amber-500/30 bg-amber-500/[0.04] p-6">
-      <h2 className="text-[15px] font-medium">This league is not ready to draft</h2>
+      <h2 className="text-[15px] font-medium">
+        {over ? "This league will not draft" : "This league is not ready to draft"}
+      </h2>
 
       <ul className="space-y-2 text-[13.5px] leading-[1.6] text-nocturne-neutral-400">
         {props.readiness.map((problem) => (
@@ -327,6 +531,16 @@ function Readiness(props: { readiness: DraftLobbyProps["readiness"]; scheduledAt
                   draft.
                 </>
               )}
+              {problem.code === "START_WINDOW_MISSED" && (
+                <>
+                  <strong className="font-medium text-nocturne-text">
+                    The season was never started on-chain
+                  </strong>
+                  , and the window for it has closed. Nothing can reopen it — the escrow makes
+                  starting a season illegal from exactly the moment it starts giving the money
+                  back, so the two can never both be available.
+                </>
+              )}
             </span>
           </li>
         ))}
@@ -337,12 +551,24 @@ function Readiness(props: { readiness: DraftLobbyProps["readiness"]; scheduledAt
         draft time on joins *and* departures, so after that instant none of the
         above can be fixed by anyone — which is why this says "before" rather
         than leaving it to be inferred.
+
+        Once the start window has shut, that sentence is about a deadline in the
+        past and would read as advice. What people need then is the one thing
+        they can still act on: the money is theirs and it is sitting there.
       */}
-      <p className="text-[12.5px] leading-[1.6] text-nocturne-neutral-500">
-        All of it has to be settled before {clockTime(props.scheduledAt)}. Nobody can join or
-        leave after that, so a league still in this state does not draft at all — and every
-        buy-in already staked is released back to its owner two days later.
-      </p>
+      {over ? (
+        <p className="text-[12.5px] leading-[1.6] text-nocturne-neutral-500">
+          Nothing here can be fixed now, and there is no draft coming. If you staked a buy-in,
+          it is refundable from your stake panel on the league page — the escrow returns it
+          unconditionally and nobody has to approve it.
+        </p>
+      ) : (
+        <p className="text-[12.5px] leading-[1.6] text-nocturne-neutral-500">
+          All of it has to be settled before {clockTime(props.scheduledAt)}. Nobody can join or
+          leave after that, so a league still in this state does not draft at all — and every
+          buy-in already staked is released back to its owner two days later.
+        </p>
+      )}
     </section>
   );
 }

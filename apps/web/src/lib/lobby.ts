@@ -16,6 +16,7 @@
  */
 
 import { explainOrderDraw, pickPosition } from "@rostr/core";
+import { seasonStartState, startDeadlineFor } from "@rostr/escrow";
 
 /** Which of the two lobby states a league is in. */
 export type LobbyPhase = "BEFORE_DRAW" | "DRAWN";
@@ -45,6 +46,16 @@ export type DrawBlocker =
   | { readonly code: "BELOW_MIN_HUMANS"; readonly humans: number; readonly required: number }
   | { readonly code: "ODD_FIELD"; readonly teams: number }
   | { readonly code: "POT_NOT_FUNDED"; readonly unfunded: number }
+  /**
+   * A pot league whose season has not been declared started on-chain. The
+   * window is still open, so this is the next thing to press.
+   */
+  | { readonly code: "SEASON_NOT_STARTED"; readonly closesAt: Date }
+  /**
+   * A pot league that can no longer be started, and therefore can no longer
+   * draft. See `SeasonStart` for what this state means and why it is separate.
+   */
+  | { readonly code: "START_WINDOW_MISSED"; readonly closedAt: Date }
   | { readonly code: "ALREADY_DRAWN" };
 
 /**
@@ -76,7 +87,76 @@ export type DrawBlocker =
 export type ReadinessProblem =
   | { readonly code: "BELOW_MIN_HUMANS"; readonly humans: number; readonly required: number }
   | { readonly code: "ODD_FIELD"; readonly teams: number; readonly canUseBot: boolean }
-  | { readonly code: "POT_NOT_FUNDED"; readonly unfunded: number };
+  | { readonly code: "POT_NOT_FUNDED"; readonly unfunded: number }
+  /**
+   * The start window closed on a pot league that never declared itself started,
+   * so it can never draft.
+   *
+   * The odd one out here, and it earns its place: the other three are things to
+   * fix before the deadline, and this is what the deadline did. It is on this
+   * list rather than only on the draw button because `DrawControl` renders
+   * nothing at all for a member — and a member whose money is now sitting
+   * refundable, in a league that will never play, is exactly who needs telling.
+   */
+  | { readonly code: "START_WINDOW_MISSED"; readonly closedAt: Date };
+
+/** What stops a season being *safely* declared started. See `SeasonStart`. */
+export type SeasonStartBlocker =
+  "TOO_EARLY" | "BELOW_MIN_HUMANS" | "ODD_FIELD" | "POT_NOT_FUNDED";
+
+/**
+ * Where this league stands on declaring its season started — the control that
+ * has to be pressed before a pot league's order can be drawn.
+ *
+ * ## Why the commissioner presses anything at all
+ *
+ * `refund_stake` opens two ways, and `League.started` is the only thing that
+ * separates them: the ordinary timelock months out, and `!started && now >=
+ * start_deadline` — the draft time plus 48 hours — for a league that never
+ * began. The program cannot tell a failed league from a running one, because
+ * the roster, the draft and who has paid are all Postgres facts. So the default
+ * is failure and **doing nothing returns the money**; a league that was ready
+ * says so.
+ *
+ * ## Why it is blocked until everything else is settled
+ *
+ * `blockedBy` is not a courtesy. Marking a season started closes the
+ * failed-league refund **permanently** — nothing unsets `started` — so a
+ * commissioner who marks a league that then fails to draw has converted a
+ * 48-hour wait into a wait of months, on money that will never be played for.
+ * And the league genuinely can fail to draw after that point: the field is
+ * locked from the draft time on INSERT and DELETE alike, so a short field, an
+ * odd field or an unpaid member cannot be fixed at all.
+ *
+ * So the button is offered only in the state where the draw would succeed the
+ * instant it lands. Two presses, in one order, both at draft time.
+ */
+export type SeasonStart =
+  /** A free league. There is no vault, so there is nothing to protect. */
+  | { readonly state: "NOT_REQUIRED" }
+  | { readonly state: "STARTED" }
+  | {
+      readonly state: "OPEN";
+      /** When `start_season` stops being legal. Draft time plus 48 hours. */
+      readonly closesAt: Date;
+      /** Empty means press it. Otherwise, what has to be true first. */
+      readonly blockedBy: readonly SeasonStartBlocker[];
+    }
+  /**
+   * The window shut and nobody started the season.
+   *
+   * There is no recovery and there must not be one: `start_season` is illegal
+   * from exactly the instant the failed-league refund becomes legal, which is
+   * what stops a league being declared started with a partly-drained vault.
+   * Every extra condition on `refund_stake` is a new way for money to become
+   * permanently stuck, so the escape hatch is not narrowed to rescue this.
+   *
+   * What the screen does about it is say so, plainly, to everybody: this league
+   * will not draft, and every stake is refundable now. Rendering only a dead
+   * draw button would leave twelve people waiting for a draft that is not
+   * coming while their money sits recoverable and unclaimed.
+   */
+  | { readonly state: "MISSED"; readonly closedAt: Date };
 
 export interface LobbyVerification {
   readonly slot: number;
@@ -111,6 +191,8 @@ export interface LobbyView {
    * draft time has arrived. Empty means it is ready. See `ReadinessProblem`.
    */
   readonly readiness: readonly ReadinessProblem[];
+  /** The season-start control, and whether it is this league's to press. */
+  readonly seasonStart: SeasonStart;
   readonly verification: LobbyVerification | null;
   /** The viewer's own overall pick numbers, once drawn. */
   readonly yourPicks: readonly number[];
@@ -150,6 +232,16 @@ export interface LobbyInput {
    * public accusation on a screen everybody in the league can see.
    */
   readonly unfundedMembers: number;
+  /**
+   * Whether `start_season` has landed and been recorded —
+   * `leagues.season_started_at`, written only after the route read
+   * `League.started` back off the account.
+   *
+   * Always false for a free league, and never consulted for one: the program
+   * refuses `start_season` without a pot, so there is no transaction that could
+   * set it and nothing it would protect.
+   */
+  readonly seasonStarted: boolean;
   /** `null` until the order is drawn. */
   readonly draw: {
     readonly slot: number;
@@ -188,6 +280,7 @@ export function picksForPosition(
 export function buildLobbyView(input: LobbyInput): LobbyView {
   const teamCount = input.teams.length;
   const humans = input.teams.filter((team) => !team.isBot).length;
+  const season = seasonStart(input, humans);
 
   const seats = input.teams.map((team): LobbySeat => {
     const picks =
@@ -221,8 +314,9 @@ export function buildLobbyView(input: LobbyInput): LobbyView {
     seats,
     humans,
     minHumans: input.minHumans,
-    drawBlocker: drawBlocker(input, humans),
-    readiness: readiness(input, humans),
+    drawBlocker: drawBlocker(input, humans, season),
+    readiness: readiness(input, humans, season),
+    seasonStart: season,
     verification: input.draw
       ? {
           slot: input.draw.slot,
@@ -243,15 +337,26 @@ export function buildLobbyView(input: LobbyInput): LobbyView {
 }
 
 /**
- * The same three refusals `drawDraftOrder` makes, computed for the screen.
+ * The same refusals `drawDraftOrder` makes, computed for the screen.
  *
  * This is a courtesy and the server is the rule — the button being enabled has
  * never been what permits a draw. It is here so the lobby can say *which* thing
  * is missing rather than presenting a live button that answers 425, and the
  * order matches the server's so the two cannot disagree about which reason
  * comes first.
+ *
+ * The season-start pair comes **last**, because `drawDraftOrder` checks it last:
+ * a commissioner who is a member short is told that rather than told to press a
+ * button which, pressed, would freeze everyone's stake until the long timelock.
+ * The server answers one code for both — it reads a column and has no clock —
+ * and the split into "not yet" and "no longer" happens here, where the deadline
+ * is derived from the same frozen draft time the account was anchored with.
  */
-function drawBlocker(input: LobbyInput, humans: number): DrawBlocker | null {
+function drawBlocker(
+  input: LobbyInput,
+  humans: number,
+  season: SeasonStart,
+): DrawBlocker | null {
   if (input.draw) return { code: "ALREADY_DRAWN" };
   if (!input.isCommissioner) return { code: "NOT_COMMISSIONER" };
   if (input.now.getTime() < input.scheduledAt.getTime()) {
@@ -270,7 +375,54 @@ function drawBlocker(input: LobbyInput, humans: number): DrawBlocker | null {
   if (input.hasPot && input.unfundedMembers > 0) {
     return { code: "POT_NOT_FUNDED", unfunded: input.unfundedMembers };
   }
+  if (season.state === "OPEN") {
+    return { code: "SEASON_NOT_STARTED", closesAt: season.closesAt };
+  }
+  if (season.state === "MISSED") {
+    return { code: "START_WINDOW_MISSED", closedAt: season.closedAt };
+  }
   return null;
+}
+
+/**
+ * Which of the four season-start states this league is in, and — while it is
+ * open — what has to be settled before the button is safe to press.
+ *
+ * The state itself is `seasonStartState` in `@rostr/escrow`, which owns the
+ * boundary because the program owns it: `start_season` requires `now <
+ * start_deadline`, so a UI that offered the button *at* the deadline would send
+ * a transaction the chain rejects. The deadline comes from `startDeadlineFor`
+ * over the frozen draft time — the same derivation the anchor route compares the
+ * account against, so the screen and the chain cannot mean different instants.
+ *
+ * `blockedBy` reports **every** outstanding condition rather than the first, for
+ * the same reason `readiness` does: they all have to hold, and this button
+ * cannot be un-pressed.
+ */
+function seasonStart(input: LobbyInput, humans: number): SeasonStart {
+  const closes = startDeadlineFor(Math.floor(input.scheduledAt.getTime() / 1000));
+  const state = seasonStartState({
+    hasPot: input.hasPot,
+    started: input.seasonStarted,
+    startDeadline: closes,
+    now: Math.floor(input.now.getTime() / 1000),
+  });
+
+  if (state === "NOT_REQUIRED") return { state };
+  if (state === "STARTED") return { state };
+  if (state === "MISSED") return { state, closedAt: new Date(closes * 1000) };
+
+  const blockedBy: SeasonStartBlocker[] = [];
+  // Before the draft time the field can still change — somebody can still join
+  // and not stake — so "everything is ready" is not yet a settled fact about
+  // this league. There is no cost to waiting: the window runs for two days from
+  // exactly the instant the field locks.
+  if (input.now.getTime() < input.scheduledAt.getTime()) blockedBy.push("TOO_EARLY");
+  if (humans < input.minHumans) blockedBy.push("BELOW_MIN_HUMANS");
+  if (input.teams.length % 2 !== 0) blockedBy.push("ODD_FIELD");
+  if (input.unfundedMembers > 0) blockedBy.push("POT_NOT_FUNDED");
+
+  return { state, closesAt: new Date(closes * 1000), blockedBy };
 }
 
 /**
@@ -284,8 +436,15 @@ function drawBlocker(input: LobbyInput, humans: number): DrawBlocker | null {
  * copy of `drawDraftOrder`'s refusals, and a courtesy that disagreed with the
  * rule would be worse than none.
  */
-function readiness(input: LobbyInput, humans: number): ReadinessProblem[] {
+function readiness(input: LobbyInput, humans: number, season: SeasonStart): ReadinessProblem[] {
   const out: ReadinessProblem[] = [];
+
+  // First, because it outranks the rest: once the start window has shut nothing
+  // below it can be fixed *or* matters. The other three describe a league that
+  // could still be saved; this one describes a league that is over.
+  if (season.state === "MISSED") {
+    out.push({ code: "START_WINDOW_MISSED", closedAt: season.closedAt });
+  }
 
   if (humans < input.minHumans) {
     out.push({ code: "BELOW_MIN_HUMANS", humans, required: input.minHumans });

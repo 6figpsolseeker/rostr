@@ -1699,6 +1699,71 @@ now pins all four states as units that run with no toolchain, and `stake.test.ts
 real refund on a real validator produces the state those units describe, so the two cannot
 agree with each other while both being wrong about the program.
 
+### The season is declared started, and nothing used to say so
+
+`programs/rostr-escrow/src/lib.rs` (`start_season`), `packages/escrow/src/start.ts`,
+`apps/web/src/app/api/leagues/[id]/start-season/route.ts`, migration `0031`, and the
+refusal in `drawDraftOrder`.
+
+**The program has had `start_season` since the failed-league refund landed (#170) and
+nothing in the app ever sent it.** That is not a missing feature, it is an open door.
+`refund_stake` has two ways in and `League.started` is the only thing between them:
+
+```
+timelock_open = now >= refund_unlock_at             // months away
+failed_open   = !started && now >= start_deadline   // draft time + 48h
+```
+
+The second exists so a league that never gets going returns everyone's money in days
+rather than months — the program cannot tell a failed league from a running one, because
+the roster, the draft and who has paid are all Postgres facts, so **the default is
+failure and doing nothing returns the money.**
+
+Its cost is that a league which _did_ get going and was never marked started spends the
+whole season on that schedule. Any member could withdraw their entire stake in week 3
+while keeping their roster, their standings place and their claim on the pot, and play
+out the year with nothing at risk — exactly what the timelock exists to prevent. **It was
+true of every pot league that ever drafted.**
+
+**Mark first, draw second, and the order is the whole fix.** `drawDraftOrder` refuses a
+pot league until the chain says started. Drawing first and failing to mark is
+unrecoverable — the draw is write-once by trigger — while marking first and failing to
+draw simply means pressing the button again on a league that genuinely is starting.
+
+**The commissioner signs it from their own wallet.** No server key exists in this flow
+and none may be introduced; the program constrains the signer to `league.commissioner`,
+which is the wallet that anchored. The route reads `League.started` back off the account
+before recording, like every other on-chain fact here.
+
+**Recorded in Postgres rather than read from the chain at draw time, and that is
+deliberate.** `drawDraftOrder` runs inside a transaction in `@rostr/db` — no RPC client,
+no escrow dependency, PGlite tests with no network — so an account read there would hold
+a row lock across a network round trip and make the one function that decides whether a
+league may draft untestable without a validator. `0031` is the chain's answer, written
+only after it was checked, exactly as `league_onchain_stakes` is. Write-once by trigger,
+in both directions: **clearing it is the dangerous edit**, because it reopens the
+failed-league refund on a running season.
+
+**It is checked last, after min humans, the odd field and the funding.** Marking a season
+started closes the failed-league refund permanently, so pressing it on a league that then
+cannot draw converts a two-day wait into a wait of months on money nobody will ever play
+for. A commissioner who is a member short is told _that_. Same reason `lib/lobby.ts` only
+offers the button when `blockedBy` is empty.
+
+**The ordering hazard, named rather than left to be found.** `start_season` is illegal
+from exactly the instant the failed-league refund becomes legal, which is what stops a
+league being declared started with a partly-drained vault. So a commissioner who leaves
+it more than 48 hours reaches a state where the season **cannot** be started and refunds
+**have** opened — and there is no recovery, because narrowing `refund_stake` to rescue it
+is a new way for money to become permanently stuck. That state is `MISSED` in
+`seasonStartState`, and the lobby renders it to **everybody**, not only the commissioner:
+`DrawControl` shows a member nothing at all, and a member whose money is sitting
+refundable in a league that will never play is precisely who needs telling.
+
+**Free leagues are excluded, not exempted.** `start_season` requires `has_pot`; there is
+no vault to release and nothing to protect, so a free league drafts with no extra wallet
+interaction. Requiring it would make every free league undraftable.
+
 ### One declaration of which chain, and everything checked against it
 
 `packages/escrow/src/cluster.ts`, `apps/web/src/lib/cluster.ts`.
