@@ -204,14 +204,36 @@ It bounds the _dishonest_ oracle not at all, because a dishonest oracle acts bef
 timelock opens. Deriving rather than declaring converts "post a winner" into "post the
 scores that produce that winner" — the same authority, with a public paper trail attached.
 
-The paper trail is worth something, and only if somebody reads it in time. **Payout should
-require a fixed hold after the last week is finalised** — seven days, inside a window that
-is 44 days wide (§7) — so the two-provider comparison `RULES.md` promises can actually
-happen before the money moves rather than after.
+### The seven-day hold — decided 2026-08-17
 
-Collusion between the oracle and one member is not mitigated by anything in this design
-except that hold and the 2-of-2 signature below. There is no veto and no abort, and adding
-one would be a new authority.
+The paper trail is worth something only if somebody reads it in time. **Payout is illegal
+until seven days after the last week it needs has been finalised.**
+
+`Scores` records the instant the final week locked; payout requires `now >= that + 7 days`.
+One field, one comparison, and it is a condition on the instruction that can only ever
+refuse to pay — never on the refund, which could strand money.
+
+**Seven days, in a window 44 days wide** (§7), so it spends a sixth of the slack and leaves
+five sixths. The number matches the stat-correction window members already know from
+finalisation, which means it needs no new explanation on the rules screen.
+
+**This is the only thing in the design that bounds a dishonest oracle.** Everything else
+bounds an _absent_ one: lose the key, refuse to act, vanish, and members are delayed rather
+than robbed, because the timelock returns every stake. None of that helps when the key works
+and lies, because a dishonest oracle acts long before the timelock opens. Deriving rather
+than declaring converts "post a winner" into "post the scores that produce that winner" —
+the same authority, with a receipt. A week of daylight between the receipt and the money is
+what makes the receipt worth printing.
+
+It is deliberately **not** a veto. Nobody gains the power to stop a payout; the hold expires
+on its own and settlement proceeds. What it buys is time for anyone — any member, or us — to
+compare the posted scores against the two providers and, if they disagree, to _not_ send the
+payout at all and let the timelock refund everyone. That remedy needs no new instruction and
+no new authority, which is why it is the one chosen.
+
+Collusion between the oracle and one member remains mitigated only by this hold and the
+2-of-2 signature below. There is no abort instruction, and adding one would be a new
+authority over money.
 
 ---
 
@@ -268,11 +290,46 @@ Consequences to face rather than discover:
   [theft nor loss]. Use 2-of-3" — which a single frozen `Pubkey` cannot meet, and which
   hardware signing cannot meet either at ~19 signatures per league per season.
 
-**The idea worth evaluating: make `settlement_oracle` a Squads multisig vault address
-rather than a raw signing key.** Still one frozen `Pubkey`, no extra field, no schema cost —
-but M-of-N sits behind it and the signer set is rotatable without touching the frozen value.
-That recovers the loss and rotation story this design otherwise does not have. Unverified
-against Squads v4's actual CPI signing model; check before committing.
+### `settlement_oracle` is a Squads vault address, not a raw key — verified 2026-08-17
+
+**Still one frozen `Pubkey`, no extra field, no schema cost** — but M-of-N sits behind it,
+and the signer set is rotatable without touching the frozen value. That is what turns "lost
+key means this league can never pay out" into "lost key means re-key the multisig", and it
+is the only way this design meets the 2-of-3 standard `SETUP-REQUIRED.md` already sets for
+itself.
+
+The previous draft called this unverified and said to check before committing. Checked:
+
+- A Squads v4 vault transaction executes its inner instructions **via CPI with the vault
+  PDA's seeds passed to `invoke_signed`**, so the vault signs on behalf of itself and our
+  `Signer` constraint sees `is_signer`. A third-party Anchor instruction is fine.
+- The vault PDA derives from the multisig account and a vault index, and the multisig's
+  _membership_ lives inside that account. **So changing who signs does not change the
+  address**, which is precisely the rotation property wanted. Creating a different multisig
+  would change it — the guarantee covers membership changes, not starting over.
+
+**And one trap, which decides how the check must be written.** ChainSecurity's writeup on
+designing for Squads is explicit: a program that identifies its caller by reading the
+`instruction_sysvar` **breaks under a multisig**, because that sysvar sees only top-level
+instructions and returns the Squads program id rather than the authority. Their
+recommendation is the one this design already takes — compare a stored `Pubkey` against an
+account marked as a signer, since "a PDA signature is unforgeable and context-independent…
+it doesn't matter how deeply nested the call is or which program sits at the top of the
+instruction stack."
+
+So: **never introspect the instruction stack to authorise posting.** A `Signer` account
+compared against `settlement_oracle` is CPI-safe, multisig-safe, and the only form that
+stays correct if the key is later moved behind a different custody arrangement.
+
+The residual cost is throughput. Roughly 19 signatures per league per season means routine
+posting still runs through a hot delegate rather than hardware approvals; the multisig is
+what makes that hot key recoverable rather than what replaces it.
+
+Sources: [ChainSecurity, "Designing for
+Squads"](https://www.chainsecurity.com/blog/www-chainsecurity-com-blog-designing-for-squads-a-lesson-in-solana-authorization),
+[Squads accounts reference](https://docs.squads.so/main/development/reference/accounts),
+[Execute Vault
+Transaction](https://docs.squads.so/main/development/typescript/instructions/execute-vault-transaction).
 
 ### Multi-season
 
@@ -460,12 +517,21 @@ Two consequences worth stating rather than discovering:
 1. ~~**`payingWeeks`**~~ — **resolved 2026-08-17: one payout, after the championship.** The
    owner's call. It cost a date in `RULES.md` §7 and no rule value, no schema move and no
    hash move — see §7. Nothing here now has a window that closes.
-2. **Squads vault as `settlement_oracle`** — verify it works, then decide. It is the
-   difference between "lost key means a dead league" and "lost key means re-key". (§6)
+2. ~~**Squads vault as `settlement_oracle`**~~ — **resolved 2026-08-17: yes, verified.** A
+   vault transaction signs inner instructions with the vault PDA via `invoke_signed`, and
+   membership changes do not move the address. One trap came with it: never authorise
+   posting by reading the `instruction_sysvar`, which under a multisig returns the Squads
+   program id. (§6)
 3. ~~**The tiebreaker chain and playoff shape on-chain**~~ — **resolved**, see §8a. They
    live in `Scores`, verified against the signed rules by the draw. No `League` field.
-4. **A mandatory hold between finalising Week 17 and payout.** Recommended: 7 days, in a
-   44-day window. (§5)
+4. ~~**A mandatory hold before payout**~~ — **resolved 2026-08-17: seven days** after the
+   last needed week finalises. One field on `Scores`, one comparison, a condition on payout
+   and never on the refund. It is the only thing in this design that bounds a _dishonest_
+   oracle rather than an absent one. (§5)
+
+**Nothing is open.** Everything above is now a decision taken, and what remains is
+implementation — G7, then payout, then the adversarial suite. If a new decision appears it
+belongs here with a date and the reason, like these four.
 
 ## 10. Order of work
 
