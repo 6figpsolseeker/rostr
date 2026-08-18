@@ -178,6 +178,13 @@ export {
 } from "./cron-health.js";
 
 export {
+  settlementPlan,
+  SettlementPlanError,
+  type SettlementPlan,
+  type SettlementPlanEntry,
+} from "./settlement.js";
+
+export {
   loadDraftBoard,
   loadProjections,
   seasonsInPlay,

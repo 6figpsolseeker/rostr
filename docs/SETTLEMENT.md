@@ -1,7 +1,8 @@
 # Settlement — how a pot pays out without anyone declaring a winner
 
-**Status: the program can pay a pot out. Nothing creates the account it pays from, so no
-pot league can currently draft — see §12.** Both derivation kernels
+**Status: the chain half is complete end to end.** A commissioner writes the settlement
+account, the draw checks it against the signed rules, weeks are posted and frozen, and
+`settle` derives the three prizes and pays them. Both derivation kernels
 now exist — `derive.rs` for seeding, `bracket.rs` for the ladder — each pinned to the
 TypeScript by a generated corpus, and **no instruction calls either.** G7 has landed — `scores.rs` holds the payee roster and the posted results, and the draw
 refuses an account that disagrees with the signed rules. The oracle key is a signed term as of
@@ -641,9 +642,9 @@ regardless.
 
 ---
 
-## 12. Nothing creates a `Scores` account, and the draw now requires one
+## 12. Nothing created a `Scores` account — fixed the same day
 
-**Found 2026-08-18, immediately after shipping the draw gate, and it is self-inflicted.**
+**Found 2026-08-18, immediately after shipping the draw gate, and it was self-inflicted.**
 
 `initialize_scores` exists in the program and in the IDL. It has **no caller**: no route,
 no panel, no client builder. Grep `apps/web` and `packages/escrow/src` for it and the only
@@ -665,6 +666,20 @@ from its `league_memberships` row — and every entry needs its `Membership` PDA
 remaining account. The window is narrow and already enforced at both ends: after
 `scheduledAt`, before `start_season`.
 
-**Do not close the gate to unblock the draw.** The gate is right; the missing half is the
-creation path. Removing the check would leave a league able to play a season toward a pot it
-cannot pay out, which is the failure the whole document is about.
+**Fixed rather than by relaxing the gate.** `settlementPlan` in `@rostr/db` derives the
+account's contents from the frozen rules and the roster that formed, `initializeScoresIx`
+builds the transaction, and `SettlementPanel` puts it in the lobby for the commissioner to
+sign — in the window the design already required, after the field locks and before
+`start_season`.
+
+Two things about the shape, both borrowed from panels that already exist. It **reads the
+account before writing**, like `JoinPanel`, so a commissioner retrying after a lost response
+is told they already did it rather than shown "account already in use". And it **renders the
+whole roster**, uncollapsed: every member checking their own row is the entire reason the
+account is written months before it is worth anything, and a list nobody opens would make
+that window real and unusable at once.
+
+The one value that is not a straight copy is the bye count, which depends on the field that
+actually formed. `settlementPlan` and `expectedScoreTerms` derive it independently in
+different packages, and the draw compares them — so a divergence would refuse an account this
+service itself produced. There is a test for exactly that.

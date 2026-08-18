@@ -45,3 +45,16 @@ export function settlementAccountCheck(): SettlementAccountCheck {
     },
   };
 }
+
+/**
+ * Whether a league's settlement account already exists.
+ *
+ * Separate from `scoresMismatches` because the lobby asks a different question:
+ * that one decides whether the draw may proceed, this decides whether to show a
+ * commissioner the button that creates the account. A league whose account is
+ * present but wrong needs the draw's refusal, not a second write it cannot make.
+ */
+export async function scoresAlreadyWritten(leagueId: string): Promise<boolean> {
+  const { program } = readOnlyEscrow();
+  return (await fetchOnChainScores(program, leagueId)) !== null;
+}

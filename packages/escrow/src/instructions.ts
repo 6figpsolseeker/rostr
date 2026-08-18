@@ -18,7 +18,8 @@ import { TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync } from "@solana/spl-tok
 import { SystemProgram, type PublicKey, type TransactionInstruction } from "@solana/web3.js";
 
 import { ESCROW_IDL } from "./idl.js";
-import { leagueIdBytes, leaguePda, membershipPda, vaultPda } from "./program.js";
+import { leagueIdBytes, leaguePda, membershipPda, scoresPdaFor, vaultPda } from "./program.js";
+import { TIEBREAKER_DISCRIMINANTS } from "./scores.js";
 import { startDeadlineFor } from "./start.js";
 import type { RostrEscrow } from "./types.js";
 
@@ -272,5 +273,79 @@ export async function refundStakeIx(
       member: params.member,
       tokenProgram: TOKEN_PROGRAM_ID,
     })
+    .instruction();
+}
+
+export type InitializeScoresParams = {
+  readonly leagueId: string;
+  /** The commissioner's wallet. Pays the rent and is the only key accepted. */
+  readonly commissioner: PublicKey;
+  /**
+   * Teams in a stable order, each with the wallet its prize would be paid to.
+   *
+   * The positions become team indices for every game posted afterwards, so the
+   * order must not change between building this and sending it. It comes from
+   * `settlementPlan` in `@rostr/db`, which reads it from the roster.
+   */
+  readonly roster: readonly { readonly teamId: string; readonly wallet: PublicKey }[];
+  readonly oracle: PublicKey;
+  /** Tiebreaker names in the signed order — mapped here, never by the caller. */
+  readonly tiebreakers: readonly string[];
+  readonly playoffWeeks: readonly number[];
+  readonly regularSeasonWeeks: number;
+  readonly playoffTeams: number;
+  readonly firstRoundByes: number;
+  readonly thirdPlace: boolean;
+};
+
+/**
+ * Write a league's payee roster and the terms its result is derived under.
+ *
+ * Once, before the season is declared started, by the commissioner. Everything
+ * it carries is derivable from the frozen rules and the roster that formed, and
+ * `drawDraftOrder` refuses to draw a league whose account disagrees with them —
+ * so this is a transcription rather than a choice, and the only correct input is
+ * whatever `settlementPlan` produced.
+ *
+ * **The wallet in each roster entry is not what the program stores.** It is used
+ * to derive that member's `Membership` PDA, which is passed alongside; the
+ * program reads the wallet out of that account instead. A caller who could name
+ * a wallet directly could name somebody else's.
+ */
+export async function initializeScoresIx(
+  program: Program<RostrEscrow>,
+  params: InitializeScoresParams,
+): Promise<TransactionInstruction> {
+  const league = leaguePda(params.leagueId);
+
+  return program.methods
+    .initializeScores({
+      teamIds: params.roster.map((entry) => Array.from(leagueIdBytes(entry.teamId))),
+      oracle: params.oracle,
+      tiebreakers: Buffer.from(
+        params.tiebreakers.map((name) => {
+          const value = TIEBREAKER_DISCRIMINANTS[name];
+          if (value === undefined) throw new Error(`unknown tiebreaker: ${name}`);
+          return value;
+        }),
+      ),
+      playoffWeeks: Buffer.from(params.playoffWeeks),
+      regularSeasonWeeks: params.regularSeasonWeeks,
+      playoffTeams: params.playoffTeams,
+      firstRoundByes: params.firstRoundByes,
+      thirdPlace: params.thirdPlace,
+    })
+    .accountsPartial({
+      league,
+      scores: scoresPdaFor(league),
+      commissioner: params.commissioner,
+    })
+    .remainingAccounts(
+      params.roster.map((entry) => ({
+        pubkey: membershipPda(league, entry.wallet),
+        isSigner: false,
+        isWritable: false,
+      })),
+    )
     .instruction();
 }

@@ -64,6 +64,7 @@ export {
   joinLeagueIx,
   payoutArray,
   refundStakeIx,
+  initializeScoresIx,
   startSeasonIx,
   type DepositParams,
   type InitializeFreeLeagueParams,
@@ -71,6 +72,7 @@ export {
   type JoinLeagueParams,
   type PrizeKey,
   type RefundParams,
+  type InitializeScoresParams,
   type StartSeasonParams,
 } from "./instructions.js";
 export {

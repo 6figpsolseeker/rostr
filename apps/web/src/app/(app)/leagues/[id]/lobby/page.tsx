@@ -1,11 +1,20 @@
 import { notFound } from "next/navigation";
-import { getChainState, getLeagueRules, loadDraft, teamForUser } from "@rostr/db";
+import {
+  getChainState,
+  getLeagueRules,
+  loadDraft,
+  settlementPlan,
+  SettlementPlanError,
+  teamForUser,
+} from "@rostr/db";
 import { DraftLobby } from "@/components/DraftLobby";
+import { SettlementPanel } from "@/components/SettlementPanel";
 import { LeagueChrome } from "@/components/LeagueChrome";
 import { db } from "@/lib/db";
 import { buildLobbyView } from "@/lib/lobby";
 import { leagueReadAccess } from "@/lib/visibility";
 import { currentUser } from "@/lib/session";
+import { scoresAlreadyWritten } from "@/lib/settlement-preflight";
 
 /**
  * The draft lobby — the screen between a full league and a live draft.
@@ -99,6 +108,32 @@ export default async function LobbyPage({ params }: { params: Promise<{ id: stri
   */
   const chain = await getChainState(client, id);
 
+  /*
+    The settlement account, which the draw refuses to draw without.
+
+    Shown to the commissioner only while it is missing, and only for a pot
+    league — a free league has nothing to settle and `initialize_scores` refuses
+    it outright. Reading the chain here rather than in the component keeps the
+    decision on the server, where the draw's own gate lives; the panel's job is
+    the signature.
+
+    A failure to build the plan is not a failure to render the lobby. Every
+    reason it can refuse — no wallet on a team, no pot — is something the
+    commissioner needs to see explained rather than as a blank page, and the draw
+    will refuse them for the same reason with a better message. So it degrades to
+    "no panel" and the draw does the talking.
+  */
+  const isCommissioner = user !== null && league.commissioner_id === user.id;
+  let settlement: Awaited<ReturnType<typeof settlementPlan>> | null = null;
+  if (isCommissioner && stored.rules.pot && !draft.draw) {
+    try {
+      const onChain = await scoresAlreadyWritten(id);
+      if (!onChain) settlement = await settlementPlan(client, id);
+    } catch (error) {
+      if (!(error instanceof SettlementPlanError)) throw error;
+    }
+  }
+
   const view = buildLobbyView({
     leagueId: league.id,
     rulesHash: stored.hash,
@@ -107,7 +142,7 @@ export default async function LobbyPage({ params }: { params: Promise<{ id: stri
     scheduledAt: draft.scheduledAt,
     now,
     viewerTeamId: myTeam?.teamId ?? null,
-    isCommissioner: user !== null && league.commissioner_id === user.id,
+    isCommissioner,
     commissionerTeamId: commissionerTeam?.id ?? null,
     teams: teams.map((team) => ({
       teamId: team.id,
@@ -144,6 +179,20 @@ export default async function LobbyPage({ params }: { params: Promise<{ id: stri
         navOpen
         active=""
       />
+
+      {settlement && (
+        <SettlementPanel
+          leagueId={league.id}
+          roster={settlement.roster.map((entry) => ({ ...entry }))}
+          oracle={settlement.oracle}
+          tiebreakers={settlement.tiebreakers}
+          playoffWeeks={settlement.playoffWeeks}
+          regularSeasonWeeks={settlement.regularSeasonWeeks}
+          playoffTeams={settlement.playoffTeams}
+          firstRoundByes={settlement.firstRoundByes}
+          thirdPlace={settlement.thirdPlace}
+        />
+      )}
 
       <DraftLobby
         leagueId={league.id}
@@ -183,7 +232,7 @@ export default async function LobbyPage({ params }: { params: Promise<{ id: stri
             : null
         }
         yourPicks={view.yourPicks}
-        isCommissioner={user !== null && league.commissioner_id === user.id}
+        isCommissioner={isCommissioner}
         draftStarted={draft.clockStartedAt !== null}
       />
     </div>
