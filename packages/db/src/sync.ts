@@ -10,7 +10,7 @@
  * quietly.
  */
 
-import type { StatsProvider } from "@rostr/stats";
+import type { ProviderGame, StatsProvider } from "@rostr/stats";
 import type { SqlClient } from "./client.js";
 import { PRIMARY_PROJECTION_SOURCE } from "./lineups.js";
 import { loadSportIds } from "./sports.js";
@@ -149,12 +149,63 @@ export async function syncByeWeeks(
 }
 
 /**
+ * The earliest kickoff already known on each calendar date in a batch.
+ *
+ * The stand-in for a fixture the NFL has dated but not timed. It is derived from
+ * the game's own dated siblings — for 27 December 2026, the 13:00 ET Sunday
+ * slot — which is the earliest hour that fixture could possibly start.
+ *
+ * Derived rather than computed, deliberately. The obvious alternative is
+ * midnight on `gameDate` in US Eastern, and that means getting EST against EDT
+ * right by hand for a date months away. Hand-rolled calendar arithmetic has
+ * already cost this repo a live bug (`latestWeekly`, where a week was assumed to
+ * be 168 hours and is not across a clock change), and the sibling games carry
+ * the answer with no arithmetic at all.
+ *
+ * A date whose games are *all* untimed yields nothing, and those fixtures stay
+ * skipped. That keeps the change strictly additive: a game is only ever stored
+ * when its lock time comes from data.
+ */
+function earliestKickoffByDate(games: readonly ProviderGame[]): ReadonlyMap<string, number> {
+  const earliest = new Map<string, number>();
+
+  for (const game of games) {
+    if (game.kickoffTbd || game.gameDate === null || game.kickoffAt <= 0) continue;
+    const known = earliest.get(game.gameDate);
+    if (known === undefined || game.kickoffAt < known) {
+      earliest.set(game.gameDate, game.kickoffAt);
+    }
+  }
+
+  return earliest;
+}
+
+/**
  * Schedule.
  *
  * `kickoffAt` is the load-bearing field: lineup locks, the inactives job, and
  * the game watcher are all derived from it. A game whose kickoff the provider
- * did not supply is skipped rather than stored with a zero, which would lock
- * lineups at the epoch.
+ * did not supply is never stored with a zero, which would lock every lineup in
+ * it at the epoch.
+ *
+ * ## A missing time is no longer a missing fixture
+ *
+ * It used to be, and the cost was measured rather than theorised: on 2026-08-17
+ * the deployed database held 248 fixtures for weeks 1-17 against a correct 256,
+ * four short in **each of weeks 16 and 17** — the playoff and championship
+ * weeks. The NFL holds those kickoff times back for flex scheduling, so the
+ * provider sends the date and both teams with `gameTime: "TBD"`, and all of it
+ * was discarded for want of an hour. Players on those teams had no game, no stat
+ * line, and therefore a permanent zero, with `weekHasSchedule` answering true
+ * off the twelve games that did exist.
+ *
+ * Such a fixture is now stored with `kickoff_tbd` set and a **conservative**
+ * kickoff from `earliestKickoffByDate`. Locking early is the safe direction: it
+ * costs a manager some Sunday-morning flexibility, where the opposite error lets
+ * someone start a player after watching him score.
+ *
+ * Screens must read `kickoff_tbd` and not present that timestamp as fact — in
+ * particular, the clock passing it does not mean the game has started.
  */
 export async function syncGames(
   db: SqlClient,
@@ -165,24 +216,37 @@ export async function syncGames(
 ): Promise<SyncResult> {
   const ids = await loadSportIds(db, sportKey);
   const games = await provider.listGames(season, week);
+  const earliest = earliestKickoffByDate(games);
 
   let inserted = 0;
   let updated = 0;
   let skipped = 0;
 
   for (const game of games) {
-    if (!game.kickoffAt || !game.homeTeamRef || !game.awayTeamRef) {
+    if (!game.homeTeamRef || !game.awayTeamRef) {
+      skipped++;
+      continue;
+    }
+
+    // A real time wins outright. Otherwise stand in the earliest kickoff known
+    // on the same date, and only if there is one.
+    const standIn = game.gameDate === null ? undefined : earliest.get(game.gameDate);
+    const kickoffAt = game.kickoffAt > 0 ? game.kickoffAt : (standIn ?? 0);
+    const kickoffTbd = game.kickoffAt <= 0;
+
+    if (kickoffAt <= 0) {
       skipped++;
       continue;
     }
 
     const rows = await db.query<{ inserted: boolean }>(
       `INSERT INTO games
-         (sport_id, external_ref, season, week, home_team_ref, away_team_ref, kickoff_at, status, final_at)
-       VALUES ($1, $2, $3, $4, $5, $6, to_timestamp($7), $8, $9)
+         (sport_id, external_ref, season, week, home_team_ref, away_team_ref, kickoff_at, kickoff_tbd, status, final_at)
+       VALUES ($1, $2, $3, $4, $5, $6, to_timestamp($7), $8, $9, $10)
        ON CONFLICT (sport_id, external_ref) DO UPDATE
          SET week = EXCLUDED.week,
              kickoff_at = EXCLUDED.kickoff_at,
+             kickoff_tbd = EXCLUDED.kickoff_tbd,
              status = EXCLUDED.status,
              final_at = COALESCE(games.final_at, EXCLUDED.final_at)
        RETURNING (xmax = 0) AS inserted`,
@@ -193,7 +257,8 @@ export async function syncGames(
         game.week,
         game.homeTeamRef,
         game.awayTeamRef,
-        game.kickoffAt,
+        kickoffAt,
+        kickoffTbd,
         game.status,
         game.status === "FINAL" ? new Date().toISOString() : null,
       ],

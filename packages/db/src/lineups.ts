@@ -238,6 +238,72 @@ export async function loadKickoffs(
 }
 
 /**
+ * Each of these players' bye week this season, `null` where it is not recorded.
+ *
+ * ## Why this is not part of `loadKickoffs`
+ *
+ * That function is the single definition of when a slot freezes, and its own
+ * docstring is emphatic that widening it is how the lock bypass happened. A bye
+ * week decides nothing about locking — it only separates "resting" from "not yet
+ * dated" for the screen — so it is loaded alongside rather than folded in.
+ * Keeping them apart means a bug here can mislabel a row and cannot unlock one.
+ *
+ * Absent from the result means absent from `player_seasons`, which
+ * `gameAvailability` reads as a bye rather than as a fixture still to come.
+ */
+export async function loadByeWeeks(
+  db: SqlClient,
+  playerIds: readonly string[],
+  season: number,
+): Promise<ReadonlyMap<string, number | null>> {
+  if (playerIds.length === 0) return new Map();
+
+  const rows = await db.query<{ player_id: string; bye_week: number | null }>(
+    `SELECT player_id, bye_week
+       FROM player_seasons
+      WHERE season = $2 AND player_id = ANY($1)`,
+    [[...playerIds], season],
+  );
+
+  return new Map(
+    rows.map((row) => [row.player_id, row.bye_week === null ? null : Number(row.bye_week)]),
+  );
+}
+
+/**
+ * Which of these players' games this week carry a provisional kickoff.
+ *
+ * `games.kickoff_tbd`: the fixture and its date are known, the hour is not, and
+ * `kickoff_at` holds the earliest time it could start. Separate from
+ * `loadKickoffs` for the same reason `loadByeWeeks` is — that function is the
+ * lock oracle, and this one only decides what a screen says. The lock *should*
+ * use the conservative time exactly as stored, which is why it needs to know
+ * nothing about this.
+ */
+export async function loadTbdKickoffs(
+  db: SqlClient,
+  playerIds: readonly string[],
+  season: number,
+  week: number,
+): Promise<ReadonlySet<string>> {
+  if (playerIds.length === 0) return new Set();
+
+  const rows = await db.query<{ player_id: string }>(
+    `SELECT p.id AS player_id
+       FROM players p
+       JOIN games g
+         ON g.sport_id = p.sport_id
+        AND g.season = $2
+        AND g.week = $3
+        AND (g.home_team_ref = p.team_ref OR g.away_team_ref = p.team_ref)
+      WHERE p.id = ANY($1) AND g.kickoff_tbd`,
+    [[...playerIds], season, week],
+  );
+
+  return new Set(rows.map((row) => row.player_id));
+}
+
+/**
  * The earliest kickoff of the week, or `null` when the week has no games.
  *
  * The conservative lock time for a player whose team is nowhere in the schedule:

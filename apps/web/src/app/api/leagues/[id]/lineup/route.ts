@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import {
+  gameAvailability,
   indexScoringRules,
   scorePlayer,
   slotIsLocked,
@@ -12,10 +13,12 @@ import {
   getAutofillEnabled,
   LineupError,
   loadAverages,
+  loadByeWeeks,
   loadLineup,
   loadProjectedPoints,
   loadKickoffs,
   loadRosterForWeek,
+  loadTbdKickoffs,
   loadWeekStats,
   setAutofillEnabled,
   setLineup,
@@ -77,6 +80,14 @@ export async function GET(
       week,
     );
 
+    // Bye weeks, and which fixtures carry a stand-in kickoff. Both are loaded
+    // separately from the kickoffs above and deliberately so: `loadKickoffs` is
+    // the lock oracle and widening it is how the lock bypass happened. These
+    // only decide what the screen says, and can mislabel a row without
+    // unlocking one — the lock uses the conservative time exactly as stored.
+    const byeWeeks = await loadByeWeeks(client, [...roster.keys()], context.season);
+    const tbdKickoffs = await loadTbdKickoffs(client, [...roster.keys()], context.season, week);
+
     // Points so far this week, so a manager can see what their lineup is doing
     // while it is doing it.
     const stats = await loadWeekStats(client, NFL.key, context.season, week);
@@ -127,6 +138,19 @@ export async function GET(
         positions: player.positions,
         status: player.status,
         kickoffAt: player.kickoffAt,
+        /**
+         * How settled this player's week is. A bye, a fixture whose kickoff
+         * time the NFL has not fixed, and an ordinary game mean quite
+         * different things to someone choosing a lineup — and the first two
+         * are indistinguishable from a kickoff alone. The screen is told which
+         * it is rather than inferring "bye" from an absence.
+         */
+        availability: gameAvailability({
+          kickoffAt: player.kickoffAt,
+          kickoffTbd: tbdKickoffs.has(player.playerId),
+          byeWeek: byeWeeks.get(player.playerId) ?? null,
+          week,
+        }),
         milliPoints: scorePlayer(stats.get(player.playerId) ?? [], scoring),
         /**
          * This week's projection, under this league's own scoring. `null` when

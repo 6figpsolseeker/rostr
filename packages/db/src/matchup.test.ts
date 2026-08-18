@@ -274,14 +274,71 @@ describe("what is still to come", () => {
     // manager points are still coming when none are.
     const fx = await setup();
     await fx.client.query("UPDATE players SET team_ref = 'DEN' WHERE external_ref = 'qb-0'");
+    await recordBye(fx, "qb-0", WEEK);
 
     const views = await loadWeekMatchups(fx.client, fx.leagueId, WEEK, BEFORE);
     const side = sideOf(views, fx.teamIds[0]!);
 
     expect(side?.starters[0]?.gameState).toBe("BYE");
     expect(side?.yetToPlay).toBe(0);
+    expect(side?.unscheduled).toBe(0);
+  });
+
+  it("calls an undated fixture unscheduled, not a bye", async () => {
+    // The live case that prompted this: the NFL dates its late-December games
+    // last, `syncGames` skips a game with no kickoff time, and the player's team
+    // then looks exactly like a team on a bye. One means he cannot score and the
+    // other means he will — in the weeks that decide a championship.
+    const fx = await setup();
+    await fx.client.query("UPDATE players SET team_ref = 'DEN' WHERE external_ref = 'qb-0'");
+    await recordBye(fx, "qb-0", WEEK + 5);
+
+    const views = await loadWeekMatchups(fx.client, fx.leagueId, WEEK, BEFORE);
+    const side = sideOf(views, fx.teamIds[0]!);
+
+    expect(side?.starters[0]?.gameState).toBe("UNSCHEDULED");
+    expect(side?.unscheduled).toBe(1);
+  });
+
+  it("does not count an undated fixture as still to play", async () => {
+    // `yetToPlay` means "points are coming, at a known time". Folding an undated
+    // fixture into it would put a kickoff on a game that has none.
+    const fx = await setup();
+    await fx.client.query("UPDATE players SET team_ref = 'DEN' WHERE external_ref = 'qb-0'");
+    await recordBye(fx, "qb-0", WEEK + 5);
+
+    const views = await loadWeekMatchups(fx.client, fx.leagueId, WEEK, BEFORE);
+    const side = sideOf(views, fx.teamIds[0]!);
+
+    expect(side?.yetToPlay).toBe(0);
+    expect(side?.inProgress).toBe(0);
+  });
+
+  it("falls back to a bye when no bye week is recorded", async () => {
+    // Never claim a fixture is coming on the strength of a row we do not hold.
+    // A missing `player_seasons` row keeps the answer this screen gave before.
+    const fx = await setup();
+    await fx.client.query("UPDATE players SET team_ref = 'DEN' WHERE external_ref = 'qb-0'");
+
+    const views = await loadWeekMatchups(fx.client, fx.leagueId, WEEK, BEFORE);
+    const side = sideOf(views, fx.teamIds[0]!);
+
+    expect(side?.starters[0]?.gameState).toBe("BYE");
+    expect(side?.unscheduled).toBe(0);
   });
 });
+
+/** Give a player's team a bye week, which is what separates a bye from an
+ * undated fixture. */
+async function recordBye(fx: Fixture, handle: string, week: number): Promise<void> {
+  const playerId = fx.players.get(handle);
+  await fx.client.query(
+    `INSERT INTO player_seasons (player_id, season, team_ref, bye_week)
+     VALUES ($1, $2, 'DEN', $3)
+     ON CONFLICT (player_id, season) DO UPDATE SET bye_week = EXCLUDED.bye_week`,
+    [playerId, SEASON, week],
+  );
+}
 
 describe("a finalised week", () => {
   it("reports the stored total, not a fresh recompute", async () => {

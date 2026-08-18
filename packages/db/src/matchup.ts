@@ -27,7 +27,7 @@
  * every lineup lock is derived from.
  */
 
-import { indexScoringRules, scoreTeamLineup } from "@rostr/core";
+import { gameAvailability, indexScoringRules, scoreTeamLineup } from "@rostr/core";
 import type { PlayerScore, TeamLineup } from "@rostr/core";
 import type { SqlClient } from "./client.js";
 import { getLeagueRules } from "./leagues.js";
@@ -44,8 +44,18 @@ export class MatchupError extends Error {
   }
 }
 
-/** Where a player's game stands. Absent from the schedule reads as a bye. */
-export type PlayerGameState = "BYE" | "YET_TO_PLAY" | "IN_PROGRESS" | "FINAL";
+/**
+ * Where a player's game stands.
+ *
+ * `TIME_TBD` is a stored fixture whose hour the NFL has not fixed — the row
+ * carries a conservative stand-in kickoff, so the clock passing it must **not**
+ * read as the game having started. `UNSCHEDULED` is the weaker case: no row at
+ * all on a week that is not the team's bye. Both used to be indistinguishable
+ * from `BYE`, and a bye means the opposite thing to anyone deciding a lineup.
+ * See `gameAvailability` in `@rostr/core`.
+ */
+export type PlayerGameState =
+  "BYE" | "UNSCHEDULED" | "TIME_TBD" | "YET_TO_PLAY" | "IN_PROGRESS" | "FINAL";
 
 export interface PlayerLine {
   readonly playerId: string;
@@ -77,6 +87,15 @@ export interface MatchupSide {
   readonly yetToPlay: number;
   /** Starters whose game is under way. */
   readonly inProgress: number;
+  /**
+   * Starters whose fixture exists but has no kickoff time yet.
+   *
+   * Counted apart from `yetToPlay` rather than folded into it: that number is
+   * "points still to come, at a known time", and this one carries no time at
+   * all. Adding them would make a side with a fixture still awaiting its time
+   * look ready to play when nobody can say what hour it starts.
+   */
+  readonly unscheduled: number;
 }
 
 export interface MatchupView {
@@ -175,7 +194,7 @@ export async function loadWeekMatchups(
       const scored = scoreTeamLineup(lineup, stats, scoring, stored.rules.roster);
       const live = scored.milliPoints;
 
-      const lines = scored.players.map((player) => toLine(player, context, now));
+      const lines = scored.players.map((player) => toLine(player, context, week, now));
       const starters = lines.filter((line) => line.counted);
 
       // Final wins over live: the stored number is what the week was settled on.
@@ -191,6 +210,9 @@ export async function loadWeekMatchups(
         bench: lines.filter((line) => !line.counted),
         yetToPlay: starters.filter((line) => line.gameState === "YET_TO_PLAY").length,
         inProgress: starters.filter((line) => line.gameState === "IN_PROGRESS").length,
+        unscheduled: starters.filter(
+          (line) => line.gameState === "UNSCHEDULED" || line.gameState === "TIME_TBD",
+        ).length,
       };
     };
 
@@ -230,6 +252,11 @@ interface PlayerFacts {
   readonly position: string;
   readonly kickoffAt: Date | null;
   readonly gameStatus: string | null;
+  /** `games.kickoff_tbd` — the kickoff above is a conservative stand-in. */
+  readonly kickoffTbd: boolean;
+  /** This season's bye week, null when unrecorded. Separates a bye from a
+   * fixture whose kickoff time is not fixed yet. */
+  readonly byeWeek: number | null;
 }
 
 /**
@@ -250,12 +277,16 @@ async function playerContext(
     position: string;
     kickoff_at: string | null;
     status: string | null;
+    kickoff_tbd: boolean | null;
+    bye_week: number | null;
   }>(
     `SELECT DISTINCT p.id,
             p.full_name,
             pos.key AS position,
             g.kickoff_at,
-            g.status
+            g.status,
+            g.kickoff_tbd,
+            ps.bye_week
        FROM roster_entries r
        JOIN teams t ON t.id = r.team_id
        JOIN players p ON p.id = r.player_id
@@ -265,6 +296,9 @@ async function playerContext(
         AND g.season = $2
         AND g.week = $3
         AND (g.home_team_ref = p.team_ref OR g.away_team_ref = p.team_ref)
+       LEFT JOIN player_seasons ps
+         ON ps.player_id = p.id
+        AND ps.season = $2
       WHERE t.league_id = $1 AND r.released_at IS NULL`,
     [leagueId, season, week],
   );
@@ -277,6 +311,8 @@ async function playerContext(
         position: row.position,
         kickoffAt: row.kickoff_at ? new Date(row.kickoff_at) : null,
         gameStatus: row.status,
+        kickoffTbd: row.kickoff_tbd === true,
+        byeWeek: row.bye_week === null ? null : Number(row.bye_week),
       },
     ]),
   );
@@ -293,6 +329,7 @@ async function playerContext(
 function toLine(
   player: PlayerScore,
   context: ReadonlyMap<string, PlayerFacts>,
+  week: number,
   now: Date,
 ): PlayerLine {
   const facts = context.get(player.playerId);
@@ -304,18 +341,36 @@ function toLine(
     slot: player.slotType,
     milliPoints: player.milliPoints,
     counted: player.counted,
-    gameState: gameStateOf(facts, now),
+    gameState: gameStateOf(facts, week, now),
     kickoffAt: facts?.kickoffAt ?? null,
   };
 }
 
-function gameStateOf(facts: PlayerFacts | undefined, now: Date): PlayerGameState {
-  // No game in this week's schedule: a bye. His slot never locks and he cannot
-  // score, which the screen should say rather than showing a hopeful zero.
-  if (!facts || facts.kickoffAt === null) return "BYE";
+function gameStateOf(facts: PlayerFacts | undefined, week: number, now: Date): PlayerGameState {
+  // No game in this week's schedule, and there are two reasons for that. A bye
+  // means he cannot score, and the screen should say so rather than show a
+  // hopeful zero. A fixture awaiting its time means he will play and nobody yet
+  // knows at what hour — telling a manager the first when the second is true is
+  // what gets the player dropped in the week that decides the season.
+  if (!facts || facts.kickoffAt === null) {
+    const availability = gameAvailability({
+      kickoffAt: facts?.kickoffAt ?? null,
+      byeWeek: facts?.byeWeek ?? null,
+      week,
+    });
+    return availability === "UNSCHEDULED" ? "UNSCHEDULED" : "BYE";
+  }
 
   const status = (facts.gameStatus ?? "").toUpperCase();
   if (status === "FINAL") return "FINAL";
+
+  // A provisional kickoff is not a kickoff, and the clock passing it says
+  // nothing. `syncGames` stores the earliest hour the game could start, so a
+  // fixture actually played at 20:20 would otherwise read as under way from
+  // 13:00 — seven hours of a manager being told a game is live before it has
+  // begun, in the week the season is decided. The provider's own status is
+  // still believed, so this resolves itself the moment the game really starts.
+  if (facts.kickoffTbd && status !== "IN_PROGRESS") return "TIME_TBD";
 
   // The clock decides when the provider has not spoken. Kickoff has passed and
   // the game is not final, so it is under way — a player sitting on zero at
