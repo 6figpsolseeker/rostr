@@ -258,7 +258,7 @@ above are what make that tolerable.
 **Blocks:** gameday inactives, and the independent second oracle source that settlement
 requires.
 **Needed by:** inactives matter from **Week 1 (Sep 9)**; the oracle role matters from
-**Week 14 (Dec 13)**, the first paying week.
+**Week 14 (Dec 13)**, the first week that decides a prize.
 **Cost:** $99–149/month self-serve.
 
 One line item, two jobs. Tank01 refreshes injuries hourly, which is fine for weekly injury
@@ -325,8 +325,13 @@ costume.
       control bricks upgradeability instantly and irreversibly.
 - [ ] At mainnet deploy:
       `solana program set-upgrade-authority <PROGRAM_ID> --new-upgrade-authority <VAULT>`
-- [ ] **Before Dec 13 (Week 14, the first payout):** burn it — set the upgrade authority to
-      `None`. The program becomes immutable.
+- [ ] **Before the January settlement (~11 Jan 2027, the only payout):** burn it — set the
+      upgrade authority to `None`. The program becomes immutable.
+
+That last deadline used to read "before Dec 13 (Week 14, the first payout)". Every prize is
+now paid once, after the championship (`docs/RULES.md` §7), so Week 14 moves no money and
+that date described nothing. The anchor is unchanged — the last moment before the vault can
+be drained — it has simply moved by a month.
 
 #### Two things to be honest about
 

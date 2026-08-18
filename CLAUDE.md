@@ -31,7 +31,7 @@ Today's date matters more than usual here.
 | **Sep 9 2026**  | **NFL kickoff.** Lineups lock, scoring runs, matchups resolve |
 | Sep 16          | Waivers (Week 2)                                              |
 | Nov 22          | Trade deadline (Week 11)                                      |
-| Dec 13          | First real payout — regular-season prize (Week 14)            |
+| Dec 13          | Regular-season prize **decided** (Week 14). Paid in January   |
 | Jan 3 2027      | Championship (Week 17)                                        |
 | Jan 10 2027     | Final payouts, after the 7-day correction window              |
 

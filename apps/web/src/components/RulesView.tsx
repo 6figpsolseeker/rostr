@@ -306,7 +306,16 @@ function Governance({ rules }: { rules: LeagueRules }) {
           label="Paying weeks finalise after"
           value={`${rules.settlement.payingFinalizationHours}h`}
         />
-        <Row label="Paying weeks" value={rules.settlement.payingWeeks.join(", ")} />
+        {/*
+          Labelled by what the field does rather than by its name. Every prize is
+          paid once, after the championship — these are the weeks that *decide*
+          one and therefore wait the full stat-correction window. "Paying weeks"
+          above a join button would promise money moving in December.
+        */}
+        <Row
+          label="Weeks that wait for stat corrections"
+          value={rules.settlement.payingWeeks.join(", ")}
+        />
       </div>
     </Section>
   );

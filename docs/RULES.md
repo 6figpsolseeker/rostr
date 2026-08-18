@@ -530,17 +530,34 @@ else, and in both the champion holds the largest single share.
 
 **Split (default)**
 
-| Prize                      | Share   | Settles |
-| -------------------------- | ------- | ------- |
-| **Champion**               | **70%** | Week 17 |
-| Runner-up                  | 20%     | Week 17 |
-| Regular-season best record | 10%     | Week 14 |
+| Prize                      | Share   | Decided by | Paid    |
+| -------------------------- | ------- | ---------- | ------- |
+| **Champion**               | **70%** | Week 17    | Week 17 |
+| Runner-up                  | 20%     | Week 17    | Week 17 |
+| Regular-season best record | 10%     | Week 14    | Week 17 |
 
 **Winner takes all**
 
-| Prize        | Share    | Settles |
-| ------------ | -------- | ------- |
-| **Champion** | **100%** | Week 17 |
+| Prize        | Share    | Decided by | Paid    |
+| ------------ | -------- | ---------- | ------- |
+| **Champion** | **100%** | Week 17    | Week 17 |
+
+**Every prize is paid once, together, after the championship settles.** The
+regular-season prize is _decided_ in Week 14 and _paid_ in January with the rest — decided
+by then in the sense that matters, since the standings become final once Week 14's
+correction window closes and nothing afterwards can move them.
+
+This table used to say the regular-season prize settled in Week 14, and the change is
+deliberate rather than a slip. **The contract pays in one transaction**, because a payout
+split across several is how the vault ends up half-drained: a partial settlement leaves the
+last members unable to take the timelock refund, permanently, and that refund is the
+guarantee everything else here rests on. One transaction cannot pay a prize in December and
+another in January, and the champion is not derivable until the Week 17 game finalises. So
+the choice was two payouts with a way for money to become stuck, or one payout a month
+later, and this is the second.
+
+Nothing about the _result_ moves. The best regular-season record is still whoever held it
+after Week 14, settled on Week 14's final numbers.
 
 **Why no consolation or third-place share.** Both prizes depend on how many people
 joined — a consolation bracket needs at least two teams left over, a third-place game
@@ -568,15 +585,20 @@ Finalisation is **two-tier**, because the NFL issues official stat corrections f
 **seven days** after a game and a reclassified fumble can flip a matchup long after it
 looked settled:
 
-| Week                                                    | Provisional | Final        | Why                                                                                                                                                |
-| ------------------------------------------------------- | ----------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Regular season 1–13, playoffs 15–16                     | immediately | **T+48h**    | No funds move. The bracket advances only on finalised results, so a correction inside the window restates the round _before_ the next one is laid. |
-| **Week 14** (regular-season prize)                      | immediately | **T+7 days** | Money moves. Must outlast the correction window.                                                                                                   |
-| **Week 17** (championship, runner-up, 3rd, consolation) | immediately | **T+7 days** | Money moves. Must outlast the correction window.                                                                                                   |
+| Week                                  | Provisional | Final        | Why                                                                                                                                                     |
+| ------------------------------------- | ----------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Regular season 1–13, playoffs 15–16   | immediately | **T+48h**    | Nothing is decided. The bracket advances only on finalised results, so a correction inside the window restates the round _before_ the next one is laid. |
+| **Week 14** (regular-season prize)    | immediately | **T+7 days** | **Decides a prize.** Must outlast the correction window, even though the money moves later.                                                             |
+| **Week 17** (championship, runner-up) | immediately | **T+7 days** | Decides a prize, and is the week the money moves.                                                                                                       |
 
-Any week that pays out waits the full seven days. Weeks that only affect standings
-finalise in 48 hours so the season keeps moving. A correction arriving after a paying
-week has finalised does not reopen it — the seven days exist precisely so that never
+**The long window follows what a week decides, not when it pays.** Week 14 settles the
+best regular-season record and is paid in January with everything else, and it still waits
+the full seven days — because once it finalises it is never rescored, so a correction
+arriving on day three would otherwise land after the prize was fixed. Shortening it to 48
+hours would decide 10% of the pot on numbers that were still provisional.
+
+Weeks that decide nothing finalise in 48 hours so the season keeps moving. A correction
+arriving after a deciding week has finalised does not reopen it — the seven days exist precisely so that never
 needs to happen.
 
 ---

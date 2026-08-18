@@ -328,7 +328,22 @@ export type SettlementRules = {
    * stat-correction window, which runs to seven days.
    */
   readonly payingFinalizationHours: number;
-  /** Weeks that trigger a payout, and therefore wait the longer window. */
+  /**
+   * Weeks that **decide** a prize, and therefore wait the longer window.
+   *
+   * The name predates the decision to pay everything once, after the
+   * championship (`docs/RULES.md` §7), and it is kept rather than corrected
+   * because renaming a field in the hashed rule set moves the golden hash for a
+   * word. What it has always actually controlled is `finalizationHours` — the
+   * 168-hour correction window — and nothing else; there is no payout for it to
+   * trigger and never has been.
+   *
+   * **Week 14 stays in this list even though no money moves then.** It settles
+   * the best regular-season record, a finalised week is never rescored, and a
+   * stat correction arrives for up to seven days — so dropping it to 48 hours
+   * would fix 10% of the pot on numbers that were still provisional. The window
+   * follows what a week decides, not when it pays.
+   */
   readonly payingWeeks: readonly number[];
 };
 

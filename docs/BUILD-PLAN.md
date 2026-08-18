@@ -41,7 +41,7 @@ to change after the fact.
 | Sep 16     | 2    | Waivers                                                 |
 | Sep 20     | 2–3  | Trades + veto                                           |
 | Nov 22     | 11   | Trade deadline enforcement                              |
-| Dec 13     | 14   | Regular-season prize settles — **first real payout**    |
+| Dec 13     | 14   | Regular-season prize **decided**. Paid with the rest    |
 | Dec 16     | 15   | Playoff + consolation brackets                          |
 | Jan 3      | 17   | Championship                                            |
 | Jan 10     | —    | Final payouts (7-day correction window)                 |

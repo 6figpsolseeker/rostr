@@ -573,7 +573,7 @@ async function finalizationHold(
       hold:
         `waiting until ${clearsAt.toISOString()} — ${hours}h after the last kickoff` +
         (paying
-          ? ", because this week pays out and NFL stat corrections arrive for up to seven days"
+          ? ", because this week decides a prize and NFL stat corrections arrive for up to seven days"
           : ""),
     };
   }

@@ -314,27 +314,48 @@ still be legal in January. So:
 **Payout must require `league.started` as well as refusing at `refund_unlock_at`.** One
 line, and the first draft would have shipped without it.
 
-### Atomic, and the `payingWeeks` conflict it creates
+### Atomic — decided 2026-08-17, and it cost a promise rather than a field
+
+**One payout, after the championship.** The owner chose this over two payouts; what follows
+records why the question arose and what it moved.
 
 PR #31 split fee and prize; a fee-only drain left the vault unable to satisfy the last
 member's refund forever, and `payout_prize` zeroed `total_deposited` so a later
 `refund_stake` underflowed on `checked_sub`. A resumable multi-instruction payout recreates
-that hazard exactly.
+that hazard exactly, and the unconditional refund is the guarantee everything else rests on.
 
-But **atomic collides with a signed rule.** `payingWeeks: [14, 17]`
-(`packages/core/src/rules/types.ts:332`, default `nfl-ppr.ts:177`) is in the hashed document,
-and `RULES.md` renders "Regular-season best record | 10% | **Week 14**". The champion is not
-derivable until January, so an atomic payout settles the Week-14 prize ~3½ weeks late for
-every league — a signed field the settlement code contradicts, with no amendment path.
+So the trade was **two payouts with a way for money to become permanently stuck, or one
+payout a month later**, and one payout won.
 
-It also **de-anchors G10**, whose deadline both `BUILD-PLAN.md` and `SETUP-REQUIRED.md`
-define as "before Week 14 pays out". If Week 14 never pays out, the most irreversible
-operation in the plan has no date.
+The cost is a date in `RULES.md` §7, which said the regular-season prize settled in Week 14.
+It is now decided in Week 14 and paid in January with the rest. Nothing about the _result_
+moves — the best record is still whoever held it after Week 14, on Week 14's final numbers.
 
-**Unresolved.** Either two payouts with the underflow hazard solved explicitly, or
-`payingWeeks` and `RULES.md` §7's table change before leagues exist that signed them. This
-is the one open item with a real deadline, and the deadline is the first funded league, not
-Aug 22.
+**And the field it looked like this would cost turned out not to be involved.**
+`payingWeeks: [14, 17]` reads like a payout trigger and is not one: its only use is
+`finalizationHours`, the 168-hour correction window. Week 14 stays in the list — it decides
+a prize, a finalised week is never rescored, and dropping it to 48 hours would fix 10% of the
+pot on numbers still inside the correction window. **The long window follows what a week
+decides, not when it pays.** No schema move, no hash move, no rule value changed.
+
+Two knock-ons, both handled: `RulesView` labelled the field "Paying weeks" above the join
+control, which would have promised money moving in December; and `SETUP-REQUIRED.md`
+anchored the G10 upgrade-authority burn to "before Dec 13, the first payout", a deadline
+that no longer described anything. It is now the January settlement — the same event, the
+last moment before the vault can be drained, moved by a month.
+
+### What the first analysis got wrong here
+
+It called this a collision with a **signed rule** — `payingWeeks` in the hashed document
+against an atomic payout — and said the fix was to change the rule before any league signed
+it. Reading the code showed the field is not what it looks like: it triggers no payout, it
+only picks the finalisation window, and there was no conflict to resolve in the rule set at
+all. What actually needed changing was a sentence in `RULES.md` and a label above the join
+control.
+
+Worth recording because the wrong version was the plausible one. A field called
+`payingWeeks` sitting next to a payout question reads as the payout trigger, and the whole
+argument for changing it followed from not checking.
 
 ### Pay the member set, never a fraction of the vault
 
@@ -436,8 +457,9 @@ Two consequences worth stating rather than discovering:
 
 ## 9. Open decisions
 
-1. **`payingWeeks`** — two payouts, or change the signed rule and `RULES.md` §7's table.
-   The only item whose window closes at the first funded league. (§7)
+1. ~~**`payingWeeks`**~~ — **resolved 2026-08-17: one payout, after the championship.** The
+   owner's call. It cost a date in `RULES.md` §7 and no rule value, no schema move and no
+   hash move — see §7. Nothing here now has a window that closes.
 2. **Squads vault as `settlement_oracle`** — verify it works, then decide. It is the
    difference between "lost key means a dead league" and "lost key means re-key". (§6)
 3. ~~**The tiebreaker chain and playoff shape on-chain**~~ — **resolved**, see §8a. They
