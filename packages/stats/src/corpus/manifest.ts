@@ -61,6 +61,22 @@ export interface ManifestGame {
   readonly espnTypeDisagreements?: readonly {
     readonly text: string;
     readonly reason: string;
+    /**
+     * The issue tracking it, where there is one.
+     *
+     * **Optional, unlike everywhere else here, and the asymmetry is deliberate.**
+     * A Sleeper disagreement asserts that one of two feeds is wrong about
+     * something that happened on a field, so there is always a fact in dispute
+     * and always something to track. An ESPN type disagreement is two
+     * serialisations of the *same* event disagreeing about what to call it —
+     * `BP` against a null `scoringType` — which may be nothing more than a
+     * filing convention, with no defect to open a ticket for. Forcing a number
+     * here would mean inventing one, and a wrong issue link is worse than none.
+     *
+     * The `reason` is **not** optional: an exception nobody justified is one
+     * nobody can review.
+     */
+    readonly issue?: number;
   }[];
 }
 
@@ -135,6 +151,17 @@ export function manifestProblems(
     if (seen.has(game.gameRef)) problems.push(`${game.gameRef} appears twice`);
     seen.add(game.gameRef);
 
+    // The same rule the Sleeper exceptions follow. A type disagreement is
+    // declared in order to *suppress* a comparison, and a suppression with a
+    // blank justification is indistinguishable from one nobody thought about.
+    for (const entry of game.espnTypeDisagreements ?? []) {
+      const where = `${game.gameRef} espn type disagreement "${entry.text}"`;
+      if (!entry.reason.trim()) problems.push(`${where} has no reason`);
+      if (entry.issue !== undefined && (!Number.isInteger(entry.issue) || entry.issue <= 0)) {
+        problems.push(`${where} has an issue number that is not one`);
+      }
+    }
+
     if (!game.why.trim()) problems.push(`${game.gameRef} has no "why"`);
     if (game.classes.length === 0) {
       problems.push(
@@ -157,8 +184,16 @@ export function manifestProblems(
     }
   }
 
+  // Two rows for one subject are validated twice and otherwise silent, and the
+  // pair would then compete to explain the same comparison — the survivor being
+  // whichever the staleness check happened to match first.
+  const declaredSubjects = new Set<string>();
+
   for (const entry of manifest.knownDisagreements) {
     const where = `${entry.gameRef} ${entry.subject}`;
+    if (declaredSubjects.has(where)) problems.push(`disagreement ${where} is declared twice`);
+    declaredSubjects.add(where);
+
     if (!seen.has(entry.gameRef)) problems.push(`disagreement ${where} names no corpus game`);
     if (!entry.reason.trim()) problems.push(`disagreement ${where} has no reason`);
     if (!Number.isInteger(entry.issue) || entry.issue <= 0) {
@@ -167,9 +202,26 @@ export function manifestProblems(
     if (entry.kind !== "DEFECT" && entry.kind !== "DELIBERATE") {
       problems.push(`disagreement ${where} does not say whether it is a defect or a decision`);
     }
+    // Milli-points, so integers — the repo-wide rule that nothing near scoring is
+    // a float. A fractional value here would be pinned, compared against a real
+    // total that can never equal it, and report as a moved gap forever.
+    for (const [label, value] of [
+      ["ourMilliPoints", entry.ourMilliPoints],
+      ["sleeperMilliPoints", entry.sleeperMilliPoints],
+    ] as const) {
+      if (!Number.isInteger(value)) {
+        problems.push(`disagreement ${where} has a non-integer ${label}`);
+      }
+    }
   }
 
+  const declaredUnjoinable = new Set<string>();
   for (const entry of manifest.unjoinable) {
+    if (declaredUnjoinable.has(entry.ref)) {
+      problems.push(`unjoinable ${entry.ref} is declared twice`);
+    }
+    declaredUnjoinable.add(entry.ref);
+
     if (!entry.reason.trim()) problems.push(`unjoinable ${entry.ref} has no reason`);
     if (!Number.isInteger(entry.issue) || entry.issue <= 0) {
       problems.push(`unjoinable ${entry.ref} has no issue number`);
