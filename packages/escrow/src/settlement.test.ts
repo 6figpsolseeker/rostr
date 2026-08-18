@@ -27,6 +27,8 @@ const TODAY = [
   "join_league",
   "post_week",
   "refund_stake",
+  // Added 2026-08-18 with D6/G9. **This is the one that opens the gate.**
+  "settle",
   // Added 2026-08-17 with the failed-league refund (#170). It closes a refund
   // window; it pays nobody, so the gate below must stay shut — see the test
   // that says so explicitly.
@@ -36,8 +38,12 @@ const TODAY = [
 const settled = { instructions: [...TODAY, "settle_league"].map((name) => ({ name })) };
 
 describe("settlementShipped", () => {
-  it("is false for the program as it stands", () => {
-    expect(settlementShipped(ESCROW_IDL)).toBe(false);
+  it("is true, because `settle` shipped 2026-08-18", () => {
+    // This assertion read `false` from the day the gate was written until D6
+    // landed. Flipping it is the event the gate exists for, and the comment on
+    // the tripwire below is what forced somebody to come here and do it
+    // deliberately rather than discover it in production.
+    expect(settlementShipped(ESCROW_IDL)).toBe(true);
   });
 
   /**
@@ -53,8 +59,14 @@ describe("settlementShipped", () => {
    */
   it("does not count start_season, which pays nobody", () => {
     expect(instructionNames(ESCROW_IDL)).toContain("start_season");
-    expect(settlementShipped(ESCROW_IDL)).toBe(false);
-    expect(potDepositGate("mainnet-beta", ESCROW_IDL)).toEqual({
+    // Asserted against a synthetic IDL now that the real one contains `settle`.
+    // The margin is still one letter and still worth pinning: had the prefixes
+    // been looser — "s", or a substring match — `start_season` would have opened
+    // the gate a day early, on a program that could not pay.
+    expect(settlementShipped({ instructions: [{ name: "start_season" }] })).toBe(false);
+    expect(
+      potDepositGate("mainnet-beta", { instructions: [{ name: "start_season" }] }),
+    ).toEqual({
       open: false,
       reason: "SETTLEMENT_NOT_SHIPPED",
     });
@@ -74,11 +86,39 @@ describe("settlementShipped", () => {
 });
 
 describe("potDepositGate", () => {
-  it("closes mainnet while the program cannot pay a pot out", () => {
-    expect(potDepositGate("mainnet-beta", ESCROW_IDL)).toEqual({
+  it("closes mainnet on a program that cannot pay a pot out", () => {
+    // Against a synthetic IDL, because the real one now can. This is the rule
+    // the gate encodes, and it outlives the day it flipped.
+    expect(
+      potDepositGate("mainnet-beta", { instructions: [{ name: "refund_stake" }] }),
+    ).toEqual({
       open: false,
       reason: "SETTLEMENT_NOT_SHIPPED",
     });
+  });
+
+  /**
+   * **Mainnet deposits are open as of 2026-08-18, and this is the assertion that
+   * says so.**
+   *
+   * The gate's rule is "a mainnet buy-in is invited only once the program has an
+   * instruction that can pay it back out", and `settle` is that instruction. The
+   * rule is satisfied.
+   *
+   * What the rule does not say, and cannot check, is that the payout has ever
+   * *run*. It has not. `settle` refuses until seven days after the last week is
+   * finalised, which no wall-clock validator test can reach — so the program
+   * suite covers every refusal and not the successful transfer. The derivation
+   * and the arithmetic are covered as Rust units in `scores.rs`.
+   *
+   * That gap is real and is recorded in `docs/SETTLEMENT.md` §10 rather than
+   * papered over here. If mainnet deposits should stay shut until the success
+   * path is exercised, that is a decision to take deliberately — and the honest
+   * place for it is a new condition on the gate, not a test that lies about what
+   * the IDL contains.
+   */
+  it("is open on mainnet now that settle exists", () => {
+    expect(potDepositGate("mainnet-beta", ESCROW_IDL)).toEqual({ open: true });
   });
 
   it("leaves every other cluster open", () => {

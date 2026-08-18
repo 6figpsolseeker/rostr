@@ -754,6 +754,137 @@ export type RostrEscrow = {
       "args": []
     },
     {
+      "name": "settle",
+      "docs": [
+        "Pay the prizes, once, from scores nobody may still dispute.",
+        "",
+        "**The first instruction in this program that spends the vault on",
+        "anything but a refund**, and therefore the one that opens",
+        "`potDepositGate` — see `packages/escrow/src/settlement.ts`, which",
+        "recognises settlement by the name of this instruction.",
+        "",
+        "It takes no argument naming a team, a wallet or an amount. Every",
+        "recipient is derived from the posted scores. See `scores::settle`."
+      ],
+      "discriminator": [
+        175,
+        42,
+        185,
+        87,
+        144,
+        131,
+        102,
+        212
+      ],
+      "accounts": [
+        {
+          "name": "league",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  101,
+                  97,
+                  103,
+                  117,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "league.league_id",
+                "account": "league"
+              }
+            ]
+          }
+        },
+        {
+          "name": "scores",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  99,
+                  111,
+                  114,
+                  101,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "league"
+              }
+            ]
+          }
+        },
+        {
+          "name": "oracle",
+          "docs": [
+            "Signed, and it authorises nothing about the result — see the docs below."
+          ],
+          "signer": true,
+          "relations": [
+            "scores"
+          ]
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "league"
+              }
+            ]
+          }
+        },
+        {
+          "name": "championTokens",
+          "writable": true
+        },
+        {
+          "name": "runnerUpTokens",
+          "writable": true
+        },
+        {
+          "name": "regularSeasonTokens",
+          "writable": true
+        },
+        {
+          "name": "feeTokens",
+          "docs": [
+            "Where the protocol fee goes. Required even at `fee_bps == 0`, where",
+            "nothing is sent to it — one account list is easier to get right than two,",
+            "and a zero transfer is skipped rather than issued."
+          ],
+          "writable": true
+        },
+        {
+          "name": "tokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "startSeason",
       "docs": [
         "Declare that this league's season has begun, closing the failed-league",
@@ -1118,6 +1249,61 @@ export type RostrEscrow = {
       "code": 6047,
       "name": "oracleMissing",
       "msg": "A league whose scores nobody may post could never be settled"
+    },
+    {
+      "code": 6048,
+      "name": "alreadySettled",
+      "msg": "This league has already been settled"
+    },
+    {
+      "code": 6049,
+      "name": "seasonNotStarted",
+      "msg": "A season that never started cannot be settled"
+    },
+    {
+      "code": 6050,
+      "name": "refundWindowOpen",
+      "msg": "The refund window is open, so the pot is no longer this program's to distribute"
+    },
+    {
+      "code": 6051,
+      "name": "noWeekFinalised",
+      "msg": "No week has been finalised, so there is nothing settled to pay from"
+    },
+    {
+      "code": 6052,
+      "name": "settlementHeld",
+      "msg": "Settlement is held until the review window after the last finalised week"
+    },
+    {
+      "code": 6053,
+      "name": "weekNotFinal",
+      "msg": "A week the result depends on has not been finalised"
+    },
+    {
+      "code": 6054,
+      "name": "prizeNotDerivable",
+      "msg": "This payout names a prize the program cannot derive"
+    },
+    {
+      "code": 6055,
+      "name": "bracketUnresolved",
+      "msg": "The bracket has not resolved, so there is no champion"
+    },
+    {
+      "code": 6056,
+      "name": "vaultShort",
+      "msg": "The vault does not hold this league's pot"
+    },
+    {
+      "code": 6057,
+      "name": "payoutExceedsPot",
+      "msg": "The payout shares exceed the pot"
+    },
+    {
+      "code": 6058,
+      "name": "wrongPrizeAccount",
+      "msg": "A prize account does not belong to the team that won it"
     }
   ],
   "types": [
@@ -1248,6 +1434,10 @@ export type RostrEscrow = {
           },
           {
             "name": "regularSeasonWeeks",
+            "type": "u8"
+          },
+          {
+            "name": "playoffTeams",
             "type": "u8"
           },
           {
@@ -1563,6 +1753,10 @@ export type RostrEscrow = {
             "type": "u8"
           },
           {
+            "name": "playoffTeams",
+            "type": "u8"
+          },
+          {
             "name": "firstRoundByes",
             "type": "u8"
           },
@@ -1591,6 +1785,10 @@ export type RostrEscrow = {
               "Bit `w` set means week `w + 1` has been finalised and can never change."
             ],
             "type": "u32"
+          },
+          {
+            "name": "settled",
+            "type": "bool"
           },
           {
             "name": "lastFinalizedAt",

@@ -100,6 +100,10 @@ const defaultScoresArgs = (oracle: anchor.web3.PublicKey, teamIds: number[][]) =
   tiebreakers: Buffer.from([0, 1, 2, 3, 4]),
   playoffWeeks: Buffer.from([15, 16, 17]),
   regularSeasonWeeks: 14,
+  // Stored rather than derived: the bye count is a function of the field size
+  // and that function is not invertible, so `settle` has no way to reconstruct
+  // the bracket field without it.
+  playoffTeams: 2,
   firstRoundByes: 0,
   thirdPlace: false,
 });

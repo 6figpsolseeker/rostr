@@ -629,6 +629,19 @@ pub mod rostr_escrow {
     pub fn finalize_week(ctx: Context<PostWeek>, week: u8) -> Result<()> {
         scores::finalize_week(ctx, week)
     }
+
+    /// Pay the prizes, once, from scores nobody may still dispute.
+    ///
+    /// **The first instruction in this program that spends the vault on
+    /// anything but a refund**, and therefore the one that opens
+    /// `potDepositGate` — see `packages/escrow/src/settlement.ts`, which
+    /// recognises settlement by the name of this instruction.
+    ///
+    /// It takes no argument naming a team, a wallet or an amount. Every
+    /// recipient is derived from the posted scores. See `scores::settle`.
+    pub fn settle(ctx: Context<Settle>) -> Result<()> {
+        scores::settle(ctx)
+    }
 }
 
 /// The terms of a league, frozen at creation.
@@ -1105,4 +1118,26 @@ pub enum EscrowError {
     OracleIsCommissioner,
     #[msg("A league whose scores nobody may post could never be settled")]
     OracleMissing,
+    #[msg("This league has already been settled")]
+    AlreadySettled,
+    #[msg("A season that never started cannot be settled")]
+    SeasonNotStarted,
+    #[msg("The refund window is open, so the pot is no longer this program's to distribute")]
+    RefundWindowOpen,
+    #[msg("No week has been finalised, so there is nothing settled to pay from")]
+    NoWeekFinalised,
+    #[msg("Settlement is held until the review window after the last finalised week")]
+    SettlementHeld,
+    #[msg("A week the result depends on has not been finalised")]
+    WeekNotFinal,
+    #[msg("This payout names a prize the program cannot derive")]
+    PrizeNotDerivable,
+    #[msg("The bracket has not resolved, so there is no champion")]
+    BracketUnresolved,
+    #[msg("The vault does not hold this league's pot")]
+    VaultShort,
+    #[msg("The payout shares exceed the pot")]
+    PayoutExceedsPot,
+    #[msg("A prize account does not belong to the team that won it")]
+    WrongPrizeAccount,
 }

@@ -45,9 +45,11 @@
 //! `SETTLEMENT_HOLD_SECONDS`.
 
 use anchor_lang::prelude::*;
+use anchor_spl::token::{self, Token, TokenAccount, Transfer};
 
-use crate::derive::{MAX_TEAMS, MAX_WEEKS};
-use crate::{EscrowError, League, Membership};
+use crate::bracket::{build_bracket, PlayoffResult};
+use crate::derive::{compute_standings, GameResult, Tiebreaker, MAX_TEAMS, MAX_WEEKS};
+use crate::{prize, EscrowError, League, Membership, BASIS_POINTS_TOTAL, PRIZE_COUNT};
 
 /// Most games one week can hold: everybody paired, nobody idle.
 pub const MAX_GAMES_PER_WEEK: usize = MAX_TEAMS / 2;
@@ -147,6 +149,14 @@ pub struct Scores {
     pub playoff_weeks: Vec<u8>,
     /// Weeks 1..=this are the regular season, and only those feed the seeding.
     pub regular_season_weeks: u8,
+    // How many top seeds reach the playoff bracket.
+    //
+    // **Not derivable from `first_round_byes`**, which is why it is stored
+    // rather than computed. The bye count is a function of the field size and
+    // that function is not invertible — two byes could mean a six-team field
+    // that signed `byeSeeds: 2`, or a derived count for some other size. The
+    // bracket needs the field, so the field has to be here.
+    pub playoff_teams: u8,
     pub first_round_byes: u8,
     pub third_place: bool,
 
@@ -156,6 +166,14 @@ pub struct Scores {
 
     /// Bit `w` set means week `w + 1` has been finalised and can never change.
     pub finalized_weeks: u32,
+
+    // Set once by `settle`, and the reason a pot cannot be paid twice.
+    //
+    // It lives here rather than on `League` because `League`'s layout is frozen
+    // and this account is not — the same reason every other settlement term is
+    // here. `Scores` is created once per league and never closed, so a flag on
+    // it is as permanent as one on `League` would have been.
+    pub settled: bool,
 
     /// When the most recent week was finalised. Zero until one is.
     ///
@@ -201,6 +219,7 @@ pub struct InitializeScoresArgs {
     pub tiebreakers: Vec<u8>,
     pub playoff_weeks: Vec<u8>,
     pub regular_season_weeks: u8,
+    pub playoff_teams: u8,
     pub first_round_byes: u8,
     pub third_place: bool,
 }
@@ -279,6 +298,9 @@ pub fn initialize_scores(ctx: Context<InitializeScores>, args: InitializeScoresA
         (args.first_round_byes as usize) < count,
         EscrowError::FieldTooSmall
     );
+    // The bracket field is the top seeds, capped by how many teams there are.
+    // Below two there is no game to play and no champion to derive.
+    require!(args.playoff_teams >= 2, EscrowError::FieldTooSmall);
     /*
       And the oracle is not the commissioner.
 
@@ -375,11 +397,13 @@ pub fn initialize_scores(ctx: Context<InitializeScores>, args: InitializeScoresA
     scores.tiebreakers = args.tiebreakers;
     scores.playoff_weeks = args.playoff_weeks;
     scores.regular_season_weeks = args.regular_season_weeks;
+    scores.playoff_teams = args.playoff_teams;
     scores.first_round_byes = args.first_round_byes;
     scores.third_place = args.third_place;
     scores.games = vec![Vec::new(); MAX_WEEKS];
     scores.finalized_weeks = 0;
     scores.last_finalized_at = 0;
+    scores.settled = false;
 
     Ok(())
 }
@@ -418,4 +442,551 @@ pub fn finalize_week(ctx: Context<PostWeek>, week: u8) -> Result<()> {
     // which somebody can notice it.
     scores.last_finalized_at = now;
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Settlement — D6/G9
+// ---------------------------------------------------------------------------
+
+/// The prizes this program can derive, and therefore the only ones it can pay.
+///
+/// Champion, runner-up and best regular-season record: all three are decidable
+/// in a league of any size, which is why `docs/RULES.md` §7's two built-in
+/// payouts name exactly these. Consolation and third place are not — they depend
+/// on how many people joined, and the payout is frozen before anyone does — so a
+/// league whose split pays either is refused here rather than paid wrongly. Its
+/// members take the timelock refund, which is the correct failure and the one
+/// `validateLeagueRules` cannot prevent, since the field size is unknown at
+/// creation.
+fn payable(payout_bps: &[u16; PRIZE_COUNT]) -> Result<()> {
+    require!(
+        payout_bps[prize::CONSOLATION] == 0 && payout_bps[prize::THIRD_PLACE] == 0,
+        EscrowError::PrizeNotDerivable
+    );
+    Ok(())
+}
+
+#[derive(Accounts)]
+pub struct Settle<'info> {
+    #[account(
+        mut,
+        seeds = [b"league", league.league_id.as_ref()],
+        bump = league.bump,
+    )]
+    pub league: Box<Account<'info, League>>,
+
+    #[account(
+        mut,
+        seeds = [b"scores", league.key().as_ref()],
+        bump = scores.bump,
+        has_one = oracle @ EscrowError::NotTheOracle,
+    )]
+    pub scores: Box<Account<'info, Scores>>,
+
+    /// Signed, and it authorises nothing about the result — see the docs below.
+    pub oracle: Signer<'info>,
+
+    #[account(mut, seeds = [b"vault", league.key().as_ref()], bump)]
+    pub vault: Box<Account<'info, TokenAccount>>,
+
+    #[account(mut)]
+    pub champion_tokens: Box<Account<'info, TokenAccount>>,
+    #[account(mut)]
+    pub runner_up_tokens: Box<Account<'info, TokenAccount>>,
+    #[account(mut)]
+    pub regular_season_tokens: Box<Account<'info, TokenAccount>>,
+    /// Where the protocol fee goes. Required even at `fee_bps == 0`, where
+    /// nothing is sent to it — one account list is easier to get right than two,
+    /// and a zero transfer is skipped rather than issued.
+    #[account(mut)]
+    pub fee_tokens: Box<Account<'info, TokenAccount>>,
+
+    pub token_program: Program<'info, Token>,
+}
+
+/// Pay a league's prizes, once, from scores nobody may still dispute.
+///
+/// ## Nobody declares a winner, including whoever sends this
+///
+/// The oracle signs it and that signature authorises **nothing about the
+/// result**. Every recipient is derived here from the posted scores — records,
+/// tiebreakers, the bracket — by the kernels `standings-corpus.json` and
+/// `bracket-corpus.json` pin against the TypeScript. There is no argument to
+/// this instruction naming a team, a wallet or an amount. That is what
+/// `docs/RULES.md` §7 means, and PR #31 was closed for offering the opposite.
+///
+/// The signature exists so a stranger cannot fire settlement at a moment of
+/// their choosing, and for nothing else. Anyone can compute the same answer.
+///
+/// ## Four conditions, each load-bearing
+///
+/// - **`started`.** `refund_stake` has a second opening for a league that never
+///   began — `!started && now >= start_deadline` — which falls months before
+///   this. Paying out a league that is simultaneously refundable drains the
+///   vault twice, and this is the half that can only ever refuse to pay.
+/// - **Before `refund_unlock_at`.** The other half of the same exclusion. After
+///   it, the timelock is open and the money belongs to whoever asks first.
+/// - **[`SETTLEMENT_HOLD_SECONDS`] past the last finalisation.** Time for anyone
+///   to compare the posted scores against the providers before they buy
+///   anything. The only bound here on an oracle that works and lies.
+/// - **Every week the derivation reads is frozen.** A prize computed from a week
+///   that can still be rewritten is a prize computed from a draft.
+///
+/// ## The pot is the roster, not the vault
+///
+/// `join_league` is permissionless, so anyone may open a `Membership` and
+/// deposit into any league they can name. The vault balance and
+/// `total_deposited` both therefore include money that is not the pot, and
+/// paying a percentage of either would hand a stranger's stake to the winners
+/// and leave the vault short when that stranger refunds.
+///
+/// So the pot is `roster.len() × buy_in` — the members this league actually has,
+/// each verified funded when the roster was written. `total_deposited` is
+/// decremented by exactly that and **never zeroed**, so a stranger's own stake
+/// is still behind the timelock waiting for them. Zeroing it is what broke the
+/// refund in PR #31.
+pub fn settle(ctx: Context<Settle>) -> Result<()> {
+    let now = Clock::get()?.unix_timestamp;
+
+    {
+        let league = &ctx.accounts.league;
+        let scores = &ctx.accounts.scores;
+
+        require!(league.has_pot, EscrowError::LeagueHasNoPot);
+        require!(!scores.settled, EscrowError::AlreadySettled);
+        require!(league.started, EscrowError::SeasonNotStarted);
+        require!(now < league.refund_unlock_at, EscrowError::RefundWindowOpen);
+        require_keys_eq!(
+            scores.league,
+            league.key(),
+            EscrowError::MembershipLeagueMismatch
+        );
+        payable(&league.payout_bps)?;
+
+        let opens_at = scores
+            .settlement_opens_at()
+            .ok_or(EscrowError::NoWeekFinalised)?;
+        require!(now >= opens_at, EscrowError::SettlementHeld);
+
+        for week in 1..=scores.regular_season_weeks {
+            require!(scores.is_finalized(week), EscrowError::WeekNotFinal);
+        }
+        for week in scores.playoff_weeks.iter() {
+            require!(scores.is_finalized(*week), EscrowError::WeekNotFinal);
+        }
+    }
+
+    let winners = ctx.accounts.scores.derive_winners()?;
+
+    let teams = ctx.accounts.scores.roster.len() as u64;
+    let buy_in = ctx.accounts.league.buy_in;
+    let pot = teams.checked_mul(buy_in).ok_or(EscrowError::MathOverflow)?;
+    require!(
+        pot <= ctx.accounts.league.total_deposited,
+        EscrowError::VaultShort
+    );
+    require!(pot <= ctx.accounts.vault.amount, EscrowError::VaultShort);
+
+    let fee = mul_bps(pot, ctx.accounts.league.fee_bps)?;
+    let distributable = pot.checked_sub(fee).ok_or(EscrowError::MathOverflow)?;
+
+    let payout_bps = ctx.accounts.league.payout_bps;
+    let runner_up = mul_bps(distributable, payout_bps[prize::RUNNER_UP])?;
+    let regular_season = mul_bps(distributable, payout_bps[prize::REGULAR_SEASON])?;
+    // The champion takes the remainder rather than their own basis points, which
+    // is that number plus whatever integer division left behind. Dust in a vault
+    // nothing can close is dust nobody can ever have — and the champion holds the
+    // largest share by rule, so this cannot reorder the prizes.
+    let champion = distributable
+        .checked_sub(runner_up)
+        .and_then(|rest| rest.checked_sub(regular_season))
+        .ok_or(EscrowError::PayoutExceedsPot)?;
+
+    let mint = ctx.accounts.league.token_mint;
+    check_destination(
+        &ctx.accounts.champion_tokens,
+        &ctx.accounts.scores,
+        winners.champion,
+        mint,
+    )?;
+    check_destination(
+        &ctx.accounts.runner_up_tokens,
+        &ctx.accounts.scores,
+        winners.runner_up,
+        mint,
+    )?;
+    check_destination(
+        &ctx.accounts.regular_season_tokens,
+        &ctx.accounts.scores,
+        winners.regular_season,
+        mint,
+    )?;
+    if fee > 0 {
+        require_keys_eq!(
+            ctx.accounts.fee_tokens.owner,
+            ctx.accounts.league.fee_recipient,
+            EscrowError::FeeRecipientMissing
+        );
+        require_keys_eq!(ctx.accounts.fee_tokens.mint, mint, EscrowError::WrongMint);
+    }
+
+    let league_id = ctx.accounts.league.league_id;
+    let bump = ctx.accounts.league.bump;
+    let seeds: &[&[u8]] = &[b"league", league_id.as_ref(), &[bump]];
+    let signer: &[&[&[u8]]] = &[seeds];
+
+    for (amount, to) in [
+        (champion, ctx.accounts.champion_tokens.to_account_info()),
+        (runner_up, ctx.accounts.runner_up_tokens.to_account_info()),
+        (
+            regular_season,
+            ctx.accounts.regular_season_tokens.to_account_info(),
+        ),
+        (fee, ctx.accounts.fee_tokens.to_account_info()),
+    ] {
+        if amount == 0 {
+            continue;
+        }
+        token::transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.vault.to_account_info(),
+                    to,
+                    authority: ctx.accounts.league.to_account_info(),
+                },
+                signer,
+            ),
+            amount,
+        )?;
+    }
+
+    // Decremented, never zeroed. A stranger who deposited into this league still
+    // has their own stake waiting behind the timelock.
+    ctx.accounts.league.total_deposited = ctx
+        .accounts
+        .league
+        .total_deposited
+        .checked_sub(pot)
+        .ok_or(EscrowError::MathOverflow)?;
+    ctx.accounts.scores.settled = true;
+
+    Ok(())
+}
+
+/// `amount * bps / 10000`, in `u128` so the multiply cannot wrap.
+fn mul_bps(amount: u64, bps: u16) -> Result<u64> {
+    let scaled = (amount as u128)
+        .checked_mul(bps as u128)
+        .ok_or(EscrowError::MathOverflow)?
+        / (BASIS_POINTS_TOTAL as u128);
+    u64::try_from(scaled).map_err(|_| error!(EscrowError::MathOverflow))
+}
+
+/// A prize destination has to belong to the team that won it.
+///
+/// The roster is the only thing on-chain connecting a team to a wallet, and it
+/// was written before the season with every entry verified against a funded
+/// `Membership`. Checking the token account's owner against it is what stops a
+/// caller redirecting a prize: the derivation decides *which team*, and this
+/// decides that the account really is theirs.
+fn check_destination(
+    account: &Account<TokenAccount>,
+    scores: &Scores,
+    team: u8,
+    mint: Pubkey,
+) -> Result<()> {
+    let entry = scores
+        .roster
+        .get(team as usize)
+        .ok_or(EscrowError::UnknownTeam)?;
+    require_keys_eq!(account.owner, entry.wallet, EscrowError::WrongPrizeAccount);
+    require_keys_eq!(account.mint, mint, EscrowError::WrongMint);
+    Ok(())
+}
+
+/// Who a league's three payable prizes belong to, as roster indices.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Winners {
+    pub champion: u8,
+    pub runner_up: u8,
+    /// Seed 1 of the regular season.
+    pub regular_season: u8,
+}
+
+impl Scores {
+    /// Derive the three payable prize-holders from the posted scores.
+    ///
+    /// **This is the whole of "no one declares a winner".** Nothing is stored
+    /// about who won and nothing is passed in; the answer is recomputed from the
+    /// games every time, by the same kernels the corpora pin against the
+    /// TypeScript members can run themselves. A wrong result here is a wrong
+    /// result anyone holding the same account can demonstrate.
+    ///
+    /// The two halves come from different weeks and must not be confused. The
+    /// regular-season prize is seed 1 of weeks 1..=`regular_season_weeks` — it
+    /// is decided in week 14 and paid in January with the rest (`RULES.md` §7).
+    /// The champion and runner-up come out of the bracket those seeds enter.
+    pub fn derive_winners(&self) -> Result<Winners> {
+        let mut ids = [[0u8; 16]; MAX_TEAMS];
+        for (index, entry) in self.roster.iter().enumerate() {
+            ids[index] = entry.team_id;
+        }
+        let team_count = self.roster.len();
+
+        let mut chain = [Tiebreaker::WinPct; MAX_TIEBREAKERS];
+        for (index, raw) in self.tiebreakers.iter().enumerate() {
+            chain[index] = Tiebreaker::from_u8(*raw)?;
+        }
+
+        // Regular-season games only. A playoff result counting toward a record
+        // would move the seeds the bracket was built from, and the standings
+        // would chase the results they produced — the bug `loadWeekResults`
+        // already had once.
+        let mut regular = [GameResult {
+            home: 0,
+            away: None,
+            home_milli_points: 0,
+            away_milli_points: 0,
+        }; MAX_GAMES_PER_WEEK * MAX_WEEKS];
+        let mut count = 0usize;
+        for week in 1..=self.regular_season_weeks {
+            let index = self.week_index(week)?;
+            for game in &self.games[index] {
+                regular[count] = GameResult {
+                    home: game.home,
+                    away: Some(game.away),
+                    home_milli_points: game.home_milli_points,
+                    away_milli_points: game.away_milli_points,
+                };
+                count += 1;
+            }
+        }
+
+        let (seeds, seeded) = compute_standings(
+            &ids[..team_count],
+            &regular[..count],
+            &chain[..self.tiebreakers.len()],
+        )?;
+        require!(seeded >= 2, EscrowError::FieldTooSmall);
+
+        // The bracket takes the top seeds, capped by the field that formed.
+        let field_size = (self.playoff_teams as usize).min(seeded);
+        let mut field = [0u8; MAX_TEAMS];
+        for (index, seed) in seeds[..field_size].iter().enumerate() {
+            field[index] = seed.team;
+        }
+
+        let mut playoff = [PlayoffResult {
+            week: 0,
+            home: 0,
+            away: 0,
+            home_milli_points: 0,
+            away_milli_points: 0,
+        }; MAX_GAMES_PER_WEEK * MAX_PLAYOFF_WEEKS];
+        let mut played = 0usize;
+        for week in self.playoff_weeks.iter() {
+            let index = self.week_index(*week)?;
+            for game in &self.games[index] {
+                playoff[played] = PlayoffResult {
+                    week: *week,
+                    home: game.home,
+                    away: game.away,
+                    home_milli_points: game.home_milli_points,
+                    away_milli_points: game.away_milli_points,
+                };
+                played += 1;
+            }
+        }
+
+        let bracket = build_bracket(
+            &field[..field_size],
+            &self.playoff_weeks,
+            self.first_round_byes as usize,
+            &playoff[..played],
+            self.third_place,
+        )?;
+
+        // Refused rather than defaulted. A bracket that has not resolved has no
+        // champion, and paying "whoever is top of the array" would settle a
+        // season that is not over.
+        let champion = bracket.champion.ok_or(EscrowError::BracketUnresolved)?;
+        let runner_up = bracket.runner_up.ok_or(EscrowError::BracketUnresolved)?;
+
+        Ok(Winners {
+            champion,
+            runner_up,
+            // Seed 1 of the regular season, which is a different question from
+            // who won the bracket and frequently a different team.
+            regular_season: seeds[0].team,
+        })
+    }
+}
+
+#[cfg(test)]
+mod derivation {
+    //! `derive_winners`, against a constructed season.
+    //!
+    //! **This is the correctness test the program tests cannot be.** The token
+    //! transfers in `settle` are gated behind a seven-day hold, which a wall-clock
+    //! validator cannot reach, so the validator suite covers every *refusal* and
+    //! not the successful payout. What it can never cover either way is the part
+    //! that actually decides who is paid — and that part is pure, so it is tested
+    //! here where no clock is involved.
+    //!
+    //! The kernels themselves are pinned against the TypeScript by the two
+    //! corpora. This tests the wiring between them: that the regular season feeds
+    //! the seeding and the playoff weeks feed the bracket, that the two are not
+    //! confused, and that an unresolved bracket refuses rather than defaulting.
+
+    use super::*;
+
+    fn team_id(n: u8) -> [u8; 16] {
+        let mut id = [0u8; 16];
+        id[15] = n;
+        id
+    }
+
+    /// Four teams, a three-week regular season, a two-week bracket.
+    fn league(regular: &[(u8, u8, u8, u32, u32)], playoff: &[(u8, u8, u8, u32, u32)]) -> Scores {
+        let mut games = vec![Vec::new(); MAX_WEEKS];
+        for (week, home, away, hp, ap) in regular.iter().chain(playoff.iter()) {
+            games[*week as usize - 1].push(PostedGame {
+                home: *home,
+                away: *away,
+                home_milli_points: *hp,
+                away_milli_points: *ap,
+            });
+        }
+
+        Scores {
+            league: Pubkey::default(),
+            bump: 0,
+            oracle: Pubkey::default(),
+            roster: (0..4)
+                .map(|n| RosterEntry {
+                    team_id: team_id(n),
+                    wallet: Pubkey::default(),
+                })
+                .collect(),
+            tiebreakers: vec![0, 1, 4],
+            playoff_weeks: vec![4, 5],
+            regular_season_weeks: 3,
+            playoff_teams: 4,
+            first_round_byes: 0,
+            third_place: false,
+            settled: false,
+            games,
+            finalized_weeks: 0,
+            last_finalized_at: 0,
+        }
+    }
+
+    /// Team 0 wins every regular-season game, team 1 wins two, and so on, so the
+    /// seeding is 0, 1, 2, 3 and nothing rests on a tiebreaker.
+    const CHALK: [(u8, u8, u8, u32, u32); 6] = [
+        (1, 0, 3, 100_000, 10_000),
+        (1, 1, 2, 100_000, 10_000),
+        (2, 0, 2, 100_000, 10_000),
+        (2, 1, 3, 100_000, 10_000),
+        (3, 0, 1, 100_000, 10_000),
+        (3, 2, 3, 100_000, 10_000),
+    ];
+
+    #[test]
+    fn derives_the_champion_from_the_bracket_and_seed_one_from_the_season() {
+        // Semifinals reseed 1v4 and 2v3; then the final. Team 3 upsets team 0 in
+        // the semifinal and goes on to win, which is the point of the case: the
+        // champion and the regular-season prize must come out different, because
+        // they are different questions asked of different weeks.
+        let scores = league(
+            &CHALK,
+            &[
+                (4, 0, 3, 10_000, 100_000),
+                (4, 1, 2, 100_000, 10_000),
+                (5, 1, 3, 10_000, 100_000),
+            ],
+        );
+
+        let winners = scores.derive_winners().expect("a resolved bracket");
+        assert_eq!(winners.champion, 3, "champion");
+        assert_eq!(winners.runner_up, 1, "runner-up");
+        assert_eq!(winners.regular_season, 0, "best regular-season record");
+    }
+
+    #[test]
+    fn playoff_results_do_not_move_the_seeding() {
+        // The bug `loadWeekResults` already had once: a bracket game counting
+        // toward a record moves the seeds the bracket was built from, and the
+        // standings chase the results they produced. Team 3 wins two blowouts in
+        // the playoffs; seed 1 must not budge.
+        let with_playoffs = league(
+            &CHALK,
+            &[
+                (4, 0, 3, 1, 500_000),
+                (4, 1, 2, 100_000, 10_000),
+                (5, 1, 3, 1, 500_000),
+            ],
+        );
+        assert_eq!(with_playoffs.derive_winners().unwrap().regular_season, 0);
+    }
+
+    #[test]
+    fn an_unresolved_bracket_refuses_rather_than_crowning_somebody() {
+        // Only the semifinals are in. Paying "whoever is top of the array" would
+        // settle a season that is not over, and every other check in `settle`
+        // would have passed.
+        let scores = league(
+            &CHALK,
+            &[(4, 0, 3, 100_000, 10_000), (4, 1, 2, 100_000, 10_000)],
+        );
+        let error = scores.derive_winners().expect_err("no champion yet");
+        let expected: u32 = EscrowError::BracketUnresolved.into();
+        assert!(
+            matches!(
+                error,
+                anchor_lang::error::Error::AnchorError(ref inner)
+                    if inner.error_code_number == expected
+            ),
+            "expected BracketUnresolved, got {error:?}",
+        );
+    }
+
+    #[test]
+    fn the_pot_is_the_roster_and_the_champion_takes_the_dust() {
+        // The arithmetic `settle` performs, checked here because the transfers it
+        // performs cannot be reached on a wall-clock validator.
+        //
+        // A buy-in that does not divide cleanly, so the rounding is real: four
+        // members at 3333333, a 1% fee, then 70/20/10 of what is left.
+        let pot: u64 = 4 * 3_333_333;
+        let fee = mul_bps(pot, 100).unwrap();
+        let distributable = pot - fee;
+        let runner_up = mul_bps(distributable, 2000).unwrap();
+        let regular = mul_bps(distributable, 1000).unwrap();
+        let champion = distributable - runner_up - regular;
+
+        // Nothing is stranded: every base unit of the pot is either paid or
+        // charged as fee. Dust in a vault nothing can close is dust nobody can
+        // ever have.
+        assert_eq!(champion + runner_up + regular + fee, pot);
+        // And the champion still holds the largest share, which is a rule.
+        assert!(champion > runner_up && runner_up > regular);
+    }
+
+    #[test]
+    fn a_payout_naming_an_underivable_prize_is_refused() {
+        // Consolation and third place depend on how many people joined, and the
+        // payout is frozen before anyone does. `validateLeagueRules` cannot catch
+        // it — the field size is unknown at creation — so this is where it stops.
+        let mut bps = [0u16; PRIZE_COUNT];
+        bps[prize::CHAMPION] = 7000;
+        bps[prize::RUNNER_UP] = 2000;
+        bps[prize::THIRD_PLACE] = 1000;
+        assert!(payable(&bps).is_err());
+
+        bps[prize::THIRD_PLACE] = 0;
+        bps[prize::REGULAR_SEASON] = 1000;
+        assert!(payable(&bps).is_ok());
+    }
 }

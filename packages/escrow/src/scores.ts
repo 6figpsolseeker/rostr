@@ -68,8 +68,11 @@ export interface OnChainScores {
   readonly tiebreakers: readonly number[];
   readonly playoffWeeks: readonly number[];
   readonly regularSeasonWeeks: number;
+  readonly playoffTeams: number;
   readonly firstRoundByes: number;
   readonly thirdPlace: boolean;
+  /** Set once the prizes have been paid. */
+  readonly settled: boolean;
   /** Bit `w` set means week `w + 1` is frozen. */
   readonly finalizedWeeks: number;
   /**
@@ -107,8 +110,10 @@ export async function fetchOnChainScores(
     tiebreakers: ArrayLike<number>;
     playoffWeeks: ArrayLike<number>;
     regularSeasonWeeks: number;
+    playoffTeams: number;
     firstRoundByes: number;
     thirdPlace: boolean;
+    settled: boolean;
     finalizedWeeks: number;
     lastFinalizedAt: { toString(): string };
   };
@@ -126,8 +131,10 @@ export async function fetchOnChainScores(
     tiebreakers: Array.from(raw.tiebreakers),
     playoffWeeks: Array.from(raw.playoffWeeks),
     regularSeasonWeeks: raw.regularSeasonWeeks,
+    playoffTeams: raw.playoffTeams,
     firstRoundByes: raw.firstRoundByes,
     thirdPlace: raw.thirdPlace,
+    settled: raw.settled,
     finalizedWeeks: raw.finalizedWeeks,
     lastFinalizedAt: raw.lastFinalizedAt.toString(),
   };
@@ -152,6 +159,7 @@ export interface ExpectedScoreTerms {
   readonly tiebreakers: readonly number[];
   readonly playoffWeeks: readonly number[];
   readonly regularSeasonWeeks: number;
+  readonly playoffTeams: number;
   readonly firstRoundByes: number;
   readonly thirdPlace: boolean;
   readonly teamCount: number;
@@ -186,6 +194,11 @@ export function expectedScoreTerms(
     }),
     playoffWeeks: [...rules.schedule.playoffWeeks],
     regularSeasonWeeks: rules.schedule.regularSeasonWeeks,
+    // The signed seat count, not the field that formed. `settle` caps it by the
+    // roster itself, so a league that never filled still brackets correctly —
+    // but the *stored* value has to be the one members agreed to, or a caller
+    // could shrink the bracket by writing a smaller number.
+    playoffTeams: rules.schedule.playoffTeams,
     firstRoundByes:
       field === rules.schedule.playoffTeams ? rules.schedule.byeSeeds : byesFor(field),
     // Always played, paid or not — `playsThirdPlace` in `@rostr/db`. A constant
@@ -242,6 +255,11 @@ export function scoresTermMismatches(
     out.push(
       `playoffWeeks: chain has [${onChain.playoffWeeks.join(", ")}], ` +
         `rules say [${expected.playoffWeeks.join(", ")}]`,
+    );
+  }
+  if (onChain.playoffTeams !== expected.playoffTeams) {
+    out.push(
+      `playoffTeams: chain has ${onChain.playoffTeams}, rules say ${expected.playoffTeams}`,
     );
   }
   if (onChain.regularSeasonWeeks !== expected.regularSeasonWeeks) {

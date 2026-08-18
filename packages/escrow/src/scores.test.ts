@@ -42,8 +42,10 @@ const onChain = (overrides: Partial<OnChainScores> = {}): OnChainScores => ({
   tiebreakers: [0, 1, 2, 3, 4],
   playoffWeeks: [15, 16, 17],
   regularSeasonWeeks: 14,
+  playoffTeams: 6,
   firstRoundByes: 2,
   thirdPlace: true,
+  settled: false,
   finalizedWeeks: 0,
   lastFinalizedAt: "0",
   ...overrides,
@@ -154,6 +156,14 @@ describe("scoresTermMismatches", () => {
   it("catches a truncated tiebreaker chain", () => {
     expect(scoresTermMismatches(onChain({ tiebreakers: [0] }), expected)[0]).toMatch(
       /tiebreakers/,
+    );
+  });
+
+  it("catches a shrunken playoff field", () => {
+    // A smaller bracket than members signed changes who reaches the postseason
+    // at all, and `settle` derives the champion from whoever does.
+    expect(scoresTermMismatches(onChain({ playoffTeams: 4 }), expected)[0]).toMatch(
+      /playoffTeams/,
     );
   });
 

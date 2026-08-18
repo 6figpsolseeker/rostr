@@ -1,10 +1,18 @@
 # Settlement — how a pot pays out without anyone declaring a winner
 
-**Status: G7 is complete.** Both derivation kernels
+**Status: the program can pay a pot out. Nothing creates the account it pays from, so no
+pot league can currently draft — see §12.** Both derivation kernels
 now exist — `derive.rs` for seeding, `bracket.rs` for the ladder — each pinned to the
 TypeScript by a generated corpus, and **no instruction calls either.** G7 has landed — `scores.rs` holds the payee roster and the posted results, and the draw
 refuses an account that disagrees with the signed rules. The oracle key is a signed term as of
-schemaVersion 8, so the comparison covers it too. What is missing is D6/G9, the payout. Issue #28 tracks the chain.
+schemaVersion 8. **D6/G9 has landed too** — `settle` derives the three payable prizes from
+the posted scores and transfers them, and shipping it opened `potDepositGate` on mainnet,
+which is the mechanism working exactly as designed.
+
+**What has not happened is a successful payout.** `settle` refuses until seven days after
+the last week is finalised, and no wall-clock validator test can reach that, so the program
+suite covers every refusal and not the transfer. The derivation and the arithmetic are Rust
+units. See §10. Issue #28 tracks the chain.
 
 **Revised 2026-08-17, after three independent reviews of the first draft.** Section 8
 records what that draft got wrong, because two of its errors were the kind that look
@@ -587,7 +595,19 @@ belongs here with a date and the reason, like these four.
    schemaVersion move (6 → 7). Until then the commissioner who creates the account picks
    it freely, which is the attack §6 describes. It is the next thing.
 
-4. **D6/G9** — payout, under §7.
+4. ~~**D6/G9**~~ — **the instruction exists**, under §7's constraints: atomic, requires
+   `started`, refuses at `refund_unlock_at`, refuses until the seven-day hold, pays
+   `roster.len() × buy_in`, decrements `total_deposited` rather than zeroing it, and takes
+   no argument naming a team, a wallet or an amount.
+
+   **The outstanding piece is a test that reaches the transfer.** The hold makes that
+   impossible against `solana-test-validator`, which is a wall clock. A harness that can
+   warp the clock — `litesvm` or `solana-bankrun` — is what closes it, and until it does
+   the money path is reasoned about rather than exercised. **That is the state in which
+   mainnet deposits are currently open**, because the gate keys on the IDL and the IDL is
+   honest. If they should stay shut until then, that is a condition somebody adds to
+   `potDepositGate` deliberately.
+
 5. **D8** — the adversarial suite, which does not exist.
 6. **D9/G10** — multisig, then burn. Note `BUILD-PLAN.md` currently orders the burn _before_
    the adversarial suite that tests what is being frozen, and lists D9 (multisig) and G10
@@ -618,3 +638,33 @@ There is also **no alerting anywhere in the cron layer**. Settlement is the one 
 fires once per league per year against a hard expiry, so a silent failure has no next run to
 correct it and no user complaint to surface it — the app will show a derived champion
 regardless.
+
+---
+
+## 12. Nothing creates a `Scores` account, and the draw now requires one
+
+**Found 2026-08-18, immediately after shipping the draw gate, and it is self-inflicted.**
+
+`initialize_scores` exists in the program and in the IDL. It has **no caller**: no route,
+no panel, no client builder. Grep `apps/web` and `packages/escrow/src` for it and the only
+hits are the IDL, the tripwire list, and the program tests.
+
+Meanwhile `drawDraftOrder` refuses `SCORES_MISMATCH` when the account is missing — fail
+closed, deliberately, because a league that drafts without one has no payee roster and no
+terms to derive under. Put together: **every pot league is now undraftable.**
+
+This is the same defect as the one this session opened with. `start_season` shipped with the
+program, shipped a client builder, and had no caller for a week while its own docstring
+claimed the draw refused without it. That was fixed; this recreates it one layer up, and it
+was recreated by the person who had just finished writing about it.
+
+**What it needs** is the same shape as `AnchorPanel`: an `initializeScoresIx` builder in
+`@rostr/escrow`, and a commissioner-signed step between the field locking and
+`start_season`. The roster comes from Postgres — teams in join order, each with the wallet
+from its `league_memberships` row — and every entry needs its `Membership` PDA passed as a
+remaining account. The window is narrow and already enforced at both ends: after
+`scheduledAt`, before `start_season`.
+
+**Do not close the gate to unblock the draw.** The gate is right; the missing half is the
+creation path. Removing the check would leave a league able to play a season toward a pot it
+cannot pay out, which is the failure the whole document is about.
