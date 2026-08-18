@@ -1,7 +1,9 @@
 # Settlement — how a pot pays out without anyone declaring a winner
 
-**Status: design, not built.** G7 (post finalised scores on-chain) and G8 (derive champion
-from bracket) are the missing inputs to D6/G9, the payout. Issue #28 tracks the chain.
+**Status: designed; the pure halves are built, nothing is wired.** Both derivation kernels
+now exist — `derive.rs` for seeding, `bracket.rs` for the ladder — each pinned to the
+TypeScript by a generated corpus, and **no instruction calls either.** What is missing is
+G7 (post finalised scores on-chain) and then D6/G9, the payout. Issue #28 tracks the chain.
 
 **Revised 2026-08-17, after three independent reviews of the first draft.** Section 8
 records what that draft got wrong, because two of its errors were the kind that look
@@ -122,16 +124,19 @@ So the on-chain input is the roster plus a list of completed games with scores. 
 else. **No standings, no seeds, no bracket, no winner** — every one of those is a
 derivation, and posting one instead of the scores is what PR #31 did.
 
-The bracket walk is G8 and is not written. `bracket.ts` is 400 lines with `buildBracket` and
-`thirdPlaceWinner`; the corpus pattern from #142 is how it should be pinned.
+The bracket walk **is written** — `programs/rostr-escrow/src/bracket.rs`, pinned by
+`bracket-corpus.json` in the pattern #142 established, sixteen cases, mutation-checked. This
+paragraph said "is not written" until it was.
 
-**Two things `derive.rs` needs that are rules-only today**, and they must be inputs the
-attester cannot choose: the tiebreaker chain (its own header says the discriminants "will be
-frozen into `League` at creation", `derive.rs:52-54`) and the playoff shape. If they arrive
-as instruction arguments the attester picks the tiebreakers and therefore the
-best-record prize holder — which is the same defect as posting a standing. **Settle this
-while writing G8, not after**, since it is the one part that may genuinely need a `League`
-field.
+**Both kernels need inputs that are rules-only, and the attester must not choose them**: the
+tiebreaker chain, the playoff week window, the first-round bye count, and whether third
+place is played. If they arrive as instruction arguments the attester picks the tiebreakers
+and therefore the best-record prize holder, which is the same defect as posting a standing.
+
+Writing G8 is what made that list finite and short, and §8a resolves where it lives: the
+`Scores` account, verified against the signed rules by the draw. **Not a `League` field** —
+`derive.rs`'s own header still says the discriminants "will be frozen into `League` at
+creation", and that is now the older plan.
 
 ---
 
