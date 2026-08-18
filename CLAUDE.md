@@ -116,8 +116,15 @@ See [`docs/BUILD-PLAN.md`](docs/BUILD-PLAN.md) for the full commit-by-commit pla
   55 tests green on localnet via `anchor test`.
 
 - **`@rostr/escrow`** — the client half. Addresses, the committed IDL and its generated
-  type, and instruction builders for all five instructions. The whole money lifecycle
+  type, and instruction builders for every instruction. The whole money lifecycle
   (anchor → join → stake → refund) is exercised through it against the real program.
+
+  **The program has six instructions, not five, and this file said five in three
+  places.** `start_season` landed with #171 and `derive.rs` — 812 lines of on-chain
+  records, standings and seeding, pinned to the TypeScript by a generated corpus —
+  landed with #142. Nothing calls `derive.rs` yet; it is the pure half of settlement
+  waiting for the instruction that feeds it scores. Count them in `lib.rs` before
+  repeating a number from here.
 
 - **The on-chain anchor recorded** (migration `0014`) — transaction and cluster, write-once
   by trigger. `recordChainAnchor` / `getChainState` in `packages/db/src/leagues.ts`.
@@ -767,7 +774,65 @@ not a copy that happens to agree. They already disagreed by a year in the draft 
 draft time can no longer add anyone. Two to eleven teams still draft and play; the one new
 dead end is a **one-member pot league**, which can never reach two and has no dissolve
 path. `docs/RULES.md` already promises auto-dissolve with refunds for exactly that case and
-nothing implements it — the program has five instructions and none is a dissolve.
+nothing implements it — no instruction in the program is a dissolve. What #171 added is
+narrower and covers only the league that never _starts_: `start_season` is never sent, and
+48 hours after the draft time every stake is refundable. A one-member pot league gets its
+money back that way; it still has no way to be retired.
+
+#### A pot league draws only once its season is closed to withdrawal
+
+`drawDraftOrder` refuses `SEASON_NOT_STARTED` until the chain says `start_season` landed.
+Added 2026-08-17; before it, **nothing in the app ever sent that instruction**.
+
+The failed-league refund is a **default**: `refund_stake` opens 48 hours after the draft
+time unless somebody marked the league started, so a league that fails gives the money back
+by nobody doing anything (#170). The mirror image is the dangerous one, and it was the live
+state — a league that drafted and played a season on stakes anyone could still withdraw. A
+manager losing in week 6 takes their stake out, keeps their roster and their standings
+place, and plays out the year with nothing at risk. Refunding decrements `total_deposited`
+and touches neither `member_count` nor the `Membership`, so nothing downstream notices.
+
+**The Rust, the IDL and the client builder all shipped with #171 and had no caller.**
+`startSeasonIx`'s own docstring asserted that `drawDraftOrder` refused without it — a
+comment describing a guarantee the code did not provide, which this repo treats as a defect
+in its own right. That sentence is now true.
+
+Four things about the shape:
+
+- **The oracle is injected**, exactly as `RandomnessBeacon` is. `@rostr/db` holds no
+  Solana dependency and should not gain one. A boolean parameter would have been the
+  caller's word for it; an interface makes every future caller of `drawDraftOrder` obtain
+  a real answer. `FixedSeasonStart` is test-only, and defeats the thing the real one
+  establishes.
+- **It throws rather than answering `false` when it cannot tell.** Both refuse the draw and
+  nothing is written either way, so both are safe — but only one is honest. "Not started"
+  sends a commissioner to sign a transaction they may already have sent.
+- **Read outside the transaction, compared inside it.** The lock must not be held across an
+  RPC round trip, _and_ the field checks have to come first: a commissioner holding an odd
+  field must be told to find a player, not told to sign the transaction that closes the
+  early refund on a league which is going to fail anyway.
+- **The check is in `drawDraftOrder`, not in the route.** `/draft/start` also draws when
+  the order is missing, so a guard in the lobby's route alone would have left the other one
+  open.
+
+**Mark first, draw second**, and the draw is write-once — so a draw that landed before a
+failed mark could never be taken back. The commissioner signs `start_season` from their own
+wallet in the same press, which is why `DrawControl` is now wallet-aware for pot leagues and
+reads `"Start the season & draw"`.
+
+**What makes it safe to sign before asking the server** is that after `scheduledAt`
+readiness is _monotone_: migration `0028` locks the field on INSERT and DELETE, deposits
+only ever add, and no refund is legal for another 48 hours. So a draw button that was live
+when the page rendered is still live when it is pressed. Signing on a league the server
+would then refuse is precisely how you close the refund on a league about to fail.
+
+`seasonStartAction` in `apps/web/src/lib/lobby.ts` decides what the browser sends, and it
+**reads the account rather than sending and catching** — the same reasoning as `JoinPanel`'s
+three states. A commissioner whose POST was lost after the transaction confirmed presses
+again, and re-sending fails with `AlreadyStarted`, which means "you already did this" and
+must not read as a failure. It also names the wallet the program will accept: `commissioner`
+on the account is whoever paid for `initialize_league`, one user may have linked several
+wallets, and "you are the commissioner" and "you are holding the key" are different facts.
 
 `SolanaBeacon.firstBlockAtOrAfter` is a binary search over block times, tolerating
 skipped slots. Roughly twenty RPC calls; a linear walk would be millions. **Verification
@@ -1267,6 +1332,39 @@ how long a week is.
 
 `packages/core/src/season/bracket.ts` (pure), `packages/db/src/playoffs.ts` (state),
 laid by `/api/cron/score-week`, drawn at `/leagues/[id]/bracket`.
+
+**And now `programs/rostr-escrow/src/bracket.rs` — the same ladder, on-chain (G8).** No
+instruction calls it yet; it is the pure half of settlement, exactly as `derive.rs` was for
+seeding. `docs/SETTLEMENT.md` is the design it belongs to.
+
+**Neither implementation is the authority — `bracket-corpus.json` is**, generated by running
+`buildBracket` and consumed by both, in the pattern #142 established for standings. Sixteen
+cases, `pnpm corpus:build` to regenerate, and **it is in `.prettierignore`**: the test
+compares the checked-in bytes against the generator's output, so formatting it would make
+that comparison fail forever. That trap is already documented in that file and I walked into
+it anyway.
+
+Three things worth not re-deriving:
+
+- **`rounds_needed` counts in halves, deliberately.** The TypeScript computes
+  `(field - byes) / 2 + byes` in floating point, so an odd `field - byes` leaves it holding
+  half a team — five teams with no byes gives 2.5, which rounds up through `nextPowerOfTwo`
+  to three rounds. Integer division disagrees, and only on inputs about to be refused, which
+  is the worst place for a divergence: five teams in a two-week window is `NOT_ENOUGH_WEEKS`
+  in TypeScript and `BracketInvariant` under truncation. Both refuse, so the corpus alone
+  would not have caught it — there is a test naming the code.
+- **The bracket errors live in `DeriveError`, not a third enum.** Anchor numbers every
+  `#[error_code]` from 6000 unless given an offset, so `DeriveError` and `EscrowError`
+  already collide variant-for-variant. Latent today — `DeriveError` reaches no instruction
+  and is absent from the committed IDL — and live the moment G7 ships. Splitting the ranges
+  is its own commit.
+- **`label` is not implemented and the corpus does not pin it.** "Semifinal" renders a
+  screen; a program with no display should not carry display strings to pass a conformance
+  test.
+
+Mutation-checked rather than assumed: flipping the tie rule, dropping the survivor sort, and
+taking the first weeks of the window instead of the last each fail the corpus, each caught by
+the case written for it.
 
 **A bracket is a function of the field and the scores, recomputed every time.**
 `buildBracket` walks from round one on each call; nothing stores who advanced. That is
@@ -2127,10 +2225,10 @@ reading "two weeks after the championship" — wrong by six weeks, and a constan
 next to a draft date the commissioner can move.
 
 **Still open, and a separate decision:** `RULES.md` promises auto-dissolve for a league
-that never fills, and dissolve by unanimous consent. **Neither exists** — the program has
-exactly five instructions and none of them is one. The timelock is silently doing that job,
-which for a league that never drafted means waiting months for money that was never at
-stake.
+that never fills, and dissolve by unanimous consent. **Neither exists** — no instruction in
+the program is one. The failed-league refund (#171) covers the first case in substance
+without being a dissolve: the league is never marked started and every stake opens 48 hours
+after the draft time. Dissolve by unanimous consent mid-season has nothing at all.
 
 **`deposit` takes no amount argument.** It moves `league.buy_in` and nothing else, so
 "everyone stakes the identical amount" is structural rather than a check that could be
