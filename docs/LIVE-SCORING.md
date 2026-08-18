@@ -85,22 +85,44 @@ Sunday by changing a number.
 
 ## Automation
 
-Fully automated. No human in the loop at any point.
+> **This section is the design. Read it in the future tense.**
+>
+> The intent is full automation with no human in the loop. As of **2026-08-17 the loop is
+> entirely human**: `cron_runs` holds no rows, so no scheduled job has ever executed
+> against the deployed database, and every sync so far was somebody running `pnpm db:sync`.
+> Check with `pnpm cron:status`. The deployment this waits on is an entry in
+> `docs/SETUP-REQUIRED.md`.
+>
+> Four of the six jobs below exist as code. Two do not exist at all. The **Exists?** column
+> says which — added because this table read as a description of production for months, and
+> `CLAUDE.md` names that mistake as how a false claim survived being repeated.
 
-The NFL schedule is published in May, so **every kickoff time is known months ahead**.
-That makes the whole thing schedule-driven rather than reactive:
+The NFL schedule is published in May, so **which teams play, and on what date, is known
+months ahead**. The _hour_ is not: late-December kickoffs are held back for flex
+scheduling and fixed last. Verified against Tank01 on 2026-08-17 — those fixtures arrive
+with `gameDate` set and `gameTime: "TBD"`, `gameTime_epoch: ""`, so the day is known and
+the hour is not.
 
-| Job                | Fires                                      | Does                                           |
-| ------------------ | ------------------------------------------ | ---------------------------------------------- |
-| **Season sync**    | Daily, 4am                                 | Players, teams, byes, schedule changes         |
-| **Injury sync**    | Every 6h, and hourly on game days          | Injury designations                            |
-| **Inactives**      | **100 minutes before each kickoff**        | Official inactive list — see below             |
-| **Game watcher**   | 2.5h after each kickoff, then every 10 min | Polls until status is `final`                  |
-| **Score finalise** | On `final`                                 | Box score → `stat_lines` → recompute → publish |
-| **Week finalise**  | T+48h, or T+7d for Weeks 14 and 17         | Locks the week for settlement                  |
+That still makes the whole thing schedule-driven rather than reactive. But an ingest that
+_requires_ a kickoff time silently drops the games in the two weeks that decide a season,
+and it did: eight fixtures across weeks 16 and 17 of 2026. See `games.kickoff_tbd`
+(migration `0030`) and `gameAvailability` in `@rostr/core`.
 
-The game watcher is the only job that polls, and only from 2.5 hours after kickoff until
-the game ends — roughly 20–40 minutes of polling per game.
+| Job                | Fires                               | Does                                           | Exists? | Where                   |
+| ------------------ | ----------------------------------- | ---------------------------------------------- | ------- | ----------------------- |
+| **Season sync**    | Daily, 09:20 UTC                    | Players, byes, schedule, rankings, projections | ✅      | `/api/cron/season-sync` |
+| **Injury sync**    | Every 6h, and hourly on game days   | Injury designations                            | ❌      | —                       |
+| **Inactives**      | **100 minutes before each kickoff** | Official inactive list — see below             | ❌      | —                       |
+| **Game watcher**   | Every 10 min, unconditionally       | Polls until status is `final`                  | 🟡      | `/api/cron/stats`       |
+| **Score finalise** | Same job, on `final`                | Box score → `stat_lines` → recompute → publish | ✅      | `syncBoxScores`         |
+| **Week finalise**  | T+48h, or T+7d for Weeks 14 and 17  | Locks the week for settlement                  | ✅      | `/api/cron/score-week`  |
+
+**The game watcher is 🟡 because it does not watch.** It polls every ten minutes all week
+rather than from 2.5 hours after a kickoff — simpler, and more provider calls. The
+2.5-hour window described below is the design, not the code.
+
+**Injuries and inactives have no code at all**, and inactives is the one this document
+argues matters most.
 
 ### Inactives matter more than live scoring
 
