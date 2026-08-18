@@ -388,27 +388,74 @@ Recorded rather than quietly edited, because two of these were confidently argue
 
 ---
 
+## 8a. Nothing needs to go on `League` — resolved 2026-08-17, after G8
+
+Decision 3 below was "the tiebreaker chain and playoff shape: arguments or `League` fields,
+and settle it while writing G8". G8 is written, so this is settled.
+
+**The frozen inputs are exactly four**, and they are small: the tiebreaker chain (which
+`compute_standings` takes), the playoff week window, the first-round bye count, and whether
+third place is played. Everything else `build_bracket` needs is derived.
+
+They cannot be instruction arguments — an attester choosing the tiebreaker chain chooses the
+best-record prize holder, which is the same defect as posting a standing. So they have to be
+frozen somewhere. **That somewhere is the `Scores` account, not `League`**, and what makes
+it work is an ordering that already exists:
+
+1. The field locks at `scheduledAt` (migration `0028`), so the roster becomes knowable.
+2. `Scores` is created, carrying the roster and those four parameters. Write-once.
+3. `start_season` is called — and **can require the `Scores` account to exist**, which is a
+   check the program can make: the account is there and names this league.
+4. The order is drawn.
+
+Step 4 is the enforcement, and it is the piece that makes this as strong as the anchor
+check rather than weaker. `drawDraftOrder` already refuses until the chain says `started`;
+it can equally refuse until the `Scores` account **agrees with the signed rule set**, in
+exactly the shape `anchorTermMismatches` uses for `League`. And a league that never draws
+never plays — no draft, no roster, no schedule, nothing to score — so this is not a
+courtesy. It is the gate.
+
+**The oracle key rides along.** It goes in the hashed rules and into `Scores`, checked by
+the same comparison, which removes the last candidate for a `League` field. The
+commissioner-as-oracle attack in §6 is closed the same way every other hostile term is: the
+draw refuses a `Scores` account whose terms disagree with the document members signed.
+
+**So the `League` layout is closed**, and with it the last thing in this document that had
+an irreversibility argument. What remains is ordinary work. The residual risk moves from
+"we cannot change this later" to "somebody must run the comparison" — which is code in the
+draw route, not a decision.
+
+Two consequences worth stating rather than discovering:
+
+- **`Scores` must be created before `start_season`**, which is a narrow and well-defined
+  window: after the field locks, before the draft. Both instants already exist and are
+  already enforced.
+- **The oracle key entering the hashed rules still moves the golden hash** (schemaVersion
+  6 → 7). That remains free while every anchored league is disposable — §1 — and it is now
+  the only schema move settlement needs.
+
 ## 9. Open decisions
 
 1. **`payingWeeks`** — two payouts, or change the signed rule and `RULES.md` §7's table.
    The only item whose window closes at the first funded league. (§7)
 2. **Squads vault as `settlement_oracle`** — verify it works, then decide. It is the
    difference between "lost key means a dead league" and "lost key means re-key". (§6)
-3. **The tiebreaker chain and playoff shape on-chain** — arguments or fields. This is the
-   one thing that may still need a `League` field, and it should be settled while writing
-   G8. (§3)
+3. ~~**The tiebreaker chain and playoff shape on-chain**~~ — **resolved**, see §8a. They
+   live in `Scores`, verified against the signed rules by the draw. No `League` field.
 4. **A mandatory hold between finalising Week 17 and payout.** Recommended: 7 days, in a
    44-day window. (§5)
 
 ## 10. Order of work
 
-1. **G8's pure kernel** — the bracket walk in `derive.rs`, pinned by an extended corpus, in
-   the pattern #142 established. No accounts, no instruction, no money — and it is what
-   establishes whether the tiebreaker chain needs a field, which is decision 3.
-2. **`max_teams` bound.** `validate.ts:724-725` has no upper bound and `derive.rs` caps at
-   16, so a 20-team pot league is creatable today and would be silently unsettleable.
-   Layout-compatible, cheap, and it belongs before anything real is anchored.
-3. **G7** — the `Scores` PDA, the roster, and posting. Under §2, §4 and §6.
+1. ~~**G8's pure kernel**~~ — **done.** `programs/rostr-escrow/src/bracket.rs`, pinned by
+   `bracket-corpus.json`, sixteen cases, mutation-checked. It also answered decision 3 —
+   see §8a.
+2. ~~**`max_teams` bound**~~ — **done.** `MAX_TEAMS_PER_LEAGUE` is twelve in `@rostr/core`
+   and mirrored in the program, checked at creation in both. A twenty-team pot league was
+   creatable, anchorable, and unsettleable.
+3. **G7** — the `Scores` PDA, the roster, and posting. Under §2, §4, §6 and §8a. The
+   account carries the roster **and** the four frozen parameters; the draw verifies both
+   against the signed rules.
 4. **D6/G9** — payout, under §7.
 5. **D8** — the adversarial suite, which does not exist.
 6. **D9/G10** — multisig, then burn. Note `BUILD-PLAN.md` currently orders the burn _before_
