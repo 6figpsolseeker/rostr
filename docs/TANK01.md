@@ -21,27 +21,54 @@ node packages/stats/dist/cli.js verify 1,2,3   # hunt rare scoring events
 Confirmed by calling each. `getNFLTeamStats` returned 404 and does not appear to
 exist under that name.
 
-| Endpoint               | Returns                                      | We use it for                                    |
-| ---------------------- | -------------------------------------------- | ------------------------------------------------ |
-| `getNFLTeams`          | 32 teams; `rosters=true` embeds full rosters | Team refs, **bye weeks**, one-call roster sync   |
-| `getNFLPlayerList`     | 4,295 players                                | Full player universe                             |
-| `getNFLPlayerInfo`     | One player, optionally with stats            | Targeted lookups                                 |
-| `getNFLTeamRoster`     | `{team, roster}`                             | Per-team roster                                  |
-| `getNFLDepthCharts`    | 32 teams, `RB1`/`RB2`…                       | Starter inference, smarter bots                  |
-| **`getNFLADP`**        | `{adpDate, adpType, adpList}`                | **Draft rankings**                               |
-| `getNFLProjections`    | Player + team-defense projections            | Waiver guidance, bot drafting                    |
-| `getNFLGamesForWeek`   | 16 games with `gameID`, `gameTime_epoch`     | **Schedule and kickoff times**                   |
-| `getNFLGamesForDate`   | Games on a date                              | Daily job scoping                                |
-| `getNFLGamesForPlayer` | **A player's whole season, one call**        | Season-to-date averages, fixtures                |
-| `getNFLTeamSchedule`   | `{team, schedule}`                           | Team-level schedule                              |
-| `getNFLScoresOnly`     | Scores + line score, no player stats         | **Cheap game-watcher polling**                   |
-| `getNFLBoxScore`       | Full player stats, DST, scoring plays        | **Weekly scoring**                               |
-| `getNFLGameInfo`       | Game metadata                                | Venue, referees                                  |
-| `getNFLNews`           | `{link, title}`                              | Injury/news feed                                 |
-| `getNFLDFS`            | DraftKings, FanDuel, Yahoo salaries          | Ranking cross-check                              |
-| `getNFLBettingOdds`    | Many sportsbooks                             | Not used                                         |
-| `getNFLChangelog`      | Recent data corrections                      | **Stat-correction detection**                    |
-| `getNFLInactiveList`   | Whole season, per game, per team `players[]` | **Gameday inactives** — see docs/LIVE-SCORING.md |
+| Endpoint               | Returns                                       | We use it for                                    |
+| ---------------------- | --------------------------------------------- | ------------------------------------------------ |
+| `getNFLTeams`          | 32 teams; `rosters=true` embeds full rosters  | Team refs, **bye weeks**, one-call roster sync   |
+| `getNFLPlayerList`     | 4,295 players                                 | Full player universe                             |
+| `getNFLPlayerInfo`     | One player, optionally with stats             | Targeted lookups                                 |
+| `getNFLTeamRoster`     | `{team, roster}`                              | Per-team roster                                  |
+| `getNFLDepthCharts`    | 32 teams, `RB1`/`RB2`…                        | Starter inference, smarter bots                  |
+| **`getNFLADP`**        | `{adpDate, adpType, adpList}`                 | **Draft rankings**                               |
+| `getNFLProjections`    | Player + team-defense projections             | Waiver guidance, bot drafting                    |
+| `getNFLGamesForWeek`   | 16 games; `gameTime_epoch` **empty when TBD** | **Schedule and kickoff times** — see below       |
+| `getNFLGamesForDate`   | Games on a date                               | Daily job scoping                                |
+| `getNFLGamesForPlayer` | **A player's whole season, one call**         | Season-to-date averages, fixtures                |
+| `getNFLTeamSchedule`   | `{team, schedule}`                            | Team-level schedule                              |
+| `getNFLScoresOnly`     | Scores + line score, no player stats          | **Cheap game-watcher polling**                   |
+| `getNFLBoxScore`       | Full player stats, DST, scoring plays         | **Weekly scoring**                               |
+| `getNFLGameInfo`       | Game metadata                                 | Venue, referees                                  |
+| `getNFLNews`           | `{link, title}`                               | Injury/news feed                                 |
+| `getNFLDFS`            | DraftKings, FanDuel, Yahoo salaries           | Ranking cross-check                              |
+| `getNFLBettingOdds`    | Many sportsbooks                              | Not used                                         |
+| `getNFLChangelog`      | Recent data corrections                       | **Stat-correction detection**                    |
+| `getNFLInactiveList`   | Whole season, per game, per team `players[]`  | **Gameday inactives** — see docs/LIVE-SCORING.md |
+
+---
+
+## A fixture with no kickoff time — verbatim, 2026-08-17
+
+The NFL fixes late-December kickoff **hours** last, holding them back for flex scheduling.
+Tank01 still returns **all 16 fixtures** for those weeks. The untimed ones carry:
+
+```
+gameDate:        "20261227"      ← the day IS known
+gameTime:        "TBD"
+gameTime_epoch:  ""              ← empty string. Not "0", not absent, not null.
+```
+
+So `Number.parseFloat(gameTime_epoch)` is `NaN` and `Number(gameTime_epoch)` is `0` — any
+code treating a falsy epoch as "there is no fixture" drops a real game. **It did:** eight
+fixtures across weeks 16 and 17 of 2026, the playoff and championship weeks, absent from
+the deployed database for two days before anyone counted.
+
+`syncGames` now stores them with `kickoff_tbd` set and a conservative kickoff borrowed
+from a dated sibling on the same date; `gameAvailability` in `@rostr/core` turns that into
+`TIME_TBD`. Where **no** game on that date is dated there is nothing safe to borrow and
+the fixture is still skipped, which is `UNSCHEDULED`.
+
+**Week 18 is entirely undated** as of 2026-08-17 — all 16 fixtures on `20270110`, every
+one `"TBD"` — so none of it is stored. That is correct and harmless here: week 18 falls
+after the fantasy championship in week 17.
 
 ---
 

@@ -12,6 +12,49 @@ Status key: ⬜ not started · 🟡 in progress · ✅ done
 
 ## Blocking soon
 
+### ⬜ A deployment, and `CRON_SECRET`
+
+**Blocks:** every automated job in `docs/LIVE-SCORING.md`. A draft can be run and a
+lineup can be set against a hand-synced database; a **season** cannot.
+**Needed by:** Sep 9 2026, and realistically a fortnight earlier so a full weekly cycle
+is watched once before it counts.
+
+**Nothing has ever run on a schedule.** `apps/web/vercel.json` schedules six crons, and
+on 2026-08-17 `cron_runs` — the heartbeat table every job stamps, migration `0029` —
+held **zero rows**. Not one job, not once. Every game, player, projection and ranking in
+the deployed database was put there by somebody typing `pnpm db:sync` at a terminal.
+
+Scheduling is not running. Check it with **`pnpm cron:status`**, which reads the job list
+out of `vercel.json` itself and exits non-zero when a job has never run, is stale, or is
+failing. `pnpm db:status` now carries a one-line summary of the same thing, because this
+gap survived for months precisely because nothing was obliged to ask.
+
+**This entry did not exist until 2026-08-17, and that is why the gap lasted.** This file
+is the list of things only the owner can do, and "there is no host" was on it nowhere.
+
+**Needed:** a Vercel project whose **Root Directory is `apps/web`**, with `DATABASE_URL`,
+`TANK01_API_KEY`, `SOLANA_RPC_URL`, `SOLANA_CLUSTER`, `NEXT_PUBLIC_SOLANA_RPC_URL`,
+`NEXT_PUBLIC_SOLANA_CLUSTER`, `FEE_RECIPIENT`, `NEXT_PUBLIC_FEE_RECIPIENT` and
+`CRON_SECRET` set.
+
+> **Four traps, in the order they bite.**
+>
+> 1. **`vercel.json` lives at `apps/web/`, not the repo root.** If the project's Root
+>    Directory is left at the root, the crons are silently not registered — the deploy
+>    succeeds, the site works, and nothing ever fires. That failure is indistinguishable
+>    from today's state.
+> 2. **Plan tier.** Cron frequency is limited on the free tier; six jobs at minute and
+>    ten-minute granularity needs a paid plan. Check current limits — the **Running cost**
+>    table below has no hosting line and needs one.
+> 3. **`CRON_SECRET` must be set on the deployment**, or `cronForbidden` refuses every
+>    cron route in production: a fully deployed, fully dead scheduler.
+> 4. **Function timeout versus `season-sync`**, which makes eighteen weeks of provider
+>    calls in a single invocation.
+>
+> **And a green `pnpm cron:status` means the routes ran, not that they did any work.** A
+> run over zero games is a healthy run. `stat_lines` is empty today and every player
+> scores zero; that is a separate check and this is not it.
+
 ### ⬜ Solana RPC endpoint (`SOLANA_RPC_URL`)
 
 **Blocks:** drawing draft orders. Every league needs one draw, at its scheduled draft

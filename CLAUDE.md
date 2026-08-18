@@ -137,23 +137,54 @@ lineup at all** — `setLineup` refuses with `SCHEDULE_MISSING`. `currentWeek` w
 minutes since it shipped. And with `games` hand-populated but no stat lines, every week
 would have finalised **0–0, permanently**, because a finalised week is never rescored.
 
-`docs/LIVE-SCORING.md` describes six automation jobs in the present tense and only one of
-them exists. Reading a plan as a description is how the claim above got written.
+`docs/LIVE-SCORING.md` describes six automation jobs in the present tense. **Four now
+exist** — season sync, the stats poller, score finalisation and week finalisation.
+**Injury sync and inactives do not exist at all**, and that document argues inactives is
+the one that matters most. Its table now carries an "Exists?" column so the plan and the
+code can be told apart at a glance. Reading a plan as a description is how the claim above
+got written.
 
 **Corrected 2026-08-17, and this passage was the stale one.** It said `syncBoxScores` did
 not exist and that every player therefore scores zero. Both halves are now false, and the
 second was false in a way that reads as urgent — which is how it survived being repeated.
 
-`syncBoxScores` **exists** (`packages/db/src/box-scores.ts`, PR #95), `/api/cron/stats`
-calls it every ten minutes alongside `syncGames`, and `apps/web/vercel.json` schedules it.
-Issue #96 is closed and complete. `syncGames` is also wired into `pnpm db:sync`.
+`syncBoxScores` **exists** (`packages/db/src/box-scores.ts`, PR #95) and `/api/cron/stats`
+runs it every ten minutes. Issue #96 is closed and complete.
 
-`stat_lines` is empty in the deployed database for a much duller reason: **all 248 games
-are `SCHEDULED` and none is `FINAL`, because the 2026 season has not started.** There is
+**`syncGames` is not in that job**, and the sentence here used to say it was. It belongs
+to `/api/cron/season-sync`, daily at 09:20 UTC (`apps/web/src/lib/jobs/season-sync.ts`),
+which runs the same set as `pnpm db:sync` — players, byes, all eighteen weeks of fixtures,
+rankings, projections. Two jobs, two cadences: a box score changes during a game, a
+schedule changes overnight. Anyone debugging a stale schedule by reading the ten-minute
+job would have found `syncGames` absent and concluded the wiring was broken.
+
+**And none of it has ever fired.** `cron_runs` (migration `0029`) is the heartbeat every
+job stamps at the end of every run, and on 2026-08-17 it was **empty** — no rows, for any
+job, ever. `apps/web/vercel.json` schedules six crons; scheduling is not running. Every
+game, player, ranking and projection in the deployed database was put there by somebody
+typing `pnpm db:sync` at a terminal.
+
+So **every sentence in this file of the form "the cron does X" describes code that is
+correct and has never executed outside a test.** Check before believing any of them —
+including this paragraph, which is only true until somebody deploys:
+
+```bash
+pnpm cron:status        # per job: never ran / stale / failing. Exits non-zero.
+pnpm db:status          # now carries a one-line scheduler summary
+```
+
+`cron:status` reads the expected job list out of `vercel.json` itself rather than restating
+it, so a job added to the schedule cannot be forgotten here. **A green result means the
+routes ran, not that they did any work** — a run over zero games is a healthy run. The
+deployment it is all waiting on is now an entry in `docs/SETUP-REQUIRED.md`, where it
+should have been all along.
+
+`stat_lines` is empty in the deployed database for a duller reason as well: **every game is
+`SCHEDULED` and none is `FINAL`, because the 2026 season has not started.** There is
 nothing to ingest until 9 September. The pipeline has never had a finished game to run on,
 which is a different problem from not existing — and the honest description of the Sep 9
-risk is now **"the producer has never been exercised against a real box score"**, not
-"there is no producer".
+risk is **"the producer has never been exercised against a real box score, and nothing has
+ever run it on a schedule"**.
 
 **All four of #81's defects are now closed**, the last two by #175 (two-point attribution,
 with #155). Its defects were filed as latent "only because nothing calls `getBoxScore`" —
@@ -417,6 +448,14 @@ suite passes, which is not the same thing.
 change and `games` was **completely empty** — no schedule at all, which makes
 `weekHasSchedule` false and `setLineup` refuse every lineup. Re-seeded, and the
 2026 season synced: 248 games, 1,017 players on the draft board.
+
+**The 248 was eight short, and nothing noticed for two days.** `syncGames` discarded any
+fixture the provider had not given a kickoff time — four in week 16 and four in week 17,
+the playoff and championship weeks, because the NFL holds those hours back for flex
+scheduling. Fixed by #182; the count is **256**, which is complete for weeks 1–17 (every
+team has its 16 games). Week 18 is absent and is meant to be: every one of its fixtures is
+undated, so no conservative kickoff can be derived, and week 18 falls after the fantasy
+championship anyway. See "A fixture with no kickoff time" below.
 
 #### What is true about Aug 22, said plainly
 
@@ -1781,8 +1820,25 @@ his game with nothing to show for it, and reading zero as "has not played" tells
 they are still live when they have already lost. Kickoff passed and not final means
 in-progress, whatever the stat line says. Tested.
 
-A player with no game that week is `BYE`, not `YET_TO_PLAY` — there are no points still
-coming.
+**A player with no game that week is not automatically `BYE`**, and reading it that way is
+what #182 fixed. `gameAvailability` (`packages/core/src/season/availability.ts`) separates
+the cases from data already held:
+
+- a stored fixture whose hour the NFL has not fixed → **`TIME_TBD`**
+- no row at all, in a week that is not the team's bye → **`UNSCHEDULED`**
+- no row, on the team's actual bye → **`BYE`**, and there are no points still coming
+
+They are opposite instructions to a manager. A bye says start someone else. A pending
+kickoff says he will play and nobody has said at what hour — the same player, the decision
+reversed, in the weeks that decide a season.
+
+**`UNSCHEDULED` is claimed only when the bye week is known and falls elsewhere.** An
+unknown bye keeps the old answer, because a wrong `BYE` costs one player's week while a
+wrong `UNSCHEDULED` is the screen promising a game out of a gap in our own ingest.
+
+And it **decides nothing**: `loadKickoffs` is still the only definition of when a slot
+freezes. Bye weeks and the TBD flag load through `loadByeWeeks` and `loadTbdKickoffs`,
+separately, so a bug in this labelling can mislabel a row and cannot unlock one.
 
 `loadWeekMatchups` takes `now` rather than calling `Date.now()`, so game state is
 deterministic and the finalisation cases are testable.

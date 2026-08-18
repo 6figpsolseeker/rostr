@@ -5,13 +5,18 @@
  *   pnpm db:status    show what is applied and what is pending
  *   pnpm db:seed      insert the sport registry
  *   pnpm db:audit     check exposure: grants, RLS, and BYPASSRLS roles
+ *   pnpm cron:status  has the scheduler ever run, and is it succeeding
  *
  * Reads DATABASE_URL from the environment. Nothing here is needed to run the
  * test suite — that uses PGlite and no credentials at all.
  */
 
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { NFL } from "@rostr/core";
 import { Tank01Provider } from "@rostr/stats";
+import { cronHealth, expectedJobs, type CronConfig } from "./cron-health.js";
+import { listCronRuns } from "./cron-runs.js";
 import { loadMigrations, migrate } from "./migrate.js";
 import { createPostgresClient } from "./postgres.js";
 import { seedSport } from "./sports.js";
@@ -37,6 +42,20 @@ import {
  * only file permitted to name a football fact.
  */
 const REGULAR_SEASON_WEEKS = NFL.seasonWeeks;
+
+/**
+ * The deployment's own cron schedule.
+ *
+ * Read from `apps/web/vercel.json` rather than restated here, because a second
+ * copy of the job list is a copy that drifts — and it would drift silently in
+ * the worst direction, with a job added to the schedule and never reported
+ * missing. If the file moves, this throws and `cron` reports it, which is the
+ * loud failure rather than the quiet one.
+ */
+function loadCronConfig(): CronConfig {
+  const path = fileURLToPath(new URL("../../../apps/web/vercel.json", import.meta.url));
+  return JSON.parse(readFileSync(path, "utf8")) as CronConfig;
+}
 
 function connectionString(): string {
   const url = process.env["DATABASE_URL"];
@@ -81,6 +100,24 @@ async function main(): Promise<void> {
             `${appliedVersions.has(m.version) ? "applied " : "PENDING "} ${m.filename}`,
           );
         }
+
+        // The anti-forgetting hook. `pnpm db:status` is the documented first
+        // command on arriving at a machine, and until 2026-08-17 nothing on that
+        // path would have told you that no job had ever run — the schedule and
+        // the heartbeat were both present and nobody compared them.
+        const scheduled = expectedJobs(loadCronConfig());
+        const ran = await listCronRuns(client).catch(() => []);
+        const health = cronHealth(scheduled, ran, new Date());
+        const unhealthy = health.jobs.filter((job) => job.state !== "OK").length;
+
+        console.log(
+          `\nscheduler: ${scheduled.length} job(s) scheduled, ` +
+            (health.neverRanAtAll
+              ? "0 have ever run — pnpm cron:status"
+              : unhealthy === 0
+                ? "all running"
+                : `${unhealthy} not healthy — pnpm cron:status`),
+        );
         break;
       }
 
@@ -237,8 +274,65 @@ async function main(): Promise<void> {
         break;
       }
 
+      case "cron": {
+        // The same argument as `audit` above, one layer out: `cron_runs` was
+        // written by every job on every run and read by nobody, so a scheduler
+        // that had never started looked exactly like a quiet week. Measured on
+        // 2026-08-17 the table held zero rows — six jobs scheduled, `draft-tick`
+        // every minute, nothing had ever fired. This makes it a command.
+        const expected = expectedJobs(loadCronConfig());
+        const health = cronHealth(expected, await listCronRuns(client), new Date());
+
+        if (expected.length === 0) {
+          console.error(
+            "No crons found in apps/web/vercel.json.\n" +
+              "That file is the schedule the host obeys; if it moved, this check is blind.",
+          );
+          process.exit(1);
+        }
+
+        for (const job of health.jobs) {
+          const every =
+            job.everyMinutes === null ? "schedule unreadable" : `every ${job.everyMinutes}m`;
+          const last = job.minutesSince === null ? "never" : `${job.minutesSince}m ago`;
+          console.log(
+            `${job.state.padEnd(17)} ${job.name.padEnd(13)} ${every.padEnd(20)} last: ${last}` +
+              (job.lastOutcome === null ? "" : ` — ${job.lastOutcome}`),
+          );
+        }
+
+        if (health.healthy) {
+          console.log(`\nOK — ${health.jobs.length} job(s) running.`);
+          // Said on the green path, because this is the reading that matters and
+          // the one nobody would otherwise question. A run over zero games is a
+          // healthy run: every job here can be OK while `stat_lines` is empty
+          // and every player scores zero.
+          console.log("This means the routes ran. It does not mean they did any work.");
+          break;
+        }
+
+        if (health.neverRanAtAll) {
+          console.error(
+            "\nFAIL — no scheduled job has ever run against this database.\n\n" +
+              "`cron_runs` is empty and the table exists, which is the signature of a\n" +
+              "deployment that does not exist rather than a scheduler that faltered.\n" +
+              "Everything in this database was put there by hand.\n\n" +
+              "See docs/SETUP-REQUIRED.md — a deployment, and CRON_SECRET.",
+          );
+          process.exit(1);
+        }
+
+        console.error(
+          `\nFAIL — ${health.jobs.filter((j) => j.state !== "OK").length} job(s) not healthy.`,
+        );
+        process.exit(1);
+        break;
+      }
+
       default:
-        console.error(`Unknown command "${command}". Use migrate, status, seed, or audit.`);
+        console.error(
+          `Unknown command "${command}". Use migrate, status, seed, sync, audit, or cron.`,
+        );
         process.exit(1);
     }
   } finally {
