@@ -847,8 +847,35 @@ describe("hashLeagueRules", () => {
     //   player-weeks of the 2025 season against the totals ESPN itself
     //   published. See `docs/TANK01.md`.
     // No leagues existed on any of these occasions.
+    //
+    // Moved 2026-08-17: schemaVersion 6 -> 7, adding `def_2pt_ret` — a defensive
+    //   two-point conversion return, which ESPN pays the unit 2 for and we had
+    //   no stat key for at all, so it scored nothing. Three occurrences across
+    //   2024 and 2025: Dallas in 2025 week 4, Miami in 2025 week 13,
+    //   Philadelphia in 2024 week 4. Tank01 carries the count as
+    //   `teamStats.defensiveTwoPointConversionReturns`.
+    //
+    //   **"No leagues existed" is not the claim this time, and repeating it
+    //   would have been false.** Four test leagues were created in the deployed
+    //   database before 2026-08-16 and are recorded as retired to `DISSOLVED`;
+    //   `apps/web/src/app/api/cron/score-week/route.test.ts` also creates and
+    //   dissolves leagues there whenever `DATABASE_URL` is set. What makes this
+    //   safe is a different fact, and a stronger one: **an addition cannot reach
+    //   a league that already exists.** A frozen league holds its own copy of
+    //   the scoring table in `league_rules.rule_json`, `scorePlayer` skips a
+    //   stat with no matching rule by design, and so a key those leagues have
+    //   never heard of scores them nothing — which is exactly right. The move
+    //   that does damage is a *rename* or a removal, which is what #162 and
+    //   `sports/stat-keys.test.ts` exist to catch, and this is neither.
+    //
+    //   Two consequences that are not about the hash. `seedSport` must be re-run
+    //   against any deployed database before the next box-score ingest, or
+    //   `ingestOneGame` throws on a stat key `stat_keys` does not hold — that is
+    //   deliberate and it is loud. And the four dissolved leagues do not gain
+    //   the rule, because frozen rules cannot be migrated; nothing can be done
+    //   about that and nothing should be.
     expect(hashLeagueRules(FIXTURE)).toBe(
-      "78f352c59a0716f3a333fcd5eb641e4f1c32dbe7c31033cb4450535f96275ec3",
+      "01e0dad789032549089087829bf1177569cf968610018c04dff31d00ef33b2bb",
     );
   });
 });

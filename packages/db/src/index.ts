@@ -156,6 +156,7 @@ export {
   LIVE_WINDOW_HOURS,
   MAX_GAMES_PER_RUN,
   syncBoxScores,
+  unresolvedStatsProblems,
   type BoxScoreSyncResult,
 } from "./box-scores.js";
 

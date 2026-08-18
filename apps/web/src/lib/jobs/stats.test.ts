@@ -123,7 +123,7 @@ async function seedDefenses(): Promise<void> {
 }
 
 /** What a healthy response looks like: both defenses present. */
-const healthy = (gameRef: string): ProviderBoxScore => ({
+const healthy = (gameRef: string, warnings: readonly string[] = []): ProviderBoxScore => ({
   gameRef,
   // Zero exactly as the real adapter returns them — the games row is what says
   // which season and week this is.
@@ -133,7 +133,7 @@ const healthy = (gameRef: string): ProviderBoxScore => ({
     ["DST_PHI", [{ statKey: "def_pts_allowed", value: 20 }]],
     ["DST_DAL", [{ statKey: "def_pts_allowed", value: 24 }]],
   ]),
-  warnings: [],
+  warnings,
 });
 
 const lastOutcome = async (): Promise<string | null | undefined> =>
@@ -210,6 +210,91 @@ describe("the stats cron", () => {
     expect(calls).toEqual(["g1", "g2"]);
     expect(body.runs.map((entry) => entry.season)).toEqual([2026, 2027]);
     expect(await lastOutcome()).toBe("1 game(s) failed to ingest");
+  });
+
+  /**
+   * Warnings, which reached a human as the word "failed" and nothing else.
+   *
+   * The translator's whole `fatal`/`warnings` split exists so that a discrepancy
+   * does not discard a game — and then every warning it raised was pushed onto
+   * `failures` and announced as "N game(s) failed to ingest" on a run where
+   * every player landed correctly. The cost is not the wording. A week finalises
+   * after 48 hours and is never rescored, so the window for acting on a warning
+   * is short, and a channel that cries failure on healthy runs is one people
+   * stop opening — which is exactly how a novel play type stays invisible for
+   * two seasons.
+   */
+  it("reports a warning as a warning, not as a failed ingest", async () => {
+    db = await createTestDatabase();
+    await seedSport(db, NFL);
+    await league(2026);
+    await seedDefenses();
+    await finishedGame(2026, "g1");
+
+    const { provider } = fakeProvider((gameRef) =>
+      healthy(gameRef, ['scoreType "XPR" has not been seen before']),
+    );
+
+    const response = await runStatsJob(db, provider, NOW);
+    const body = (await response.json()) as {
+      runs: { failures: unknown[]; warnings: { warning: string }[] }[];
+    };
+
+    expect(body.runs[0]?.failures).toEqual([]);
+    expect(body.runs[0]?.warnings?.[0]?.warning).toContain("XPR");
+    expect(await lastOutcome()).toBe("1 warning(s) from games that did ingest");
+  });
+
+  it("says both when a run has failures and warnings", async () => {
+    // This was a chain of ternaries, so the first true branch won and the rest
+    // went unsaid. A heartbeat is read once and acted on once.
+    db = await createTestDatabase();
+    await seedSport(db, NFL);
+    await league(2026);
+    await seedDefenses();
+    await finishedGame(2026, "g1");
+    await finishedGame(2026, "g2");
+
+    const { provider } = fakeProvider((gameRef) =>
+      gameRef === "g1"
+        ? new Error("provider exploded")
+        : healthy(gameRef, ["something did not add up"]),
+    );
+
+    await runStatsJob(db, provider, NOW);
+
+    expect(await lastOutcome()).toBe(
+      "1 game(s) failed to ingest; 1 warning(s) from games that did ingest",
+    );
+  });
+
+  /**
+   * A heartbeat does not remember, and `games.stats_error` does.
+   *
+   * `cron_runs` holds one row per job and the next run overwrites it, so a
+   * warning raised at noon is gone by ten past — and the run that follows a
+   * troubled one is usually the quiet Tuesday run that fetched nothing at all.
+   * `unresolvedStatsProblems` reads the column that survives.
+   */
+  it("keeps reporting a game that is still broken on a run that touched nothing", async () => {
+    db = await createTestDatabase();
+    await seedSport(db, NFL);
+    await league(2026);
+    await seedDefenses();
+    await finishedGame(2026, "g1");
+
+    const { provider } = fakeProvider((gameRef) =>
+      healthy(gameRef, ["something did not add up"]),
+    );
+    await runStatsJob(db, provider, NOW);
+
+    // Nothing is due now — the game was just read and its retry is paced — so
+    // this run does no work at all and would once have recorded itself clean.
+    const quiet = fakeProvider(() => new Error("must not be called"));
+    await runStatsJob(db, quiet.provider, NOW);
+
+    expect(quiet.calls).toEqual([]);
+    expect(await lastOutcome()).toBe("1 game(s) still carry an unresolved problem");
   });
 
   /**

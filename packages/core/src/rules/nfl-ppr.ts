@@ -68,6 +68,11 @@ export const NFL_PPR_SCORING: readonly ScoringRule[] = [
   { statKey: "def_safety", kind: "LINEAR", milliPointsPerUnit: pts(2) },
   { statKey: "def_td", kind: "LINEAR", milliPointsPerUnit: pts(6) },
   { statKey: "def_blk_kick", kind: "LINEAR", milliPointsPerUnit: pts(2) },
+  // A defence that returns a failed two-point conversion scores 2, exactly as it
+  // does for a safety. ESPN's value; Sleeper pays the same. Added 2026-08-17
+  // because we had no rule for it and therefore paid nothing — three occurrences
+  // over 2024 and 2025, each 2 points to a unit somebody had started.
+  { statKey: "def_2pt_ret", kind: "LINEAR", milliPointsPerUnit: pts(2) },
   // Both defensive tiers are ESPN's, decoded from their own published data
   // rather than from documentation: their scoring API returns values keyed by
   // numeric stat id with no names, so the boundaries were pinned by recomputing
@@ -256,7 +261,7 @@ export function buildNflPprRules(overrides: NflPprOverrides): LeagueRules {
   const pot = overrides.pot ?? null;
 
   return structuredClone({
-    schemaVersion: 6,
+    schemaVersion: 7,
     sportKey: "nfl",
     seasonYear: overrides.seasonYear,
     scoring: NFL_PPR_SCORING,

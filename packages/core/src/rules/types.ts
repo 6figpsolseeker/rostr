@@ -341,6 +341,17 @@ export type LeagueRules = {
    * 1 → 2 added `pot.feeBps` and `pot.feeRecipient`.
    * 2 → 3 replaced `league.botsAllowed` with `league.maxBots`.
    * 3 → 4 removed `abandonment` and added `roster.autofill`.
+   * 4 → 5 changed the default payout to 70/20/10, so that every prize is
+   *       decidable in a league of any size.
+   * 5 → 6 aligned the scoring table with ESPN — `fg_50_plus` split, `fg_missed`
+   *       and `def_yds_allowed` added, the points-allowed ladder replaced.
+   * 6 → 7 added `def_2pt_ret`, a defensive two-point conversion return.
+   *
+   * This list stopped at 3 → 4 for two versions, which made it look as though
+   * nothing had moved since. The changelog that decides anything is the dated
+   * one on the golden fixture in `rules.test.ts`; this one exists so the
+   * declaration below is readable, and a stale copy of a record is worse than no
+   * copy.
    *
    * Bumping this is the honest way to change the rule schema: it changes the
    * canonical encoding and therefore every hash, so the golden fixture in
@@ -349,7 +360,7 @@ export type LeagueRules = {
    * one does, a schema change means supporting both versions — the rules of a
    * created league can never be re-encoded.
    */
-  readonly schemaVersion: 6;
+  readonly schemaVersion: 7;
   readonly sportKey: string;
   readonly seasonYear: number;
   readonly scoring: readonly ScoringRule[];

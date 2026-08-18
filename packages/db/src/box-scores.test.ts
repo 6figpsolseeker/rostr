@@ -5,7 +5,7 @@ import type { ProviderBoxScore, StatsProvider } from "@rostr/stats";
 import { seedSport } from "./sports.js";
 import { createTestDatabase } from "./testing.js";
 import type { PGliteClient } from "./testing.js";
-import { syncBoxScores } from "./box-scores.js";
+import { syncBoxScores, unresolvedStatsProblems } from "./box-scores.js";
 
 /**
  * The producer, against the real translator.
@@ -294,13 +294,121 @@ describe("syncBoxScores", () => {
 
     expect(await currentValue(fx, "DST_PHI", "def_sack")).toBeNull();
     expect(await currentValue(fx, "qb1", "pass_yd")).toBe(300);
-    expect(result.failures[0]?.reason).toContain("def_pts_allowed");
+
+    // **A warning, not a failure**, and this assertion read `failures` until
+    // 2026-08-17. The game was ingested — the quarterback's line is right there
+    // on the line above — so calling it a failed ingest is false in both
+    // directions: it raises a false alarm on a run that worked, and it puts a
+    // discrepancy in the same count as a game nobody could read at all.
+    expect(result.failures).toEqual([]);
+    expect(result.warnings[0]?.warning).toContain("def_pts_allowed");
+    expect(result.warnings[0]?.gameRef).toBe("g1");
 
     const [row] = await fx.client.query<{ stats_error: string | null }>(
       "SELECT stats_error FROM games WHERE id = $1",
       [fx.gameId],
     );
     expect(row?.stats_error).toContain("DST_PHI");
+  });
+
+  it("keeps a translator warning apart from a game that could not be read", async () => {
+    // The distinction the `fatal`/`warnings` split makes upstream, carried
+    // through to the caller. Both games below produce something worth saying;
+    // only one of them lost any data.
+    const fx = await setup();
+    const [sport] = await fx.client.query<{ id: string }>(
+      "SELECT id FROM sports WHERE key = $1",
+      [NFL.key],
+    );
+    await fx.client.query(
+      `INSERT INTO games (sport_id, external_ref, season, week, home_team_ref, away_team_ref,
+                          kickoff_at, status, final_at)
+       VALUES ($1, 'g2', $2, $3, 'BUF', 'NYJ', now() - interval '3 hours', 'FINAL',
+               now() - interval '1 hour')`,
+      [sport!.id, SEASON, WEEK],
+    );
+
+    const result = await syncBoxScores(
+      fx.client,
+      fakeProvider(
+        new Map<string, ProviderBoxScore | Error>([
+          [
+            "g1",
+            boxScore("g1", { qb1: [line("pass_yd", 300)], ...bothDefenses }, [
+              'scoreType "XPR" has not been seen before',
+              "Somebody: unparseable field goal",
+            ]),
+          ],
+          ["g2", new Error("provider exploded")],
+        ]),
+      ),
+      NFL.key,
+      SEASON,
+    );
+
+    // Both warnings survive as separate entries rather than one joined string,
+    // so a caller can count them and a reader can read them.
+    expect(result.warnings.map((entry) => entry.gameRef)).toEqual(["g1", "g1"]);
+    expect(result.warnings[0]?.warning).toContain("XPR");
+    expect(result.failures.map((entry) => entry.gameRef)).toEqual(["g2"]);
+
+    // And the stats still landed for the game that warned.
+    expect(await currentValue(fx, "qb1", "pass_yd")).toBe(300);
+  });
+
+  it("reads unresolved problems back out of the column that stores them", async () => {
+    // `games.stats_error` has been written since `0027` and read by nothing, so
+    // a discrepancy survived the run that found it and was visible to nobody:
+    // `cron_runs` holds one row per job and the next clean run overwrites it.
+    const fx = await setup();
+
+    await syncBoxScores(
+      fx.client,
+      fakeProvider(
+        new Map([
+          ["g1", boxScore("g1", { qb1: [line("pass_yd", 300)], ...bothDefenses }, ["odd"])],
+        ]),
+      ),
+      NFL.key,
+      SEASON,
+    );
+
+    const outstanding = await unresolvedStatsProblems(fx.client, NFL.key);
+
+    expect(outstanding.total).toBe(1);
+    expect(outstanding.games).toEqual([
+      { gameRef: "g1", season: SEASON, week: WEEK, problem: "odd" },
+    ]);
+  });
+
+  it("reports nothing once the game has been re-read cleanly", async () => {
+    // The other half: a problem has to be able to stop being reported, or the
+    // count only ever grows and becomes noise. `stats_error` is overwritten on
+    // every ingest, including with null.
+    const fx = await setup();
+    const good = boxScore("g1", { qb1: [line("pass_yd", 300)], ...bothDefenses });
+
+    await syncBoxScores(
+      fx.client,
+      fakeProvider(
+        new Map([
+          ["g1", boxScore("g1", { qb1: [line("pass_yd", 300)], ...bothDefenses }, ["odd"])],
+        ]),
+      ),
+      NFL.key,
+      SEASON,
+    );
+    expect((await unresolvedStatsProblems(fx.client, NFL.key)).total).toBe(1);
+
+    // The retry clause needs the last attempt to be older than
+    // FAILED_RETRY_MINUTES, which it is not in a test that just ran.
+    await fx.client.query(
+      "UPDATE games SET stats_synced_at = now() - interval '1 hour' WHERE id = $1",
+      [fx.gameId],
+    );
+    await syncBoxScores(fx.client, fakeProvider(new Map([["g1", good]])), NFL.key, SEASON);
+
+    expect((await unresolvedStatsProblems(fx.client, NFL.key)).total).toBe(0);
   });
 
   it("keeps going when one game cannot be read", async () => {

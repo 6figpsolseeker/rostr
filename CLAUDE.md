@@ -189,14 +189,31 @@ Two-point conversions were compared separately, because Sleeper splits them acro
 `pass_2pt`, `rush_2pt` and `rec_2pt`. **Tua Tagovailoa 1/1 and Julian Hill 1/1** — #175
 confirmed against an independent source on the game that exposed the bug.
 
-**And ESPN, the third source, agrees too** — 91 of 91, joined on `espnID`, which Tank01
-carries alongside `sleeperBotID`. Extracted by column _label_ rather than position, so a
-column moving in their payload cannot silently shift a stat into the wrong key. That
-satisfies the standing three-source rule for these two games.
+**ESPN also returned 91 of 91 — and that is not a third source. Corrected 2026-08-17, the
+same day it was written.**
 
-**What is still not established.** And 91 comparisons across two games is not a season: #160 is the issue for
-making this a permanent check rather than a thing somebody did once. Nothing here tests
-D/ST, kicking or return touchdowns, none of which occurred in the two games sampled.
+The sentence here said ESPN "agrees too" and that this "satisfies the standing three-source
+rule". Both are wrong, because **Tank01 is an ESPN re-serialisation**. Measured, not
+inferred: scoring-play text is byte-identical including 175 trailing spaces and the
+`"Touchown"` typo this repo attributed to Tank01; 42 of 42 numeric stats match ESPN's own
+box score; and **Tank01's `playerID` _is_ the ESPN athlete id**. Dak Prescott is `2577417`
+in both.
+
+So comparing our output against ESPN is a **self-consistency check on our parser**, which
+is genuinely useful — the parser is where every defect has been — but it corroborates
+nothing. Where ESPN is wrong, Tank01 is wrong identically and both columns read green. ESPN
+_is_ wrong in the 2025 corpus: week 10 ARI@SEA lists the same sack-fumble twice with
+different yardage.
+
+**The consequence reaches past this paragraph.** `RULES.md` §7 requires two independent
+sources to agree before a paying week finalises. **Tank01 + ESPN does not satisfy it.**
+They are one source. Sleeper is the only genuine second opinion the project currently has,
+and it is the one that found ~500 points of real error (see #178).
+
+**What is still not established.** 91 comparisons across two games is not a season — #160
+is the issue for making this permanent rather than a thing somebody did once. And those two
+games contained no D/ST score, no notable kicking and no return touchdown, which are
+exactly the paths that read prose instead of numbers.
 
 - **Anchoring wired into the app** — `POST /api/leagues/[id]/anchor`, `AnchorPanel.tsx`,
   and `readOnlyEscrow()` in `apps/web/src/lib/escrow.ts`. The commissioner signs from
@@ -2309,28 +2326,30 @@ at T+48h. Validation enforces this.
 
 These were discussed at length and decided. Re-proposing them wastes the owner's time.
 
-| Decision                                         | Status                                                                   |
-| ------------------------------------------------ | ------------------------------------------------------------------------ |
-| Full PPR scoring                                 | **Settled** — table in `docs/RULES.md` §1                                |
-| Schedule luck retained                           | **Settled** — median scoring was proposed and **rejected**               |
-| Rolling waiver priority                          | **Settled** — FAAB proposed and **rejected** for v1                      |
-| NFTs _are_ the roster, not souvenirs             | **Settled** — Token-2022, transfer hook + permanent delegate             |
-| NFTs persist as trophies, labelled "Player YYYY" | **Settled**                                                              |
-| Trades vetoable, never automatic                 | **Settled** — 48h escrow, ⅓ of uninvolved managers                       |
-| Trade deadline set by the commissioner           | **Settled** 2026-08-08 — default 11; binds on the execution week         |
-| Rules immutable, shown before joining            | **Settled**                                                              |
-| Per-game score updates, not real-time            | **Settled** — cost is not the reason; simplicity is                      |
-| Mainnet with the pot live for 2026               | **Settled** — risks were raised and the owner chose this                 |
-| Payout 70/20/10, or winner-take-all              | **Settled** 2026-08-10 — the commissioner picks; champion always largest |
-| Abandonment (3 strikes → stake forfeit)          | **Removed** 2026-08-08 — could not fire; autofill does the job           |
-| Consolation bracket played but unpaid            | **Changed** 2026-08-10 — a paid consolation cannot settle a small league |
-| IP-based sybil blocking                          | **Rejected** — breaks households, defeated by any VPN                    |
-| Protocol fee: 1%, once, at settlement            | **Settled** 2026-08-07 — in the hashed rules; never on a refund          |
-| Buy-in between $5 and $50 per member             | **Settled** 2026-08-07 — a range; both bounds enforced on-chain          |
-| Pot mints must have six decimals (season one)    | **Settled** 2026-08-07 — what makes the $50 cap mean dollars             |
-| Free leagues anchor their rules hash on-chain    | **Settled** 2026-08-07 — `initialize_free_league`                        |
-| Autofill on by default, per-team toggle          | **Settled** 2026-08-08 — method frozen in rules, switch is yours         |
-| Autofill ranks on weekly projections             | **Settled** 2026-08-08 — a decision, not a fact; see DECISIONS           |
+| Decision                                         | Status                                                                            |
+| ------------------------------------------------ | --------------------------------------------------------------------------------- |
+| Full PPR scoring                                 | **Settled** — table in `docs/RULES.md` §1                                         |
+| Schedule luck retained                           | **Settled** — median scoring was proposed and **rejected**                        |
+| Rolling waiver priority                          | **Settled** — FAAB proposed and **rejected** for v1                               |
+| NFTs _are_ the roster, not souvenirs             | **Settled** — Token-2022, transfer hook + permanent delegate                      |
+| NFTs persist as trophies, labelled "Player YYYY" | **Settled**                                                                       |
+| Trades vetoable, never automatic                 | **Settled** — 48h escrow, ⅓ of uninvolved managers                                |
+| Trade deadline set by the commissioner           | **Settled** 2026-08-08 — default 11; binds on the execution week                  |
+| Rules immutable, shown before joining            | **Settled**                                                                       |
+| Per-game score updates, not real-time            | **Settled** — cost is not the reason; simplicity is                               |
+| Mainnet with the pot live for 2026               | **Settled** — risks were raised and the owner chose this                          |
+| Payout 70/20/10, or winner-take-all              | **Settled** 2026-08-10 — the commissioner picks; champion always largest          |
+| Abandonment (3 strikes → stake forfeit)          | **Removed** 2026-08-08 — could not fire; autofill does the job                    |
+| Consolation bracket played but unpaid            | **Changed** 2026-08-10 — a paid consolation cannot settle a small league          |
+| IP-based sybil blocking                          | **Rejected** — breaks households, defeated by any VPN                             |
+| Protocol fee: 1%, once, at settlement            | **Settled** 2026-08-07 — in the hashed rules; never on a refund                   |
+| Buy-in between $5 and $50 per member             | **Settled** 2026-08-07 — a range; both bounds enforced on-chain                   |
+| Pot mints must have six decimals (season one)    | **Settled** 2026-08-07 — what makes the $50 cap mean dollars                      |
+| Free leagues anchor their rules hash on-chain    | **Settled** 2026-08-07 — `initialize_free_league`                                 |
+| Autofill on by default, per-team toggle          | **Settled** 2026-08-08 — method frozen in rules, switch is yours                  |
+| Autofill ranks on weekly projections             | **Settled** 2026-08-08 — a decision, not a fact; see DECISIONS                    |
+| `def_pts_allowed` follows ESPN, not Sleeper      | **Settled** 2026-08-17 — a defensive TD is deducted from points allowed           |
+| Defense is the **team unit**, never a player     | **Settled** 2026-08-17 — no IDP slot, and per-player defensive stats are unmapped |
 
 ---
 
