@@ -33,6 +33,13 @@ export async function GET(
         // provider has no projection — a deep-bench flier is still draftable,
         // and showing a confident zero would be worse than showing nothing.
         projectedMilliPoints: board.projected.get(entry.playerId) ?? null,
+        // A face, a club, a bye and a designation. Display only — the draft
+        // engine reads none of it, and every field can be null on a pool
+        // that has not been synced since the profile columns landed.
+        imageUrl: entry.summary.imageUrl,
+        teamRef: entry.summary.teamRef,
+        byeWeek: entry.summary.byeWeek,
+        injuryDesignation: entry.summary.injuryDesignation,
       })),
     });
   } catch (error) {

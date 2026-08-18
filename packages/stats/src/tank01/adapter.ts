@@ -12,6 +12,7 @@ import type {
   ProviderHealth,
   ProviderInjury,
   ProviderPlayer,
+  ProviderPlayerProfile,
   StatsProvider,
 } from "../provider.js";
 import { Tank01Client } from "./client.js";
@@ -75,13 +76,26 @@ export interface AdpBoard {
   readonly entries: readonly AdpEntry[];
 }
 
+interface RawDraftInfo {
+  round?: string;
+  pick?: string;
+  year?: string;
+}
+
 interface RawPlayer {
   playerID?: string;
   longName?: string;
   pos?: string;
   team?: string;
   isFreeAgent?: string;
-  injury?: { designation?: string; description?: string };
+  injury?: { designation?: string; description?: string; injReturnDate?: string };
+  espnHeadshot?: string;
+  jerseyNum?: string;
+  height?: string;
+  weight?: string;
+  bDay?: string;
+  school?: string;
+  draftInfo?: RawDraftInfo;
 }
 
 interface RawTeam {
@@ -89,6 +103,7 @@ interface RawTeam {
   teamCity?: string;
   teamName?: string;
   byeWeeks?: Record<string, string[]>;
+  espnLogo1?: string;
 }
 
 interface RawGame {
@@ -172,6 +187,135 @@ function mapGameStatus(status: string | undefined): ProviderGame["status"] {
   return "SCHEDULED";
 }
 
+/**
+ * Tank01's fields for the profile block, verified against the live player list
+ * on 2026-08-18 (4,202 entries) rather than read off documentation. Field names
+ * guessed from docs have been wrong three times on this project.
+ *
+ * Shapes seen, and every one of them is handled below:
+ *   height    `"6'2\""`, or `""`
+ *   weight    `"230"`,   or `""`
+ *   bDay      `"7/29/1993"` — American order, always, 4,145 of 4,202
+ *   draftInfo `{ round, pick, year, teamID }` or absent (2,133 have it)
+ *   injury    always present; `designation` empty for 4,017 of them
+ *   injReturnDate `"20270215"`, or `""`
+ */
+const NO_PHOTO = "nophoto";
+
+/** `"6'2\""` to 74. Null for anything that is not that shape. */
+function heightInches(raw: string | undefined): number | null {
+  const match = /^(\d+)'(\d+)"?$/.exec((raw ?? "").trim());
+  if (!match) return null;
+  const feet = Number(match[1]);
+  const inches = Number(match[2]);
+  return feet * 12 + inches;
+}
+
+/** Digits only. Rejects `""` and anything with a unit or a range in it. */
+function wholeNumber(raw: string | undefined): number | null {
+  const text = (raw ?? "").trim();
+  if (!/^\d+$/.test(text)) return null;
+  const value = Number(text);
+  return Number.isSafeInteger(value) ? value : null;
+}
+
+/**
+ * `"7/29/1993"` to `"1993-07-29"`.
+ *
+ * Month first — the provider is American and every one of the 4,145 published
+ * birth dates parses that way. Written out rather than handed to `new Date()`,
+ * which would read the same string differently depending on the runtime's
+ * locale and silently swap 7 March for 3 July.
+ */
+function isoFromUsDate(raw: string | undefined): string | null {
+  const match = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec((raw ?? "").trim());
+  if (!match) return null;
+  const [, month, day, year] = match;
+  const asMonth = Number(month);
+  const asDay = Number(day);
+  if (asMonth < 1 || asMonth > 12 || asDay < 1 || asDay > 31) return null;
+  return `${year}-${String(asMonth).padStart(2, "0")}-${String(asDay).padStart(2, "0")}`;
+}
+
+/** `"20270215"` to `"2027-02-15"`. */
+function isoFromCompactDate(raw: string | undefined): string | null {
+  const match = /^(\d{4})(\d{2})(\d{2})$/.exec((raw ?? "").trim());
+  if (!match) return null;
+  const [, year, month, day] = match;
+  if (Number(month) < 1 || Number(month) > 12) return null;
+  if (Number(day) < 1 || Number(day) > 31) return null;
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * An image URL, or null where the provider is telling us it has none.
+ *
+ * The placeholder matters: 36 players resolve to ESPN's own grey silhouette,
+ * and storing that would put a foreign "no photo" graphic on our screens in
+ * place of the initials fallback we control. A null here is the more useful
+ * answer than a URL that loads.
+ */
+function imageUrl(raw: string | undefined): string | null {
+  const url = (raw ?? "").trim();
+  if (!url || url.includes(NO_PHOTO)) return null;
+  return url;
+}
+
+/**
+ * Every profile field absent.
+ *
+ * Spread rather than written out at each use so a field added to the type is a
+ * compile error in one place instead of a silently missing key in several.
+ */
+const EMPTY_PROFILE: ProviderPlayerProfile = {
+  imageUrl: null,
+  jerseyNumber: null,
+  heightInches: null,
+  weightPounds: null,
+  birthDate: null,
+  college: null,
+  draft: null,
+  injury: null,
+};
+
+function profileOf(player: RawPlayer): ProviderPlayerProfile {
+  const designation = (player.injury?.designation ?? "").trim();
+
+  return {
+    imageUrl: imageUrl(player.espnHeadshot),
+    jerseyNumber: (player.jerseyNum ?? "").trim() || null,
+    heightInches: heightInches(player.height),
+    weightPounds: wholeNumber(player.weight),
+    birthDate: isoFromUsDate(player.bDay),
+    college: (player.school ?? "").trim() || null,
+    draft: draftOf(player.draftInfo),
+    injury:
+      designation === ""
+        ? null
+        : {
+            designation,
+            description: (player.injury?.description ?? "").trim() || null,
+            returnDate: isoFromCompactDate(player.injury?.injReturnDate),
+          },
+  };
+}
+
+/**
+ * Draft position, or null.
+ *
+ * All three parts are required together. A round with no pick number is not a
+ * partial answer worth rendering — "round 4, pick —" reads as missing data
+ * rather than as the fact it is trying to state.
+ */
+function draftOf(raw: RawDraftInfo | undefined): ProviderPlayerProfile["draft"] {
+  if (!raw) return null;
+  const year = wholeNumber(raw.year);
+  const round = wholeNumber(raw.round);
+  const pick = wholeNumber(raw.pick);
+  if (year === null || round === null || pick === null) return null;
+  return { year, round, pick };
+}
+
 export class Tank01Provider implements StatsProvider {
   readonly name = "tank01";
   private readonly client: Tank01Client;
@@ -205,6 +349,7 @@ export class Tank01Provider implements StatsProvider {
         positions: [position],
         teamRef: player.team && player.team !== "FA" ? player.team : null,
         active: player.isFreeAgent !== "True",
+        profile: profileOf(player),
       });
     }
 
@@ -216,6 +361,10 @@ export class Tank01Provider implements StatsProvider {
         positions: ["DEF"],
         teamRef: team.teamAbv,
         active: true,
+        // A team unit has no face, so its crest stands in — the same slot in the
+        // same field, so every screen renders one image and never branches on
+        // whether a roster row happens to be eleven people.
+        profile: { ...EMPTY_PROFILE, imageUrl: imageUrl(team.espnLogo1) },
       });
     }
 

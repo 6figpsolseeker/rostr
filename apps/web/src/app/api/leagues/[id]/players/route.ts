@@ -40,8 +40,16 @@ export async function GET(
     const now = new Date();
 
     const available = await availablePlayers(client, id, now);
-    const roster = await client.query<{ player_id: string; full_name: string; key: string }>(
-      `SELECT r.player_id, p.full_name, pos.key
+    const roster = await client.query<{
+      player_id: string;
+      full_name: string;
+      key: string;
+      image_url: string | null;
+      team_ref: string | null;
+      injury_designation: string | null;
+    }>(
+      `SELECT r.player_id, p.full_name, pos.key,
+              p.image_url, p.team_ref, p.injury_designation
          FROM roster_entries r
          JOIN players p ON p.id = r.player_id
          JOIN positions pos ON pos.id = p.primary_position_id
@@ -57,11 +65,17 @@ export async function GET(
         positions: player.positions,
         availability: player.availability,
         clearsAt: player.clearsAt?.toISOString() ?? null,
+        imageUrl: player.imageUrl,
+        teamRef: player.teamRef,
+        injuryDesignation: player.injuryDesignation,
       })),
       roster: roster.map((row) => ({
         playerId: row.player_id,
         name: row.full_name,
         position: row.key,
+        imageUrl: row.image_url,
+        teamRef: row.team_ref,
+        injuryDesignation: row.injury_designation,
       })),
       claims: await pendingClaims(client, id, context.myTeamId),
     });

@@ -185,6 +185,10 @@ export async function availablePlayers(
     positions: readonly string[];
     availability: Exclude<Availability, "ROSTERED">;
     clearsAt: Date | null;
+    /** Display only. Nothing in the waiver rules reads any of these. */
+    imageUrl: string | null;
+    teamRef: string | null;
+    injuryDesignation: string | null;
   }[]
 > {
   const stored = await getLeagueRules(db, leagueId);
@@ -195,11 +199,17 @@ export async function availablePlayers(
     full_name: string;
     positions: string[];
     clears_at: string | null;
+    image_url: string | null;
+    team_ref: string | null;
+    injury_designation: string | null;
   }>(
     `SELECT p.id,
             p.full_name,
             array_agg(DISTINCT pos.key) AS positions,
-            w.clears_at
+            w.clears_at,
+            p.image_url,
+            p.team_ref,
+            p.injury_designation
        FROM players p
        JOIN positions pos
          ON pos.id = p.primary_position_id
@@ -212,7 +222,8 @@ export async function availablePlayers(
             JOIN teams t ON t.id = r.team_id
            WHERE t.league_id = l.id AND r.player_id = p.id AND r.released_at IS NULL
         )
-      GROUP BY p.id, p.full_name, w.clears_at`,
+      GROUP BY p.id, p.full_name, w.clears_at,
+               p.image_url, p.team_ref, p.injury_designation`,
     [leagueId],
   );
 
@@ -232,6 +243,9 @@ export async function availablePlayers(
           ? ("ON_WAIVERS" as const)
           : ("FREE_AGENT" as const),
       clearsAt,
+      imageUrl: row.image_url,
+      teamRef: row.team_ref,
+      injuryDesignation: row.injury_designation,
     };
   });
 }

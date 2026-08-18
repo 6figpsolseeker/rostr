@@ -98,6 +98,7 @@ export {
   loadKickoffs,
   loadRosterForWeek,
   loadTbdKickoffs,
+  type RosterPlayer,
   loadWeekLineups,
   loadWeekStats,
   PRIMARY_PROJECTION_SOURCE,
@@ -185,6 +186,14 @@ export {
 } from "./settlement.js";
 
 export {
+  loadPlayerProfile,
+  type PlayerBio,
+  type PlayerInjury,
+  type PlayerProfile,
+  type PlayerWeek,
+} from "./players.js";
+
+export {
   loadDraftBoard,
   loadProjections,
   seasonsInPlay,
@@ -196,6 +205,7 @@ export {
   type AdpCapableProvider,
   type ByeCapableProvider,
   type DraftBoardEntry,
+  type PlayerSummary,
   type ProjectionCapableProvider,
   type SyncResult,
 } from "./sync.js";

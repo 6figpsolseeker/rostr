@@ -5,6 +5,7 @@ export {
   type ProviderHealth,
   type ProviderInjury,
   type ProviderPlayer,
+  type ProviderPlayerProfile,
   type StatsProvider,
 } from "./provider.js";
 

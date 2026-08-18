@@ -2,6 +2,9 @@
 
 import { useMemo, useState } from "react";
 import useSWR from "swr";
+import { PlayerAvatar } from "./PlayerAvatar";
+import { PlayerCard } from "./PlayerCard";
+import { injuryBadge, injuryTone, positionColour, positionGroup } from "@/lib/player";
 
 /**
  * Adds, drops and waiver claims.
@@ -22,12 +25,19 @@ interface Available {
   positions: string[];
   availability: "ON_WAIVERS" | "FREE_AGENT";
   clearsAt: string | null;
+  /** Display only. Null on a pool synced before migration `0032`. */
+  imageUrl: string | null;
+  teamRef: string | null;
+  injuryDesignation: string | null;
 }
 
 interface Rostered {
   playerId: string;
   name: string;
   position: string;
+  imageUrl: string | null;
+  teamRef: string | null;
+  injuryDesignation: string | null;
 }
 
 interface Claim {
@@ -73,6 +83,8 @@ export function PlayerMarket({ leagueId }: { leagueId: string }) {
   const [search, setSearch] = useState("");
   const [dropWith, setDropWith] = useState<string>("");
   const [busy, setBusy] = useState(false);
+  /** The player whose card is open. A face or a name anywhere here opens one. */
+  const [openPlayerId, setOpenPlayerId] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
 
@@ -217,10 +229,38 @@ export function PlayerMarket({ leagueId }: { leagueId: string }) {
         <ul className="divide-y divide-nocturne-neutral-900 rounded border border-nocturne-neutral-900">
           {shown.map((player) => (
             <li key={player.playerId} className="flex items-center gap-3 px-4 py-2.5">
-              <span className="w-12 text-xs text-nocturne-neutral-600">
-                {player.positions.join("/")}
-              </span>
-              <span className="flex-1 truncate text-sm">{player.name}</span>
+              <button
+                onClick={() => setOpenPlayerId(player.playerId)}
+                className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
+                title={`${player.name} — open card`}
+              >
+                <PlayerAvatar
+                  name={player.name}
+                  positions={player.positions}
+                  imageUrl={player.imageUrl}
+                  size={32}
+                />
+                <span className="min-w-0">
+                  <span className="flex items-center gap-1.5">
+                    <span className="truncate text-sm">{player.name}</span>
+                    {injuryBadge(player.injuryDesignation) && (
+                      <span
+                        className={`text-[10px] font-semibold ${injuryTone(player.injuryDesignation)}`}
+                      >
+                        {injuryBadge(player.injuryDesignation)}
+                      </span>
+                    )}
+                  </span>
+                  <span className="flex items-center gap-1.5 text-[11px] text-nocturne-neutral-600">
+                    <span
+                      className={`rounded px-1 py-px font-medium ring-1 ${positionColour(positionGroup(player.positions))}`}
+                    >
+                      {positionGroup(player.positions)}
+                    </span>
+                    {player.teamRef ?? "FA"}
+                  </span>
+                </span>
+              </button>
 
               {player.availability === "ON_WAIVERS" && (
                 <span className="text-xs text-amber-400/70">{clearsIn(player.clearsAt)}</span>
@@ -253,8 +293,37 @@ export function PlayerMarket({ leagueId }: { leagueId: string }) {
         <ul className="divide-y divide-nocturne-neutral-900 rounded border border-nocturne-neutral-900">
           {data.roster.map((player) => (
             <li key={player.playerId} className="flex items-center gap-3 px-4 py-2 text-sm">
-              <span className="w-12 text-xs text-nocturne-neutral-600">{player.position}</span>
-              <span className="flex-1 truncate">{player.name}</span>
+              <button
+                onClick={() => setOpenPlayerId(player.playerId)}
+                className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
+              >
+                <PlayerAvatar
+                  name={player.name}
+                  positions={[player.position]}
+                  imageUrl={player.imageUrl}
+                  size={32}
+                />
+                <span className="min-w-0">
+                  <span className="flex items-center gap-1.5">
+                    <span className="truncate">{player.name}</span>
+                    {injuryBadge(player.injuryDesignation) && (
+                      <span
+                        className={`text-[10px] font-semibold ${injuryTone(player.injuryDesignation)}`}
+                      >
+                        {injuryBadge(player.injuryDesignation)}
+                      </span>
+                    )}
+                  </span>
+                  <span className="flex items-center gap-1.5 text-[11px] text-nocturne-neutral-600">
+                    <span
+                      className={`rounded px-1 py-px font-medium ring-1 ${positionColour(player.position)}`}
+                    >
+                      {player.position}
+                    </span>
+                    {player.teamRef ?? "FA"}
+                  </span>
+                </span>
+              </button>
               <button
                 onClick={() => void act({ action: "DROP", playerId: player.playerId })}
                 disabled={busy}
@@ -266,6 +335,14 @@ export function PlayerMarket({ leagueId }: { leagueId: string }) {
           ))}
         </ul>
       </section>
+
+      {openPlayerId && (
+        <PlayerCard
+          leagueId={leagueId}
+          playerId={openPlayerId}
+          onClose={() => setOpenPlayerId(null)}
+        />
+      )}
 
       <p className="text-xs text-nocturne-neutral-600">
         A player you drop goes to waivers unless you held him less than a day, in which case he

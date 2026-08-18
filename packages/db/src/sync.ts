@@ -82,16 +82,43 @@ export async function syncPlayers(
       continue;
     }
 
+    // The profile block, or every field null when the provider publishes none.
+    //
+    // `hasProfile` is what stops the second case erasing the first. A provider
+    // that carries no profile data is stating *no opinion*, not "this player has
+    // no face and no college" — so a players sync run from a secondary provider
+    // must leave what the primary wrote alone. Within a profile, though, a null
+    // is an assertion and does overwrite: a designation that clears when a
+    // player recovers has to reach the column, or "Out" sticks to him forever.
+    const profile = player.profile;
+    const hasProfile = profile !== null;
+
     const rows = await db.query<{ inserted: boolean }>(
       `INSERT INTO players
-         (sport_id, external_ref, full_name, primary_position_id, team_ref, active, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, now())
+         (sport_id, external_ref, full_name, primary_position_id, team_ref, active, updated_at,
+          image_url, jersey_number, height_inches, weight_pounds, birth_date, college,
+          draft_year, draft_round, draft_pick,
+          injury_designation, injury_description, injury_return_date)
+       VALUES ($1, $2, $3, $4, $5, $6, now(),
+               $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
        ON CONFLICT (sport_id, external_ref) DO UPDATE
          SET full_name = EXCLUDED.full_name,
              primary_position_id = EXCLUDED.primary_position_id,
              team_ref = EXCLUDED.team_ref,
              active = EXCLUDED.active,
-             updated_at = now()
+             updated_at = now(),
+             image_url          = CASE WHEN $19 THEN EXCLUDED.image_url          ELSE players.image_url          END,
+             jersey_number      = CASE WHEN $19 THEN EXCLUDED.jersey_number      ELSE players.jersey_number      END,
+             height_inches      = CASE WHEN $19 THEN EXCLUDED.height_inches      ELSE players.height_inches      END,
+             weight_pounds      = CASE WHEN $19 THEN EXCLUDED.weight_pounds      ELSE players.weight_pounds      END,
+             birth_date         = CASE WHEN $19 THEN EXCLUDED.birth_date         ELSE players.birth_date         END,
+             college            = CASE WHEN $19 THEN EXCLUDED.college            ELSE players.college            END,
+             draft_year         = CASE WHEN $19 THEN EXCLUDED.draft_year         ELSE players.draft_year         END,
+             draft_round        = CASE WHEN $19 THEN EXCLUDED.draft_round        ELSE players.draft_round        END,
+             draft_pick         = CASE WHEN $19 THEN EXCLUDED.draft_pick         ELSE players.draft_pick         END,
+             injury_designation = CASE WHEN $19 THEN EXCLUDED.injury_designation ELSE players.injury_designation END,
+             injury_description = CASE WHEN $19 THEN EXCLUDED.injury_description ELSE players.injury_description END,
+             injury_return_date = CASE WHEN $19 THEN EXCLUDED.injury_return_date ELSE players.injury_return_date END
        RETURNING (xmax = 0) AS inserted`,
       [
         ids.sportId,
@@ -100,6 +127,19 @@ export async function syncPlayers(
         positionId,
         player.teamRef,
         player.active,
+        profile?.imageUrl ?? null,
+        profile?.jerseyNumber ?? null,
+        profile?.heightInches ?? null,
+        profile?.weightPounds ?? null,
+        profile?.birthDate ?? null,
+        profile?.college ?? null,
+        profile?.draft?.year ?? null,
+        profile?.draft?.round ?? null,
+        profile?.draft?.pick ?? null,
+        profile?.injury?.designation ?? null,
+        profile?.injury?.description ?? null,
+        profile?.injury?.returnDate ?? null,
+        hasProfile,
       ],
     );
 
@@ -525,6 +565,25 @@ export async function loadProjections(
   return byPlayer;
 }
 
+/**
+ * The thumbnail a screen needs beside a player's name.
+ *
+ * Not the whole profile — the board sends a thousand of these on one request,
+ * and height, college and draft position are read one player at a time from
+ * `loadPlayerProfile` when somebody opens a card. What is here is what a row
+ * shows: a face, a shirt, a bye, and whether he is hurt.
+ */
+export interface PlayerSummary {
+  /** Absolute, provider-published. Null renders as initials. */
+  readonly imageUrl: string | null;
+  /** The club, not the fantasy team — "DAL". Null for a free agent. */
+  readonly teamRef: string | null;
+  /** This season's bye. Null when the schedule has not been synced. */
+  readonly byeWeek: number | null;
+  /** The provider's own wording. Null when fit. */
+  readonly injuryDesignation: string | null;
+}
+
 export interface DraftBoardEntry {
   readonly playerId: string;
   readonly externalRef: string;
@@ -532,6 +591,8 @@ export interface DraftBoardEntry {
   readonly positions: readonly string[];
   /** Lower is better, as the draft engine expects. */
   readonly rank: number;
+  /** Display only. Nothing in the draft engine reads it. */
+  readonly summary: PlayerSummary;
 }
 
 /**
@@ -555,23 +616,38 @@ export async function loadDraftBoard(
     full_name: string;
     positions: string[];
     overall_milli: number | null;
+    image_url: string | null;
+    team_ref: string | null;
+    bye_week: number | null;
+    injury_designation: string | null;
   }>(
     `SELECT p.id,
             p.external_ref,
             p.full_name,
             array_agg(DISTINCT pos.key) AS positions,
-            r.overall_milli
+            r.overall_milli,
+            p.image_url,
+            p.team_ref,
+            -- A bye is a fact about the club, and player_seasons is where the
+            -- sync writes it. Left joined, so a season nobody has synced reads
+            -- null rather than dropping every player off the board.
+            ps.bye_week,
+            p.injury_designation
        FROM players p
        JOIN positions pos
          ON pos.id = p.primary_position_id
          OR pos.id IN (SELECT position_id FROM player_eligible_positions WHERE player_id = p.id)
+       LEFT JOIN player_seasons ps
+         ON ps.player_id = p.id
+        AND ps.season = $2
        LEFT JOIN player_rankings_current r
          ON r.player_id = p.id
         AND r.season = $2
         AND r.source = COALESCE($3, r.source)
         AND r.ranking_type = COALESCE($4, r.ranking_type)
       WHERE p.sport_id = $1 AND p.active
-      GROUP BY p.id, p.external_ref, p.full_name, r.overall_milli
+      GROUP BY p.id, p.external_ref, p.full_name, r.overall_milli,
+               p.image_url, p.team_ref, ps.bye_week, p.injury_designation
       ORDER BY r.overall_milli NULLS LAST, p.full_name`,
     [ids.sportId, season, options.source ?? null, options.rankingType ?? null],
   );
@@ -584,6 +660,12 @@ export async function loadDraftBoard(
     // Dense 1..n ordering. The engine only compares ranks, so the ADP value
     // itself does not need to survive — but the ordering does.
     rank: index + 1,
+    summary: {
+      imageUrl: row.image_url,
+      teamRef: row.team_ref,
+      byeWeek: row.bye_week === null ? null : Number(row.bye_week),
+      injuryDesignation: row.injury_designation,
+    },
   }));
 }
 

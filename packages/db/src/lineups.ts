@@ -323,12 +323,38 @@ async function weekFirstKickoff(
     : null;
 }
 
+/**
+ * A rostered player, as the lineup screen needs him.
+ *
+ * `LineupPlayer` is the part the rules read — the id, the positions, and the
+ * kickoff a slot locks on. The three fields added here are the part a person
+ * reads, and the separation is worth keeping visible: a face and a club can be
+ * missing, stale or wrong without a single point moving, while the fields they
+ * sit beside decide whether an edit is legal.
+ */
+export type RosterPlayer = LineupPlayer & {
+  readonly fullName: string;
+  readonly status: string;
+  /** Provider-published headshot, or a crest for a team unit. Null renders as initials. */
+  readonly imageUrl: string | null;
+  /** The club, not the fantasy team — "PHI". */
+  readonly teamRef: string | null;
+  /**
+   * The provider's own wording, or null when fit.
+   *
+   * **Shown, never enforced.** §6 locks a slot at that player's own kickoff and
+   * says nothing about whether he is fit to play it — starting a doubtful
+   * player is a manager's call, and a designation arriving on the Sunday must
+   * not be able to invalidate a lineup that was legal when it was set.
+   */
+  readonly injuryDesignation: string | null;
+};
 export async function loadRosterForWeek(
   db: SqlClient,
   teamId: string,
   season: number,
   week: number,
-): Promise<ReadonlyMap<string, LineupPlayer & { fullName: string; status: string }>> {
+): Promise<ReadonlyMap<string, RosterPlayer>> {
   const rows = await db.query<{
     player_id: string;
     full_name: string;
@@ -336,10 +362,19 @@ export async function loadRosterForWeek(
     positions: string[];
     kickoff_at: string | null;
     team_scheduled: boolean;
+    image_url: string | null;
+    team_ref: string | null;
+    injury_designation: string | null;
   }>(
     `SELECT p.id AS player_id,
             p.full_name,
             p.status,
+            -- Display only. A roster row shows a face, a club, and whether the
+            -- man is hurt; none of the three is read by a lock, by
+            -- validateLineup, or by anything that scores.
+            p.image_url,
+            p.team_ref,
+            p.injury_designation,
             array_agg(DISTINCT pos.key) AS positions,
             g.kickoff_at,
             -- Does this player's team appear anywhere in the season's schedule?
@@ -362,7 +397,8 @@ export async function loadRosterForWeek(
         AND g.week = $3
         AND (g.home_team_ref = p.team_ref OR g.away_team_ref = p.team_ref)
       WHERE r.team_id = $1 AND r.released_at IS NULL
-      GROUP BY p.id, p.full_name, p.status, g.kickoff_at, p.team_ref, p.sport_id`,
+      GROUP BY p.id, p.full_name, p.status, g.kickoff_at, p.team_ref, p.sport_id,
+               p.image_url, p.injury_designation`,
     [teamId, season, week],
   );
 
@@ -379,6 +415,9 @@ export async function loadRosterForWeek(
         fullName: row.full_name,
         status: row.status,
         positions: row.positions,
+        imageUrl: row.image_url,
+        teamRef: row.team_ref,
+        injuryDesignation: row.injury_designation,
         kickoffAt: row.kickoff_at
           ? Math.floor(new Date(row.kickoff_at).getTime() / 1000)
           : // No game this week. A bye keeps null and stays movable; a player

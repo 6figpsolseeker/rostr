@@ -94,12 +94,37 @@ class FakeProvider implements AdpCapableProvider {
   }
 }
 
-const player = (ref: string, name: string, position: string, team = "PHI"): ProviderPlayer => ({
+/**
+ * The profile block, all absent.
+ *
+ * Spread into the fixture rather than written out, so a field added to
+ * `ProviderPlayerProfile` does not need touching in every test that happens to
+ * build a player.
+ */
+const NO_PROFILE = {
+  imageUrl: null,
+  jerseyNumber: null,
+  heightInches: null,
+  weightPounds: null,
+  birthDate: null,
+  college: null,
+  draft: null,
+  injury: null,
+} as const;
+
+const player = (
+  ref: string,
+  name: string,
+  position: string,
+  team = "PHI",
+  profile: ProviderPlayer["profile"] = null,
+): ProviderPlayer => ({
   externalRef: ref,
   fullName: name,
   positions: [position],
   teamRef: team,
   active: true,
+  profile,
 });
 
 async function fresh(): Promise<PGliteClient> {
@@ -176,6 +201,108 @@ describe("syncPlayers", () => {
         WHERE p.external_ref = 'DST_PHI'`,
     );
     expect(row?.key).toBe("DEF");
+  });
+});
+
+describe("syncPlayers — the profile block", () => {
+  const hurts = {
+    ...NO_PROFILE,
+    imageUrl: "https://example.test/hurts.png",
+    jerseyNumber: "1",
+    heightInches: 73,
+    weightPounds: 223,
+    birthDate: "1998-08-07",
+    college: "Oklahoma",
+    draft: { year: 2020, round: 2, pick: 53 },
+  } as const;
+
+  it("stores what the provider published", async () => {
+    const client = await fresh();
+    await syncPlayers(
+      client,
+      new FakeProvider([player("1", "Jalen Hurts", "QB", "PHI", hurts)]),
+      "nfl",
+      2026,
+    );
+
+    const [row] = await client.query<{
+      image_url: string | null;
+      jersey_number: string | null;
+      height_inches: number | null;
+      weight_pounds: number | null;
+      college: string | null;
+      draft_round: number | null;
+    }>(
+      `SELECT image_url, jersey_number, height_inches, weight_pounds, college, draft_round
+         FROM players WHERE external_ref = '1'`,
+    );
+
+    expect(row).toMatchObject({
+      image_url: "https://example.test/hurts.png",
+      jersey_number: "1",
+      height_inches: 73,
+      weight_pounds: 223,
+      college: "Oklahoma",
+      draft_round: 2,
+    });
+  });
+
+  it("clears an injury that has cleared", async () => {
+    // The failure this exists to prevent is a designation that sticks: a player
+    // marked Questionable in October who is still labelled that way in January
+    // because the update only ever wrote non-null values. Within a published
+    // profile a null is an assertion, and it has to reach the column.
+    const client = await fresh();
+    const hurt = {
+      ...hurts,
+      injury: { designation: "Questionable", description: "Ankle", returnDate: null },
+    } as const;
+
+    await syncPlayers(
+      client,
+      new FakeProvider([player("1", "J. Hurts", "QB", "PHI", hurt)]),
+      "nfl",
+      2026,
+    );
+    await syncPlayers(
+      client,
+      new FakeProvider([player("1", "J. Hurts", "QB", "PHI", hurts)]),
+      "nfl",
+      2026,
+    );
+
+    const [row] = await client.query<{ designation: string | null }>(
+      "SELECT injury_designation AS designation FROM players WHERE external_ref = '1'",
+    );
+    expect(row?.designation).toBeNull();
+  });
+
+  it("leaves the stored profile alone when a provider publishes none", async () => {
+    // A provider with no profile data is stating *no opinion*, not "this player
+    // has no face". Without the guard, a players sync run from a second source
+    // would blank every headshot in the database and nothing would report it.
+    const client = await fresh();
+
+    await syncPlayers(
+      client,
+      new FakeProvider([player("1", "Jalen Hurts", "QB", "PHI", hurts)]),
+      "nfl",
+      2026,
+    );
+    await syncPlayers(
+      client,
+      new FakeProvider([player("1", "Jalen Hurts", "QB", "PHI", null)]),
+      "nfl",
+      2026,
+    );
+
+    const [row] = await client.query<{ image_url: string | null; college: string | null }>(
+      "SELECT image_url, college FROM players WHERE external_ref = '1'",
+    );
+    expect(row).toMatchObject({
+      image_url: "https://example.test/hurts.png",
+      college: "Oklahoma",
+    });
   });
 });
 

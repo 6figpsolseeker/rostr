@@ -13,6 +13,60 @@
 
 import type { StatLine } from "@rostr/core";
 
+/**
+ * Who a player is, as opposed to what he did.
+ *
+ * Split from `ProviderPlayer` rather than flattened into it because the two
+ * carry different obligations. The fields there identify a player and are read
+ * by the draft, the roster and every score; **nothing in this type is read by
+ * anything that decides an outcome**, and a provider that publishes none of it
+ * costs a screen some detail and costs a league nothing.
+ *
+ * So a null here is ordinary rather than an error, and no caller may come to
+ * depend on one being present.
+ */
+export interface ProviderPlayerProfile {
+  /**
+   * A headshot, or a crest for a team unit. Absolute, and the provider's own.
+   *
+   * Published rather than composed from an id. The provider's URLs are not
+   * uniform — rookies and players with no photo sit on different paths, 361 of
+   * 4,202 on 2026-08-18 — and composing one here would hard-code another
+   * company's hostname into ours, which is the coupling this interface exists
+   * to prevent.
+   */
+  readonly imageUrl: string | null;
+  /** Text, not a number: `"00"` is a jersey somebody wears. */
+  readonly jerseyNumber: string | null;
+  /** Whole inches and whole pounds. Integers — see invariant 2. */
+  readonly heightInches: number | null;
+  readonly weightPounds: number | null;
+  /** ISO `YYYY-MM-DD`. The date, never a computed age. */
+  readonly birthDate: string | null;
+  readonly college: string | null;
+  /** Where they entered the league. Null for an undrafted player. */
+  readonly draft: {
+    readonly year: number;
+    readonly round: number;
+    readonly pick: number;
+  } | null;
+  /**
+   * The provider's own wording — "Questionable", "Out", "Injured Reserve".
+   *
+   * Not normalised onto an enum of ours, because an unfamiliar fourth value has
+   * to reach the screen rather than be dropped or fail a cast. **Nothing may
+   * gate a lineup on it**: `RULES.md` §6 locks a slot on that player's own
+   * kickoff, not on whether he is fit, and starting a doubtful player is a
+   * manager's call to make.
+   */
+  readonly injury: {
+    readonly designation: string;
+    readonly description: string | null;
+    /** ISO `YYYY-MM-DD`, when the provider offers one. */
+    readonly returnDate: string | null;
+  } | null;
+}
+
 export interface ProviderPlayer {
   /** The provider's own identifier, stored so players survive a provider switch. */
   readonly externalRef: string;
@@ -21,6 +75,8 @@ export interface ProviderPlayer {
   readonly positions: readonly string[];
   readonly teamRef: string | null;
   readonly active: boolean;
+  /** Display detail. Null where the provider publishes none. */
+  readonly profile: ProviderPlayerProfile | null;
 }
 
 export interface ProviderGame {

@@ -2,6 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
+import { PlayerAvatar } from "./PlayerAvatar";
+import { PlayerCard } from "./PlayerCard";
+import { injuryBadge, injuryTone, positionColour, positionGroup } from "@/lib/player";
 
 /**
  * The lineup screen.
@@ -42,6 +45,16 @@ interface RosterPlayer {
   projectedMilliPoints: number | null;
   /** Season to date. Null before week 2, when there is no history yet. */
   averageMilliPoints: number | null;
+  /**
+   * Display only. Null on a pool synced before migration `0032`.
+   *
+   * The designation in particular is **shown and never enforced**: §6 locks a
+   * slot at that player's own kickoff and says nothing about whether he is fit,
+   * so starting a doubtful player stays the manager's call.
+   */
+  imageUrl: string | null;
+  teamRef: string | null;
+  injuryDesignation: string | null;
 }
 
 interface LineupResponse {
@@ -103,6 +116,8 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
   );
 
   const [saving, setSaving] = useState(false);
+  /** The player whose card is open. Every face and name on this screen opens one. */
+  const [openPlayerId, setOpenPlayerId] = useState<string | null>(null);
   const [problems, setProblems] = useState<readonly string[]>([]);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -261,6 +276,57 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
                 {slot.slotType}
               </span>
 
+              {/*
+                The face, and the man's own details, outside the <select>.
+                A native select cannot render an image and its option text is the
+                only thing it can show — so an editor built entirely out of one
+                reduces your team to a list of strings. The control stays exactly
+                as it was, because it is the accessible, keyboard-navigable way
+                to change a slot; what is added is everything a select cannot
+                say.
+              */}
+              {player ? (
+                <button
+                  onClick={() => setOpenPlayerId(player.playerId)}
+                  className="flex min-w-0 items-center gap-2.5 text-left"
+                  title={`${player.name} — open card`}
+                >
+                  <PlayerAvatar
+                    name={player.name}
+                    positions={player.positions}
+                    imageUrl={player.imageUrl}
+                    size={40}
+                  />
+                  <span className="hidden min-w-0 sm:block">
+                    <span className="flex items-center gap-1.5">
+                      <span className="truncate text-sm">{player.name}</span>
+                      {injuryBadge(player.injuryDesignation) && (
+                        <span
+                          className={`text-[10px] font-semibold ${injuryTone(player.injuryDesignation)}`}
+                        >
+                          {injuryBadge(player.injuryDesignation)}
+                        </span>
+                      )}
+                    </span>
+                    <span className="flex items-center gap-1.5 text-[11px] text-nocturne-neutral-600">
+                      <span
+                        className={`rounded px-1 py-px font-medium ring-1 ${positionColour(positionGroup(player.positions))}`}
+                      >
+                        {positionGroup(player.positions)}
+                      </span>
+                      {player.teamRef ?? "FA"}
+                    </span>
+                  </span>
+                </button>
+              ) : (
+                <span
+                  className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-dashed border-nocturne-neutral-800 text-nocturne-neutral-700"
+                  aria-hidden
+                >
+                  +
+                </span>
+              )}
+
               <div className="min-w-0 flex-1">
                 <select
                   value={slot.playerId ?? ""}
@@ -347,11 +413,25 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
         </h3>
         <ul className="space-y-1 text-xs">
           {bench.map((player) => (
-            <li key={player.playerId} className="flex gap-3">
-              <span className="w-10 text-nocturne-neutral-600">
-                {player.positions.join("/")}
-              </span>
-              <span className="flex-1 truncate">{player.name}</span>
+            <li key={player.playerId} className="flex items-center gap-3">
+              <button
+                onClick={() => setOpenPlayerId(player.playerId)}
+                className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
+              >
+                <PlayerAvatar
+                  name={player.name}
+                  positions={player.positions}
+                  imageUrl={player.imageUrl}
+                  size={28}
+                />
+                <span className="min-w-0">
+                  <span className="block truncate text-xs">{player.name}</span>
+                  <span className="block text-[10px] text-nocturne-neutral-600">
+                    {positionGroup(player.positions)}
+                    {player.teamRef ? ` · ${player.teamRef}` : ""}
+                  </span>
+                </span>
+              </button>
               {OUT_STATUSES.has(player.status.toUpperCase()) && (
                 <span className="text-amber-400/70">{player.status}</span>
               )}
@@ -399,6 +479,18 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
         Each slot locks when that player&rsquo;s game kicks off, not all at once — so a Thursday
         starter locking does not stop you moving anyone else.
       </p>
+
+      {openPlayerId && (
+        <PlayerCard
+          leagueId={leagueId}
+          playerId={openPlayerId}
+          onClose={() => setOpenPlayerId(null)}
+          {...(byId.get(openPlayerId) ? { fallbackName: byId.get(openPlayerId)!.name } : {})}
+          {...(byId.get(openPlayerId)
+            ? { fallbackPositions: byId.get(openPlayerId)!.positions }
+            : {})}
+        />
+      )}
     </div>
   );
 }

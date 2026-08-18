@@ -630,6 +630,16 @@ tests, and every docstring the change falsified rewritten in the same commit:
 - **#79 part 3 is deferred on purpose.** The analysis is banked in a comment on the issue,
   including the two fixes that look right and are not. Do not "just" enumerate calendar dates.
 
+**The migration-numbering trap fired again on 2026-08-18, and `db:status` reported
+the wrong thing.** `feat/settlement-kernel` was eight commits behind a `main` carrying
+`0030` and `0031`, and the Supabase database was already at **31**. A new file written
+as `0030` therefore showed as **`applied`** in `pnpm db:status` — the runner keys on the
+version number, not the filename — so it would have been skipped in silence and every
+query against its columns would have failed at runtime with the schema check reading
+green. Renumbered to `0032`. **`applied` beside a file you just wrote means a
+collision, not success**; check `main`'s highest before picking a number, and confirm
+the columns actually exist rather than trusting the status line.
+
 **A GitHub trap that has now cost this repo twice:** `Closes #79 part 2` closes **#79**. GitHub
 does not parse the qualifier. Both #106 and #124 swallowed a multi-part issue that way. For a
 partial fix write `Refs #79` and close it by hand when the last part lands.
@@ -1076,6 +1086,91 @@ Clocks are **computed from `clock_started_at`, never scheduled.** That is what l
 the work list and a job auto-picks through it. A pause clears the clock, so a manager
 resumes with a full fresh timer rather than losing sixty of their ninety seconds to an
 outage they had nothing to do with.
+
+### Faces, and the player card
+
+Migration `0032`, `packages/db/src/players.ts`, `apps/web/src/lib/player.ts`,
+`components/PlayerAvatar.tsx`, `components/PlayerCard.tsx`. Added 2026-08-18.
+
+**Everything in this feature is display data, and the separation is the point.**
+Nothing scoring, locking, drafting or settling reads a single one of these columns.
+They are refreshed wholesale on every sync with no revision history and no source
+column, so a rule that came to depend on one would be depending on a value that
+can change silently — which is exactly what `stat_lines`' revisions and sources
+exist to prevent. The injury designation is the tempting one: it is **shown and
+never enforced**, because `RULES.md` §6 locks a slot at that player's own kickoff
+and says nothing about fitness, and a designation arriving on the Sunday must not
+be able to invalidate a lineup that was legal when it was set.
+
+**The image URL is stored, not composed, and that was measured rather than
+assumed.** Our provider's player id _is_ the ESPN athlete id, so
+`.../headshots/nfl/players/full/<id>.png` looks derivable with no column at all.
+Against the live player list on 2026-08-18 that URL is **wrong for 361 of 4,202
+players**: 325 rookies are served from the `college-football` path, and 36 have no
+photo and resolve to ESPN's own grey silhouette. Composing it would also have put
+a stats provider's hostname inside our rendering code, which is the one coupling
+`StatsProvider` exists to prevent. The provider publishes the URL, the adapter maps
+it, and `PlayerAvatar` renders whatever it is handed. The 36 placeholders are
+mapped to **null** on purpose, so our own initialled disc shows instead of somebody
+else's "no photo" graphic.
+
+**A plain `<img>`, not `next/image`**, for the same reason: `remotePatterns` would
+put that hostname in `next.config.ts` and break silently the day the provider
+changes CDN.
+
+**The sync's update rule has two halves and they are not the same.** A provider
+publishing _no_ profile is stating **no opinion**, so its sync leaves what the
+primary wrote alone — without that guard, a players sync from a second source
+would blank every headshot in the database and nothing would report it. Within a
+published profile a null is an **assertion** and does overwrite, because a
+designation that clears when a player recovers has to reach the column or "Out"
+sticks to him for the rest of the season. Both halves have a test.
+
+**The card is league-scoped (`/api/leagues/[id]/players/[playerId]`), and not
+because of the biography.** A player's height is the same everywhere; his points
+are not. Every number on the card is scored from raw stat lines with _that_
+league's frozen rules, through the same `scorePlayer` the cron uses — so the card
+cannot report a week differently from the scoreboard that settled it, and there is
+deliberately no `/api/players/[id]`. It is gated by `leagueReadForbidden` like the
+standings: a private league's player pages report how it is going.
+
+**Age is computed, never stored.** `birth_date` is the column; an age column is
+wrong the day after it is written and nothing would ever notice. `ageOn` compares
+calendar parts rather than dividing a millisecond difference, which is a day out
+every fourth year — on somebody's birthday, the one day anyone would spot it.
+
+Presentation rules live in `lib/player.ts` with 31 tests, not inside the
+components, for the reason this file gives twice already: `apps/web` cannot render
+a component in a test, so a rule written in `.tsx` is verified only by being run
+in production. Initials, the injury abbreviation and the image sizing each have a
+wrong answer worth catching — an unfamiliar designation is **truncated, never
+dropped**, because a player silently appearing healthy is the bad failure.
+
+#### The draft room is a board now
+
+`components/DraftRoom.tsx`, `lib/draft-board.ts`. Rebuilt 2026-08-18 to the
+column-per-seat, row-per-round grid every draft room in the sport uses, because it
+is the layout that answers "when am I up again" by counting downwards.
+
+**Nothing in it computes the snake.** Every cell's position comes from the
+engine's own `pickPosition`, the same function the server uses to decide whose
+turn it is — the rule the lobby already follows. A board that worked the ordering
+out for itself would highlight one seat while the server accepted a pick from
+another. `buildBoard` seeds the grid with nulls and fills **by position** rather
+than pushing in pick order, which is the bug the fixture test names: pushing looks
+right in round 1 and puts every even round in the wrong column.
+
+Two things were kept rather than restyled, because they are the argument this
+product makes and Sleeper has no equivalent: the **order-draw explainer** with its
+slot, blockhash and seed, and the **auto-pick marking** on a cell. Everything
+load-bearing about the old room survives unchanged — the adaptive poll, the
+server-clock deadline, the expiry gate on the Draft button.
+
+**The designer's own draft room (`docs/design/screens/Rostr Draft Room.dc.html`)
+lays the pool out as a table with a right rail and no grid.** This is a deliberate
+divergence, asked for by the owner with a Sleeper screenshot; the palette, the
+copy and the verifiability panels stay this repo's. Reconcile before treating that
+file as the spec for this screen.
 
 ### The season
 

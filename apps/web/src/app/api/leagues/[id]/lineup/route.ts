@@ -137,6 +137,12 @@ export async function GET(
         name: player.fullName,
         positions: player.positions,
         status: player.status,
+        // Shown, never enforced. The lock is `locked` above, computed from
+        // kickoff; a designation arriving on the Sunday must not be able to
+        // invalidate a lineup that was legal when it was set.
+        imageUrl: player.imageUrl,
+        teamRef: player.teamRef,
+        injuryDesignation: player.injuryDesignation,
         kickoffAt: player.kickoffAt,
         /**
          * How settled this player's week is. A bye, a fixture whose kickoff

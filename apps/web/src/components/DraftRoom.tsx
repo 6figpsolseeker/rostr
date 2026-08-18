@@ -1,7 +1,20 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import useSWR from "swr";
+import { PlayerAvatar } from "./PlayerAvatar";
+import { PlayerCard } from "./PlayerCard";
+import { buildBoard, focusRound, picksUntilTurn } from "@/lib/draft-board";
+import type { BoardCell, BoardRow } from "@/lib/draft-board";
+import {
+  POSITION_ORDER,
+  injuryBadge,
+  injuryTone,
+  points,
+  positionColour,
+  positionGroup,
+  shortName,
+} from "@/lib/player";
 
 /**
  * The draft room.
@@ -13,6 +26,12 @@ import useSWR from "swr";
  *
  * The board is fetched once — it only changes when the stats sync runs — and
  * availability is worked out here by subtracting who has been drafted.
+ *
+ * **The grid is the screen's centre of gravity**, one column per seat and one
+ * row per round, because that is the layout that answers "when am I up again"
+ * by counting downwards. Its geometry comes from `lib/draft-board.ts`, which
+ * asks the engine's own `pickPosition` — the snake is authored once, on the
+ * server, and this room reads it rather than restating it.
  */
 
 interface Player {
@@ -22,25 +41,11 @@ interface Player {
   rank: number;
   /** Milli-points, scored with this league's rules. Null when unprojected. */
   projectedMilliPoints: number | null;
-}
-
-/** Display order for the position groups. Matches the roster, top to bottom. */
-const POSITION_ORDER = ["QB", "RB", "WR", "TE", "K", "DEF"] as const;
-
-const points = (milli: number | null): string =>
-  milli === null ? "—" : (milli / 1000).toFixed(1);
-
-/**
- * A player's group.
- *
- * Multi-position players are filed under the first position the roster cares
- * about, so a receiver who also returns kicks does not appear twice.
- */
-function groupOf(player: Player): string {
-  for (const position of POSITION_ORDER) {
-    if (player.positions.includes(position)) return position;
-  }
-  return player.positions[0] ?? "—";
+  /** Display only — see the board route. Null on a pool synced before `0032`. */
+  imageUrl: string | null;
+  teamRef: string | null;
+  byeWeek: number | null;
+  injuryDesignation: string | null;
 }
 
 /**
@@ -131,7 +136,9 @@ const fetcher = async (url: string): Promise<unknown> => {
   return response.json();
 };
 
-const POSITIONS = ["ALL", "QB", "RB", "WR", "TE", "K", "DEF"] as const;
+const FILTERS = ["ALL", ...POSITION_ORDER] as const;
+
+type Tab = "QUEUE" | "ROSTER" | "ORDER";
 
 export function DraftRoom({ leagueId, leagueName }: { leagueId: string; leagueName: string }) {
   const { data, error, mutate } = useSWR<DraftResponse>(
@@ -146,61 +153,63 @@ export function DraftRoom({ leagueId, leagueName }: { leagueId: string; leagueNa
     { revalidateOnFocus: false, revalidateIfStale: false },
   );
 
-  const [position, setPosition] = useState<(typeof POSITIONS)[number]>("ALL");
+  const [position, setPosition] = useState<(typeof FILTERS)[number]>("ALL");
   const [search, setSearch] = useState("");
+  const [tab, setTab] = useState<Tab>("QUEUE");
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  /** The player whose card is open, or null. Opened from anywhere on the page. */
+  const [openPlayerId, setOpenPlayerId] = useState<string | null>(null);
 
   const draft = data?.draft ?? null;
   const teams = useMemo(() => new Map((data?.teams ?? []).map((t) => [t.id, t])), [data]);
   const myTeamId = data?.me.teamId ?? null;
-  const queue = data?.me.queue ?? [];
+  const queue = useMemo(() => data?.me.queue ?? [], [data]);
 
   const drafted = useMemo(
     () => new Set((draft?.picks ?? []).map((pick) => pick.playerId)),
     [draft],
   );
 
-  const players = boardData?.players ?? [];
+  const players = useMemo(() => boardData?.players ?? [], [boardData]);
   const byId = useMemo(() => new Map(players.map((p) => [p.id, p])), [players]);
 
   /**
-   * Available players, grouped by position and ranked within each group.
+   * Available players, ranked.
    *
-   * Grouping is the point: comparing a quarterback's 340 projected points
-   * against a kicker's 130 says nothing useful, because you need one of each.
-   * What matters is who is the best one left *at a position*.
+   * One flat list rather than the old per-position sections. The sections
+   * existed to stop a quarterback's 340 being compared against a kicker's 130,
+   * and the filter row does that job better: it is one click, it shows how many
+   * are left at each position, and it leaves the default view as the honest
+   * "best available" a manager is actually choosing from.
    */
-  const groups = useMemo(() => {
+  const pool = useMemo(() => {
     const term = search.trim().toLowerCase();
-    const matching = players
-      .filter((player) => !drafted.has(player.id))
-      .filter((player) => term === "" || player.name.toLowerCase().includes(term));
-
-    const wanted = position === "ALL" ? POSITION_ORDER : [position];
-
-    return wanted
-      .map((slot) => ({
-        position: slot,
-        players: matching
-          .filter((player) => groupOf(player) === slot)
-          .sort(byProjection)
-          // Deep enough that nobody runs out mid-draft, short enough to render.
-          .slice(0, position === "ALL" ? 25 : 150),
-      }))
-      .filter((group) => group.players.length > 0);
+    return (
+      players
+        .filter((player) => !drafted.has(player.id))
+        .filter((player) => term === "" || player.name.toLowerCase().includes(term))
+        .filter((player) => position === "ALL" || positionGroup(player.positions) === position)
+        .sort(byProjection)
+        // Deep enough that nobody runs out mid-draft, short enough to render.
+        .slice(0, 200)
+    );
   }, [players, drafted, position, search]);
+
+  /** How many are left at each position, for the filter row. */
+  const remaining = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const player of players) {
+      if (drafted.has(player.id)) continue;
+      const group = positionGroup(player.positions);
+      counts.set(group, (counts.get(group) ?? 0) + 1);
+    }
+    return counts;
+  }, [players, drafted]);
 
   const onTheClock = draft?.currentTeamId ?? null;
   const isMyTurn = myTeamId !== null && onTheClock === myTeamId;
 
-  /**
-   * When the pick on the clock expires, in milliseconds.
-   *
-   * Computed here rather than in `ClockBar` because two things need it and they
-   * must not be able to disagree: the countdown, and whether the Draft button
-   * still does anything.
-   */
   /**
    * The server clock, as of the last poll.
    *
@@ -214,6 +223,13 @@ export function DraftRoom({ leagueId, leagueName }: { leagueId: string; leagueNa
    */
   const serverNow = data?.now ? new Date(data.now).getTime() : Date.now();
 
+  /**
+   * When the pick on the clock expires, in milliseconds.
+   *
+   * Computed here rather than in the header because two things need it and they
+   * must not be able to disagree: the countdown, and whether the Draft button
+   * still does anything.
+   */
   const deadline =
     draft?.clockStartedAt !== null && draft?.clockStartedAt !== undefined
       ? new Date(draft.clockStartedAt).getTime() + draft.pickSeconds * 1000
@@ -272,6 +288,42 @@ export function DraftRoom({ leagueId, leagueName }: { leagueId: string; leagueNa
     [leagueId, mutate],
   );
 
+  const canPick = isMyTurn && draft?.status === "IN_PROGRESS" && !clockExpired;
+
+  const pick = useCallback(
+    (playerId: string): void => {
+      setOpenPlayerId(null);
+      void post("/pick", { playerId });
+    },
+    [post],
+  );
+
+  const toggleQueue = useCallback(
+    (playerId: string): void => {
+      void post(
+        "/queue",
+        {
+          playerIds: queue.includes(playerId)
+            ? queue.filter((id) => id !== playerId)
+            : [...queue, playerId],
+        },
+        "PUT",
+      );
+    },
+    [post, queue],
+  );
+
+  const rows = useMemo(
+    () =>
+      buildBoard({
+        order: draft?.order ?? [],
+        rounds: draft?.rounds ?? 0,
+        picks: draft?.picks ?? [],
+        currentPickNumber: draft?.currentPickNumber ?? null,
+      }),
+    [draft],
+  );
+
   if (error) {
     return <p className="text-sm text-red-400">{error.message}</p>;
   }
@@ -282,7 +334,7 @@ export function DraftRoom({ leagueId, leagueName }: { leagueId: string; leagueNa
 
   if (!draft) {
     return (
-      <section className="rounded border border-nocturne-neutral-900 p-6">
+      <section className="rounded-lg border border-nocturne-neutral-900 p-6">
         <p className="text-sm text-nocturne-neutral-400">
           No draft has been scheduled for {leagueName} yet.
         </p>
@@ -290,13 +342,17 @@ export function DraftRoom({ leagueId, leagueName }: { leagueId: string; leagueNa
     );
   }
 
+  const untilMyTurn = picksUntilTurn(rows, myTeamId, draft.currentPickNumber);
+  const openPlayer = openPlayerId ? byId.get(openPlayerId) : undefined;
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <ClockBar
         draft={draft}
         deadline={deadline}
         teams={teams}
         isMyTurn={isMyTurn}
+        untilMyTurn={untilMyTurn}
         isCommissioner={data.me.isCommissioner}
         busy={busy}
         onStart={() => void post("/start")}
@@ -308,84 +364,136 @@ export function DraftRoom({ leagueId, leagueName }: { leagueId: string; leagueNa
         </p>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
-        <section className="space-y-3">
-          <div className="flex flex-wrap items-center gap-2">
-            {POSITIONS.map((slot) => (
+      <PickBoard
+        rows={rows}
+        teams={teams}
+        order={draft.order}
+        myTeamId={myTeamId}
+        byId={byId}
+        currentPickNumber={draft.currentPickNumber}
+        onOpenPlayer={setOpenPlayerId}
+      />
+
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_21rem]">
+        <section className="min-w-0 space-y-3">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {FILTERS.map((slot) => (
               <button
                 key={slot}
                 onClick={() => setPosition(slot)}
-                className={`rounded px-2.5 py-1 text-xs font-medium ${
+                className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
                   position === slot
-                    ? "border border-nocturne-accent text-nocturne-accent-200"
+                    ? "bg-nocturne-accent text-nocturne-bg"
                     : "border border-nocturne-neutral-800 text-nocturne-neutral-400 hover:text-nocturne-text"
                 }`}
               >
                 {slot}
+                {slot !== "ALL" && (
+                  <span className="ml-1.5 opacity-60 tabular-nums">
+                    {remaining.get(slot) ?? 0}
+                  </span>
+                )}
               </button>
             ))}
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search players"
-              className="ml-auto w-44 rounded border border-nocturne-neutral-800 bg-transparent px-3 py-1 text-sm"
+              placeholder="Find player"
+              className="ml-auto w-44 rounded-full border border-nocturne-neutral-800 bg-nocturne-surface/40 px-3.5 py-1.5 text-sm placeholder:text-nocturne-neutral-600"
             />
           </div>
 
-          {groups.length === 0 ? (
-            <p className="text-sm text-nocturne-neutral-600">Nobody left matching that.</p>
-          ) : (
-            groups.map((group) => (
-              <section key={group.position} className="space-y-1.5">
-                <h2 className="flex items-baseline gap-2 text-xs font-medium tracking-wide text-nocturne-neutral-500 uppercase">
-                  {group.position}
-                  <span className="text-[10px] normal-case">
-                    {group.players.length} available · projected season points
-                  </span>
-                </h2>
-                <PlayerList
-                  players={group.players}
-                  queue={queue}
-                  canPick={isMyTurn && draft.status === "IN_PROGRESS" && !clockExpired}
-                  busy={busy}
-                  onPick={(playerId) => void post("/pick", { playerId })}
-                  onQueue={(playerId) =>
-                    void post(
-                      "/queue",
-                      {
-                        playerIds: queue.includes(playerId)
-                          ? queue.filter((q) => q !== playerId)
-                          : [...queue, playerId],
-                      },
-                      "PUT",
-                    )
-                  }
-                  inLeague={myTeamId !== null}
-                />
-              </section>
-            ))
-          )}
+          <PlayerTable
+            players={pool}
+            queue={queue}
+            canPick={canPick === true}
+            busy={busy}
+            inLeague={myTeamId !== null}
+            onPick={pick}
+            onQueue={toggleQueue}
+            onOpen={setOpenPlayerId}
+          />
 
-          {position === "ALL" && (
-            <p className="text-xs text-nocturne-neutral-600">
-              Showing the top 25 at each position. Pick a position above for the full list.
-            </p>
+          {pool.length === 0 && (
+            <p className="text-sm text-nocturne-neutral-600">Nobody left matching that.</p>
           )}
         </section>
 
-        <aside className="space-y-6">
-          <Queue
-            queue={queue}
-            byId={byId}
-            drafted={drafted}
-            busy={busy}
-            onChange={(ids) => void post("/queue", { playerIds: ids }, "PUT")}
-          />
-          <MyRoster picks={draft.picks} myTeamId={myTeamId} byId={byId} />
-          <RecentPicks picks={draft.picks} teams={teams} byId={byId} />
-          <OrderPanel draft={draft} teams={teams} myTeamId={myTeamId} />
+        <aside className="min-w-0">
+          <div className="flex border-b border-nocturne-neutral-900">
+            {(["QUEUE", "ROSTER", "ORDER"] as const).map((name) => (
+              <button
+                key={name}
+                onClick={() => setTab(name)}
+                className={`flex-1 px-3 py-2 text-xs font-medium tracking-wide uppercase transition-colors ${
+                  tab === name
+                    ? "border-b-2 border-nocturne-accent text-nocturne-text"
+                    : "text-nocturne-neutral-600 hover:text-nocturne-neutral-400"
+                }`}
+              >
+                {name}
+                {name === "QUEUE" && queue.length > 0 && (
+                  <span className="ml-1.5 opacity-60 tabular-nums">{queue.length}</span>
+                )}
+              </button>
+            ))}
+          </div>
+
+          <div className="pt-4">
+            {tab === "QUEUE" && (
+              <Queue
+                queue={queue}
+                byId={byId}
+                drafted={drafted}
+                busy={busy}
+                onOpen={setOpenPlayerId}
+                onChange={(ids) => void post("/queue", { playerIds: ids }, "PUT")}
+              />
+            )}
+            {tab === "ROSTER" && (
+              <MyRoster
+                picks={draft.picks}
+                myTeamId={myTeamId}
+                byId={byId}
+                onOpen={setOpenPlayerId}
+              />
+            )}
+            {tab === "ORDER" && <OrderPanel draft={draft} teams={teams} myTeamId={myTeamId} />}
+          </div>
+
+          <RecentPicks picks={draft.picks} teams={teams} byId={byId} onOpen={setOpenPlayerId} />
         </aside>
       </div>
+
+      {openPlayerId && (
+        <PlayerCard
+          leagueId={leagueId}
+          playerId={openPlayerId}
+          onClose={() => setOpenPlayerId(null)}
+          {...(openPlayer ? { fallbackName: openPlayer.name } : {})}
+          {...(openPlayer ? { fallbackPositions: openPlayer.positions } : {})}
+          actions={
+            <>
+              <button
+                onClick={() => pick(openPlayerId)}
+                disabled={!canPick || busy || drafted.has(openPlayerId)}
+                className="rounded bg-nocturne-accent px-4 py-1.5 text-sm font-medium text-nocturne-bg disabled:opacity-30"
+              >
+                {drafted.has(openPlayerId) ? "Already drafted" : "Draft"}
+              </button>
+              {myTeamId !== null && !drafted.has(openPlayerId) && (
+                <button
+                  onClick={() => toggleQueue(openPlayerId)}
+                  disabled={busy}
+                  className="rounded border border-nocturne-neutral-800 px-4 py-1.5 text-sm text-nocturne-neutral-300 hover:text-nocturne-text disabled:opacity-40"
+                >
+                  {queue.includes(openPlayerId) ? "Remove from queue" : "Add to queue"}
+                </button>
+              )}
+            </>
+          }
+        />
+      )}
     </div>
   );
 }
@@ -397,6 +505,7 @@ function ClockBar({
   deadline,
   teams,
   isMyTurn,
+  untilMyTurn,
   isCommissioner,
   busy,
   onStart,
@@ -406,6 +515,8 @@ function ClockBar({
   deadline: number | null;
   teams: Map<string, Team>;
   isMyTurn: boolean;
+  /** Picks until this manager is up, or null. */
+  untilMyTurn: number | null;
   isCommissioner: boolean;
   busy: boolean;
   onStart: () => void;
@@ -424,7 +535,7 @@ function ClockBar({
 
   if (draft.status === "SCHEDULED" || draft.status === "PAUSED") {
     return (
-      <section className="flex flex-wrap items-center justify-between gap-4 rounded border border-nocturne-neutral-900 p-6">
+      <section className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-nocturne-neutral-900 bg-nocturne-surface/30 p-6">
         <div className="space-y-1">
           <p className="text-lg font-medium">
             {draft.status === "PAUSED" ? "Draft paused" : "Draft not started"}
@@ -434,7 +545,7 @@ function ClockBar({
             {draft.pickSeconds >= 3600
               ? `${Math.round(draft.pickSeconds / 3600)}h`
               : `${draft.pickSeconds}s`}{" "}
-            per pick
+            per pick · {draft.rounds} rounds
           </p>
           {!draft.draw && (
             <p className="text-xs text-nocturne-neutral-600">
@@ -447,7 +558,7 @@ function ClockBar({
           <button
             onClick={onStart}
             disabled={busy}
-            className="rounded rounded-[4px] border border-nocturne-accent px-4 py-2 text-[13.5px] text-nocturne-accent-200 transition-colors hover:bg-nocturne-accent/10 disabled:opacity-40"
+            className="rounded-[4px] border border-nocturne-accent px-4 py-2 text-[13.5px] text-nocturne-accent-200 transition-colors hover:bg-nocturne-accent/10 disabled:opacity-40"
           >
             {busy ? "Starting…" : draft.draw ? "Resume draft" : "Draw order and start"}
           </button>
@@ -458,10 +569,11 @@ function ClockBar({
 
   if (draft.complete) {
     return (
-      <section className="rounded border border-nocturne-neutral-900 p-6">
+      <section className="rounded-lg border border-nocturne-neutral-900 bg-nocturne-surface/30 p-6">
         <p className="text-lg font-medium">Draft complete</p>
         <p className="text-sm text-nocturne-neutral-500">
-          {draft.totalPicks} picks over {draft.rounds} rounds.
+          {draft.totalPicks} picks over {draft.rounds} rounds. Set your lineup before the first
+          kickoff.
         </p>
       </section>
     );
@@ -471,32 +583,56 @@ function ClockBar({
 
   return (
     <section
-      className={`flex flex-wrap items-center justify-between gap-4 rounded border p-6 ${
+      className={`flex flex-wrap items-center justify-between gap-4 rounded-lg border bg-nocturne-surface/30 p-5 transition-colors ${
         isMyTurn ? "border-nocturne-accent" : "border-nocturne-neutral-900"
       }`}
     >
-      <div className="space-y-1">
-        <p className="text-sm text-nocturne-neutral-500">
-          Round {Math.ceil((draft.currentPickNumber ?? 1) / draft.order.length)} · Pick{" "}
-          {draft.currentPickNumber} of {draft.totalPicks}
-        </p>
-        <p className="text-lg font-medium">
-          {isMyTurn ? "You are on the clock" : `${team?.name ?? "…"} is on the clock`}
-          {team?.isBot && <span className="ml-2 text-xs text-nocturne-neutral-600">bot</span>}
-        </p>
-        {remaining === 0 && (
-          // Says what is about to happen rather than leaving a dead button and a
-          // 0:00 with no explanation. The pick is the auto-pick's from the
-          // deadline onwards, and the server refuses a late manual one.
-          <p className="text-xs text-nocturne-neutral-600">
-            {isMyTurn ? "Your time is up — " : "Time is up — "}
-            the auto-pick takes this one, stamped at the deadline it missed.
-          </p>
+      <div className="flex items-center gap-4">
+        {team && (
+          <span
+            className={`grid h-11 w-11 place-items-center rounded-full text-sm font-semibold ring-1 ${
+              isMyTurn
+                ? "bg-nocturne-accent/20 text-nocturne-accent-200 ring-nocturne-accent/40"
+                : "bg-nocturne-neutral-900 text-nocturne-neutral-400 ring-nocturne-neutral-800"
+            }`}
+          >
+            {team.name.slice(0, 2).toUpperCase()}
+          </span>
         )}
+        <div className="space-y-0.5">
+          <p className="text-xs tracking-wide text-nocturne-neutral-500 uppercase">
+            Round {Math.ceil((draft.currentPickNumber ?? 1) / draft.order.length)} · Pick{" "}
+            {draft.currentPickNumber} of {draft.totalPicks}
+          </p>
+          <p className="text-lg font-medium">
+            {isMyTurn ? "You are on the clock" : `${team?.name ?? "…"} is on the clock`}
+            {team?.isBot && <span className="ml-2 text-xs text-nocturne-neutral-600">bot</span>}
+          </p>
+          {remaining === 0 ? (
+            // Says what is about to happen rather than leaving a dead button and
+            // a 0:00 with no explanation. The pick is the auto-pick's from the
+            // deadline onwards, and the server refuses a late manual one.
+            <p className="text-xs text-nocturne-neutral-600">
+              {isMyTurn ? "Your time is up — " : "Time is up — "}
+              the auto-pick takes this one, stamped at the deadline it missed.
+            </p>
+          ) : (
+            untilMyTurn !== null &&
+            untilMyTurn > 0 && (
+              <p className="text-xs text-nocturne-neutral-600">
+                You pick in {untilMyTurn} {untilMyTurn === 1 ? "pick" : "picks"}.
+              </p>
+            )
+          )}
+        </div>
       </div>
 
       {remaining !== null && (
-        <div className={`text-3xl font-semibold tabular-nums ${urgent ? "text-red-400" : ""}`}>
+        <div
+          className={`text-4xl font-semibold tabular-nums transition-colors ${
+            urgent ? "text-red-400" : ""
+          }`}
+        >
           {Math.floor(remaining / 60)}:{String(remaining % 60).padStart(2, "0")}
         </div>
       )}
@@ -504,66 +640,298 @@ function ClockBar({
   );
 }
 
-function PlayerList({
+/**
+ * The grid: a column per seat, a row per round.
+ *
+ * Scrolls in both directions with the team header pinned, because twelve teams
+ * do not fit on a laptop and fifteen rounds do not fit on a screen. The row for
+ * the pick on the clock is scrolled to on mount and whenever the round turns
+ * over — a board sitting on round one while round nine is being drafted is the
+ * commonest way this screen goes useless.
+ */
+function PickBoard({
+  rows,
+  teams,
+  order,
+  myTeamId,
+  byId,
+  currentPickNumber,
+  onOpenPlayer,
+}: {
+  rows: readonly BoardRow[];
+  teams: Map<string, Team>;
+  order: readonly string[];
+  myTeamId: string | null;
+  byId: Map<string, Player>;
+  currentPickNumber: number | null;
+  onOpenPlayer: (playerId: string) => void;
+}) {
+  const scroller = useRef<HTMLDivElement>(null);
+  const round = focusRound(rows, currentPickNumber);
+
+  useEffect(() => {
+    const node = scroller.current?.querySelector<HTMLElement>(`[data-round="${round}"]`);
+    // `nearest` rather than `center`: the board is one panel among several, and
+    // pulling the page around it every time a round turns over would yank the
+    // player list out from under whoever was reading it.
+    node?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [round]);
+
+  if (rows.length === 0) {
+    return (
+      <section className="rounded-lg border border-nocturne-neutral-900 p-6 text-sm text-nocturne-neutral-500">
+        The board appears once the order is drawn.
+      </section>
+    );
+  }
+
+  return (
+    <section className="overflow-hidden rounded-lg border border-nocturne-neutral-900">
+      <div ref={scroller} className="max-h-[22rem] overflow-auto">
+        <table className="w-full border-separate border-spacing-0">
+          <thead className="sticky top-0 z-10">
+            <tr>
+              <th className="sticky left-0 z-20 w-10 border-b border-nocturne-neutral-900 bg-nocturne-bg px-2 py-2 text-[10px] font-medium text-nocturne-neutral-600">
+                RD
+              </th>
+              {order.map((teamId) => {
+                const team = teams.get(teamId);
+                const mine = teamId === myTeamId;
+                return (
+                  <th
+                    key={teamId}
+                    className={`min-w-[7.5rem] border-b border-nocturne-neutral-900 bg-nocturne-bg px-2 py-2 text-left ${
+                      mine ? "text-nocturne-accent-300" : "text-nocturne-neutral-400"
+                    }`}
+                  >
+                    <span className="block truncate text-xs font-medium">
+                      {team?.name ?? "—"}
+                    </span>
+                    <span className="block text-[10px] font-normal text-nocturne-neutral-600">
+                      {mine ? "you" : team?.isBot ? "bot" : " "}
+                    </span>
+                  </th>
+                );
+              })}
+            </tr>
+          </thead>
+
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.round} data-round={row.round}>
+                <td className="sticky left-0 z-10 bg-nocturne-bg px-2 py-1 text-center align-middle">
+                  <span className="block text-xs font-medium text-nocturne-neutral-500 tabular-nums">
+                    {row.round}
+                  </span>
+                  {/* The reversal is the one thing people get wrong when
+                      planning two picks ahead, so it is drawn rather than
+                      implied by the numbers. */}
+                  <span className="block text-[10px] text-nocturne-neutral-700">
+                    {row.direction === "FORWARD" ? "→" : "←"}
+                  </span>
+                </td>
+
+                {row.cells.map((cell) => (
+                  <td key={cell.pickNumber} className="p-0.5 align-top">
+                    <BoardSquare
+                      cell={cell}
+                      player={cell.playerId ? byId.get(cell.playerId) : undefined}
+                      mine={cell.teamId === myTeamId}
+                      onOpen={onOpenPlayer}
+                    />
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function BoardSquare({
+  cell,
+  player,
+  mine,
+  onOpen,
+}: {
+  cell: BoardCell;
+  player: Player | undefined;
+  mine: boolean;
+  onOpen: (playerId: string) => void;
+}) {
+  if (cell.state === "ON_CLOCK") {
+    return (
+      <div className="flex h-14 flex-col justify-center rounded bg-nocturne-accent/20 px-2 ring-1 ring-nocturne-accent">
+        <span className="text-[10px] text-nocturne-accent-200 tabular-nums">{cell.label}</span>
+        <span className="text-xs font-medium text-nocturne-accent-200">On the clock</span>
+      </div>
+    );
+  }
+
+  if (cell.playerId === null) {
+    return (
+      <div
+        className={`flex h-14 flex-col justify-center rounded px-2 ${
+          mine
+            ? "bg-nocturne-neutral-900/60 ring-1 ring-nocturne-neutral-800"
+            : "bg-nocturne-surface/20"
+        }`}
+      >
+        <span className="text-[10px] text-nocturne-neutral-700 tabular-nums">{cell.label}</span>
+      </div>
+    );
+  }
+
+  const group = player ? positionGroup(player.positions) : "—";
+
+  return (
+    <button
+      onClick={() => onOpen(cell.playerId!)}
+      className={`flex h-14 w-full flex-col justify-center rounded px-2 text-left ring-1 transition-opacity hover:opacity-80 ${positionColour(group)}`}
+      title={player?.name ?? cell.playerId}
+    >
+      <span className="flex items-baseline justify-between gap-1">
+        <span className="truncate text-xs font-medium">
+          {player ? shortName(player.name) : "—"}
+        </span>
+        <span className="shrink-0 text-[10px] opacity-70 tabular-nums">{cell.label}</span>
+      </span>
+      <span className="truncate text-[10px] opacity-80">
+        {group}
+        {player?.teamRef ? ` · ${player.teamRef}` : ""}
+        {/* An auto-pick is marked, because "the bot outdrafted me while I was
+            asleep" is a thing people say and the record should be plain. */}
+        {cell.source && cell.source !== "MANUAL" ? " · auto" : ""}
+      </span>
+    </button>
+  );
+}
+
+function PlayerTable({
   players,
   queue,
   canPick,
   busy,
+  inLeague,
   onPick,
   onQueue,
-  inLeague,
+  onOpen,
 }: {
   players: Player[];
   queue: string[];
   canPick: boolean;
   busy: boolean;
+  inLeague: boolean;
   onPick: (playerId: string) => void;
   onQueue: (playerId: string) => void;
-  inLeague: boolean;
+  onOpen: (playerId: string) => void;
 }) {
   return (
-    <ul className="divide-y divide-nocturne-neutral-900 rounded border border-nocturne-neutral-900">
-      {players.map((player) => (
-        <li key={player.id} className="flex items-center gap-3 px-4 py-2.5">
-          <span
-            className="w-14 text-right text-sm font-medium tabular-nums"
-            title={
-              player.projectedMilliPoints === null
-                ? "No projection published for this player"
-                : "Projected season points, scored with this league's rules"
-            }
-          >
-            {points(player.projectedMilliPoints)}
-          </span>
-          <span className="flex-1 truncate text-sm">{player.name}</span>
-          <span
-            className="w-10 text-xs text-nocturne-neutral-600 tabular-nums"
-            title="Average draft position"
-          >
-            {player.rank}
-          </span>
+    <div className="overflow-hidden rounded-lg border border-nocturne-neutral-900">
+      <div className="grid grid-cols-[2.5rem_1fr_3rem_3rem_4rem_auto] items-center gap-2 border-b border-nocturne-neutral-900 px-3 py-2 text-[10px] font-medium tracking-wide text-nocturne-neutral-600 uppercase">
+        <span>Rk</span>
+        <span>Player</span>
+        <span className="text-right">Bye</span>
+        <span className="text-right">ADP</span>
+        <span className="text-right">Proj</span>
+        <span />
+      </div>
 
-          {inLeague && (
-            <button
-              onClick={() => onQueue(player.id)}
-              disabled={busy}
-              className="rounded border border-nocturne-neutral-800 px-2 py-1 text-xs text-nocturne-neutral-400 hover:text-nocturne-text disabled:opacity-40"
-              title="Add to or remove from your queue"
+      <ul className="divide-y divide-nocturne-neutral-900">
+        {players.map((player) => {
+          const group = positionGroup(player.positions);
+          const badge = injuryBadge(player.injuryDesignation);
+
+          return (
+            <li
+              key={player.id}
+              className="grid grid-cols-[2.5rem_1fr_3rem_3rem_4rem_auto] items-center gap-2 px-3 py-2 hover:bg-nocturne-surface/30"
             >
-              {queue.includes(player.id) ? "Queued" : "Queue"}
-            </button>
-          )}
+              <span className="text-xs text-nocturne-neutral-600 tabular-nums">
+                {player.rank}
+              </span>
 
-          <button
-            onClick={() => onPick(player.id)}
-            disabled={!canPick || busy}
-            className="rounded border border-nocturne-accent px-3 py-1 text-xs font-medium text-black disabled:opacity-30"
-          >
-            Draft
-          </button>
-        </li>
-      ))}
-    </ul>
+              {/* The whole cell opens the card, not a separate "info" affordance
+                  — a name is the thing people expect to click. */}
+              <button
+                onClick={() => onOpen(player.id)}
+                className="flex min-w-0 items-center gap-2.5 text-left"
+              >
+                <PlayerAvatar
+                  name={player.name}
+                  positions={player.positions}
+                  imageUrl={player.imageUrl}
+                  size={32}
+                />
+                <span className="min-w-0">
+                  <span className="flex items-center gap-1.5">
+                    <span className="truncate text-sm">{player.name}</span>
+                    {badge && (
+                      <span
+                        className={`text-[10px] font-semibold ${injuryTone(player.injuryDesignation)}`}
+                      >
+                        {badge}
+                      </span>
+                    )}
+                  </span>
+                  <span className="flex items-center gap-1.5 text-[11px] text-nocturne-neutral-600">
+                    <span
+                      className={`rounded px-1 py-px font-medium ring-1 ${positionColour(group)}`}
+                    >
+                      {group}
+                    </span>
+                    {player.teamRef ?? "FA"}
+                  </span>
+                </span>
+              </button>
+
+              <span className="text-right text-xs text-nocturne-neutral-600 tabular-nums">
+                {player.byeWeek ?? "—"}
+              </span>
+              <span className="text-right text-xs text-nocturne-neutral-600 tabular-nums">
+                {player.rank}
+              </span>
+              <span
+                className="text-right text-sm font-medium tabular-nums"
+                title={
+                  player.projectedMilliPoints === null
+                    ? "No projection published for this player"
+                    : "Projected season points, scored with this league's rules"
+                }
+              >
+                {points(player.projectedMilliPoints)}
+              </span>
+
+              <span className="flex items-center gap-1.5">
+                {inLeague && (
+                  <button
+                    onClick={() => onQueue(player.id)}
+                    disabled={busy}
+                    className={`rounded border px-2 py-1 text-xs disabled:opacity-40 ${
+                      queue.includes(player.id)
+                        ? "border-nocturne-accent/40 text-nocturne-accent-300"
+                        : "border-nocturne-neutral-800 text-nocturne-neutral-500 hover:text-nocturne-text"
+                    }`}
+                    title="Add to or remove from your queue"
+                  >
+                    {queue.includes(player.id) ? "Queued" : "Queue"}
+                  </button>
+                )}
+                <button
+                  onClick={() => onPick(player.id)}
+                  disabled={!canPick || busy}
+                  className="rounded bg-nocturne-accent px-3 py-1 text-xs font-medium text-nocturne-bg disabled:opacity-25"
+                >
+                  Draft
+                </button>
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 }
 
@@ -573,12 +941,14 @@ function Queue({
   drafted,
   busy,
   onChange,
+  onOpen,
 }: {
   queue: string[];
   byId: Map<string, Player>;
   drafted: Set<string>;
   busy: boolean;
   onChange: (ids: string[]) => void;
+  onOpen: (playerId: string) => void;
 }) {
   const move = (index: number, delta: number): void => {
     const next = [...queue];
@@ -588,64 +958,73 @@ function Queue({
     onChange(next);
   };
 
-  return (
-    <section className="space-y-2">
-      <h2 className="text-sm font-medium text-nocturne-neutral-400">
-        Your queue
-        <span className="ml-2 text-xs font-normal text-nocturne-neutral-600">
-          used if your clock runs out
-        </span>
-      </h2>
+  if (queue.length === 0) {
+    return (
+      <p className="text-xs text-nocturne-neutral-600">
+        Empty. If your clock expires, the auto-pick takes the best available player who fits
+        your roster instead.
+      </p>
+    );
+  }
 
-      {queue.length === 0 ? (
-        <p className="text-xs text-nocturne-neutral-600">
-          Empty. If your clock expires, the auto-pick takes the best available player who fits
-          your roster instead.
-        </p>
-      ) : (
-        <ol className="space-y-1">
-          {queue.map((playerId, index) => {
-            const player = byId.get(playerId);
-            const gone = drafted.has(playerId);
-            return (
-              <li
-                key={playerId}
-                className={`flex items-center gap-2 rounded border border-nocturne-neutral-900 px-2 py-1.5 text-xs ${
-                  gone ? "opacity-40" : ""
-                }`}
-              >
-                <span className="w-4 text-nocturne-neutral-600">{index + 1}</span>
-                <span className="flex-1 truncate">
-                  {player?.name ?? playerId}
-                  {gone && <span className="ml-1 text-nocturne-neutral-600">— taken</span>}
-                </span>
-                <button
-                  onClick={() => move(index, -1)}
-                  disabled={busy || index === 0}
-                  className="px-1 text-nocturne-neutral-600 hover:text-nocturne-text disabled:opacity-20"
-                >
-                  ↑
-                </button>
-                <button
-                  onClick={() => move(index, 1)}
-                  disabled={busy || index === queue.length - 1}
-                  className="px-1 text-nocturne-neutral-600 hover:text-nocturne-text disabled:opacity-20"
-                >
-                  ↓
-                </button>
-                <button
-                  onClick={() => onChange(queue.filter((id) => id !== playerId))}
-                  disabled={busy}
-                  className="px-1 text-nocturne-neutral-600 hover:text-nocturne-text disabled:opacity-20"
-                >
-                  ×
-                </button>
-              </li>
-            );
-          })}
-        </ol>
-      )}
-    </section>
+  return (
+    <ol className="space-y-1">
+      {queue.map((playerId, index) => {
+        const player = byId.get(playerId);
+        const gone = drafted.has(playerId);
+        return (
+          <li
+            key={playerId}
+            className={`flex items-center gap-2 rounded border border-nocturne-neutral-900 px-2 py-1.5 ${
+              gone ? "opacity-40" : ""
+            }`}
+          >
+            <span className="w-4 text-xs text-nocturne-neutral-600 tabular-nums">
+              {index + 1}
+            </span>
+            <button
+              onClick={() => onOpen(playerId)}
+              className="flex min-w-0 flex-1 items-center gap-2 text-left"
+            >
+              <PlayerAvatar
+                name={player?.name ?? "?"}
+                positions={player?.positions ?? []}
+                imageUrl={player?.imageUrl ?? null}
+                size={24}
+              />
+              <span className="min-w-0 flex-1 truncate text-xs">
+                {player?.name ?? playerId}
+                {gone && <span className="ml-1 text-nocturne-neutral-600">— taken</span>}
+              </span>
+            </button>
+            <button
+              onClick={() => move(index, -1)}
+              disabled={busy || index === 0}
+              className="px-1 text-nocturne-neutral-600 hover:text-nocturne-text disabled:opacity-20"
+              aria-label="Move up"
+            >
+              ↑
+            </button>
+            <button
+              onClick={() => move(index, 1)}
+              disabled={busy || index === queue.length - 1}
+              className="px-1 text-nocturne-neutral-600 hover:text-nocturne-text disabled:opacity-20"
+              aria-label="Move down"
+            >
+              ↓
+            </button>
+            <button
+              onClick={() => onChange(queue.filter((id) => id !== playerId))}
+              disabled={busy}
+              className="px-1 text-nocturne-neutral-600 hover:text-nocturne-text disabled:opacity-20"
+              aria-label="Remove"
+            >
+              ×
+            </button>
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 
@@ -653,40 +1032,52 @@ function MyRoster({
   picks,
   myTeamId,
   byId,
+  onOpen,
 }: {
   picks: Pick[];
   myTeamId: string | null;
   byId: Map<string, Player>;
+  onOpen: (playerId: string) => void;
 }) {
-  if (!myTeamId) return null;
+  if (!myTeamId) {
+    return <p className="text-xs text-nocturne-neutral-600">You are watching, not drafting.</p>;
+  }
 
   const mine = picks.filter((pick) => pick.teamId === myTeamId);
 
+  if (mine.length === 0) {
+    return <p className="text-xs text-nocturne-neutral-600">Nothing yet.</p>;
+  }
+
   return (
-    <section className="space-y-2">
-      <h2 className="text-sm font-medium text-nocturne-neutral-400">
-        Your roster{" "}
-        <span className="text-xs font-normal text-nocturne-neutral-600">{mine.length}</span>
-      </h2>
-      {mine.length === 0 ? (
-        <p className="text-xs text-nocturne-neutral-600">Nothing yet.</p>
-      ) : (
-        <ul className="space-y-1 text-xs">
-          {mine.map((pick) => {
-            const player = byId.get(pick.playerId);
-            return (
-              <li key={pick.pickNumber} className="flex gap-2">
-                <span className="w-10 text-nocturne-neutral-600">
-                  {player?.positions[0] ?? "—"}
+    <ul className="space-y-1">
+      {mine.map((pick) => {
+        const player = byId.get(pick.playerId);
+        return (
+          <li key={pick.pickNumber}>
+            <button
+              onClick={() => onOpen(pick.playerId)}
+              className="flex w-full items-center gap-2 rounded px-1 py-1 text-left hover:bg-nocturne-surface/40"
+            >
+              <PlayerAvatar
+                name={player?.name ?? "?"}
+                positions={player?.positions ?? []}
+                imageUrl={player?.imageUrl ?? null}
+                size={28}
+              />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-xs">{player?.name ?? pick.playerId}</span>
+                <span className="block text-[10px] text-nocturne-neutral-600">
+                  {player ? positionGroup(player.positions) : "—"}
+                  {player?.teamRef ? ` · ${player.teamRef}` : ""}
                 </span>
-                <span className="flex-1 truncate">{player?.name ?? pick.playerId}</span>
-                <span className="text-nocturne-neutral-600">R{pick.round}</span>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </section>
+              </span>
+              <span className="text-[10px] text-nocturne-neutral-600">R{pick.round}</span>
+            </button>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
@@ -694,26 +1085,33 @@ function RecentPicks({
   picks,
   teams,
   byId,
+  onOpen,
 }: {
   picks: Pick[];
   teams: Map<string, Team>;
   byId: Map<string, Player>;
+  onOpen: (playerId: string) => void;
 }) {
-  const recent = [...picks].reverse().slice(0, 10);
+  const recent = [...picks].reverse().slice(0, 8);
   if (recent.length === 0) return null;
 
   return (
-    <section className="space-y-2">
-      <h2 className="text-sm font-medium text-nocturne-neutral-400">Recent picks</h2>
+    <section className="mt-6 space-y-2 border-t border-nocturne-neutral-900 pt-4">
+      <h2 className="text-xs font-medium tracking-wide text-nocturne-neutral-500 uppercase">
+        Recent picks
+      </h2>
       <ul className="space-y-1 text-xs">
         {recent.map((pick) => (
-          <li key={pick.pickNumber} className="flex gap-2">
+          <li key={pick.pickNumber} className="flex items-center gap-2">
             <span className="w-8 text-nocturne-neutral-600 tabular-nums">
               {pick.pickNumber}
             </span>
-            <span className="flex-1 truncate">
+            <button
+              onClick={() => onOpen(pick.playerId)}
+              className="min-w-0 flex-1 truncate text-left hover:text-nocturne-accent-300"
+            >
               {byId.get(pick.playerId)?.name ?? pick.playerId}
-            </span>
+            </button>
             <span className="max-w-[8ch] truncate text-nocturne-neutral-600">
               {teams.get(pick.teamId)?.name ?? "—"}
             </span>
@@ -738,18 +1136,21 @@ function OrderPanel({
   teams: Map<string, Team>;
   myTeamId: string | null;
 }) {
-  if (draft.order.length === 0) return null;
+  if (draft.order.length === 0) {
+    return (
+      <p className="text-xs text-nocturne-neutral-600">The order has not been drawn yet.</p>
+    );
+  }
 
   return (
     <section className="space-y-2">
-      <h2 className="text-sm font-medium text-nocturne-neutral-400">Draft order</h2>
       <ol className="space-y-1 text-xs">
         {draft.order.map((teamId, index) => (
           <li
             key={teamId}
             className={`flex gap-2 ${teamId === myTeamId ? "text-nocturne-accent-300" : ""}`}
           >
-            <span className="w-4 text-nocturne-neutral-600">{index + 1}</span>
+            <span className="w-4 text-nocturne-neutral-600 tabular-nums">{index + 1}</span>
             <span className="flex-1 truncate">{teams.get(teamId)?.name ?? teamId}</span>
             {teams.get(teamId)?.isBot && <span className="text-nocturne-text/25">bot</span>}
           </li>
