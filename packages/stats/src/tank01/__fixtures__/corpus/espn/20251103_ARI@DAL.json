@@ -1,0 +1,38 @@
+{
+  "gameRef": "20251103_ARI@DAL",
+  "eventId": "401772818",
+  "scoringPlays": [
+    {
+      "text": "Chad Ryland 48 Yd Field Goal",
+      "abbreviation": "FG"
+    },
+    {
+      "text": "Marvin Harrison Jr. 4 Yd pass from Jacoby Brissett (Chad Ryland Kick)",
+      "abbreviation": "TD"
+    },
+    {
+      "text": "Marshawn Kneeland Blocked Punt Recovery in End Zone (Brandon Aubrey Kick)",
+      "abbreviation": "TD"
+    },
+    {
+      "text": "Jacoby Brissett 1 Yd Rush (Chad Ryland Kick)",
+      "abbreviation": "TD"
+    },
+    {
+      "text": "Trey McBride 12 Yd pass from Jacoby Brissett (Chad Ryland Kick)",
+      "abbreviation": "TD"
+    },
+    {
+      "text": "Brandon Aubrey 26 Yd Field Goal",
+      "abbreviation": "FG"
+    },
+    {
+      "text": "Chad Ryland 34 Yd Field Goal",
+      "abbreviation": "FG"
+    },
+    {
+      "text": "Ryan Flournoy 5 Yd pass from Dak Prescott (Brandon Aubrey Kick)",
+      "abbreviation": "TD"
+    }
+  ]
+}

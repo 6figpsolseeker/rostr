@@ -1,0 +1,38 @@
+{
+  "gameRef": "20250928_CAR@NE",
+  "eventId": "401772847",
+  "scoringPlays": [
+    {
+      "text": "Tommy Tremble 7 Yd pass from Bryce Young (Ryan Fitzgerald PAT Failed)",
+      "abbreviation": "TD"
+    },
+    {
+      "text": "Marcus Jones 87 Yd Punt Return (Andy Borregales Kick)",
+      "abbreviation": "TD"
+    },
+    {
+      "text": "Drake Maye 5 Yd Rush (Andy Borregales Kick)",
+      "abbreviation": "TD"
+    },
+    {
+      "text": "TreVeyon Henderson 5 Yd Rush (Andy Borregales Kick)",
+      "abbreviation": "TD"
+    },
+    {
+      "text": "Antonio Gibson 1 Yd Rush (Andy Borregales Kick)",
+      "abbreviation": "TD"
+    },
+    {
+      "text": "Hunter Henry 31 Yd pass from Drake Maye (Andy Borregales Kick)",
+      "abbreviation": "TD"
+    },
+    {
+      "text": "Mack Hollins 4 Yd pass from Drake Maye (Andy Borregales Kick)",
+      "abbreviation": "TD"
+    },
+    {
+      "text": "Mitchell Evans 2 Yd pass from Andy Dalton (Ryan Fitzgerald Kick)",
+      "abbreviation": "TD"
+    }
+  ]
+}

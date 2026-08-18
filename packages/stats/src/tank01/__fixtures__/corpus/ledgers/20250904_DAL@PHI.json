@@ -1,0 +1,207 @@
+{
+  "gameRef": "20250904_DAL@PHI",
+  "playersTranslated": 93,
+  "warnings": [],
+  "fatal": [],
+  "players": [
+    {
+      "ref": "2577417",
+      "name": "Dak Prescott",
+      "stats": {
+        "pass_yd": 188,
+        "rush_yd": 3
+      },
+      "milliPoints": 7820
+    },
+    {
+      "ref": "3050478",
+      "name": "Jake Elliott",
+      "stats": {
+        "fg_50_59": 1,
+        "xp_made": 3
+      },
+      "milliPoints": 8000
+    },
+    {
+      "ref": "3121023",
+      "name": "Dallas Goedert",
+      "stats": {
+        "rec": 7,
+        "rec_yd": 44
+      },
+      "milliPoints": 11400
+    },
+    {
+      "ref": "3676833",
+      "name": "KaVontae Turpin",
+      "stats": {
+        "rec": 2,
+        "rec_yd": 18,
+        "rush_yd": 9
+      },
+      "milliPoints": 4700
+    },
+    {
+      "ref": "3929630",
+      "name": "Saquon Barkley",
+      "stats": {
+        "rec": 4,
+        "rec_yd": 24,
+        "rush_td": 1,
+        "rush_yd": 60
+      },
+      "milliPoints": 18400
+    },
+    {
+      "ref": "3953687",
+      "name": "Brandon Aubrey",
+      "stats": {
+        "fg_40_49": 1,
+        "fg_50_59": 1,
+        "xp_made": 2
+      },
+      "milliPoints": 11000
+    },
+    {
+      "ref": "4039160",
+      "name": "Kylen Granson",
+      "stats": {
+        "rec": 1,
+        "rec_yd": 1
+      },
+      "milliPoints": 1100
+    },
+    {
+      "ref": "4040715",
+      "name": "Jalen Hurts",
+      "stats": {
+        "pass_yd": 152,
+        "rush_td": 2,
+        "rush_yd": 62
+      },
+      "milliPoints": 24280
+    },
+    {
+      "ref": "4045163",
+      "name": "Miles Sanders",
+      "stats": {
+        "fum_lost": 1,
+        "rec": 1,
+        "rec_yd": -3,
+        "rush_yd": 53
+      },
+      "milliPoints": 4000
+    },
+    {
+      "ref": "4047646",
+      "name": "A.J. Brown",
+      "stats": {
+        "rec": 1,
+        "rec_yd": 8
+      },
+      "milliPoints": 1800
+    },
+    {
+      "ref": "4239934",
+      "name": "AJ Dillon",
+      "stats": {
+        "rush_yd": 10
+      },
+      "milliPoints": 1000
+    },
+    {
+      "ref": "4241389",
+      "name": "CeeDee Lamb",
+      "stats": {
+        "rec": 7,
+        "rec_yd": 110
+      },
+      "milliPoints": 18000
+    },
+    {
+      "ref": "4241478",
+      "name": "DeVonta Smith",
+      "stats": {
+        "rec": 3,
+        "rec_yd": 16
+      },
+      "milliPoints": 4600
+    },
+    {
+      "ref": "4242355",
+      "name": "Jake Ferguson",
+      "stats": {
+        "rec": 5,
+        "rec_yd": 23
+      },
+      "milliPoints": 7300
+    },
+    {
+      "ref": "4249417",
+      "name": "Jalen Tolbert",
+      "stats": {
+        "rec": 1
+      },
+      "milliPoints": 1000
+    },
+    {
+      "ref": "4361409",
+      "name": "Jahan Dotson",
+      "stats": {
+        "rec": 3,
+        "rec_yd": 59
+      },
+      "milliPoints": 8900
+    },
+    {
+      "ref": "4361579",
+      "name": "Javonte Williams",
+      "stats": {
+        "rec": 2,
+        "rec_yd": 10,
+        "rush_td": 2,
+        "rush_yd": 54
+      },
+      "milliPoints": 20400
+    },
+    {
+      "ref": "4426354",
+      "name": "George Pickens",
+      "stats": {
+        "rec": 3,
+        "rec_yd": 30
+      },
+      "milliPoints": 6000
+    },
+    {
+      "ref": "4431545",
+      "name": "Will Shipley",
+      "stats": {
+        "rush_yd": 26
+      },
+      "milliPoints": 2600
+    }
+  ],
+  "teamDefense": [
+    {
+      "ref": "DAL",
+      "name": "DAL D/ST",
+      "stats": {
+        "def_pts_allowed": 24,
+        "def_sack": 1,
+        "def_yds_allowed": 302
+      },
+      "milliPoints": 1000
+    },
+    {
+      "ref": "PHI",
+      "name": "PHI D/ST",
+      "stats": {
+        "def_fum_rec": 1,
+        "def_pts_allowed": 20,
+        "def_yds_allowed": 307
+      },
+      "milliPoints": 2000
+    }
+  ]
+}

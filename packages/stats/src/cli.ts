@@ -6,14 +6,43 @@
  *   verify <weeks>        hunt rare scoring events across many games
  *   discover              which endpoints exist, and what each returns
  *   deep                  detail on the endpoints we actually use
+ *   capture <id> [path]   save one raw box score as a fixture
+ *   corpus-sync           fill in whatever the conformance corpus is missing
  *
- * These are investigation tools, not part of the running system. They exist
- * because the stat map was originally written from documentation and three of
- * its field names were wrong — see `docs/TANK01.md`. Anything asserted about
- * Tank01 should be reproducible with one of these commands.
+ * Everything but `corpus-sync` is an investigation tool rather than part of the
+ * running system. They exist because the stat map was originally written from
+ * documentation and three of its field names were wrong — see `docs/TANK01.md`.
+ * Anything asserted about Tank01 should be reproducible with one of these
+ * commands.
+ *
+ * `corpus-sync` is the one command that fills the conformance corpus, and it is
+ * a command rather than part of `pnpm test` on purpose — see
+ * `corpus/capture.ts`.
  */
 
+import { existsSync, mkdirSync } from "node:fs";
+import { join } from "node:path";
 import { Tank01Client } from "./tank01/client.js";
+import { translateBoxScore } from "./tank01/box-score.js";
+import {
+  fetchBoxScore,
+  fetchEspnScoringPlays,
+  fetchSleeperIdMap,
+  fetchSleeperWeek,
+  resolveEspnEvent,
+} from "./corpus/capture.js";
+import {
+  boxScorePath,
+  CORPUS_ROOT,
+  espnPath,
+  idMapPath,
+  readBoxScore,
+  readIdMap,
+  readManifest,
+  sleeperPath,
+  writeJson,
+} from "./corpus/fixtures.js";
+import type { SleeperIdMap } from "./corpus/sleeper.js";
 
 function apiKey(): string {
   const key = process.env["TANK01_API_KEY"];
@@ -381,6 +410,116 @@ async function capture(): Promise<void> {
   console.log(`Captured ${gameID} -> ${out} (${Math.round(bytes / 1024)} KB)`);
 }
 
+/**
+ * Fill in whatever the conformance corpus is missing.
+ *
+ * Driven entirely by `__fixtures__/corpus/manifest.json`: **adding a game means
+ * adding a manifest entry and running this**, and nothing else here needs
+ * editing. Idempotent — anything already on disk is left alone, so re-running
+ * after adding one game costs one metered call rather than thirteen.
+ *
+ * `--force` re-fetches the free sources (Sleeper and ESPN) for every game. It
+ * deliberately does **not** re-fetch box scores: those are the artifacts under
+ * test, they are metered, and a silent re-capture is how a fixture stops
+ * containing the rare play it was chosen for.
+ */
+async function corpusSync(): Promise<void> {
+  const force = process.argv.includes("--force");
+  const manifest = readManifest();
+
+  for (const directory of ["ledgers", "sleeper", "espn"]) {
+    mkdirSync(join(CORPUS_ROOT, directory), { recursive: true });
+  }
+
+  let metered = 0;
+  const boxes: unknown[] = [];
+
+  for (const game of manifest.games) {
+    let box: unknown;
+    try {
+      box = readBoxScore(game.boxScore);
+    } catch {
+      const client = new Tank01Client({ apiKey: apiKey() });
+      box = await fetchBoxScore(client, game.gameRef);
+      metered++;
+      writeJson(boxScorePath(game.boxScore), box);
+      console.log(`  captured  ${game.gameRef} -> ${game.boxScore}  (1 metered call)`);
+    }
+    boxes.push(box);
+  }
+
+  // The id map is one shared file, so it is rebuilt whenever a game was added:
+  // entries written last week do not cover a box score captured today, and
+  // merging is cheaper to reason about than diffing.
+  //
+  // The rebuild costs one metered call — `getNFLPlayerList` — which is why it is
+  // conditional rather than unconditional. `--force` does not trigger it; only a
+  // genuinely unmapped player does.
+  let idMap: SleeperIdMap = {};
+  try {
+    idMap = readIdMap();
+  } catch {
+    idMap = {};
+  }
+
+  // **Only players the translator actually produces a stat line for**, and not
+  // the ones the manifest already declares unjoinable.
+  //
+  // This used to ask whether any `playerStats` key was unmapped, which is true
+  // in every checked-in state and always will be: a box score carries around
+  // ninety players, 65 of them are offensive linemen Sleeper has no fantasy row
+  // for, and none of them is ever compared against anything. So the "conditional"
+  // metered call fired on every run, including a run with nothing to do — against
+  // the idempotence promised three lines up. Measured on the current corpus: 65
+  // of 1221 rows are unmapped, but only **one** of the 277 rows carrying stats
+  // is, and that one is the declared `unjoinable` entry for issue #185.
+  //
+  // The set that matters is the set `joinFailures` checks in `corpus.test.ts`.
+  // Asking the same question in both places is what keeps a sync that reports
+  // nothing to do and a test that passes describing the same corpus.
+  const declaredUnjoinable = new Set(manifest.unjoinable.map((row) => row.ref));
+  const unmapped = boxes.some((box) =>
+    [...translateBoxScore(box).players].some(
+      ([id, lines]) => lines.length > 0 && !idMap[id] && !declaredUnjoinable.has(id),
+    ),
+  );
+
+  if (unmapped) {
+    const client = new Tank01Client({ apiKey: apiKey() });
+    const built = await fetchSleeperIdMap(client, boxes, idMap);
+    metered++;
+    idMap = built.map;
+    console.log(`  id map    ${Object.keys(idMap).length} players  (1 metered call)`);
+    // Never silent. A pair dropped for a name mismatch is a player who will show
+    // up as unjoined in the test, and "we could not map him" is a different fact
+    // from "Sleeper had no row for him".
+    for (const line of built.rejected) console.log(`    rejected  ${line}`);
+  }
+
+  writeJson(idMapPath(), idMap);
+
+  for (const [index, game] of manifest.games.entries()) {
+    const box = boxes[index];
+
+    if (force || !existsSync(sleeperPath(game.gameRef))) {
+      const week = await fetchSleeperWeek(box, idMap, game.season, game.week);
+      writeJson(sleeperPath(game.gameRef), week);
+      console.log(`  sleeper   ${game.gameRef}  ${Object.keys(week.stats).length} subjects`);
+    }
+
+    if (force || !existsSync(espnPath(game.gameRef))) {
+      const eventId = await resolveEspnEvent(game.gameRef);
+      const plays = await fetchEspnScoringPlays(game.gameRef, eventId);
+      writeJson(espnPath(game.gameRef), plays);
+      console.log(
+        `  espn      ${game.gameRef}  event ${eventId}, ${plays.scoringPlays.length} plays`,
+      );
+    }
+  }
+
+  console.log(`\n${metered} metered Tank01 call(s). Now run: pnpm corpus:stats`);
+}
+
 const command = process.argv[2] ?? "check";
 
 const run =
@@ -394,7 +533,9 @@ const run =
           ? deep
           : command === "capture"
             ? capture
-            : check;
+            : command === "corpus-sync"
+              ? corpusSync
+              : check;
 
 run().catch((error: unknown) => {
   console.error(error instanceof Error ? error.message : String(error));

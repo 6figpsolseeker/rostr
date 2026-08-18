@@ -1,0 +1,34 @@
+{
+  "gameRef": "20250907_ARI@NO",
+  "eventId": "401772718",
+  "scoringPlays": [
+    {
+      "text": "Chad Ryland 42 Yd Field Goal",
+      "abbreviation": "FG"
+    },
+    {
+      "text": "Alvin Kamara 18 Yd Rush (Blake Grupe Kick)",
+      "abbreviation": "TD"
+    },
+    {
+      "text": "Marvin Harrison Jr. 1 Yd pass from Kyler Murray (Chad Ryland Kick)",
+      "abbreviation": "TD"
+    },
+    {
+      "text": "Blake Grupe 36 Yd Field Goal",
+      "abbreviation": "FG"
+    },
+    {
+      "text": "James Conner 4 Yd pass from Kyler Murray (Chad Ryland Kick)",
+      "abbreviation": "TD"
+    },
+    {
+      "text": "Chad Ryland 50 Yd Field Goal",
+      "abbreviation": "FG"
+    },
+    {
+      "text": "Blake Grupe 28 Yd Field Goal",
+      "abbreviation": "FG"
+    }
+  ]
+}

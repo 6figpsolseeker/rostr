@@ -1,0 +1,2684 @@
+{
+  "DST": {
+    "away": {
+      "teamAbv": "MIA",
+      "teamID": "20",
+      "defTD": "0",
+      "defensiveInterceptions": "0",
+      "sacks": "1",
+      "ydsAllowed": "418",
+      "fumblesRecovered": "0",
+      "ptsAllowed": "33",
+      "safeties": "0"
+    },
+    "home": {
+      "teamAbv": "IND",
+      "teamID": "14",
+      "defTD": "0",
+      "defensiveInterceptions": "2",
+      "sacks": "3",
+      "ydsAllowed": "211",
+      "fumblesRecovered": "1",
+      "ptsAllowed": "8",
+      "safeties": "0"
+    }
+  },
+  "Referees": "Rick Patterson, Sarah Thomas, Brad Allen, Chad Hill, Walter Flowers, Tyree Walton, Marcus Woods",
+  "arena": "Lucas Oil Stadium",
+  "arenaCapacity": "63,000",
+  "attendance": "64,065",
+  "away": "MIA",
+  "awayPts": "8",
+  "awayResult": "L",
+  "currentPeriod": "Final",
+  "gameClock": "",
+  "gameDate": "20250907",
+  "gameLocation": "Indianapolis, IN",
+  "gameStatus": "Completed",
+  "gameWeek": "Week 1",
+  "home": "IND",
+  "homePts": "33",
+  "homeResult": "W",
+  "lineScore": {
+    "period": "Final",
+    "gameClock": "",
+    "away": {
+      "Q1": "0",
+      "Q2": "0",
+      "Q3": "0",
+      "Q4": "8",
+      "teamID": "20",
+      "currentlyInPossession": "False",
+      "totalPts": "8",
+      "teamAbv": "MIA"
+    },
+    "home": {
+      "Q1": "3",
+      "Q2": "17",
+      "Q3": "3",
+      "Q4": "10",
+      "teamID": "14",
+      "currentlyInPossession": "False",
+      "totalPts": "33",
+      "teamAbv": "IND"
+    }
+  },
+  "network": "CBS",
+  "playerStats": {
+    "2566045": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "14",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "9",
+        "stSnapPct": "0.50",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "IND",
+      "teamAbv": "IND",
+      "playerID": "2566045",
+      "longName": "Luke Rhodes"
+    },
+    "2575907": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "20",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "1",
+        "stSnapPct": "0.06",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "MIA",
+      "teamAbv": "MIA",
+      "playerID": "2575907",
+      "longName": "Joe Cardona"
+    },
+    "2971282": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "14",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "33",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "0.69"
+      },
+      "team": "IND",
+      "teamAbv": "IND",
+      "Defense": {
+        "totalTackles": "3",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "0",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "2971282",
+      "longName": "DeForest Buckner"
+    },
+    "2978935": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "14",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "32",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "0.67"
+      },
+      "team": "IND",
+      "teamAbv": "IND",
+      "Defense": {
+        "fumblesLost": "0",
+        "defensiveInterceptions": "0",
+        "forcedFumbles": "0",
+        "fumbles": "0",
+        "fumblesRecovered": "1"
+      },
+      "playerID": "2978935",
+      "longName": "Xavien Howard"
+    },
+    "2998565": {
+      "gameID": "20250907_MIA@IND",
+      "Receiving": {
+        "receptions": "1",
+        "recTD": "0",
+        "longRec": "20",
+        "targets": "1",
+        "recYds": "20",
+        "recAvg": "20.0"
+      },
+      "teamID": "14",
+      "snapCounts": {
+        "offSnapPct": "0.45",
+        "defSnap": "0",
+        "stSnap": "9",
+        "stSnapPct": "0.50",
+        "offSnap": "33",
+        "defSnapPct": "0.00"
+      },
+      "team": "IND",
+      "teamAbv": "IND",
+      "playerID": "2998565",
+      "longName": "Mo Alie-Cox"
+    },
+    "3040513": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "14",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "22",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "0.46"
+      },
+      "team": "IND",
+      "teamAbv": "IND",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "0",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "3040513",
+      "longName": "Tyquan Lewis"
+    },
+    "3045527": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "14",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "18",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "0.38"
+      },
+      "team": "IND",
+      "teamAbv": "IND",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "1",
+        "qbHits": "3",
+        "defensiveInterceptions": "0",
+        "sacks": "1",
+        "passDeflections": "0"
+      },
+      "playerID": "3045527",
+      "longName": "Samson Ebukam"
+    },
+    "3057956": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "20",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "54",
+        "stSnap": "7",
+        "stSnapPct": "0.39",
+        "offSnap": "0",
+        "defSnapPct": "0.74"
+      },
+      "team": "MIA",
+      "teamAbv": "MIA",
+      "Defense": {
+        "totalTackles": "3",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "3",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "3057956",
+      "longName": "Zach Sieler"
+    },
+    "3116406": {
+      "gameID": "20250907_MIA@IND",
+      "Receiving": {
+        "receptions": "4",
+        "recTD": "0",
+        "longRec": "21",
+        "targets": "6",
+        "recYds": "40",
+        "recAvg": "10.0"
+      },
+      "teamID": "20",
+      "snapCounts": {
+        "offSnapPct": "0.62",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "30",
+        "defSnapPct": "0.00"
+      },
+      "team": "MIA",
+      "teamAbv": "MIA",
+      "playerID": "3116406",
+      "longName": "Tyreek Hill"
+    },
+    "3116733": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "20",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "40",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "0.55"
+      },
+      "team": "MIA",
+      "teamAbv": "MIA",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "1",
+        "qbHits": "1",
+        "defensiveInterceptions": "0",
+        "sacks": "1",
+        "passDeflections": "0"
+      },
+      "playerID": "3116733",
+      "longName": "Bradley Chubb"
+    },
+    "3121595": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "14",
+      "snapCounts": {
+        "offSnapPct": "0.92",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "67",
+        "defSnapPct": "0.00"
+      },
+      "team": "IND",
+      "teamAbv": "IND",
+      "playerID": "3121595",
+      "longName": "Braden Smith"
+    },
+    "3122976": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "20",
+      "snapCounts": {
+        "offSnapPct": "0.04",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "2",
+        "defSnapPct": "0.00"
+      },
+      "team": "MIA",
+      "teamAbv": "MIA",
+      "playerID": "3122976",
+      "longName": "Jeff Wilson Jr."
+    },
+    "3124005": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "14",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "39",
+        "stSnap": "1",
+        "stSnapPct": "0.06",
+        "offSnap": "0",
+        "defSnapPct": "0.81"
+      },
+      "team": "IND",
+      "teamAbv": "IND",
+      "Defense": {
+        "totalTackles": "4",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "2",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "3124005",
+      "longName": "Zaire Franklin"
+    },
+    "3129308": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "14",
+      "snapCounts": {
+        "offSnapPct": "0.92",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "67",
+        "defSnapPct": "0.00"
+      },
+      "team": "IND",
+      "teamAbv": "IND",
+      "playerID": "3129308",
+      "longName": "Quenton Nelson"
+    },
+    "3858271": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "20",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "11",
+        "stSnap": "14",
+        "stSnapPct": "0.78",
+        "offSnap": "0",
+        "defSnapPct": "0.15"
+      },
+      "team": "MIA",
+      "teamAbv": "MIA",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "1",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "3858271",
+      "longName": "Ashtyn Davis"
+    },
+    "3892883": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "14",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "13",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "0.27"
+      },
+      "team": "IND",
+      "teamAbv": "IND",
+      "Defense": {
+        "totalTackles": "0",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "0",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "1"
+      },
+      "playerID": "3892883",
+      "longName": "Neville Gallimore"
+    },
+    "3894849": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "20",
+      "snapCounts": {
+        "offSnapPct": "0.06",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "3",
+        "defSnapPct": "0.00"
+      },
+      "team": "MIA",
+      "teamAbv": "MIA",
+      "playerID": "3894849",
+      "longName": "James Daniels"
+    },
+    "3914922": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "14",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "8",
+        "stSnapPct": "0.44",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "IND",
+      "teamAbv": "IND",
+      "playerID": "3914922",
+      "longName": "Rigoberto Sanchez"
+    },
+    "3915470": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "14",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "7",
+        "stSnapPct": "0.39",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "IND",
+      "teamAbv": "IND",
+      "playerID": "3915470",
+      "longName": "Danny Pinter"
+    },
+    "3917668": {
+      "gameID": "20250907_MIA@IND",
+      "Receiving": {
+        "receptions": "1",
+        "recTD": "0",
+        "longRec": "1",
+        "targets": "2",
+        "recYds": "1",
+        "recAvg": "1.0"
+      },
+      "teamID": "20",
+      "snapCounts": {
+        "offSnapPct": "0.27",
+        "defSnap": "0",
+        "stSnap": "8",
+        "stSnapPct": "0.44",
+        "offSnap": "13",
+        "defSnapPct": "0.00"
+      },
+      "team": "MIA",
+      "teamAbv": "MIA",
+      "playerID": "3917668",
+      "longName": "Alec Ingold"
+    },
+    "3917792": {
+      "gameID": "20250907_MIA@IND",
+      "Rushing": {
+        "rushAvg": "3.7",
+        "rushYds": "26",
+        "carries": "7",
+        "longRush": "11",
+        "rushTD": "2"
+      },
+      "Passing": {
+        "qbr": "84.5",
+        "rtg": "115.9",
+        "sacked": "1-10",
+        "passAttempts": "29",
+        "passAvg": "9.4",
+        "passTD": "1",
+        "passYds": "272",
+        "int": "0",
+        "passCompletions": "22"
+      },
+      "scoringPlays": [
+        {
+          "score": "Michael Pittman Jr. 27 Yd pass from Daniel Jones (Spencer Shrader Kick)",
+          "scorePeriod": "Q2",
+          "homeScore": "10",
+          "awayScore": "0",
+          "teamID": "14",
+          "scoreDetails": "14 plays, 84 yards, 8:18",
+          "scoreType": "TD",
+          "scoreTime": "14:54",
+          "team": "IND",
+          "playerIDs": ["3917792", "4035687", "4571557"]
+        },
+        {
+          "score": "Daniel Jones 1 Yd Rush (Spencer Shrader Kick)",
+          "scorePeriod": "Q2",
+          "homeScore": "17",
+          "awayScore": "0",
+          "teamID": "14",
+          "scoreDetails": "5 plays, 42 yards, 2:13",
+          "scoreType": "TD",
+          "scoreTime": "12:01",
+          "team": "IND",
+          "playerIDs": ["3917792", "4571557"]
+        },
+        {
+          "score": "Daniel Jones 1 Yd Rush (Spencer Shrader Kick)",
+          "scorePeriod": "Q4",
+          "homeScore": "30",
+          "awayScore": "0",
+          "teamID": "14",
+          "scoreDetails": "15 plays, 69 yards, 9:16",
+          "scoreType": "TD",
+          "scoreTime": "10:14",
+          "team": "IND",
+          "playerIDs": ["3917792", "4571557"]
+        }
+      ],
+      "teamID": "14",
+      "snapCounts": {
+        "offSnapPct": "1.00",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "73",
+        "defSnapPct": "0.00"
+      },
+      "team": "IND",
+      "teamAbv": "IND",
+      "playerID": "3917792",
+      "longName": "Daniel Jones"
+    },
+    "3925345": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "20",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "73",
+        "stSnap": "8",
+        "stSnapPct": "0.44",
+        "offSnap": "0",
+        "defSnapPct": "1.00"
+      },
+      "team": "MIA",
+      "teamAbv": "MIA",
+      "Defense": {
+        "totalTackles": "9",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "6",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "1"
+      },
+      "playerID": "3925345",
+      "longName": "Minkah Fitzpatrick"
+    },
+    "3929785": {
+      "gameID": "20250907_MIA@IND",
+      "Receiving": {
+        "receptions": "1",
+        "recTD": "0",
+        "longRec": "7",
+        "targets": "2",
+        "recYds": "7",
+        "recAvg": "7.0"
+      },
+      "teamID": "20",
+      "snapCounts": {
+        "offSnapPct": "0.44",
+        "defSnap": "0",
+        "stSnap": "10",
+        "stSnapPct": "0.56",
+        "offSnap": "21",
+        "defSnapPct": "0.00"
+      },
+      "team": "MIA",
+      "teamAbv": "MIA",
+      "playerID": "3929785",
+      "longName": "Nick Westbrook-Ikhine"
+    },
+    "3931395": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "20",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "1",
+        "stSnapPct": "0.06",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "Punting": {
+        "puntYds": "42",
+        "punts": "1",
+        "puntAvg": "42.0",
+        "puntsin20": "1",
+        "puntTouchBacks": "0",
+        "puntLong": "42"
+      },
+      "team": "MIA",
+      "teamAbv": "MIA",
+      "playerID": "3931395",
+      "longName": "Jake Bailey"
+    },
+    "3932901": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "20",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "11",
+        "stSnapPct": "0.61",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "MIA",
+      "teamAbv": "MIA",
+      "playerID": "3932901",
+      "longName": "Elijah Campbell"
+    },
+    "3943270": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "20",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "44",
+        "stSnap": "2",
+        "stSnapPct": "0.11",
+        "offSnap": "0",
+        "defSnapPct": "0.60"
+      },
+      "team": "MIA",
+      "teamAbv": "MIA",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "1"
+      },
+      "playerID": "3943270",
+      "longName": "Rasul Douglas"
+    },
+    "3961466": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "20",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "33",
+        "stSnap": "2",
+        "stSnapPct": "0.11",
+        "offSnap": "0",
+        "defSnapPct": "0.45"
+      },
+      "team": "MIA",
+      "teamAbv": "MIA",
+      "Defense": {
+        "totalTackles": "2",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "3961466",
+      "longName": "Matthew Judon"
+    },
+    "4035232": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "20",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "73",
+        "stSnap": "8",
+        "stSnapPct": "0.44",
+        "offSnap": "0",
+        "defSnapPct": "1.00"
+      },
+      "team": "MIA",
+      "teamAbv": "MIA",
+      "Defense": {
+        "totalTackles": "13",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "6",
+        "tfl": "1",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4035232",
+      "longName": "Tyrel Dodson"
+    },
+    "4035299": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "20",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "20",
+        "stSnap": "5",
+        "stSnapPct": "0.28",
+        "offSnap": "0",
+        "defSnapPct": "0.27"
+      },
+      "team": "MIA",
+      "teamAbv": "MIA",
+      "playerID": "4035299",
+      "longName": "Benito Jones"
+    },
+    "4035686": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "20",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "73",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "1.00"
+      },
+      "team": "MIA",
+      "teamAbv": "MIA",
+      "Defense": {
+        "totalTackles": "8",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "3",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "1"
+      },
+      "playerID": "4035686",
+      "longName": "Jack Jones"
+    },
+    "4035687": {
+      "gameID": "20250907_MIA@IND",
+      "Receiving": {
+        "receptions": "6",
+        "recTD": "1",
+        "longRec": "27",
+        "targets": "8",
+        "recYds": "80",
+        "recAvg": "13.3"
+      },
+      "scoringPlays": [
+        {
+          "score": "Michael Pittman Jr. 27 Yd pass from Daniel Jones (Spencer Shrader Kick)",
+          "scorePeriod": "Q2",
+          "homeScore": "10",
+          "awayScore": "0",
+          "teamID": "14",
+          "scoreDetails": "14 plays, 84 yards, 8:18",
+          "scoreType": "TD",
+          "scoreTime": "14:54",
+          "team": "IND",
+          "playerIDs": ["3917792", "4035687", "4571557"]
+        }
+      ],
+      "teamID": "14",
+      "snapCounts": {
+        "offSnapPct": "0.82",
+        "defSnap": "0",
+        "stSnap": "1",
+        "stSnapPct": "0.06",
+        "offSnap": "60",
+        "defSnapPct": "0.00"
+      },
+      "team": "IND",
+      "teamAbv": "IND",
+      "playerID": "4035687",
+      "longName": "Michael Pittman Jr."
+    },
+    "4035857": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "20",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "11",
+        "stSnapPct": "0.61",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "MIA",
+      "teamAbv": "MIA",
+      "playerID": "4035857",
+      "longName": "Cameron Goode"
+    },
+    "4035861": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "14",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "39",
+        "stSnap": "1",
+        "stSnapPct": "0.06",
+        "offSnap": "0",
+        "defSnapPct": "0.81"
+      },
+      "team": "IND",
+      "teamAbv": "IND",
+      "Defense": {
+        "totalTackles": "3",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "1",
+        "defensiveInterceptionsYards": "14",
+        "interceptionTDs": "0",
+        "sacks": "0",
+        "passDeflections": "2"
+      },
+      "playerID": "4035861",
+      "longName": "Cam Bynum"
+    },
+    "4036507": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "14",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "22",
+        "stSnap": "11",
+        "stSnapPct": "0.61",
+        "offSnap": "0",
+        "defSnapPct": "0.46"
+      },
+      "team": "IND",
+      "teamAbv": "IND",
+      "Defense": {
+        "totalTackles": "6",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4036507",
+      "longName": "Joe Bachie"
+    },
+    "4037361": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "14",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "45",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "0.94"
+      },
+      "team": "IND",
+      "teamAbv": "IND",
+      "Defense": {
+        "totalTackles": "6",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "4",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4037361",
+      "longName": "Charvarius Ward"
+    },
+    "4040537": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "20",
+      "snapCounts": {
+        "offSnapPct": "1.00",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "48",
+        "defSnapPct": "0.00"
+      },
+      "team": "MIA",
+      "teamAbv": "MIA",
+      "playerID": "4040537",
+      "longName": "Aaron Brewer"
+    },
+    "4043016": {
+      "gameID": "20250907_MIA@IND",
+      "Receiving": {
+        "receptions": "1",
+        "recTD": "0",
+        "longRec": "9",
+        "targets": "2",
+        "recYds": "9",
+        "recAvg": "9.0"
+      },
+      "teamID": "20",
+      "snapCounts": {
+        "offSnapPct": "0.27",
+        "defSnap": "0",
+        "stSnap": "7",
+        "stSnapPct": "0.39",
+        "offSnap": "13",
+        "defSnapPct": "0.00"
+      },
+      "Kicking": {
+        "kickReturns": "4",
+        "kickReturnTD": "0",
+        "kickReturnYds": "109",
+        "kickReturnAvg": "27.3",
+        "kickReturnLong": "38"
+      },
+      "team": "MIA",
+      "teamAbv": "MIA",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4043016",
+      "longName": "Dee Eskridge"
+    },
+    "4043130": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "20",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "73",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "1.00"
+      },
+      "team": "MIA",
+      "teamAbv": "MIA",
+      "Defense": {
+        "totalTackles": "14",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "5",
+        "tfl": "1",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4043130",
+      "longName": "Jordyn Brooks"
+    },
+    "4047422": {
+      "gameID": "20250907_MIA@IND",
+      "Receiving": {
+        "receptions": "2",
+        "recTD": "0",
+        "longRec": "14",
+        "targets": "4",
+        "recYds": "20",
+        "recAvg": "10.0"
+      },
+      "teamID": "20",
+      "snapCounts": {
+        "offSnapPct": "0.58",
+        "defSnap": "0",
+        "stSnap": "7",
+        "stSnapPct": "0.39",
+        "offSnap": "28",
+        "defSnapPct": "0.00"
+      },
+      "team": "MIA",
+      "teamAbv": "MIA",
+      "playerID": "4047422",
+      "longName": "Tanner Conner"
+    },
+    "4050971": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "14",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "7",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "0.15"
+      },
+      "team": "IND",
+      "teamAbv": "IND",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4050971",
+      "longName": "Eric Johnson II"
+    },
+    "4058521": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "20",
+      "snapCounts": {
+        "offSnapPct": "0.94",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "45",
+        "defSnapPct": "0.00"
+      },
+      "team": "MIA",
+      "teamAbv": "MIA",
+      "playerID": "4058521",
+      "longName": "Kion Smith"
+    },
+    "4058825": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "14",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "27",
+        "stSnap": "7",
+        "stSnapPct": "0.39",
+        "offSnap": "0",
+        "defSnapPct": "0.56"
+      },
+      "team": "IND",
+      "teamAbv": "IND",
+      "Defense": {
+        "totalTackles": "2",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "0",
+        "tfl": "0",
+        "qbHits": "1",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4058825",
+      "longName": "Grover Stewart"
+    },
+    "4061956": {
+      "gameID": "20250907_MIA@IND",
+      "Rushing": {
+        "rushAvg": "15.0",
+        "rushYds": "15",
+        "carries": "1",
+        "longRush": "15",
+        "rushTD": "0"
+      },
+      "teamID": "14",
+      "snapCounts": {
+        "offSnapPct": "0.14",
+        "defSnap": "0",
+        "stSnap": "11",
+        "stSnapPct": "0.61",
+        "offSnap": "10",
+        "defSnapPct": "0.00"
+      },
+      "Kicking": {
+        "kickReturns": "1",
+        "kickReturnTD": "0",
+        "kickReturnYds": "27",
+        "kickReturnAvg": "27.0",
+        "kickReturnLong": "27"
+      },
+      "team": "IND",
+      "teamAbv": "IND",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4061956",
+      "longName": "Ashton Dulin"
+    },
+    "4218312": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "14",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "45",
+        "stSnap": "1",
+        "stSnapPct": "0.06",
+        "offSnap": "0",
+        "defSnapPct": "0.94"
+      },
+      "team": "IND",
+      "teamAbv": "IND",
+      "Defense": {
+        "totalTackles": "4",
+        "defTD": "0",
+        "forcedFumbles": "1",
+        "soloTackles": "2",
+        "tfl": "0",
+        "qbHits": "1",
+        "defensiveInterceptions": "0",
+        "sacks": "1",
+        "passDeflections": "1"
+      },
+      "playerID": "4218312",
+      "longName": "Kenny Moore II"
+    },
+    "4240401": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "20",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "50",
+        "stSnap": "16",
+        "stSnapPct": "0.89",
+        "offSnap": "0",
+        "defSnapPct": "0.68"
+      },
+      "team": "MIA",
+      "teamAbv": "MIA",
+      "Defense": {
+        "totalTackles": "6",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "6",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4240401",
+      "longName": "Ifeatu Melifonwu"
+    },
+    "4241217": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "20",
+      "snapCounts": {
+        "offSnapPct": "0.21",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "10",
+        "defSnapPct": "0.00"
+      },
+      "team": "MIA",
+      "teamAbv": "MIA",
+      "playerID": "4241217",
+      "longName": "Larry Borom"
+    },
+    "4241479": {
+      "gameID": "20250907_MIA@IND",
+      "Rushing": {
+        "rushAvg": "7.0",
+        "rushYds": "7",
+        "carries": "1",
+        "longRush": "7",
+        "rushTD": "0"
+      },
+      "Passing": {
+        "qbr": "2.7",
+        "rtg": "51.7",
+        "sacked": "3-13",
+        "passAttempts": "23",
+        "passAvg": "5.0",
+        "passTD": "1",
+        "passYds": "114",
+        "int": "2",
+        "passingTwoPointConversion": "1",
+        "passCompletions": "14"
+      },
+      "scoringPlays": [
+        {
+          "score": "De'Von Achane 11 Yd pass from Tua Tagovailoa (Tua Tagovailoa Pass to Julian Hill for Two-Point Conversion)",
+          "scorePeriod": "Q4",
+          "homeScore": "30",
+          "awayScore": "8",
+          "teamID": "20",
+          "scoreDetails": "9 plays, 65 yards, 3:53",
+          "scoreType": "TD",
+          "scoreTime": "6:21",
+          "team": "MIA",
+          "playerIDs": ["4241479", "4429160"]
+        }
+      ],
+      "teamID": "20",
+      "snapCounts": {
+        "offSnapPct": "0.81",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "39",
+        "defSnapPct": "0.00"
+      },
+      "team": "MIA",
+      "teamAbv": "MIA",
+      "Defense": {
+        "fumblesLost": "1",
+        "defensiveInterceptions": "0",
+        "forcedFumbles": "0",
+        "fumbles": "1",
+        "fumblesRecovered": "0"
+      },
+      "playerID": "4241479",
+      "longName": "Tua Tagovailoa"
+    },
+    "4242335": {
+      "gameID": "20250907_MIA@IND",
+      "Rushing": {
+        "rushAvg": "3.9",
+        "rushYds": "71",
+        "carries": "18",
+        "longRush": "15",
+        "rushTD": "0"
+      },
+      "Receiving": {
+        "receptions": "3",
+        "recTD": "0",
+        "longRec": "16",
+        "targets": "3",
+        "recYds": "27",
+        "recAvg": "9.0"
+      },
+      "teamID": "14",
+      "snapCounts": {
+        "offSnapPct": "0.71",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "52",
+        "defSnapPct": "0.00"
+      },
+      "team": "IND",
+      "teamAbv": "IND",
+      "playerID": "4242335",
+      "longName": "Jonathan Taylor"
+    },
+    "4242415": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "14",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "9",
+        "stSnap": "9",
+        "stSnapPct": "0.50",
+        "offSnap": "0",
+        "defSnapPct": "0.19"
+      },
+      "team": "IND",
+      "teamAbv": "IND",
+      "playerID": "4242415",
+      "longName": "Daniel Scott"
+    },
+    "4242457": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "20",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "20",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "0.27"
+      },
+      "team": "MIA",
+      "teamAbv": "MIA",
+      "Defense": {
+        "totalTackles": "2",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "2",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4242457",
+      "longName": "Matthew Butler"
+    },
+    "4242521": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "20",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "11",
+        "stSnapPct": "0.61",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "MIA",
+      "teamAbv": "MIA",
+      "playerID": "4242521",
+      "longName": "K.J. Britt"
+    },
+    "4242975": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "20",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "40",
+        "stSnap": "7",
+        "stSnapPct": "0.39",
+        "offSnap": "0",
+        "defSnapPct": "0.55"
+      },
+      "team": "MIA",
+      "teamAbv": "MIA",
+      "Defense": {
+        "totalTackles": "2",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4242975",
+      "longName": "Jaelan Phillips"
+    },
+    "4243371": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "20",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "2",
+        "stSnapPct": "0.11",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "MIA",
+      "teamAbv": "MIA",
+      "playerID": "4243371",
+      "longName": "Riley Patterson"
+    },
+    "4248455": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "14",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "10",
+        "stSnap": "9",
+        "stSnapPct": "0.50",
+        "offSnap": "0",
+        "defSnapPct": "0.21"
+      },
+      "team": "IND",
+      "teamAbv": "IND",
+      "Defense": {
+        "totalTackles": "3",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "3",
+        "tfl": "1",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4248455",
+      "longName": "Rodney Thomas II"
+    },
+    "4258194": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "14",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "30",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "0.63"
+      },
+      "team": "IND",
+      "teamAbv": "IND",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "1",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4258194",
+      "longName": "Kwity Paye"
+    },
+    "4259804": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "20",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "9",
+        "stSnapPct": "0.50",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "MIA",
+      "teamAbv": "MIA",
+      "playerID": "4259804",
+      "longName": "Willie Gay Jr."
+    },
+    "4260703": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "14",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "10",
+        "stSnapPct": "0.56",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "IND",
+      "teamAbv": "IND",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4260703",
+      "longName": "Segun Olubi"
+    },
+    "4271632": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "20",
+      "snapCounts": {
+        "offSnapPct": "0.79",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "38",
+        "defSnapPct": "0.00"
+      },
+      "team": "MIA",
+      "teamAbv": "MIA",
+      "playerID": "4271632",
+      "longName": "Austin Jackson"
+    },
+    "4360078": {
+      "gameID": "20250907_MIA@IND",
+      "Receiving": {
+        "receptions": "1",
+        "recTD": "0",
+        "longRec": "36",
+        "targets": "3",
+        "recYds": "36",
+        "recAvg": "36.0"
+      },
+      "teamID": "14",
+      "snapCounts": {
+        "offSnapPct": "0.79",
+        "defSnap": "0",
+        "stSnap": "1",
+        "stSnapPct": "0.06",
+        "offSnap": "58",
+        "defSnapPct": "0.00"
+      },
+      "team": "IND",
+      "teamAbv": "IND",
+      "playerID": "4360078",
+      "longName": "Alec Pierce"
+    },
+    "4360677": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "14",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "22",
+        "stSnap": "5",
+        "stSnapPct": "0.28",
+        "offSnap": "0",
+        "defSnapPct": "0.46"
+      },
+      "team": "IND",
+      "teamAbv": "IND",
+      "Defense": {
+        "totalTackles": "3",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "2",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4360677",
+      "longName": "Mekhi Blackmon"
+    },
+    "4361259": {
+      "gameID": "20250907_MIA@IND",
+      "Rushing": {
+        "rushAvg": "3.0",
+        "rushYds": "3",
+        "carries": "1",
+        "longRush": "3",
+        "rushTD": "0"
+      },
+      "Passing": {
+        "qbr": "16.0",
+        "rtg": "70.8",
+        "sacked": "0-0",
+        "passAttempts": "8",
+        "passAvg": "4.0",
+        "passTD": "0",
+        "passYds": "32",
+        "int": "0",
+        "passCompletions": "5"
+      },
+      "teamID": "20",
+      "snapCounts": {
+        "offSnapPct": "0.19",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "9",
+        "defSnapPct": "0.00"
+      },
+      "team": "MIA",
+      "teamAbv": "MIA",
+      "playerID": "4361259",
+      "longName": "Zach Wilson"
+    },
+    "4362580": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "14",
+      "snapCounts": {
+        "offSnapPct": "1.00",
+        "defSnap": "0",
+        "stSnap": "7",
+        "stSnapPct": "0.39",
+        "offSnap": "73",
+        "defSnapPct": "0.00"
+      },
+      "team": "IND",
+      "teamAbv": "IND",
+      "playerID": "4362580",
+      "longName": "Bernhard Raimann"
+    },
+    "4365395": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "20",
+      "snapCounts": {
+        "offSnapPct": "0.58",
+        "defSnap": "0",
+        "stSnap": "8",
+        "stSnapPct": "0.44",
+        "offSnap": "28",
+        "defSnapPct": "0.00"
+      },
+      "team": "MIA",
+      "teamAbv": "MIA",
+      "playerID": "4365395",
+      "longName": "Julian Hill"
+    },
+    "4370363": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "14",
+      "snapCounts": {
+        "offSnapPct": "0.08",
+        "defSnap": "0",
+        "stSnap": "7",
+        "stSnapPct": "0.39",
+        "offSnap": "6",
+        "defSnapPct": "0.00"
+      },
+      "team": "IND",
+      "teamAbv": "IND",
+      "playerID": "4370363",
+      "longName": "Dalton Tucker"
+    },
+    "4372016": {
+      "gameID": "20250907_MIA@IND",
+      "Receiving": {
+        "receptions": "4",
+        "recTD": "0",
+        "longRec": "16",
+        "targets": "5",
+        "recYds": "30",
+        "recAvg": "7.5"
+      },
+      "teamID": "20",
+      "snapCounts": {
+        "offSnapPct": "0.64",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "31",
+        "defSnapPct": "0.00"
+      },
+      "team": "MIA",
+      "teamAbv": "MIA",
+      "playerID": "4372016",
+      "longName": "Jaylen Waddle"
+    },
+    "4372085": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "14",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "22",
+        "stSnap": "10",
+        "stSnapPct": "0.56",
+        "offSnap": "0",
+        "defSnapPct": "0.46"
+      },
+      "team": "IND",
+      "teamAbv": "IND",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4372085",
+      "longName": "Cameron McGrone"
+    },
+    "4374171": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "14",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "9",
+        "stSnap": "10",
+        "stSnapPct": "0.56",
+        "offSnap": "0",
+        "defSnapPct": "0.19"
+      },
+      "team": "IND",
+      "teamAbv": "IND",
+      "Defense": {
+        "totalTackles": "2",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4374171",
+      "longName": "Austin Ajiake"
+    },
+    "4426403": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "14",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "39",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "0.81"
+      },
+      "team": "IND",
+      "teamAbv": "IND",
+      "Defense": {
+        "totalTackles": "6",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "4",
+        "tfl": "1",
+        "qbHits": "1",
+        "defensiveInterceptions": "0",
+        "sacks": "1",
+        "passDeflections": "0"
+      },
+      "playerID": "4426403",
+      "longName": "Nick Cross"
+    },
+    "4426473": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "14",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "32",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "0.67"
+      },
+      "team": "IND",
+      "teamAbv": "IND",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "1",
+        "defensiveInterceptionsYards": "6",
+        "interceptionTDs": "0",
+        "sacks": "0",
+        "passDeflections": "1"
+      },
+      "playerID": "4426473",
+      "longName": "Laiatu Latu"
+    },
+    "4426689": {
+      "gameID": "20250907_MIA@IND",
+      "Rushing": {
+        "rushAvg": "0.0",
+        "rushYds": "0",
+        "carries": "1",
+        "longRush": "0",
+        "rushTD": "0"
+      },
+      "teamID": "14",
+      "snapCounts": {
+        "offSnapPct": "0.03",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "2",
+        "defSnapPct": "0.00"
+      },
+      "team": "IND",
+      "teamAbv": "IND",
+      "playerID": "4426689",
+      "longName": "Ulysses Bentley IV"
+    },
+    "4427103": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "20",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "29",
+        "stSnap": "3",
+        "stSnapPct": "0.17",
+        "offSnap": "0",
+        "defSnapPct": "0.40"
+      },
+      "team": "MIA",
+      "teamAbv": "MIA",
+      "Defense": {
+        "totalTackles": "2",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "1"
+      },
+      "playerID": "4427103",
+      "longName": "Storm Duck"
+    },
+    "4427298": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "14",
+      "snapCounts": {
+        "offSnapPct": "1.00",
+        "defSnap": "0",
+        "stSnap": "7",
+        "stSnapPct": "0.39",
+        "offSnap": "73",
+        "defSnapPct": "0.00"
+      },
+      "team": "IND",
+      "teamAbv": "IND",
+      "playerID": "4427298",
+      "longName": "Matt Goncalves"
+    },
+    "4427635": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "14",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "13",
+        "stSnap": "10",
+        "stSnapPct": "0.56",
+        "offSnap": "0",
+        "defSnapPct": "0.27"
+      },
+      "team": "IND",
+      "teamAbv": "IND",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "0",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4427635",
+      "longName": "Adetomiwa Adebawore"
+    },
+    "4429160": {
+      "gameID": "20250907_MIA@IND",
+      "Rushing": {
+        "rushAvg": "7.9",
+        "rushYds": "55",
+        "carries": "7",
+        "longRush": "26",
+        "rushTD": "0"
+      },
+      "Receiving": {
+        "receptions": "3",
+        "recTD": "1",
+        "longRec": "11",
+        "targets": "4",
+        "recYds": "20",
+        "recAvg": "6.7"
+      },
+      "scoringPlays": [
+        {
+          "score": "De'Von Achane 11 Yd pass from Tua Tagovailoa (Tua Tagovailoa Pass to Julian Hill for Two-Point Conversion)",
+          "scorePeriod": "Q4",
+          "homeScore": "30",
+          "awayScore": "8",
+          "teamID": "20",
+          "scoreDetails": "9 plays, 65 yards, 3:53",
+          "scoreType": "TD",
+          "scoreTime": "6:21",
+          "team": "MIA",
+          "playerIDs": ["4241479", "4429160"]
+        }
+      ],
+      "teamID": "20",
+      "snapCounts": {
+        "offSnapPct": "0.73",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "35",
+        "defSnapPct": "0.00"
+      },
+      "team": "MIA",
+      "teamAbv": "MIA",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4429160",
+      "longName": "De'Von Achane"
+    },
+    "4429684": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "14",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "2",
+        "stSnapPct": "0.11",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "IND",
+      "teamAbv": "IND",
+      "playerID": "4429684",
+      "longName": "Anthony Gould"
+    },
+    "4430957": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "14",
+      "snapCounts": {
+        "offSnapPct": "1.00",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "73",
+        "defSnapPct": "0.00"
+      },
+      "team": "IND",
+      "teamAbv": "IND",
+      "playerID": "4430957",
+      "longName": "Tanor Bortolini"
+    },
+    "4431459": {
+      "gameID": "20250907_MIA@IND",
+      "Rushing": {
+        "rushAvg": "3.0",
+        "rushYds": "3",
+        "carries": "1",
+        "longRush": "3",
+        "rushTD": "0"
+      },
+      "Receiving": {
+        "receptions": "7",
+        "recTD": "0",
+        "longRec": "21",
+        "targets": "9",
+        "recYds": "76",
+        "recAvg": "10.9"
+      },
+      "teamID": "14",
+      "snapCounts": {
+        "offSnapPct": "0.73",
+        "defSnap": "0",
+        "stSnap": "1",
+        "stSnapPct": "0.06",
+        "offSnap": "53",
+        "defSnapPct": "0.00"
+      },
+      "team": "IND",
+      "teamAbv": "IND",
+      "playerID": "4431459",
+      "longName": "Tyler Warren"
+    },
+    "4431586": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "20",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "37",
+        "stSnap": "8",
+        "stSnapPct": "0.44",
+        "offSnap": "0",
+        "defSnapPct": "0.51"
+      },
+      "team": "MIA",
+      "teamAbv": "MIA",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4431586",
+      "longName": "Chop Robinson"
+    },
+    "4431664": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "20",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "22",
+        "stSnap": "9",
+        "stSnapPct": "0.50",
+        "offSnap": "0",
+        "defSnapPct": "0.30"
+      },
+      "team": "MIA",
+      "teamAbv": "MIA",
+      "Defense": {
+        "totalTackles": "3",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "2",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4431664",
+      "longName": "Dante Trader Jr."
+    },
+    "4432730": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "20",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "34",
+        "stSnap": "5",
+        "stSnapPct": "0.28",
+        "offSnap": "0",
+        "defSnapPct": "0.47"
+      },
+      "team": "MIA",
+      "teamAbv": "MIA",
+      "Defense": {
+        "totalTackles": "2",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "1",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4432730",
+      "longName": "Jason Marshall Jr."
+    },
+    "4567493": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "20",
+      "snapCounts": {
+        "offSnapPct": "1.00",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "48",
+        "defSnapPct": "0.00"
+      },
+      "team": "MIA",
+      "teamAbv": "MIA",
+      "playerID": "4567493",
+      "longName": "Patrick Paul"
+    },
+    "4569603": {
+      "gameID": "20250907_MIA@IND",
+      "Rushing": {
+        "rushAvg": "9.0",
+        "rushYds": "9",
+        "carries": "1",
+        "longRush": "9",
+        "rushTD": "0"
+      },
+      "Receiving": {
+        "receptions": "2",
+        "recTD": "0",
+        "longRec": "11",
+        "targets": "5",
+        "recYds": "20",
+        "recAvg": "10.0"
+      },
+      "teamID": "20",
+      "snapCounts": {
+        "offSnapPct": "0.58",
+        "defSnap": "0",
+        "stSnap": "8",
+        "stSnapPct": "0.44",
+        "offSnap": "28",
+        "defSnapPct": "0.00"
+      },
+      "Kicking": {
+        "kickReturns": "3",
+        "kickReturnTD": "0",
+        "kickReturnYds": "60",
+        "kickReturnAvg": "20.0",
+        "kickReturnLong": "27"
+      },
+      "team": "MIA",
+      "teamAbv": "MIA",
+      "playerID": "4569603",
+      "longName": "Malik Washington"
+    },
+    "4571557": {
+      "gameID": "20250907_MIA@IND",
+      "scoringPlays": [
+        {
+          "score": "Spencer Shrader 24 Yd Field Goal",
+          "scorePeriod": "Q1",
+          "homeScore": "3",
+          "awayScore": "0",
+          "teamID": "14",
+          "scoreDetails": "9 plays, 62 yards, 4:23",
+          "scoreType": "FG",
+          "scoreTime": "10:37",
+          "team": "IND",
+          "playerIDs": ["4571557"]
+        },
+        {
+          "score": "Michael Pittman Jr. 27 Yd pass from Daniel Jones (Spencer Shrader Kick)",
+          "scorePeriod": "Q2",
+          "homeScore": "10",
+          "awayScore": "0",
+          "teamID": "14",
+          "scoreDetails": "14 plays, 84 yards, 8:18",
+          "scoreType": "TD",
+          "scoreTime": "14:54",
+          "team": "IND",
+          "playerIDs": ["3917792", "4035687", "4571557"]
+        },
+        {
+          "score": "Daniel Jones 1 Yd Rush (Spencer Shrader Kick)",
+          "scorePeriod": "Q2",
+          "homeScore": "17",
+          "awayScore": "0",
+          "teamID": "14",
+          "scoreDetails": "5 plays, 42 yards, 2:13",
+          "scoreType": "TD",
+          "scoreTime": "12:01",
+          "team": "IND",
+          "playerIDs": ["3917792", "4571557"]
+        },
+        {
+          "score": "Spencer Shrader 35 Yd Field Goal ",
+          "scorePeriod": "Q2",
+          "homeScore": "20",
+          "awayScore": "0",
+          "teamID": "14",
+          "scoreDetails": "17 plays, 72 yards, 6:46",
+          "scoreType": "FG",
+          "scoreTime": "0:00",
+          "team": "IND",
+          "playerIDs": ["4571557"]
+        },
+        {
+          "score": "Spencer Shrader 28 Yd Field Goal",
+          "scorePeriod": "Q3",
+          "homeScore": "23",
+          "awayScore": "0",
+          "teamID": "14",
+          "scoreDetails": "7 plays, 48 yards, 3:49",
+          "scoreType": "FG",
+          "scoreTime": "7:30",
+          "team": "IND",
+          "playerIDs": ["4571557"]
+        },
+        {
+          "score": "Daniel Jones 1 Yd Rush (Spencer Shrader Kick)",
+          "scorePeriod": "Q4",
+          "homeScore": "30",
+          "awayScore": "0",
+          "teamID": "14",
+          "scoreDetails": "15 plays, 69 yards, 9:16",
+          "scoreType": "TD",
+          "scoreTime": "10:14",
+          "team": "IND",
+          "playerIDs": ["3917792", "4571557"]
+        },
+        {
+          "score": "Spencer Shrader 48 Yd Field Goal ",
+          "scorePeriod": "Q4",
+          "homeScore": "33",
+          "awayScore": "8",
+          "teamID": "14",
+          "scoreDetails": "7 plays, 21 yards, 3:58",
+          "scoreType": "FG",
+          "scoreTime": "2:23",
+          "team": "IND",
+          "playerIDs": ["4571557"]
+        }
+      ],
+      "teamID": "14",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "14",
+        "stSnapPct": "0.78",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "Kicking": {
+        "fgLong": "48",
+        "fgMade": "4",
+        "fgAttempts": "4",
+        "xpMade": "3",
+        "fgPct": "100.0",
+        "kickingPts": "15",
+        "xpAttempts": "3",
+        "fgMissed": "0",
+        "xpMissed": "0"
+      },
+      "team": "IND",
+      "teamAbv": "IND",
+      "playerID": "4571557",
+      "longName": "Spencer Shrader"
+    },
+    "4597500": {
+      "gameID": "20250907_MIA@IND",
+      "Receiving": {
+        "receptions": "2",
+        "recTD": "0",
+        "longRec": "18",
+        "targets": "2",
+        "recYds": "21",
+        "recAvg": "10.5"
+      },
+      "teamID": "14",
+      "snapCounts": {
+        "offSnapPct": "0.21",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "15",
+        "defSnapPct": "0.00"
+      },
+      "team": "IND",
+      "teamAbv": "IND",
+      "playerID": "4597500",
+      "longName": "Adonai Mitchell"
+    },
+    "4685145": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "14",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "6",
+        "stSnapPct": "0.33",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "IND",
+      "teamAbv": "IND",
+      "playerID": "4685145",
+      "longName": "Jaylon Jones"
+    },
+    "4688813": {
+      "gameID": "20250907_MIA@IND",
+      "Receiving": {
+        "receptions": "2",
+        "recTD": "0",
+        "longRec": "6",
+        "targets": "3",
+        "recYds": "12",
+        "recAvg": "6.0"
+      },
+      "teamID": "14",
+      "snapCounts": {
+        "offSnapPct": "0.49",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "36",
+        "defSnapPct": "0.00"
+      },
+      "team": "IND",
+      "teamAbv": "IND",
+      "playerID": "4688813",
+      "longName": "Josh Downs"
+    },
+    "4711533": {
+      "gameID": "20250907_MIA@IND",
+      "Rushing": {
+        "rushAvg": "2.0",
+        "rushYds": "4",
+        "carries": "2",
+        "longRush": "3",
+        "rushTD": "0"
+      },
+      "Receiving": {
+        "receptions": "1",
+        "recTD": "0",
+        "longRec": "-1",
+        "targets": "1",
+        "recYds": "-1",
+        "recAvg": "-1.0"
+      },
+      "teamID": "20",
+      "snapCounts": {
+        "offSnapPct": "0.25",
+        "defSnap": "0",
+        "stSnap": "1",
+        "stSnapPct": "0.06",
+        "offSnap": "12",
+        "defSnapPct": "0.00"
+      },
+      "team": "MIA",
+      "teamAbv": "MIA",
+      "playerID": "4711533",
+      "longName": "Ollie Gordon II"
+    },
+    "4722908": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "14",
+      "snapCounts": {
+        "offSnapPct": "0.37",
+        "defSnap": "0",
+        "stSnap": "17",
+        "stSnapPct": "0.94",
+        "offSnap": "27",
+        "defSnapPct": "0.00"
+      },
+      "team": "IND",
+      "teamAbv": "IND",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4722908",
+      "longName": "Drew Ogletree"
+    },
+    "4819257": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "20",
+      "snapCounts": {
+        "offSnapPct": "1.00",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "48",
+        "defSnapPct": "0.00"
+      },
+      "team": "MIA",
+      "teamAbv": "MIA",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4819257",
+      "longName": "Jonah Savaiinaea"
+    },
+    "4837188": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "20",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "33",
+        "stSnap": "2",
+        "stSnapPct": "0.11",
+        "offSnap": "0",
+        "defSnapPct": "0.45"
+      },
+      "team": "MIA",
+      "teamAbv": "MIA",
+      "Defense": {
+        "totalTackles": "5",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "2",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4837188",
+      "longName": "Jordan Phillips"
+    },
+    "4874509": {
+      "gameID": "20250907_MIA@IND",
+      "Rushing": {
+        "rushAvg": "3.4",
+        "rushYds": "41",
+        "carries": "12",
+        "longRush": "12",
+        "rushTD": "0"
+      },
+      "teamID": "14",
+      "snapCounts": {
+        "offSnapPct": "0.25",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "18",
+        "defSnapPct": "0.00"
+      },
+      "team": "IND",
+      "teamAbv": "IND",
+      "playerID": "4874509",
+      "longName": "DJ Giddens"
+    },
+    "4892240": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "14",
+      "snapCounts": {
+        "offSnapPct": "0.10",
+        "defSnap": "0",
+        "stSnap": "7",
+        "stSnapPct": "0.39",
+        "offSnap": "7",
+        "defSnapPct": "0.00"
+      },
+      "team": "IND",
+      "teamAbv": "IND",
+      "playerID": "4892240",
+      "longName": "Jalen Travis"
+    },
+    "4894654": {
+      "gameID": "20250907_MIA@IND",
+      "teamID": "20",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "44",
+        "stSnap": "7",
+        "stSnapPct": "0.39",
+        "offSnap": "0",
+        "defSnapPct": "0.60"
+      },
+      "team": "MIA",
+      "teamAbv": "MIA",
+      "Defense": {
+        "totalTackles": "4",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4894654",
+      "longName": "Kenneth Grant"
+    }
+  },
+  "scoringPlays": [
+    {
+      "score": "Spencer Shrader 24 Yd Field Goal",
+      "scorePeriod": "Q1",
+      "homeScore": "3",
+      "awayScore": "0",
+      "teamID": "14",
+      "scoreDetails": "9 plays, 62 yards, 4:23",
+      "scoreType": "FG",
+      "scoreTime": "10:37",
+      "team": "IND",
+      "playerIDs": ["4571557"]
+    },
+    {
+      "score": "Michael Pittman Jr. 27 Yd pass from Daniel Jones (Spencer Shrader Kick)",
+      "scorePeriod": "Q2",
+      "homeScore": "10",
+      "awayScore": "0",
+      "teamID": "14",
+      "scoreDetails": "14 plays, 84 yards, 8:18",
+      "scoreType": "TD",
+      "scoreTime": "14:54",
+      "team": "IND",
+      "playerIDs": ["3917792", "4035687", "4571557"]
+    },
+    {
+      "score": "Daniel Jones 1 Yd Rush (Spencer Shrader Kick)",
+      "scorePeriod": "Q2",
+      "homeScore": "17",
+      "awayScore": "0",
+      "teamID": "14",
+      "scoreDetails": "5 plays, 42 yards, 2:13",
+      "scoreType": "TD",
+      "scoreTime": "12:01",
+      "team": "IND",
+      "playerIDs": ["3917792", "4571557"]
+    },
+    {
+      "score": "Spencer Shrader 35 Yd Field Goal ",
+      "scorePeriod": "Q2",
+      "homeScore": "20",
+      "awayScore": "0",
+      "teamID": "14",
+      "scoreDetails": "17 plays, 72 yards, 6:46",
+      "scoreType": "FG",
+      "scoreTime": "0:00",
+      "team": "IND",
+      "playerIDs": ["4571557"]
+    },
+    {
+      "score": "Spencer Shrader 28 Yd Field Goal",
+      "scorePeriod": "Q3",
+      "homeScore": "23",
+      "awayScore": "0",
+      "teamID": "14",
+      "scoreDetails": "7 plays, 48 yards, 3:49",
+      "scoreType": "FG",
+      "scoreTime": "7:30",
+      "team": "IND",
+      "playerIDs": ["4571557"]
+    },
+    {
+      "score": "Daniel Jones 1 Yd Rush (Spencer Shrader Kick)",
+      "scorePeriod": "Q4",
+      "homeScore": "30",
+      "awayScore": "0",
+      "teamID": "14",
+      "scoreDetails": "15 plays, 69 yards, 9:16",
+      "scoreType": "TD",
+      "scoreTime": "10:14",
+      "team": "IND",
+      "playerIDs": ["3917792", "4571557"]
+    },
+    {
+      "score": "De'Von Achane 11 Yd pass from Tua Tagovailoa (Tua Tagovailoa Pass to Julian Hill for Two-Point Conversion)",
+      "scorePeriod": "Q4",
+      "homeScore": "30",
+      "awayScore": "8",
+      "teamID": "20",
+      "scoreDetails": "9 plays, 65 yards, 3:53",
+      "scoreType": "TD",
+      "scoreTime": "6:21",
+      "team": "MIA",
+      "playerIDs": ["4241479", "4429160"]
+    },
+    {
+      "score": "Spencer Shrader 48 Yd Field Goal ",
+      "scorePeriod": "Q4",
+      "homeScore": "33",
+      "awayScore": "8",
+      "teamID": "14",
+      "scoreDetails": "7 plays, 21 yards, 3:58",
+      "scoreType": "FG",
+      "scoreTime": "2:23",
+      "team": "IND",
+      "playerIDs": ["4571557"]
+    }
+  ],
+  "seasonType": "Regular Season",
+  "teamIDAway": "20",
+  "teamIDHome": "14",
+  "teamStats": {
+    "away": {
+      "totalYards": "211",
+      "rushingAttempts": "12",
+      "rushingYards": "78",
+      "fumblesLost": "1",
+      "penalties": "3-15",
+      "totalPlays": "46",
+      "possession": "21:17",
+      "safeties": "0",
+      "passCompletionsAndAttempts": "19-31",
+      "passingFirstDowns": "9",
+      "interceptionsThrown": "2",
+      "sacksAndYardsLost": "3-13",
+      "thirdDownEfficiency": "5-10",
+      "blockedPunt": "0",
+      "yardsPerPlay": "4.6",
+      "redZoneScoredAndAttempted": "1-1",
+      "teamID": "20",
+      "defensiveInterceptions": "0",
+      "defensiveOrSpecialTeamsTds": "0",
+      "totalDrives": "7",
+      "rushingFirstDowns": "3",
+      "blockedFG": "0",
+      "rushTD": "0",
+      "twoPointConversions": "1",
+      "firstDowns": "12",
+      "passTD": "1",
+      "team": "MIA",
+      "blockedXP": "0",
+      "teamAbv": "MIA",
+      "firstDownsFromPenalties": "0",
+      "fourthDownEfficiency": "1-2",
+      "defensiveTwoPointConversionReturns": "0",
+      "passingYards": "133",
+      "yardsPerRush": "6.5",
+      "snapCounts": {
+        "totalSpecialTeams": "18",
+        "totalOffensive": "48",
+        "totalDefensive": "73"
+      },
+      "turnovers": "3",
+      "yardsPerPass": "3.9"
+    },
+    "home": {
+      "totalYards": "418",
+      "rushingAttempts": "40",
+      "rushingYards": "156",
+      "fumblesLost": "0",
+      "penalties": "4-45",
+      "totalPlays": "70",
+      "possession": "38:43",
+      "safeties": "0",
+      "passCompletionsAndAttempts": "22-29",
+      "passingFirstDowns": "14",
+      "interceptionsThrown": "0",
+      "sacksAndYardsLost": "1-10",
+      "thirdDownEfficiency": "7-15",
+      "blockedPunt": "0",
+      "yardsPerPlay": "6.0",
+      "redZoneScoredAndAttempted": "3-6",
+      "teamID": "14",
+      "defensiveInterceptions": "2",
+      "defensiveOrSpecialTeamsTds": "0",
+      "totalDrives": "7",
+      "rushingFirstDowns": "11",
+      "blockedFG": "0",
+      "rushTD": "2",
+      "twoPointConversions": "0",
+      "firstDowns": "27",
+      "passTD": "1",
+      "team": "IND",
+      "blockedXP": "0",
+      "teamAbv": "IND",
+      "firstDownsFromPenalties": "2",
+      "fourthDownEfficiency": "3-3",
+      "defensiveTwoPointConversionReturns": "0",
+      "passingYards": "262",
+      "yardsPerRush": "3.9",
+      "snapCounts": {
+        "totalSpecialTeams": "18",
+        "totalOffensive": "73",
+        "totalDefensive": "48"
+      },
+      "turnovers": "0",
+      "yardsPerPass": "8.7"
+    }
+  },
+  "gameID": "20250907_MIA@IND",
+  "gameStatusCode": "2"
+}

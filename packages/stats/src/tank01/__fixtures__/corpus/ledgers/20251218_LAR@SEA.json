@@ -1,0 +1,231 @@
+{
+  "gameRef": "20251218_LAR@SEA",
+  "playersTranslated": 93,
+  "warnings": [],
+  "fatal": [],
+  "players": [
+    {
+      "ref": "12483",
+      "name": "Matthew Stafford",
+      "stats": {
+        "pass_td": 3,
+        "pass_yd": 457,
+        "rush_yd": 6
+      },
+      "milliPoints": 30880
+    },
+    {
+      "ref": "2473037",
+      "name": "Jason Myers",
+      "stats": {
+        "xp_made": 2
+      },
+      "milliPoints": 2000
+    },
+    {
+      "ref": "2975863",
+      "name": "Eric Saubert",
+      "stats": {
+        "two_pt": 1
+      },
+      "milliPoints": 2000
+    },
+    {
+      "ref": "2977187",
+      "name": "Cooper Kupp",
+      "stats": {
+        "fum_lost": 1,
+        "rec": 3,
+        "rec_yd": 39,
+        "two_pt": 1
+      },
+      "milliPoints": 6900
+    },
+    {
+      "ref": "3912547",
+      "name": "Sam Darnold",
+      "stats": {
+        "pass_int": 2,
+        "pass_td": 2,
+        "pass_yd": 270,
+        "rush_yd": 7,
+        "two_pt": 2
+      },
+      "milliPoints": 19500
+    },
+    {
+      "ref": "4032473",
+      "name": "Rashid Shaheed",
+      "stats": {
+        "ret_td": 1,
+        "rush_yd": 31
+      },
+      "milliPoints": 9100
+    },
+    {
+      "ref": "4242557",
+      "name": "Colby Parkinson",
+      "stats": {
+        "rec": 2,
+        "rec_yd": 21
+      },
+      "milliPoints": 4100
+    },
+    {
+      "ref": "4386544",
+      "name": "Xavier Smith",
+      "stats": {
+        "rec": 2,
+        "rec_yd": 57
+      },
+      "milliPoints": 7700
+    },
+    {
+      "ref": "4426385",
+      "name": "Zach Charbonnet",
+      "stats": {
+        "rec": 4,
+        "rec_yd": 22,
+        "rush_td": 1,
+        "rush_yd": 32,
+        "two_pt": 1
+      },
+      "milliPoints": 17400
+    },
+    {
+      "ref": "4426515",
+      "name": "Puka Nacua",
+      "stats": {
+        "rec": 12,
+        "rec_td": 2,
+        "rec_yd": 225
+      },
+      "milliPoints": 46500
+    },
+    {
+      "ref": "4426553",
+      "name": "Davis Allen",
+      "stats": {
+        "rec": 2,
+        "rec_yd": 34
+      },
+      "milliPoints": 5400
+    },
+    {
+      "ref": "4429096",
+      "name": "Blake Corum",
+      "stats": {
+        "rec": 1,
+        "rec_yd": 13,
+        "rush_td": 1,
+        "rush_yd": 48
+      },
+      "milliPoints": 13100
+    },
+    {
+      "ref": "4430737",
+      "name": "Kyren Williams",
+      "stats": {
+        "rec": 3,
+        "rec_yd": 15,
+        "rush_yd": 70
+      },
+      "milliPoints": 11500
+    },
+    {
+      "ref": "4430878",
+      "name": "Jaxon Smith-Njigba",
+      "stats": {
+        "rec": 8,
+        "rec_td": 1,
+        "rec_yd": 96
+      },
+      "milliPoints": 23600
+    },
+    {
+      "ref": "4567048",
+      "name": "Kenneth Walker III",
+      "stats": {
+        "rec": 3,
+        "rec_yd": 64,
+        "rush_td": 1,
+        "rush_yd": 100
+      },
+      "milliPoints": 25400
+    },
+    {
+      "ref": "4569382",
+      "name": "Jordan Whittington",
+      "stats": {
+        "rec": 1,
+        "rec_yd": 19
+      },
+      "milliPoints": 2900
+    },
+    {
+      "ref": "4570037",
+      "name": "Terrance Ferguson",
+      "stats": {
+        "rec": 3,
+        "rec_td": 1,
+        "rec_yd": 33
+      },
+      "milliPoints": 12300
+    },
+    {
+      "ref": "4574716",
+      "name": "Harrison Mevis",
+      "stats": {
+        "fg_0_39": 2,
+        "fg_40_49": 1,
+        "fg_missed": 1,
+        "xp_made": 4
+      },
+      "milliPoints": 13000
+    },
+    {
+      "ref": "4576297",
+      "name": "AJ Barner",
+      "stats": {
+        "rec": 4,
+        "rec_td": 1,
+        "rec_yd": 49,
+        "rush_yd": 1
+      },
+      "milliPoints": 15000
+    },
+    {
+      "ref": "4710855",
+      "name": "Konata Mumpfield",
+      "stats": {
+        "rec": 3,
+        "rec_yd": 40
+      },
+      "milliPoints": 7000
+    }
+  ],
+  "teamDefense": [
+    {
+      "ref": "LAR",
+      "name": "LAR D/ST",
+      "stats": {
+        "def_fum_rec": 1,
+        "def_int": 2,
+        "def_pts_allowed": 38,
+        "def_sack": 4,
+        "def_yds_allowed": 415
+      },
+      "milliPoints": 4000
+    },
+    {
+      "ref": "SEA",
+      "name": "SEA D/ST",
+      "stats": {
+        "def_pts_allowed": 37,
+        "def_td": 1,
+        "def_yds_allowed": 581
+      },
+      "milliPoints": -4000
+    }
+  ]
+}

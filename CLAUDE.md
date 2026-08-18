@@ -241,10 +241,14 @@ sources to agree before a paying week finalises. **Tank01 + ESPN does not satisf
 They are one source. Sleeper is the only genuine second opinion the project currently has,
 and it is the one that found ~500 points of real error (see #178).
 
-**What is still not established.** 91 comparisons across two games is not a season — #160
-is the issue for making this permanent rather than a thing somebody did once. And those two
-games contained no D/ST score, no notable kicking and no return touchdown, which are
-exactly the paths that read prose instead of numbers.
+**Now permanent, and the gap named here is closed.** This used to read "91 comparisons
+across two games is not a season", with the two games containing no D/ST score, no notable
+kicking and no return touchdown — exactly the paths that read prose instead of numbers. The
+conformance corpus (#160, see below) is thirteen games chosen for those paths, including
+both D/ST ladders at top and bottom tier, all four field-goal buckets, and four separate
+return-touchdown shapes. **What has not changed is the argument above:** ESPN is still not
+a second source, and the corpus asserts it as a republication rather than counting it as
+one.
 
 - **Anchoring wired into the app** — `POST /api/leagues/[id]/anchor`, `AnchorPanel.tsx`,
   and `readOnlyEscrow()` in `apps/web/src/lib/escrow.ts`. The commissioner signs from
@@ -545,9 +549,10 @@ is 2.
 - **#155** — a two-point conversion receiver scores nothing when the provider omits
   him from `playerIDs`. Note the obvious fix does not work, and the numeric
   fields would double-count; the issue explains both.
-- **#160** — make the ESPN conformance check permanent. This is the machinery that
-  found most of the above, and it is most of what `RULES.md` §7's two-source
-  requirement needs.
+- **#160 — largely done.** The conformance corpus is checked in and runs offline in
+  `pnpm test`; see "The scoring conformance corpus" below. What remains is breadth:
+  thirteen games is not a season, and `RULES.md` §7's two-source gate still needs
+  Sleeper wired into finalisation rather than only into a test.
 - **#158, #159, #163** — blocked-kick recoveries recognised by neither pattern; one
   unexplained ESPN scoring category; no dissolve anywhere in the product.
 
@@ -679,11 +684,11 @@ partial fix write `Refs #79` and close it by hand when the last part lands.
 4. **Settlement**, which is where the season ends up. `championship()` now derives all
    five prize-holders from the scores; nothing pays them out yet, and that is D6 — see
    above for why it is not an afternoon.
-5. **B5's outstanding half — validate scoring against real 2025 box scores.** The engine
-   is still checked only against _constructed_ fixtures, and it decides who gets paid. The
-   Tank01 key is provisioned but lives on the main PC, so this is **main-PC work** despite
-   needing no Rust. Hand-verify a handful of real games against ESPN's totals and record
-   them in `docs/TANK01.md`. Worth doing before Sep 9 rather than after.
+5. **B5's outstanding half — done, and no longer main-PC work.** The engine used to be
+   checked only against _constructed_ fixtures while deciding who gets paid. Thirteen real
+   games are now checked in and compared on every `pnpm test`, offline — see "The scoring
+   conformance corpus" below and `docs/TANK01.md`. Capturing a **new** game still needs
+   the Tank01 key; comparing the ones already captured needs nothing.
 
 **Still open on the draft:** nothing, on the fairness side — the grindable seed is fixed
 (see "The order draw" below). What remains is operational: `SOLANA_RPC_URL` has to be
@@ -1894,8 +1899,89 @@ Three behaviours that are deliberate and should not be "fixed":
   The filter comes from the league's own roster rules, not a hardcoded slot list.
 
 Fixtures in `scoring/fixtures.ts` are **constructed, not real box scores**, and labelled
-as such. Validating against real 2025 data is the outstanding half of B5 and needs the
-Tank01 key.
+as such. **B5's outstanding half is now covered** by the scoring conformance corpus below:
+thirteen real games, checked in, scored by this engine and cross-checked against Sleeper,
+offline on every `pnpm test`.
+
+### The scoring conformance corpus
+
+`packages/stats/src/corpus/`, fixtures under
+`packages/stats/src/tank01/__fixtures__/corpus/`. Thirteen real games, checked in, 98
+tests, run by `pnpm test` **offline with no credentials** — CI has no Tank01 key and that
+constraint is absolute. Refs #160. Full write-up, including the game-by-game table, is in
+[`docs/TANK01.md`](docs/TANK01.md).
+
+**Why it exists.** Every scoring defect this repo has fixed was found by a sweep of all
+544 games of 2025 and 2024, and **that sweep was a throwaway script** — hundreds of
+metered calls, run once, leaving nothing behind that would notice the same class of defect
+arriving again. The cost of noticing late is not "a bug for a while": a finalised week is
+never rescored, so a translator regression landing on a Thursday has permanently decided
+matchups, playoff seeds and — in weeks 14 and 17 — money by the following Wednesday.
+
+**Four checks, and none of them is "the numbers still match":**
+
+- **Coverage.** Each game declares in the manifest what it is FOR, and the claim is
+  re-derived from the fixture every run. A corpus that reconciles perfectly and contains
+  no `BP` play, no shutout and no 60-yard field goal is worthless and looks green.
+  Derived from the **Tank01 fixture, never the ESPN column** — ESPN's labels are easier to
+  search, but the translator reads Tank01 and `SCORE_TYPE_BP` is a value ESPN does not
+  publish at all.
+- **The ledger.** Generated, never hand-edited: every player **and every D/ST unit**, with
+  the translator's own `warnings` and `fatal` arrays recorded in full and compared as
+  recorded rather than asserted empty. Units are not optional — three of #81's four
+  defects, and every blocked-kick and safety defect, live in `translateTeamDefense`, so a
+  player-only ledger is blind to them.
+- **Sleeper**, the only genuine second source, compared as **their raw stats run through
+  our own `scorePlayer`** — never their points. Note `def_fum_rec` is `fum_rec` **+**
+  `def_st_fum_rec`. **The comparison is per-stat, not per-total**, and that is not a
+  refinement: gating on totals hid two real `def_pts_allowed` divergences of six and two
+  points, because both readings fell in the same tier and paid the same. A tier is a
+  range, so a stat gap worth nothing this week is worth six the week it straddles a
+  boundary.
+- **ESPN as a republication, not corroboration.** Tank01 _is_ ESPN reserialised, so an
+  ESPN column would be one source read twice and dressed as agreement. What is asserted is
+  the republication itself: per scoring play, `tank.score === espn.text` and
+  `tank.scoreType === espn.scoringType.abbreviation`.
+
+**The manifest is the only hand-written file**, and it carries the guards. Every
+`knownDisagreement` needs a reason, an issue number and a `DEFECT`/`DELIBERATE` kind, and
+pins both totals — so an exception written for a 2-point gap cannot cover a 20-point one.
+**A disagreement that has been resolved is a failure**, not a pass: a stale exception is
+how a fixed bug silently un-fixes, going on suppressing its comparison while the next
+regression lands inside its shadow. Unjoinable players are declared the same way, because
+a join that quietly fails is indistinguishable from agreement.
+
+**Regeneration is a separate command and CI never runs it.** `pnpm corpus:stats` writes
+the ledgers, `pnpm stats:corpus-sync` captures fixtures; `pnpm test` only compares. The
+generator is byte-reproducible — running it on unmodified code leaves no diff.
+
+**What is reasoned rather than exercised**, since a green corpus overstates itself
+otherwise: no captured game makes ESPN and Tank01 differ on scoring-play count, so the
+claim-once matching path has unit tests but no fixture; no game carries `def_st_fum_rec`;
+and the one `SLEEPER_TEAM_ALIASES` entry is unreached. An unjoinable player is declared
+(#185) rather than skipped, because a failed join is indistinguishable from agreement.
+
+**Regenerate-to-green does not work, and that was verified rather than assumed.** Paying
+one extra `def_td` in `translateTeamDefense` fails four ledgers; regenerating them to
+silence that moves the same four failures onto the **Sleeper** column, which is an
+independent source and cannot be regenerated. What regeneration _can_ hide is a subject
+Sleeper does not cover, or one already carrying a declared disagreement — for those the
+diff is the only defence, so **read the diff**. There is deliberately **no `test:live`
+tier**.
+
+**What it cannot catch**, stated because a green corpus reads as more assurance than it
+is: it is thirteen games, so a defect in a class no fixture contains is invisible, and
+coverage only guards classes someone has already registered. ESPN cannot corroborate us —
+the scoring table came from ESPN — so `RULES.md` §7's two-source requirement is met by
+Sleeper here and not by ESPN. Where Sleeper is silent nothing checks us. A declared
+disagreement suppresses that subject entirely while it stands. And it does not check the
+table against `RULES.md`; that is the golden hash's job.
+
+**Adding a game** is a manifest entry plus `pnpm stats:corpus-sync` (**one metered call**,
+idempotent — it never re-fetches an existing box score even under `--force`, because those
+are the artifacts under test) then `pnpm corpus:stats`. A new coverage class needs a
+`classes.ts` entry **and** a game claiming it; both directions are enforced, since a
+registered class nobody claims is a check with no data behind it.
 
 ### The escrow
 
@@ -2579,8 +2665,10 @@ Preferences established in practice, not stated as rules:
 - **Keep notes in the repo, not in a chat window.** This file, `DECISIONS.md`, and
   `SETUP-REQUIRED.md` exist because the owner works across two machines and expects to
   pick up where they left off. Update them as you go rather than at the end.
-- **Say what is not done.** The scoring fixtures are constructed rather than real box
-  scores, and that is labelled everywhere it appears rather than glossed.
+- **Say what is not done.** The unit fixtures in `scoring/fixtures.ts` are still
+  constructed rather than real box scores, and that is labelled everywhere it appears
+  rather than glossed — the real-game checking lives in the conformance corpus alongside
+  them, and its own limits are written down in the same spirit.
 
 **There are more product ideas the owner has not yet shared.** They said so explicitly
 during the initial scoping and the conversation moved on to building. Worth asking before
