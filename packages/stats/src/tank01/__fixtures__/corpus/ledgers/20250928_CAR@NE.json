@@ -1,0 +1,271 @@
+{
+  "gameRef": "20250928_CAR@NE",
+  "playersTranslated": 96,
+  "warnings": [],
+  "fatal": [],
+  "players": [
+    {
+      "ref": "14012",
+      "name": "Andy Dalton",
+      "stats": {
+        "pass_td": 1,
+        "pass_yd": 58
+      },
+      "milliPoints": 6320
+    },
+    {
+      "ref": "2976212",
+      "name": "Stefon Diggs",
+      "stats": {
+        "rec": 6,
+        "rec_yd": 101
+      },
+      "milliPoints": 16100
+    },
+    {
+      "ref": "2991662",
+      "name": "Mack Hollins",
+      "stats": {
+        "rec": 1,
+        "rec_td": 1,
+        "rec_yd": 4
+      },
+      "milliPoints": 7400
+    },
+    {
+      "ref": "3043275",
+      "name": "Austin Hooper",
+      "stats": {
+        "rec": 1,
+        "rec_yd": 24
+      },
+      "milliPoints": 3400
+    },
+    {
+      "ref": "3044720",
+      "name": "Joshua Dobbs",
+      "stats": {
+        "rush_yd": -2
+      },
+      "milliPoints": -200
+    },
+    {
+      "ref": "3046439",
+      "name": "Hunter Henry",
+      "stats": {
+        "rec": 2,
+        "rec_td": 1,
+        "rec_yd": 39
+      },
+      "milliPoints": 11900
+    },
+    {
+      "ref": "3135321",
+      "name": "Hunter Renfrow",
+      "stats": {
+        "rec": 2,
+        "rec_yd": 10
+      },
+      "milliPoints": 3000
+    },
+    {
+      "ref": "4038815",
+      "name": "Rico Dowdle",
+      "stats": {
+        "rec": 1,
+        "rec_yd": -2,
+        "rush_yd": 32
+      },
+      "milliPoints": 4000
+    },
+    {
+      "ref": "4212909",
+      "name": "David Moore",
+      "stats": {
+        "rush_yd": 12
+      },
+      "milliPoints": 1200
+    },
+    {
+      "ref": "4241416",
+      "name": "Chuba Hubbard",
+      "stats": {
+        "rec": 3,
+        "rec_yd": 20,
+        "rush_yd": 49
+      },
+      "milliPoints": 9900
+    },
+    {
+      "ref": "4241720",
+      "name": "Marcus Jones",
+      "stats": {
+        "ret_td": 1
+      },
+      "milliPoints": 6000
+    },
+    {
+      "ref": "4360294",
+      "name": "Antonio Gibson",
+      "stats": {
+        "rush_td": 1,
+        "rush_yd": 27
+      },
+      "milliPoints": 8700
+    },
+    {
+      "ref": "4360763",
+      "name": "Brycen Tremayne",
+      "stats": {
+        "rec": 3,
+        "rec_yd": 36
+      },
+      "milliPoints": 6600
+    },
+    {
+      "ref": "4361988",
+      "name": "James Mitchell",
+      "stats": {
+        "rec": 2,
+        "rec_yd": 17
+      },
+      "milliPoints": 3700
+    },
+    {
+      "ref": "4372780",
+      "name": "Tommy Tremble",
+      "stats": {
+        "rec": 5,
+        "rec_td": 1,
+        "rec_yd": 42
+      },
+      "milliPoints": 15200
+    },
+    {
+      "ref": "4429022",
+      "name": "Kayshon Boutte",
+      "stats": {
+        "rec": 1,
+        "rec_yd": 18
+      },
+      "milliPoints": 2800
+    },
+    {
+      "ref": "4431452",
+      "name": "Drake Maye",
+      "stats": {
+        "pass_td": 2,
+        "pass_yd": 203,
+        "rush_td": 1,
+        "rush_yd": 11
+      },
+      "milliPoints": 23220
+    },
+    {
+      "ref": "4432710",
+      "name": "TreVeyon Henderson",
+      "stats": {
+        "rec": 2,
+        "rec_yd": 14,
+        "rush_td": 1,
+        "rush_yd": 32
+      },
+      "milliPoints": 12600
+    },
+    {
+      "ref": "4568263",
+      "name": "Ryan Fitzgerald",
+      "stats": {
+        "fg_missed": 1,
+        "xp_made": 1
+      },
+      "milliPoints": 0
+    },
+    {
+      "ref": "4569173",
+      "name": "Rhamondre Stevenson",
+      "stats": {
+        "rec": 1,
+        "rec_yd": 3,
+        "rush_yd": 38
+      },
+      "milliPoints": 5100
+    },
+    {
+      "ref": "4569923",
+      "name": "Andy Borregales",
+      "stats": {
+        "xp_made": 6
+      },
+      "milliPoints": 6000
+    },
+    {
+      "ref": "4613202",
+      "name": "Kyle Williams",
+      "stats": {
+        "rush_yd": -2
+      },
+      "milliPoints": -200
+    },
+    {
+      "ref": "4683243",
+      "name": "Mitchell Evans",
+      "stats": {
+        "rec": 3,
+        "rec_td": 1,
+        "rec_yd": 23
+      },
+      "milliPoints": 11300
+    },
+    {
+      "ref": "4685350",
+      "name": "Trevor Etienne",
+      "stats": {
+        "rush_yd": 33
+      },
+      "milliPoints": 3300
+    },
+    {
+      "ref": "4685472",
+      "name": "Tetairoa McMillan",
+      "stats": {
+        "rec": 4,
+        "rec_yd": 62
+      },
+      "milliPoints": 10200
+    },
+    {
+      "ref": "4685720",
+      "name": "Bryce Young",
+      "stats": {
+        "pass_td": 1,
+        "pass_yd": 150,
+        "rush_yd": 3
+      },
+      "milliPoints": 10300
+    }
+  ],
+  "teamDefense": [
+    {
+      "ref": "CAR",
+      "name": "CAR D/ST",
+      "stats": {
+        "def_pts_allowed": 36,
+        "def_sack": 1,
+        "def_yds_allowed": 307
+      },
+      "milliPoints": -2000
+    },
+    {
+      "ref": "NE",
+      "name": "NE D/ST",
+      "stats": {
+        "def_pts_allowed": 13,
+        "def_sack": 1,
+        "def_td": 1,
+        "def_yds_allowed": 326
+      },
+      "milliPoints": 10000
+    }
+  ]
+}

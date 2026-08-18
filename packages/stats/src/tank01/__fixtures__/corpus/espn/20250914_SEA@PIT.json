@@ -1,0 +1,42 @@
+{
+  "gameRef": "20250914_SEA@PIT",
+  "eventId": "401772836",
+  "scoringPlays": [
+    {
+      "text": "Tory Horton 21 Yd pass from Sam Darnold (Jason Myers Kick)",
+      "abbreviation": "TD"
+    },
+    {
+      "text": "Chris Boswell 48 Yd Field Goal",
+      "abbreviation": "FG"
+    },
+    {
+      "text": "Chris Boswell 48 Yd Field Goal",
+      "abbreviation": "FG"
+    },
+    {
+      "text": "DK Metcalf 2 Yd pass from Aaron Rodgers (Aaron Rodgers Pass to Darnell Washington for Two-Point Conversion)",
+      "abbreviation": "TD"
+    },
+    {
+      "text": "AJ Barner 7 Yd pass from Sam Darnold (Jason Myers Kick)",
+      "abbreviation": "TD"
+    },
+    {
+      "text": "Jason Myers 54 Yd Field Goal",
+      "abbreviation": "FG"
+    },
+    {
+      "text": "George Holani Recovered Kickoff in End Zone for a Touchdown (Jason Myers Kick)",
+      "abbreviation": null
+    },
+    {
+      "text": "Chris Boswell 45 Yd Field Goal",
+      "abbreviation": "FG"
+    },
+    {
+      "text": "Kenneth Walker III 19 Yd Rush (Jason Myers Kick)",
+      "abbreviation": "TD"
+    }
+  ]
+}

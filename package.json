@@ -29,7 +29,9 @@
     "idl:sync": "node scripts/sync-idl.mjs",
     "idl:check": "node scripts/sync-idl.mjs --check",
     "test:web": "vitest run --config vitest.web.config.ts",
-    "corpus:build": "pnpm --filter @rostr/core build && node scripts/build-corpus.mjs"
+    "corpus:build": "pnpm --filter @rostr/core build && node scripts/build-corpus.mjs",
+    "stats:corpus-sync": "node --env-file-if-exists=.env packages/stats/dist/cli.js corpus-sync && prettier --write --log-level warn \"packages/stats/src/tank01/__fixtures__/**/*.json\"",
+    "corpus:stats": "pnpm --filter @rostr/core --filter @rostr/stats build && node scripts/build-stats-corpus.mjs && prettier --write --log-level warn \"packages/stats/src/tank01/__fixtures__/**/*.json\""
   },
   "devDependencies": {
     "@coral-xyz/anchor": "^0.31.1",

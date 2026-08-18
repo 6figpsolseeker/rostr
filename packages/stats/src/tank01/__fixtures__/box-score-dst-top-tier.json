@@ -1,0 +1,2586 @@
+{
+  "DST": {
+    "away": {
+      "teamAbv": "LV",
+      "teamID": "17",
+      "defTD": "0",
+      "defensiveInterceptions": "0",
+      "sacks": "1",
+      "ydsAllowed": "434",
+      "fumblesRecovered": "0",
+      "ptsAllowed": "31",
+      "safeties": "0"
+    },
+    "home": {
+      "teamAbv": "KC",
+      "teamID": "16",
+      "defTD": "0",
+      "defensiveInterceptions": "0",
+      "sacks": "1",
+      "ydsAllowed": "95",
+      "fumblesRecovered": "1",
+      "ptsAllowed": "0",
+      "safeties": "0"
+    }
+  },
+  "Referees": "Clete Blakeman, James Coleman, Kent Payne, Jonah Monroe, Scott Campbell, Karina Tovar, Andy Warner",
+  "arena": "GEHA Field at Arrowhead Stadium",
+  "arenaCapacity": "73,426",
+  "attendance": "73,584",
+  "away": "LV",
+  "awayPts": "0",
+  "awayResult": "L",
+  "currentPeriod": "Final",
+  "gameClock": "",
+  "gameDate": "20251019",
+  "gameLocation": "Kansas City, MO",
+  "gameStatus": "Completed",
+  "gameWeek": "Week 7",
+  "home": "KC",
+  "homePts": "31",
+  "homeResult": "W",
+  "lineScore": {
+    "period": "Final",
+    "gameClock": "",
+    "away": {
+      "Q1": "0",
+      "Q2": "0",
+      "Q3": "0",
+      "Q4": "0",
+      "teamID": "17",
+      "currentlyInPossession": "False",
+      "totalPts": "0",
+      "teamAbv": "LV"
+    },
+    "home": {
+      "Q1": "7",
+      "Q2": "14",
+      "Q3": "10",
+      "Q4": "0",
+      "teamID": "16",
+      "currentlyInPossession": "False",
+      "totalPts": "31",
+      "teamAbv": "KC"
+    }
+  },
+  "network": "CBS",
+  "playerStats": {
+    "15847": {
+      "gameID": "20251019_LV@KC",
+      "Receiving": {
+        "receptions": "3",
+        "recTD": "0",
+        "longRec": "44",
+        "targets": "3",
+        "recYds": "54",
+        "recAvg": "18.0"
+      },
+      "teamID": "16",
+      "snapCounts": {
+        "offSnapPct": "0.62",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "50",
+        "defSnapPct": "0.00"
+      },
+      "team": "KC",
+      "teamAbv": "KC",
+      "playerID": "15847",
+      "longName": "Travis Kelce"
+    },
+    "15864": {
+      "gameID": "20251019_LV@KC",
+      "Rushing": {
+        "rushAvg": "0.5",
+        "rushYds": "1",
+        "carries": "2",
+        "longRush": "1",
+        "rushTD": "0"
+      },
+      "Passing": {
+        "qbr": "7.7",
+        "rtg": "71.6",
+        "sacked": "1-5",
+        "passAttempts": "16",
+        "passAvg": "4.2",
+        "passTD": "0",
+        "passYds": "67",
+        "int": "0",
+        "passCompletions": "10"
+      },
+      "teamID": "17",
+      "snapCounts": {
+        "offSnapPct": "0.86",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "30",
+        "defSnapPct": "0.00"
+      },
+      "team": "LV",
+      "teamAbv": "LV",
+      "Defense": {
+        "fumblesLost": "0",
+        "defensiveInterceptions": "0",
+        "forcedFumbles": "0",
+        "fumbles": "1",
+        "fumblesRecovered": "1"
+      },
+      "playerID": "15864",
+      "longName": "Geno Smith"
+    },
+    "16665": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "16",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "8",
+        "stSnapPct": "0.38",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "KC",
+      "teamAbv": "KC",
+      "playerID": "16665",
+      "longName": "James Winchester"
+    },
+    "2576414": {
+      "gameID": "20251019_LV@KC",
+      "Receiving": {
+        "receptions": "1",
+        "recTD": "0",
+        "longRec": "2",
+        "targets": "1",
+        "recYds": "2",
+        "recAvg": "2.0"
+      },
+      "teamID": "17",
+      "snapCounts": {
+        "offSnapPct": "0.26",
+        "defSnap": "0",
+        "stSnap": "6",
+        "stSnapPct": "0.29",
+        "offSnap": "9",
+        "defSnapPct": "0.00"
+      },
+      "Kicking": {
+        "kickReturns": "3",
+        "kickReturnTD": "0",
+        "kickReturnYds": "100",
+        "kickReturnAvg": "33.3",
+        "kickReturnLong": "37"
+      },
+      "team": "LV",
+      "teamAbv": "LV",
+      "playerID": "2576414",
+      "longName": "Raheem Mostert"
+    },
+    "2975674": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "16",
+      "snapCounts": {
+        "offSnapPct": "0.30",
+        "defSnap": "0",
+        "stSnap": "7",
+        "stSnapPct": "0.33",
+        "offSnap": "24",
+        "defSnapPct": "0.00"
+      },
+      "team": "KC",
+      "teamAbv": "KC",
+      "playerID": "2975674",
+      "longName": "Robert Tonyan"
+    },
+    "2987743": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "17",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "75",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "0.93"
+      },
+      "team": "LV",
+      "teamAbv": "LV",
+      "Defense": {
+        "totalTackles": "18",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "7",
+        "tfl": "1",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "2987743",
+      "longName": "Elandon Roberts"
+    },
+    "3044859": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "16",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "22",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "0.63"
+      },
+      "team": "KC",
+      "teamAbv": "KC",
+      "Defense": {
+        "totalTackles": "2",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "1",
+        "qbHits": "1",
+        "defensiveInterceptions": "0",
+        "sacks": "1",
+        "passDeflections": "0"
+      },
+      "playerID": "3044859",
+      "longName": "Chris Jones"
+    },
+    "3051909": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "17",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "1",
+        "stSnapPct": "0.05",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "LV",
+      "teamAbv": "LV",
+      "playerID": "3051909",
+      "longName": "Daniel Carlson"
+    },
+    "3055899": {
+      "gameID": "20251019_LV@KC",
+      "scoringPlays": [
+        {
+          "score": "Rashee Rice 2 Yd pass from Patrick Mahomes (Harrison Butker Kick)",
+          "scorePeriod": "Q1",
+          "homeScore": "7",
+          "awayScore": "0",
+          "teamID": "16",
+          "scoreDetails": "9 plays, 92 yards, 5:46",
+          "scoreType": "TD",
+          "scoreTime": "5:58",
+          "team": "KC",
+          "playerIDs": ["3139477", "4428331", "3055899"]
+        },
+        {
+          "score": "Hollywood Brown 8 Yd pass from Patrick Mahomes (Harrison Butker Kick)",
+          "scorePeriod": "Q2",
+          "homeScore": "14",
+          "awayScore": "0",
+          "teamID": "16",
+          "scoreDetails": "17 plays, 84 yards, 8:40",
+          "scoreType": "TD",
+          "scoreTime": "9:17",
+          "team": "KC",
+          "playerIDs": ["3139477", "4241372", "3055899"]
+        },
+        {
+          "score": "Rashee Rice 3 Yd pass from Patrick Mahomes (Harrison Butker Kick)",
+          "scorePeriod": "Q2",
+          "homeScore": "21",
+          "awayScore": "0",
+          "teamID": "16",
+          "scoreDetails": "16 plays, 94 yards, 6:22",
+          "scoreType": "TD",
+          "scoreTime": "0:10",
+          "team": "KC",
+          "playerIDs": ["3139477", "4428331", "3055899"]
+        },
+        {
+          "score": "Isiah Pacheco 7 Yd Rush (Harrison Butker Kick)",
+          "scorePeriod": "Q3",
+          "homeScore": "28",
+          "awayScore": "0",
+          "teamID": "16",
+          "scoreDetails": "11 plays, 65 yards, 6:00",
+          "scoreType": "TD",
+          "scoreTime": "9:00",
+          "team": "KC",
+          "playerIDs": ["4361529", "3055899"]
+        },
+        {
+          "score": "Harrison Butker 38 Yd Field Goal",
+          "scorePeriod": "Q3",
+          "homeScore": "31",
+          "awayScore": "0",
+          "teamID": "16",
+          "scoreDetails": "9 plays, 66 yards, 4:26",
+          "scoreType": "FG",
+          "scoreTime": "2:36",
+          "team": "KC",
+          "playerIDs": ["3055899"]
+        }
+      ],
+      "teamID": "16",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "11",
+        "stSnapPct": "0.52",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "Kicking": {
+        "fgLong": "38",
+        "fgMade": "1",
+        "fgAttempts": "1",
+        "xpMade": "4",
+        "fgPct": "100.0",
+        "kickingPts": "7",
+        "xpAttempts": "4",
+        "fgMissed": "0",
+        "xpMissed": "0"
+      },
+      "team": "KC",
+      "teamAbv": "KC",
+      "playerID": "3055899",
+      "longName": "Harrison Butker"
+    },
+    "3059021": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "17",
+      "snapCounts": {
+        "offSnapPct": "0.29",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "10",
+        "defSnapPct": "0.00"
+      },
+      "team": "LV",
+      "teamAbv": "LV",
+      "playerID": "3059021",
+      "longName": "Alex Cappa"
+    },
+    "3059915": {
+      "gameID": "20251019_LV@KC",
+      "Rushing": {
+        "rushAvg": "4.5",
+        "rushYds": "18",
+        "carries": "4",
+        "longRush": "9",
+        "rushTD": "0"
+      },
+      "teamID": "16",
+      "snapCounts": {
+        "offSnapPct": "0.19",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "15",
+        "defSnapPct": "0.00"
+      },
+      "team": "KC",
+      "teamAbv": "KC",
+      "playerID": "3059915",
+      "longName": "Kareem Hunt"
+    },
+    "3115373": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "17",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "54",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "0.67"
+      },
+      "team": "LV",
+      "teamAbv": "LV",
+      "Defense": {
+        "totalTackles": "3",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "2",
+        "tfl": "1",
+        "qbHits": "1",
+        "defensiveInterceptions": "0",
+        "sacks": "1",
+        "passDeflections": "0"
+      },
+      "playerID": "3115373",
+      "longName": "Jamal Adams"
+    },
+    "3120348": {
+      "gameID": "20251019_LV@KC",
+      "Receiving": {
+        "receptions": "3",
+        "recTD": "0",
+        "longRec": "19",
+        "targets": "3",
+        "recYds": "35",
+        "recAvg": "11.7"
+      },
+      "teamID": "16",
+      "snapCounts": {
+        "offSnapPct": "0.36",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "29",
+        "defSnapPct": "0.00"
+      },
+      "team": "KC",
+      "teamAbv": "KC",
+      "playerID": "3120348",
+      "longName": "JuJu Smith-Schuster"
+    },
+    "3122930": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "16",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "14",
+        "stSnap": "1",
+        "stSnapPct": "0.05",
+        "offSnap": "0",
+        "defSnapPct": "0.40"
+      },
+      "team": "KC",
+      "teamAbv": "KC",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "0",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "3122930",
+      "longName": "Derrick Nnadi"
+    },
+    "3129310": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "16",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "18",
+        "stSnap": "1",
+        "stSnapPct": "0.05",
+        "offSnap": "0",
+        "defSnapPct": "0.51"
+      },
+      "team": "KC",
+      "teamAbv": "KC",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "3129310",
+      "longName": "Drue Tranquill"
+    },
+    "3139477": {
+      "gameID": "20251019_LV@KC",
+      "Rushing": {
+        "rushAvg": "7.0",
+        "rushYds": "28",
+        "carries": "4",
+        "longRush": "10",
+        "rushTD": "0"
+      },
+      "Passing": {
+        "qbr": "89.6",
+        "rtg": "126.6",
+        "sacked": "1-4",
+        "passAttempts": "35",
+        "passAvg": "8.2",
+        "passTD": "3",
+        "passYds": "286",
+        "int": "0",
+        "passCompletions": "26"
+      },
+      "scoringPlays": [
+        {
+          "score": "Rashee Rice 2 Yd pass from Patrick Mahomes (Harrison Butker Kick)",
+          "scorePeriod": "Q1",
+          "homeScore": "7",
+          "awayScore": "0",
+          "teamID": "16",
+          "scoreDetails": "9 plays, 92 yards, 5:46",
+          "scoreType": "TD",
+          "scoreTime": "5:58",
+          "team": "KC",
+          "playerIDs": ["3139477", "4428331", "3055899"]
+        },
+        {
+          "score": "Hollywood Brown 8 Yd pass from Patrick Mahomes (Harrison Butker Kick)",
+          "scorePeriod": "Q2",
+          "homeScore": "14",
+          "awayScore": "0",
+          "teamID": "16",
+          "scoreDetails": "17 plays, 84 yards, 8:40",
+          "scoreType": "TD",
+          "scoreTime": "9:17",
+          "team": "KC",
+          "playerIDs": ["3139477", "4241372", "3055899"]
+        },
+        {
+          "score": "Rashee Rice 3 Yd pass from Patrick Mahomes (Harrison Butker Kick)",
+          "scorePeriod": "Q2",
+          "homeScore": "21",
+          "awayScore": "0",
+          "teamID": "16",
+          "scoreDetails": "16 plays, 94 yards, 6:22",
+          "scoreType": "TD",
+          "scoreTime": "0:10",
+          "team": "KC",
+          "playerIDs": ["3139477", "4428331", "3055899"]
+        }
+      ],
+      "teamID": "16",
+      "snapCounts": {
+        "offSnapPct": "0.80",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "65",
+        "defSnapPct": "0.00"
+      },
+      "team": "KC",
+      "teamAbv": "KC",
+      "playerID": "3139477",
+      "longName": "Patrick Mahomes"
+    },
+    "3686689": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "17",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "6",
+        "stSnapPct": "0.29",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "Punting": {
+        "puntYds": "283",
+        "punts": "6",
+        "puntAvg": "47.2",
+        "puntsin20": "3",
+        "puntTouchBacks": "0",
+        "puntLong": "63"
+      },
+      "team": "LV",
+      "teamAbv": "LV",
+      "playerID": "3686689",
+      "longName": "AJ Cole"
+    },
+    "3863182": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "16",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "15",
+        "stSnap": "1",
+        "stSnapPct": "0.05",
+        "offSnap": "0",
+        "defSnapPct": "0.43"
+      },
+      "team": "KC",
+      "teamAbv": "KC",
+      "Defense": {
+        "totalTackles": "1",
+        "fumblesLost": "0",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "fumbles": "0",
+        "fumblesRecovered": "1",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "3863182",
+      "longName": "Jerry Tillery"
+    },
+    "3915487": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "16",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "17",
+        "stSnap": "1",
+        "stSnapPct": "0.05",
+        "offSnap": "0",
+        "defSnapPct": "0.49"
+      },
+      "team": "KC",
+      "teamAbv": "KC",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "0",
+        "tfl": "0",
+        "qbHits": "1",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "3915487",
+      "longName": "Mike Danna"
+    },
+    "3916655": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "17",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "32",
+        "stSnap": "2",
+        "stSnapPct": "0.10",
+        "offSnap": "0",
+        "defSnapPct": "0.40"
+      },
+      "team": "LV",
+      "teamAbv": "LV",
+      "Defense": {
+        "totalTackles": "3",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "3916655",
+      "longName": "Maxx Crosby"
+    },
+    "3919510": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "17",
+      "snapCounts": {
+        "offSnapPct": "0.06",
+        "defSnap": "0",
+        "stSnap": "4",
+        "stSnapPct": "0.19",
+        "offSnap": "2",
+        "defSnapPct": "0.00"
+      },
+      "Punting": {
+        "puntReturns": "1",
+        "puntReturnYds": "6",
+        "puntReturnAvg": "6.0",
+        "puntReturnLong": "6",
+        "puntReturnTD": "0"
+      },
+      "team": "LV",
+      "teamAbv": "LV",
+      "playerID": "3919510",
+      "longName": "Alex Bachman"
+    },
+    "3925443": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "17",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "6",
+        "stSnapPct": "0.29",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "LV",
+      "teamAbv": "LV",
+      "playerID": "3925443",
+      "longName": "Jacob Bobenmoyer"
+    },
+    "3929865": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "16",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "20",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "0.57"
+      },
+      "team": "KC",
+      "teamAbv": "KC",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "0",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "3929865",
+      "longName": "Charles Omenihu"
+    },
+    "4034961": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "16",
+      "snapCounts": {
+        "offSnapPct": "0.80",
+        "defSnap": "0",
+        "stSnap": "4",
+        "stSnapPct": "0.19",
+        "offSnap": "65",
+        "defSnapPct": "0.00"
+      },
+      "team": "KC",
+      "teamAbv": "KC",
+      "playerID": "4034961",
+      "longName": "Jawaan Taylor"
+    },
+    "4034962": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "17",
+      "snapCounts": {
+        "offSnapPct": "0.97",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "34",
+        "defSnapPct": "0.00"
+      },
+      "team": "LV",
+      "teamAbv": "LV",
+      "playerID": "4034962",
+      "longName": "Stone Forsythe"
+    },
+    "4035434": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "17",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "81",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "1.00"
+      },
+      "team": "LV",
+      "teamAbv": "LV",
+      "Defense": {
+        "totalTackles": "16",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "6",
+        "tfl": "1",
+        "qbHits": "1",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4035434",
+      "longName": "Devin White"
+    },
+    "4035666": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "17",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "42",
+        "stSnap": "6",
+        "stSnapPct": "0.29",
+        "offSnap": "0",
+        "defSnapPct": "0.52"
+      },
+      "team": "LV",
+      "teamAbv": "LV",
+      "Defense": {
+        "totalTackles": "3",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "1",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4035666",
+      "longName": "Leki Fotu"
+    },
+    "4038524": {
+      "gameID": "20251019_LV@KC",
+      "Rushing": {
+        "rushAvg": "-1.0",
+        "rushYds": "-3",
+        "carries": "3",
+        "longRush": "-1",
+        "rushTD": "0"
+      },
+      "teamID": "16",
+      "snapCounts": {
+        "offSnapPct": "0.20",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "16",
+        "defSnapPct": "0.00"
+      },
+      "team": "KC",
+      "teamAbv": "KC",
+      "playerID": "4038524",
+      "longName": "Gardner Minshew"
+    },
+    "4043039": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "16",
+      "snapCounts": {
+        "offSnapPct": "0.80",
+        "defSnap": "0",
+        "stSnap": "5",
+        "stSnapPct": "0.24",
+        "offSnap": "65",
+        "defSnapPct": "0.00"
+      },
+      "team": "KC",
+      "teamAbv": "KC",
+      "playerID": "4043039",
+      "longName": "Mike Caliendo"
+    },
+    "4043041": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "16",
+      "snapCounts": {
+        "offSnapPct": "1.00",
+        "defSnap": "0",
+        "stSnap": "5",
+        "stSnapPct": "0.24",
+        "offSnap": "81",
+        "defSnapPct": "0.00"
+      },
+      "team": "KC",
+      "teamAbv": "KC",
+      "playerID": "4043041",
+      "longName": "Jaylon Moore"
+    },
+    "4043169": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "17",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "81",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "1.00"
+      },
+      "team": "LV",
+      "teamAbv": "LV",
+      "Defense": {
+        "totalTackles": "10",
+        "defTD": "0",
+        "forcedFumbles": "1",
+        "soloTackles": "8",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4043169",
+      "longName": "Jeremy Chinn"
+    },
+    "4045305": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "17",
+      "snapCounts": {
+        "offSnapPct": "0.34",
+        "defSnap": "0",
+        "stSnap": "6",
+        "stSnapPct": "0.29",
+        "offSnap": "12",
+        "defSnapPct": "0.00"
+      },
+      "team": "LV",
+      "teamAbv": "LV",
+      "playerID": "4045305",
+      "longName": "Ian Thomas"
+    },
+    "4076803": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "17",
+      "snapCounts": {
+        "offSnapPct": "1.00",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "35",
+        "defSnapPct": "0.00"
+      },
+      "team": "LV",
+      "teamAbv": "LV",
+      "playerID": "4076803",
+      "longName": "Jordan Meredith"
+    },
+    "4239719": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "17",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "46",
+        "stSnap": "14",
+        "stSnapPct": "0.67",
+        "offSnap": "0",
+        "defSnapPct": "0.57"
+      },
+      "team": "LV",
+      "teamAbv": "LV",
+      "Defense": {
+        "totalTackles": "6",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "2",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4239719",
+      "longName": "Malcolm Koonce"
+    },
+    "4240472": {
+      "gameID": "20251019_LV@KC",
+      "Receiving": {
+        "receptions": "1",
+        "recTD": "0",
+        "longRec": "28",
+        "targets": "1",
+        "recYds": "28",
+        "recAvg": "28.0"
+      },
+      "teamID": "16",
+      "snapCounts": {
+        "offSnapPct": "0.59",
+        "defSnap": "0",
+        "stSnap": "10",
+        "stSnapPct": "0.48",
+        "offSnap": "48",
+        "defSnapPct": "0.00"
+      },
+      "team": "KC",
+      "teamAbv": "KC",
+      "playerID": "4240472",
+      "longName": "Noah Gray"
+    },
+    "4240703": {
+      "gameID": "20251019_LV@KC",
+      "Rushing": {
+        "rushAvg": "0.0",
+        "rushYds": "0",
+        "carries": "1",
+        "longRush": "0",
+        "rushTD": "0"
+      },
+      "Passing": {
+        "qbr": "0.0",
+        "rtg": "83.3",
+        "sacked": "0-0",
+        "passAttempts": "2",
+        "passAvg": "4.0",
+        "passTD": "0",
+        "passYds": "8",
+        "int": "0",
+        "passCompletions": "2"
+      },
+      "teamID": "17",
+      "snapCounts": {
+        "offSnapPct": "0.14",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "5",
+        "defSnapPct": "0.00"
+      },
+      "team": "LV",
+      "teamAbv": "LV",
+      "Defense": {
+        "fumblesLost": "1",
+        "defensiveInterceptions": "0",
+        "forcedFumbles": "0",
+        "fumbles": "1",
+        "fumblesRecovered": "0"
+      },
+      "playerID": "4240703",
+      "longName": "Kenny Pickett"
+    },
+    "4240849": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "17",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "32",
+        "stSnap": "4",
+        "stSnapPct": "0.19",
+        "offSnap": "0",
+        "defSnapPct": "0.40"
+      },
+      "team": "LV",
+      "teamAbv": "LV",
+      "Defense": {
+        "totalTackles": "2",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "1",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4240849",
+      "longName": "Charles Snowden"
+    },
+    "4241372": {
+      "gameID": "20251019_LV@KC",
+      "Receiving": {
+        "receptions": "2",
+        "recTD": "1",
+        "longRec": "8",
+        "targets": "4",
+        "recYds": "14",
+        "recAvg": "7.0"
+      },
+      "scoringPlays": [
+        {
+          "score": "Hollywood Brown 8 Yd pass from Patrick Mahomes (Harrison Butker Kick)",
+          "scorePeriod": "Q2",
+          "homeScore": "14",
+          "awayScore": "0",
+          "teamID": "16",
+          "scoreDetails": "17 plays, 84 yards, 8:40",
+          "scoreType": "TD",
+          "scoreTime": "9:17",
+          "team": "KC",
+          "playerIDs": ["3139477", "4241372", "3055899"]
+        }
+      ],
+      "teamID": "16",
+      "snapCounts": {
+        "offSnapPct": "0.33",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "27",
+        "defSnapPct": "0.00"
+      },
+      "team": "KC",
+      "teamAbv": "KC",
+      "Defense": {
+        "fumblesLost": "0",
+        "defensiveInterceptions": "0",
+        "forcedFumbles": "0",
+        "fumbles": "1",
+        "fumblesRecovered": "0"
+      },
+      "playerID": "4241372",
+      "longName": "Hollywood Brown"
+    },
+    "4241385": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "16",
+      "snapCounts": {
+        "offSnapPct": "0.80",
+        "defSnap": "0",
+        "stSnap": "5",
+        "stSnapPct": "0.24",
+        "offSnap": "65",
+        "defSnapPct": "0.00"
+      },
+      "team": "KC",
+      "teamAbv": "KC",
+      "playerID": "4241385",
+      "longName": "Creed Humphrey"
+    },
+    "4242459": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "16",
+      "snapCounts": {
+        "offSnapPct": "0.21",
+        "defSnap": "0",
+        "stSnap": "1",
+        "stSnapPct": "0.05",
+        "offSnap": "17",
+        "defSnapPct": "0.00"
+      },
+      "team": "KC",
+      "teamAbv": "KC",
+      "playerID": "4242459",
+      "longName": "Trey Smith"
+    },
+    "4242973": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "17",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "22",
+        "stSnap": "3",
+        "stSnapPct": "0.14",
+        "offSnap": "0",
+        "defSnapPct": "0.27"
+      },
+      "team": "LV",
+      "teamAbv": "LV",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4242973",
+      "longName": "Darnay Holmes"
+    },
+    "4243375": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "17",
+      "snapCounts": {
+        "offSnapPct": "0.97",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "34",
+        "defSnapPct": "0.00"
+      },
+      "team": "LV",
+      "teamAbv": "LV",
+      "playerID": "4243375",
+      "longName": "Dylan Parham"
+    },
+    "4247726": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "16",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "23",
+        "stSnap": "4",
+        "stSnapPct": "0.19",
+        "offSnap": "0",
+        "defSnapPct": "0.66"
+      },
+      "team": "KC",
+      "teamAbv": "KC",
+      "playerID": "4247726",
+      "longName": "Bryan Cook"
+    },
+    "4249766": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "16",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "10",
+        "stSnap": "15",
+        "stSnapPct": "0.71",
+        "offSnap": "0",
+        "defSnapPct": "0.29"
+      },
+      "team": "KC",
+      "teamAbv": "KC",
+      "playerID": "4249766",
+      "longName": "Jack Cochrane"
+    },
+    "4250393": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "17",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "12",
+        "stSnap": "18",
+        "stSnapPct": "0.86",
+        "offSnap": "0",
+        "defSnapPct": "0.15"
+      },
+      "team": "LV",
+      "teamAbv": "LV",
+      "Defense": {
+        "totalTackles": "2",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4250393",
+      "longName": "Tristin McCollum"
+    },
+    "4258485": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "17",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "15",
+        "stSnapPct": "0.71",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "LV",
+      "teamAbv": "LV",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4258485",
+      "longName": "Jon Rhattigan"
+    },
+    "4259561": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "17",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "81",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "1.00"
+      },
+      "team": "LV",
+      "teamAbv": "LV",
+      "Defense": {
+        "totalTackles": "2",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "2",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4259561",
+      "longName": "Eric Stokes"
+    },
+    "4259632": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "17",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "75",
+        "stSnap": "5",
+        "stSnapPct": "0.24",
+        "offSnap": "0",
+        "defSnapPct": "0.93"
+      },
+      "team": "LV",
+      "teamAbv": "LV",
+      "Defense": {
+        "totalTackles": "10",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "8",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4259632",
+      "longName": "Isaiah Pola-Mao"
+    },
+    "4360749": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "17",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "52",
+        "stSnap": "5",
+        "stSnapPct": "0.24",
+        "offSnap": "0",
+        "defSnapPct": "0.64"
+      },
+      "team": "LV",
+      "teamAbv": "LV",
+      "Defense": {
+        "totalTackles": "6",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "2",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4360749",
+      "longName": "Thomas Booker IV"
+    },
+    "4361332": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "17",
+      "snapCounts": {
+        "offSnapPct": "0.09",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "3",
+        "defSnapPct": "0.00"
+      },
+      "team": "LV",
+      "teamAbv": "LV",
+      "playerID": "4361332",
+      "longName": "Shedrick Jackson"
+    },
+    "4361426": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "17",
+      "snapCounts": {
+        "offSnapPct": "0.03",
+        "defSnap": "0",
+        "stSnap": "9",
+        "stSnapPct": "0.43",
+        "offSnap": "1",
+        "defSnapPct": "0.00"
+      },
+      "team": "LV",
+      "teamAbv": "LV",
+      "playerID": "4361426",
+      "longName": "Justin Shorter"
+    },
+    "4361496": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "16",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "8",
+        "stSnapPct": "0.38",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "Punting": {
+        "puntYds": "106",
+        "punts": "3",
+        "puntAvg": "35.3",
+        "puntsin20": "2",
+        "puntTouchBacks": "0",
+        "puntLong": "40"
+      },
+      "team": "KC",
+      "teamAbv": "KC",
+      "playerID": "4361496",
+      "longName": "Matt Araiza"
+    },
+    "4361529": {
+      "gameID": "20251019_LV@KC",
+      "Rushing": {
+        "rushAvg": "3.8",
+        "rushYds": "57",
+        "carries": "15",
+        "longRush": "11",
+        "rushTD": "1"
+      },
+      "Receiving": {
+        "receptions": "1",
+        "recTD": "0",
+        "longRec": "-3",
+        "targets": "2",
+        "recYds": "-3",
+        "recAvg": "-3.0"
+      },
+      "scoringPlays": [
+        {
+          "score": "Isiah Pacheco 7 Yd Rush (Harrison Butker Kick)",
+          "scorePeriod": "Q3",
+          "homeScore": "28",
+          "awayScore": "0",
+          "teamID": "16",
+          "scoreDetails": "11 plays, 65 yards, 6:00",
+          "scoreType": "TD",
+          "scoreTime": "9:00",
+          "team": "KC",
+          "playerIDs": ["4361529", "3055899"]
+        }
+      ],
+      "teamID": "16",
+      "snapCounts": {
+        "offSnapPct": "0.56",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "45",
+        "defSnapPct": "0.00"
+      },
+      "team": "KC",
+      "teamAbv": "KC",
+      "playerID": "4361529",
+      "longName": "Isiah Pacheco"
+    },
+    "4361964": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "16",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "26",
+        "stSnap": "6",
+        "stSnapPct": "0.29",
+        "offSnap": "0",
+        "defSnapPct": "0.74"
+      },
+      "team": "KC",
+      "teamAbv": "KC",
+      "Defense": {
+        "totalTackles": "2",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4361964",
+      "longName": "Chamarri Conner"
+    },
+    "4362759": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "16",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "25",
+        "stSnap": "1",
+        "stSnapPct": "0.05",
+        "offSnap": "0",
+        "defSnapPct": "0.71"
+      },
+      "team": "KC",
+      "teamAbv": "KC",
+      "Defense": {
+        "totalTackles": "2",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4362759",
+      "longName": "Nick Bolton"
+    },
+    "4362921": {
+      "gameID": "20251019_LV@KC",
+      "Receiving": {
+        "receptions": "1",
+        "recTD": "0",
+        "longRec": "39",
+        "targets": "2",
+        "recYds": "39",
+        "recAvg": "39.0"
+      },
+      "teamID": "16",
+      "snapCounts": {
+        "offSnapPct": "0.33",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "27",
+        "defSnapPct": "0.00"
+      },
+      "team": "KC",
+      "teamAbv": "KC",
+      "playerID": "4362921",
+      "longName": "Tyquan Thornton"
+    },
+    "4366963": {
+      "gameID": "20251019_LV@KC",
+      "Rushing": {
+        "rushAvg": "1.5",
+        "rushYds": "3",
+        "carries": "2",
+        "longRush": "2",
+        "rushTD": "0"
+      },
+      "Receiving": {
+        "receptions": "1",
+        "recTD": "0",
+        "longRec": "1",
+        "targets": "1",
+        "recYds": "1",
+        "recAvg": "1.0"
+      },
+      "teamID": "17",
+      "snapCounts": {
+        "offSnapPct": "0.14",
+        "defSnap": "0",
+        "stSnap": "7",
+        "stSnapPct": "0.33",
+        "offSnap": "5",
+        "defSnapPct": "0.00"
+      },
+      "team": "LV",
+      "teamAbv": "LV",
+      "playerID": "4366963",
+      "longName": "Dylan Laube"
+    },
+    "4367645": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "16",
+      "snapCounts": {
+        "offSnapPct": "0.20",
+        "defSnap": "0",
+        "stSnap": "5",
+        "stSnapPct": "0.24",
+        "offSnap": "16",
+        "defSnapPct": "0.00"
+      },
+      "team": "KC",
+      "teamAbv": "KC",
+      "playerID": "4367645",
+      "longName": "Hunter Nourzad"
+    },
+    "4372533": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "17",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "57",
+        "stSnap": "6",
+        "stSnapPct": "0.29",
+        "offSnap": "0",
+        "defSnapPct": "0.70"
+      },
+      "team": "LV",
+      "teamAbv": "LV",
+      "Defense": {
+        "totalTackles": "2",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "2",
+        "tfl": "1",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4372533",
+      "longName": "Tyree Wilson"
+    },
+    "4372716": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "16",
+      "snapCounts": {
+        "offSnapPct": "0.15",
+        "defSnap": "0",
+        "stSnap": "7",
+        "stSnapPct": "0.33",
+        "offSnap": "12",
+        "defSnapPct": "0.00"
+      },
+      "Punting": {
+        "puntReturns": "3",
+        "puntReturnYds": "15",
+        "puntReturnAvg": "5.0",
+        "puntReturnLong": "11",
+        "puntReturnTD": "0"
+      },
+      "team": "KC",
+      "teamAbv": "KC",
+      "Defense": {
+        "fumblesLost": "0",
+        "defensiveInterceptions": "0",
+        "forcedFumbles": "0",
+        "fumbles": "1",
+        "fumblesRecovered": "1"
+      },
+      "playerID": "4372716",
+      "longName": "Nikko Remigio"
+    },
+    "4373956": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "17",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "68",
+        "stSnap": "6",
+        "stSnapPct": "0.29",
+        "offSnap": "0",
+        "defSnapPct": "0.84"
+      },
+      "team": "LV",
+      "teamAbv": "LV",
+      "Defense": {
+        "totalTackles": "3",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "1",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "2"
+      },
+      "playerID": "4373956",
+      "longName": "Jonah Laulu"
+    },
+    "4379413": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "17",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "16",
+        "stSnapPct": "0.76",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "LV",
+      "teamAbv": "LV",
+      "playerID": "4379413",
+      "longName": "Chris Smith II"
+    },
+    "4426393": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "17",
+      "snapCounts": {
+        "offSnapPct": "0.03",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "1",
+        "defSnapPct": "0.00"
+      },
+      "team": "LV",
+      "teamAbv": "LV",
+      "playerID": "4426393",
+      "longName": "Will Putnam"
+    },
+    "4426405": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "16",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "25",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "0.71"
+      },
+      "team": "KC",
+      "teamAbv": "KC",
+      "Defense": {
+        "totalTackles": "6",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "4",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4426405",
+      "longName": "Trent McDuffie"
+    },
+    "4426659": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "16",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "19",
+        "stSnap": "1",
+        "stSnapPct": "0.05",
+        "offSnap": "0",
+        "defSnapPct": "0.54"
+      },
+      "team": "KC",
+      "teamAbv": "KC",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4426659",
+      "longName": "George Karlaftis"
+    },
+    "4426901": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "16",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "16",
+        "stSnap": "10",
+        "stSnapPct": "0.48",
+        "offSnap": "0",
+        "defSnapPct": "0.46"
+      },
+      "team": "KC",
+      "teamAbv": "KC",
+      "Defense": {
+        "totalTackles": "3",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "0",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4426901",
+      "longName": "Leo Chenal"
+    },
+    "4427695": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "17",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "68",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "0.84"
+      },
+      "team": "LV",
+      "teamAbv": "LV",
+      "playerID": "4427695",
+      "longName": "Kyu Blu Kelly"
+    },
+    "4428331": {
+      "gameID": "20251019_LV@KC",
+      "Receiving": {
+        "receptions": "7",
+        "recTD": "2",
+        "longRec": "12",
+        "targets": "10",
+        "recYds": "42",
+        "recAvg": "6.0"
+      },
+      "scoringPlays": [
+        {
+          "score": "Rashee Rice 2 Yd pass from Patrick Mahomes (Harrison Butker Kick)",
+          "scorePeriod": "Q1",
+          "homeScore": "7",
+          "awayScore": "0",
+          "teamID": "16",
+          "scoreDetails": "9 plays, 92 yards, 5:46",
+          "scoreType": "TD",
+          "scoreTime": "5:58",
+          "team": "KC",
+          "playerIDs": ["3139477", "4428331", "3055899"]
+        },
+        {
+          "score": "Rashee Rice 3 Yd pass from Patrick Mahomes (Harrison Butker Kick)",
+          "scorePeriod": "Q2",
+          "homeScore": "21",
+          "awayScore": "0",
+          "teamID": "16",
+          "scoreDetails": "16 plays, 94 yards, 6:22",
+          "scoreType": "TD",
+          "scoreTime": "0:10",
+          "team": "KC",
+          "playerIDs": ["3139477", "4428331", "3055899"]
+        }
+      ],
+      "teamID": "16",
+      "snapCounts": {
+        "offSnapPct": "0.41",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "33",
+        "defSnapPct": "0.00"
+      },
+      "team": "KC",
+      "teamAbv": "KC",
+      "playerID": "4428331",
+      "longName": "Rashee Rice"
+    },
+    "4428383": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "16",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "18",
+        "stSnap": "15",
+        "stSnapPct": "0.71",
+        "offSnap": "0",
+        "defSnapPct": "0.51"
+      },
+      "team": "KC",
+      "teamAbv": "KC",
+      "Defense": {
+        "totalTackles": "4",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "3",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4428383",
+      "longName": "Chris Roland-Wallace"
+    },
+    "4428718": {
+      "gameID": "20251019_LV@KC",
+      "Receiving": {
+        "receptions": "5",
+        "recTD": "0",
+        "longRec": "14",
+        "targets": "6",
+        "recYds": "33",
+        "recAvg": "6.6"
+      },
+      "teamID": "17",
+      "snapCounts": {
+        "offSnapPct": "0.89",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "31",
+        "defSnapPct": "0.00"
+      },
+      "team": "LV",
+      "teamAbv": "LV",
+      "playerID": "4428718",
+      "longName": "Tre Tucker"
+    },
+    "4429086": {
+      "gameID": "20251019_LV@KC",
+      "Receiving": {
+        "receptions": "1",
+        "recTD": "0",
+        "longRec": "10",
+        "targets": "2",
+        "recYds": "10",
+        "recAvg": "10.0"
+      },
+      "teamID": "17",
+      "snapCounts": {
+        "offSnapPct": "0.94",
+        "defSnap": "0",
+        "stSnap": "6",
+        "stSnapPct": "0.29",
+        "offSnap": "33",
+        "defSnapPct": "0.00"
+      },
+      "team": "LV",
+      "teamAbv": "LV",
+      "playerID": "4429086",
+      "longName": "Michael Mayer"
+    },
+    "4429560": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "17",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "21",
+        "stSnapPct": "1.00",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "LV",
+      "teamAbv": "LV",
+      "playerID": "4429560",
+      "longName": "Tommy Eichenberg"
+    },
+    "4430330": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "17",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "13",
+        "stSnap": "12",
+        "stSnapPct": "0.57",
+        "offSnap": "0",
+        "defSnapPct": "0.16"
+      },
+      "team": "LV",
+      "teamAbv": "LV",
+      "playerID": "4430330",
+      "longName": "Darien Porter"
+    },
+    "4431595": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "16",
+      "snapCounts": {
+        "offSnapPct": "1.00",
+        "defSnap": "0",
+        "stSnap": "5",
+        "stSnapPct": "0.24",
+        "offSnap": "81",
+        "defSnapPct": "0.00"
+      },
+      "team": "KC",
+      "teamAbv": "KC",
+      "playerID": "4431595",
+      "longName": "Kingsley Suamataia"
+    },
+    "4432775": {
+      "gameID": "20251019_LV@KC",
+      "Receiving": {
+        "receptions": "0",
+        "recTD": "0",
+        "longRec": "0",
+        "targets": "3",
+        "recYds": "0",
+        "recAvg": "0.0"
+      },
+      "teamID": "17",
+      "snapCounts": {
+        "offSnapPct": "0.86",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "30",
+        "defSnapPct": "0.00"
+      },
+      "team": "LV",
+      "teamAbv": "LV",
+      "playerID": "4432775",
+      "longName": "Dont'e Thornton Jr."
+    },
+    "4567826": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "16",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "4",
+        "stSnap": "15",
+        "stSnapPct": "0.71",
+        "offSnap": "0",
+        "defSnapPct": "0.11"
+      },
+      "team": "KC",
+      "teamAbv": "KC",
+      "Defense": {
+        "totalTackles": "2",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "2",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4567826",
+      "longName": "Cooper McDonald"
+    },
+    "4570577": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "16",
+      "snapCounts": {
+        "offSnapPct": "0.22",
+        "defSnap": "0",
+        "stSnap": "5",
+        "stSnapPct": "0.24",
+        "offSnap": "18",
+        "defSnapPct": "0.00"
+      },
+      "team": "KC",
+      "teamAbv": "KC",
+      "playerID": "4570577",
+      "longName": "Wanya Morris"
+    },
+    "4591008": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "16",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "7",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "0.20"
+      },
+      "team": "KC",
+      "teamAbv": "KC",
+      "playerID": "4591008",
+      "longName": "Omarr Norman-Lott"
+    },
+    "4596602": {
+      "gameID": "20251019_LV@KC",
+      "Rushing": {
+        "rushAvg": "2.8",
+        "rushYds": "39",
+        "carries": "14",
+        "longRush": "8",
+        "rushTD": "0"
+      },
+      "Receiving": {
+        "receptions": "5",
+        "recTD": "0",
+        "longRec": "17",
+        "targets": "5",
+        "recYds": "42",
+        "recAvg": "8.4"
+      },
+      "teamID": "16",
+      "snapCounts": {
+        "offSnapPct": "0.35",
+        "defSnap": "0",
+        "stSnap": "1",
+        "stSnapPct": "0.05",
+        "offSnap": "28",
+        "defSnapPct": "0.00"
+      },
+      "team": "KC",
+      "teamAbv": "KC",
+      "playerID": "4596602",
+      "longName": "Brashard Smith"
+    },
+    "4602389": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "16",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "9",
+        "stSnap": "15",
+        "stSnapPct": "0.71",
+        "offSnap": "0",
+        "defSnapPct": "0.26"
+      },
+      "team": "KC",
+      "teamAbv": "KC",
+      "playerID": "4602389",
+      "longName": "Jeffrey Bassa"
+    },
+    "4603186": {
+      "gameID": "20251019_LV@KC",
+      "Receiving": {
+        "receptions": "2",
+        "recTD": "0",
+        "longRec": "7",
+        "targets": "2",
+        "recYds": "13",
+        "recAvg": "6.5"
+      },
+      "teamID": "17",
+      "snapCounts": {
+        "offSnapPct": "0.63",
+        "defSnap": "0",
+        "stSnap": "7",
+        "stSnapPct": "0.33",
+        "offSnap": "22",
+        "defSnapPct": "0.00"
+      },
+      "team": "LV",
+      "teamAbv": "LV",
+      "playerID": "4603186",
+      "longName": "Jack Bech"
+    },
+    "4605498": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "17",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "7",
+        "stSnapPct": "0.33",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "LV",
+      "teamAbv": "LV",
+      "playerID": "4605498",
+      "longName": "Decamerion Richardson"
+    },
+    "4606683": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "17",
+      "snapCounts": {
+        "offSnapPct": "1.00",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "35",
+        "defSnapPct": "0.00"
+      },
+      "team": "LV",
+      "teamAbv": "LV",
+      "playerID": "4606683",
+      "longName": "DJ Glaze"
+    },
+    "4610705": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "16",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "24",
+        "stSnap": "16",
+        "stSnapPct": "0.76",
+        "offSnap": "0",
+        "defSnapPct": "0.69"
+      },
+      "team": "KC",
+      "teamAbv": "KC",
+      "Defense": {
+        "totalTackles": "3",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4610705",
+      "longName": "Nohl Williams"
+    },
+    "4683062": {
+      "gameID": "20251019_LV@KC",
+      "Rushing": {
+        "rushAvg": "13.0",
+        "rushYds": "13",
+        "carries": "1",
+        "longRush": "13",
+        "rushTD": "0"
+      },
+      "Receiving": {
+        "receptions": "3",
+        "recTD": "0",
+        "longRec": "15",
+        "targets": "4",
+        "recYds": "35",
+        "recAvg": "11.7"
+      },
+      "teamID": "16",
+      "snapCounts": {
+        "offSnapPct": "0.59",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "48",
+        "defSnapPct": "0.00"
+      },
+      "team": "KC",
+      "teamAbv": "KC",
+      "Defense": {
+        "fumblesLost": "0",
+        "defensiveInterceptions": "0",
+        "forcedFumbles": "0",
+        "fumbles": "0",
+        "fumblesRecovered": "1"
+      },
+      "playerID": "4683062",
+      "longName": "Xavier Worthy"
+    },
+    "4684432": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "16",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "18",
+        "stSnap": "1",
+        "stSnapPct": "0.05",
+        "offSnap": "0",
+        "defSnapPct": "0.51"
+      },
+      "team": "KC",
+      "teamAbv": "KC",
+      "Defense": {
+        "totalTackles": "2",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "0",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4684432",
+      "longName": "Ashton Gillotte"
+    },
+    "4685126": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "17",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "20",
+        "stSnapPct": "0.95",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "LV",
+      "teamAbv": "LV",
+      "playerID": "4685126",
+      "longName": "Cody Lindenberg"
+    },
+    "4685232": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "16",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "20",
+        "stSnap": "15",
+        "stSnapPct": "0.71",
+        "offSnap": "0",
+        "defSnapPct": "0.57"
+      },
+      "team": "KC",
+      "teamAbv": "KC",
+      "Defense": {
+        "totalTackles": "3",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4685232",
+      "longName": "Jaden Hicks"
+    },
+    "4694505": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "17",
+      "snapCounts": {
+        "offSnapPct": "0.03",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "1",
+        "defSnapPct": "0.00"
+      },
+      "team": "LV",
+      "teamAbv": "LV",
+      "playerID": "4694505",
+      "longName": "Charles Grant"
+    },
+    "4697639": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "16",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "25",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "0.71"
+      },
+      "team": "KC",
+      "teamAbv": "KC",
+      "Defense": {
+        "totalTackles": "0",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "0",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "1"
+      },
+      "playerID": "4697639",
+      "longName": "Jaylen Watson"
+    },
+    "4875295": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "17",
+      "snapCounts": {
+        "offSnapPct": "0.71",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "25",
+        "defSnapPct": "0.00"
+      },
+      "team": "LV",
+      "teamAbv": "LV",
+      "playerID": "4875295",
+      "longName": "Jackson Powers-Johnson"
+    },
+    "4890973": {
+      "gameID": "20251019_LV@KC",
+      "Rushing": {
+        "rushAvg": "3.5",
+        "rushYds": "21",
+        "carries": "6",
+        "longRush": "8",
+        "rushTD": "0"
+      },
+      "Receiving": {
+        "receptions": "1",
+        "recTD": "0",
+        "longRec": "13",
+        "targets": "1",
+        "recYds": "13",
+        "recAvg": "13.0"
+      },
+      "teamID": "17",
+      "snapCounts": {
+        "offSnapPct": "0.63",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "22",
+        "defSnapPct": "0.00"
+      },
+      "team": "LV",
+      "teamAbv": "LV",
+      "playerID": "4890973",
+      "longName": "Ashton Jeanty"
+    },
+    "4917635": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "16",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "10",
+        "stSnap": "15",
+        "stSnapPct": "0.71",
+        "offSnap": "0",
+        "defSnapPct": "0.29"
+      },
+      "team": "KC",
+      "teamAbv": "KC",
+      "playerID": "4917635",
+      "longName": "Joshua Williams"
+    },
+    "5082630": {
+      "gameID": "20251019_LV@KC",
+      "teamID": "16",
+      "snapCounts": {
+        "offSnapPct": "0.20",
+        "defSnap": "0",
+        "stSnap": "11",
+        "stSnapPct": "0.52",
+        "offSnap": "16",
+        "defSnapPct": "0.00"
+      },
+      "team": "KC",
+      "teamAbv": "KC",
+      "playerID": "5082630",
+      "longName": "Jalen Royals"
+    },
+    "5155825": {
+      "gameID": "20251019_LV@KC",
+      "Receiving": {
+        "receptions": "1",
+        "recTD": "0",
+        "longRec": "3",
+        "targets": "1",
+        "recYds": "3",
+        "recAvg": "3.0"
+      },
+      "teamID": "17",
+      "snapCounts": {
+        "offSnapPct": "0.14",
+        "defSnap": "0",
+        "stSnap": "13",
+        "stSnapPct": "0.62",
+        "offSnap": "5",
+        "defSnapPct": "0.00"
+      },
+      "team": "LV",
+      "teamAbv": "LV",
+      "playerID": "5155825",
+      "longName": "Carter Runyon"
+    }
+  },
+  "scoringPlays": [
+    {
+      "score": "Rashee Rice 2 Yd pass from Patrick Mahomes (Harrison Butker Kick)",
+      "scorePeriod": "Q1",
+      "homeScore": "7",
+      "awayScore": "0",
+      "teamID": "16",
+      "scoreDetails": "9 plays, 92 yards, 5:46",
+      "scoreType": "TD",
+      "scoreTime": "5:58",
+      "team": "KC",
+      "playerIDs": ["3139477", "4428331", "3055899"]
+    },
+    {
+      "score": "Hollywood Brown 8 Yd pass from Patrick Mahomes (Harrison Butker Kick)",
+      "scorePeriod": "Q2",
+      "homeScore": "14",
+      "awayScore": "0",
+      "teamID": "16",
+      "scoreDetails": "17 plays, 84 yards, 8:40",
+      "scoreType": "TD",
+      "scoreTime": "9:17",
+      "team": "KC",
+      "playerIDs": ["3139477", "4241372", "3055899"]
+    },
+    {
+      "score": "Rashee Rice 3 Yd pass from Patrick Mahomes (Harrison Butker Kick)",
+      "scorePeriod": "Q2",
+      "homeScore": "21",
+      "awayScore": "0",
+      "teamID": "16",
+      "scoreDetails": "16 plays, 94 yards, 6:22",
+      "scoreType": "TD",
+      "scoreTime": "0:10",
+      "team": "KC",
+      "playerIDs": ["3139477", "4428331", "3055899"]
+    },
+    {
+      "score": "Isiah Pacheco 7 Yd Rush (Harrison Butker Kick)",
+      "scorePeriod": "Q3",
+      "homeScore": "28",
+      "awayScore": "0",
+      "teamID": "16",
+      "scoreDetails": "11 plays, 65 yards, 6:00",
+      "scoreType": "TD",
+      "scoreTime": "9:00",
+      "team": "KC",
+      "playerIDs": ["4361529", "3055899"]
+    },
+    {
+      "score": "Harrison Butker 38 Yd Field Goal",
+      "scorePeriod": "Q3",
+      "homeScore": "31",
+      "awayScore": "0",
+      "teamID": "16",
+      "scoreDetails": "9 plays, 66 yards, 4:26",
+      "scoreType": "FG",
+      "scoreTime": "2:36",
+      "team": "KC",
+      "playerIDs": ["3055899"]
+    }
+  ],
+  "seasonType": "Regular Season",
+  "teamIDAway": "17",
+  "teamIDHome": "16",
+  "teamStats": {
+    "away": {
+      "totalYards": "95",
+      "rushingAttempts": "11",
+      "rushingYards": "25",
+      "fumblesLost": "1",
+      "penalties": "8-58",
+      "totalPlays": "30",
+      "possession": "17:52",
+      "safeties": "0",
+      "passCompletionsAndAttempts": "12-18",
+      "passingFirstDowns": "2",
+      "interceptionsThrown": "0",
+      "sacksAndYardsLost": "1-5",
+      "thirdDownEfficiency": "0-7",
+      "blockedPunt": "0",
+      "yardsPerPlay": "3.2",
+      "redZoneScoredAndAttempted": "0-0",
+      "teamID": "17",
+      "defensiveInterceptions": "0",
+      "defensiveOrSpecialTeamsTds": "0",
+      "totalDrives": "10",
+      "rushingFirstDowns": "0",
+      "blockedFG": "0",
+      "rushTD": "0",
+      "twoPointConversions": "0",
+      "firstDowns": "3",
+      "passTD": "0",
+      "team": "LV",
+      "blockedXP": "0",
+      "teamAbv": "LV",
+      "firstDownsFromPenalties": "1",
+      "fourthDownEfficiency": "0-1",
+      "defensiveTwoPointConversionReturns": "0",
+      "passingYards": "70",
+      "yardsPerRush": "2.3",
+      "snapCounts": {
+        "totalSpecialTeams": "21",
+        "totalOffensive": "35",
+        "totalDefensive": "81"
+      },
+      "turnovers": "1",
+      "yardsPerPass": "3.7"
+    },
+    "home": {
+      "totalYards": "434",
+      "rushingAttempts": "41",
+      "rushingYards": "152",
+      "fumblesLost": "0",
+      "penalties": "5-38",
+      "totalPlays": "77",
+      "possession": "42:08",
+      "safeties": "0",
+      "passCompletionsAndAttempts": "26-35",
+      "passingFirstDowns": "16",
+      "interceptionsThrown": "0",
+      "sacksAndYardsLost": "1-4",
+      "thirdDownEfficiency": "9-15",
+      "blockedPunt": "0",
+      "yardsPerPlay": "5.6",
+      "redZoneScoredAndAttempted": "4-5",
+      "teamID": "16",
+      "defensiveInterceptions": "0",
+      "defensiveOrSpecialTeamsTds": "0",
+      "totalDrives": "9",
+      "rushingFirstDowns": "12",
+      "blockedFG": "0",
+      "rushTD": "1",
+      "twoPointConversions": "0",
+      "firstDowns": "30",
+      "passTD": "3",
+      "team": "KC",
+      "blockedXP": "0",
+      "teamAbv": "KC",
+      "firstDownsFromPenalties": "2",
+      "fourthDownEfficiency": "1-2",
+      "defensiveTwoPointConversionReturns": "0",
+      "passingYards": "282",
+      "yardsPerRush": "3.7",
+      "snapCounts": {
+        "totalSpecialTeams": "21",
+        "totalOffensive": "81",
+        "totalDefensive": "35"
+      },
+      "turnovers": "0",
+      "yardsPerPass": "7.8"
+    }
+  },
+  "gameID": "20251019_LV@KC",
+  "gameStatusCode": "2"
+}

@@ -1,0 +1,54 @@
+{
+  "gameRef": "20251218_LAR@SEA",
+  "eventId": "401772949",
+  "scoringPlays": [
+    {
+      "text": "Zach Charbonnet 4 Yd Rush (Jason Myers Kick)",
+      "abbreviation": "TD"
+    },
+    {
+      "text": "Harrison Mevis 23 Yd Field Goal",
+      "abbreviation": "FG"
+    },
+    {
+      "text": "Harrison Mevis 28 Yd Field Goal",
+      "abbreviation": "FG"
+    },
+    {
+      "text": "Terrance Ferguson 3 Yd pass from Matthew Stafford (Harrison Mevis Kick)",
+      "abbreviation": "TD"
+    },
+    {
+      "text": "Kenneth Walker III 55 Yd Rush (Jason Myers Kick)",
+      "abbreviation": "TD"
+    },
+    {
+      "text": "Harrison Mevis 41 Yd Field Goal ",
+      "abbreviation": "FG"
+    },
+    {
+      "text": "Blake Corum 1 Yd Rush (Harrison Mevis Kick)",
+      "abbreviation": "TD"
+    },
+    {
+      "text": "Puka Nacua 1 Yd pass from Matthew Stafford (Harrison Mevis Kick)",
+      "abbreviation": "TD"
+    },
+    {
+      "text": "Rashid Shaheed 58 Yd Punt Return (Sam Darnold Pass to Cooper Kupp for Two-Point Conversion)",
+      "abbreviation": "TD"
+    },
+    {
+      "text": "AJ Barner 26 Yd pass from Sam Darnold (Zach Charbonnet Run for Two-Point Conversion)",
+      "abbreviation": "TD"
+    },
+    {
+      "text": "Puka Nacua 41 Yd pass from Matthew Stafford (Harrison Mevis Kick)",
+      "abbreviation": "TD"
+    },
+    {
+      "text": "Jaxon Smith-Njigba 4 Yd pass from Sam Darnold (Sam Darnold Pass to Eric Saubert for Two-Point Conversion)",
+      "abbreviation": "TD"
+    }
+  ]
+}

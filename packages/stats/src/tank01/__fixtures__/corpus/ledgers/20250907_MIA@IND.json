@@ -1,0 +1,250 @@
+{
+  "gameRef": "20250907_MIA@IND",
+  "playersTranslated": 93,
+  "warnings": [],
+  "fatal": [],
+  "players": [
+    {
+      "ref": "2998565",
+      "name": "Mo Alie-Cox",
+      "stats": {
+        "rec": 1,
+        "rec_yd": 20
+      },
+      "milliPoints": 3000
+    },
+    {
+      "ref": "3116406",
+      "name": "Tyreek Hill",
+      "stats": {
+        "rec": 4,
+        "rec_yd": 40
+      },
+      "milliPoints": 8000
+    },
+    {
+      "ref": "3917668",
+      "name": "Alec Ingold",
+      "stats": {
+        "rec": 1,
+        "rec_yd": 1
+      },
+      "milliPoints": 1100
+    },
+    {
+      "ref": "3917792",
+      "name": "Daniel Jones",
+      "stats": {
+        "pass_td": 1,
+        "pass_yd": 272,
+        "rush_td": 2,
+        "rush_yd": 26
+      },
+      "milliPoints": 29480
+    },
+    {
+      "ref": "3929785",
+      "name": "Nick Westbrook-Ikhine",
+      "stats": {
+        "rec": 1,
+        "rec_yd": 7
+      },
+      "milliPoints": 1700
+    },
+    {
+      "ref": "4035687",
+      "name": "Michael Pittman Jr.",
+      "stats": {
+        "rec": 6,
+        "rec_td": 1,
+        "rec_yd": 80
+      },
+      "milliPoints": 20000
+    },
+    {
+      "ref": "4043016",
+      "name": "Dee Eskridge",
+      "stats": {
+        "rec": 1,
+        "rec_yd": 9
+      },
+      "milliPoints": 1900
+    },
+    {
+      "ref": "4047422",
+      "name": "Tanner Conner",
+      "stats": {
+        "rec": 2,
+        "rec_yd": 20
+      },
+      "milliPoints": 4000
+    },
+    {
+      "ref": "4061956",
+      "name": "Ashton Dulin",
+      "stats": {
+        "rush_yd": 15
+      },
+      "milliPoints": 1500
+    },
+    {
+      "ref": "4241479",
+      "name": "Tua Tagovailoa",
+      "stats": {
+        "fum_lost": 1,
+        "pass_int": 2,
+        "pass_td": 1,
+        "pass_yd": 114,
+        "rush_yd": 7,
+        "two_pt": 1
+      },
+      "milliPoints": 5260
+    },
+    {
+      "ref": "4242335",
+      "name": "Jonathan Taylor",
+      "stats": {
+        "rec": 3,
+        "rec_yd": 27,
+        "rush_yd": 71
+      },
+      "milliPoints": 12800
+    },
+    {
+      "ref": "4360078",
+      "name": "Alec Pierce",
+      "stats": {
+        "rec": 1,
+        "rec_yd": 36
+      },
+      "milliPoints": 4600
+    },
+    {
+      "ref": "4361259",
+      "name": "Zach Wilson",
+      "stats": {
+        "pass_yd": 32,
+        "rush_yd": 3
+      },
+      "milliPoints": 1580
+    },
+    {
+      "ref": "4365395",
+      "name": "Julian Hill",
+      "stats": {
+        "two_pt": 1
+      },
+      "milliPoints": 2000
+    },
+    {
+      "ref": "4372016",
+      "name": "Jaylen Waddle",
+      "stats": {
+        "rec": 4,
+        "rec_yd": 30
+      },
+      "milliPoints": 7000
+    },
+    {
+      "ref": "4429160",
+      "name": "De'Von Achane",
+      "stats": {
+        "rec": 3,
+        "rec_td": 1,
+        "rec_yd": 20,
+        "rush_yd": 55
+      },
+      "milliPoints": 16500
+    },
+    {
+      "ref": "4431459",
+      "name": "Tyler Warren",
+      "stats": {
+        "rec": 7,
+        "rec_yd": 76,
+        "rush_yd": 3
+      },
+      "milliPoints": 14900
+    },
+    {
+      "ref": "4569603",
+      "name": "Malik Washington",
+      "stats": {
+        "rec": 2,
+        "rec_yd": 20,
+        "rush_yd": 9
+      },
+      "milliPoints": 4900
+    },
+    {
+      "ref": "4571557",
+      "name": "Spencer Shrader",
+      "stats": {
+        "fg_0_39": 3,
+        "fg_40_49": 1,
+        "xp_made": 3
+      },
+      "milliPoints": 16000
+    },
+    {
+      "ref": "4597500",
+      "name": "Adonai Mitchell",
+      "stats": {
+        "rec": 2,
+        "rec_yd": 21
+      },
+      "milliPoints": 4100
+    },
+    {
+      "ref": "4688813",
+      "name": "Josh Downs",
+      "stats": {
+        "rec": 2,
+        "rec_yd": 12
+      },
+      "milliPoints": 3200
+    },
+    {
+      "ref": "4711533",
+      "name": "Ollie Gordon II",
+      "stats": {
+        "rec": 1,
+        "rec_yd": -1,
+        "rush_yd": 4
+      },
+      "milliPoints": 1300
+    },
+    {
+      "ref": "4874509",
+      "name": "DJ Giddens",
+      "stats": {
+        "rush_yd": 41
+      },
+      "milliPoints": 4100
+    }
+  ],
+  "teamDefense": [
+    {
+      "ref": "IND",
+      "name": "IND D/ST",
+      "stats": {
+        "def_fum_rec": 1,
+        "def_int": 2,
+        "def_pts_allowed": 8,
+        "def_sack": 3,
+        "def_yds_allowed": 211
+      },
+      "milliPoints": 14000
+    },
+    {
+      "ref": "MIA",
+      "name": "MIA D/ST",
+      "stats": {
+        "def_pts_allowed": 33,
+        "def_sack": 1,
+        "def_yds_allowed": 418
+      },
+      "milliPoints": -3000
+    }
+  ]
+}

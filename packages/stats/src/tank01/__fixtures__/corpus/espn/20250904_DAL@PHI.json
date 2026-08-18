@@ -1,0 +1,38 @@
+{
+  "gameRef": "20250904_DAL@PHI",
+  "eventId": "401772510",
+  "scoringPlays": [
+    {
+      "text": "Javonte Williams 1 Yd Rush (Brandon Aubrey Kick)",
+      "abbreviation": "TD"
+    },
+    {
+      "text": "Jalen Hurts 4 Yd Rush (Jake Elliott Kick)",
+      "abbreviation": "TD"
+    },
+    {
+      "text": "Javonte Williams 1 Yd Rush (Brandon Aubrey Kick)",
+      "abbreviation": "TD"
+    },
+    {
+      "text": "Jalen Hurts 8 Yd Rush (Jake Elliott Kick)",
+      "abbreviation": "TD"
+    },
+    {
+      "text": "Brandon Aubrey 41 Yd Field Goal",
+      "abbreviation": "FG"
+    },
+    {
+      "text": "Saquon Barkley 10 Yd Rush (Jake Elliott Kick)",
+      "abbreviation": "TD"
+    },
+    {
+      "text": "Brandon Aubrey 53 Yd Field Goal",
+      "abbreviation": "FG"
+    },
+    {
+      "text": "Jake Elliott 58 Yd Field Goal",
+      "abbreviation": "FG"
+    }
+  ]
+}

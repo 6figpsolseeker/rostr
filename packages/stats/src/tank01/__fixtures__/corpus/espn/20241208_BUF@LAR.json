@@ -1,0 +1,58 @@
+{
+  "gameRef": "20241208_BUF@LAR",
+  "eventId": "401671773",
+  "scoringPlays": [
+    {
+      "text": "Kyren Williams 3 Yd Run (Joshua Karty Kick)",
+      "abbreviation": "TD"
+    },
+    {
+      "text": "Josh Allen 1 Yd Run (Tyler Bass Kick)",
+      "abbreviation": "TD"
+    },
+    {
+      "text": "Joshua Karty 22 Yd Field Goal ",
+      "abbreviation": "FG"
+    },
+    {
+      "text": "Hunter Long 22 Yd Return of Blocked Punt (Joshua Karty Kick)",
+      "abbreviation": null
+    },
+    {
+      "text": "Ty Johnson 41 Yd pass from Josh Allen (Tyler Bass Kick)",
+      "abbreviation": "TD"
+    },
+    {
+      "text": "Puka Nacua 4 Yd Run (Joshua Karty Kick)",
+      "abbreviation": "TD"
+    },
+    {
+      "text": "Kyren Williams 7 Yd Run (Joshua Karty Kick)",
+      "abbreviation": "TD"
+    },
+    {
+      "text": "Khalil Shakir 51 Yd pass from Josh Allen (Tyler Bass Kick)",
+      "abbreviation": "TD"
+    },
+    {
+      "text": "Cooper Kupp 17 Yd pass from Matthew Stafford (Joshua Karty Kick)",
+      "abbreviation": "TD"
+    },
+    {
+      "text": "Josh Allen 1 Yd Run (Tyler Bass Kick)",
+      "abbreviation": "TD"
+    },
+    {
+      "text": "Mack Hollins 21 Yd pass from Josh Allen (Tyler Bass Kick)",
+      "abbreviation": "TD"
+    },
+    {
+      "text": "Puka Nacua 19 Yd pass from Matthew Stafford (Joshua Karty PAT failed)",
+      "abbreviation": "TD"
+    },
+    {
+      "text": "Josh Allen 1 Yd Run (Tyler Bass Kick)",
+      "abbreviation": "TD"
+    }
+  ]
+}

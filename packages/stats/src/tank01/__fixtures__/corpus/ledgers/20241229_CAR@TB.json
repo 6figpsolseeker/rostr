@@ -1,0 +1,253 @@
+{
+  "gameRef": "20241229_CAR@TB",
+  "playersTranslated": 95,
+  "warnings": [],
+  "fatal": [],
+  "players": [
+    {
+      "ref": "16460",
+      "name": "Adam Thielen",
+      "stats": {
+        "rec": 5,
+        "rec_td": 2,
+        "rec_yd": 110
+      },
+      "milliPoints": 28000
+    },
+    {
+      "ref": "16737",
+      "name": "Mike Evans",
+      "stats": {
+        "rec": 8,
+        "rec_td": 2,
+        "rec_yd": 97
+      },
+      "milliPoints": 29700
+    },
+    {
+      "ref": "3052587",
+      "name": "Baker Mayfield",
+      "stats": {
+        "pass_td": 5,
+        "pass_yd": 359,
+        "rush_yd": 2
+      },
+      "milliPoints": 34560
+    },
+    {
+      "ref": "3139033",
+      "name": "Mike Boone",
+      "stats": {
+        "rush_yd": 11
+      },
+      "milliPoints": 1100
+    },
+    {
+      "ref": "3150744",
+      "name": "Chase McLaughlin",
+      "stats": {
+        "fg_0_39": 2,
+        "xp_made": 6
+      },
+      "milliPoints": 12000
+    },
+    {
+      "ref": "3929637",
+      "name": "Dan Chisena",
+      "stats": {
+        "rec": 1,
+        "rec_yd": 8
+      },
+      "milliPoints": 1800
+    },
+    {
+      "ref": "4034946",
+      "name": "Kyle Trask",
+      "stats": {
+        "rush_yd": -2
+      },
+      "milliPoints": -200
+    },
+    {
+      "ref": "4034949",
+      "name": "Eddy Pineiro",
+      "stats": {
+        "fg_missed": 1,
+        "xp_made": 2
+      },
+      "milliPoints": 1000
+    },
+    {
+      "ref": "4212909",
+      "name": "David Moore",
+      "stats": {
+        "rec": 1,
+        "rec_yd": 17
+      },
+      "milliPoints": 2700
+    },
+    {
+      "ref": "4243366",
+      "name": "J.J. Russell",
+      "stats": {
+        "ret_td": 1
+      },
+      "milliPoints": 6000
+    },
+    {
+      "ref": "4259308",
+      "name": "Raheem Blackshear",
+      "stats": {
+        "rush_yd": 20
+      },
+      "milliPoints": 2000
+    },
+    {
+      "ref": "4361112",
+      "name": "Devin Culp",
+      "stats": {
+        "rec": 3,
+        "rec_yd": 52
+      },
+      "milliPoints": 8200
+    },
+    {
+      "ref": "4369466",
+      "name": "Ryan Miller",
+      "stats": {
+        "rec": 2,
+        "rec_yd": 26
+      },
+      "milliPoints": 4600
+    },
+    {
+      "ref": "4372505",
+      "name": "Payne Durham",
+      "stats": {
+        "rec": 2,
+        "rec_td": 1,
+        "rec_yd": 36
+      },
+      "milliPoints": 11600
+    },
+    {
+      "ref": "4429006",
+      "name": "Rakim Jarrett",
+      "stats": {
+        "rec": 1,
+        "rec_yd": 11
+      },
+      "milliPoints": 2100
+    },
+    {
+      "ref": "4430034",
+      "name": "Xavier Legette",
+      "stats": {
+        "rec": 5,
+        "rec_yd": 28
+      },
+      "milliPoints": 7800
+    },
+    {
+      "ref": "4430834",
+      "name": "Jalen McMillan",
+      "stats": {
+        "rec": 5,
+        "rec_td": 2,
+        "rec_yd": 51,
+        "rush_yd": 9
+      },
+      "milliPoints": 23000
+    },
+    {
+      "ref": "4430871",
+      "name": "Sean Tucker",
+      "stats": {
+        "rec": 1,
+        "rec_yd": 5,
+        "rush_yd": 39
+      },
+      "milliPoints": 5400
+    },
+    {
+      "ref": "4431588",
+      "name": "Ja'Tavion Sanders",
+      "stats": {
+        "rec": 1,
+        "rec_yd": 5
+      },
+      "milliPoints": 1500
+    },
+    {
+      "ref": "4596448",
+      "name": "Bucky Irving",
+      "stats": {
+        "rec": 4,
+        "rec_yd": 77,
+        "rush_yd": 113
+      },
+      "milliPoints": 23000
+    },
+    {
+      "ref": "4685720",
+      "name": "Bryce Young",
+      "stats": {
+        "pass_td": 2,
+        "pass_yd": 203,
+        "rush_yd": 8
+      },
+      "milliPoints": 16920
+    },
+    {
+      "ref": "4695883",
+      "name": "Jalen Coker",
+      "stats": {
+        "rec": 2,
+        "rec_yd": 35
+      },
+      "milliPoints": 5500
+    },
+    {
+      "ref": "4697815",
+      "name": "Rachaad White",
+      "stats": {
+        "rec": 1,
+        "rec_yd": 4,
+        "rush_yd": 30
+      },
+      "milliPoints": 4400
+    },
+    {
+      "ref": "5097554",
+      "name": "Kameron Johnson",
+      "stats": {
+        "rush_yd": 11
+      },
+      "milliPoints": 1100
+    }
+  ],
+  "teamDefense": [
+    {
+      "ref": "CAR",
+      "name": "CAR D/ST",
+      "stats": {
+        "def_pts_allowed": 48,
+        "def_sack": 2,
+        "def_yds_allowed": 551
+      },
+      "milliPoints": -10000
+    },
+    {
+      "ref": "TB",
+      "name": "TB D/ST",
+      "stats": {
+        "def_blk_kick": 1,
+        "def_pts_allowed": 14,
+        "def_sack": 5,
+        "def_td": 1,
+        "def_yds_allowed": 204
+      },
+      "milliPoints": 16000
+    }
+  ]
+}

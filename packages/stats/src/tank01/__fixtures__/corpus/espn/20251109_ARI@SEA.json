@@ -1,0 +1,50 @@
+{
+  "gameRef": "20251109_ARI@SEA",
+  "eventId": "401772773",
+  "scoringPlays": [
+    {
+      "text": "Jaxon Smith-Njigba 43 Yd pass from Sam Darnold (Jason Myers Kick)",
+      "abbreviation": "TD"
+    },
+    {
+      "text": "DeMarcus Lawrence 34 Yd Fumble Recovery by Tyrice Knight For 34 Yd Loss (Jason Myers Kick)",
+      "abbreviation": "TD"
+    },
+    {
+      "text": "George Holani 9 Yd Rush (Jason Myers Kick)",
+      "abbreviation": "TD"
+    },
+    {
+      "text": "DeMarcus Lawrence 22 Yd Fumble Recovery by Tyrice Knight For 22 Yd Loss (Jason Myers Kick)",
+      "abbreviation": "TD"
+    },
+    {
+      "text": "Zach Charbonnet 6 Yd Rush (Jason Myers Kick)",
+      "abbreviation": "TD"
+    },
+    {
+      "text": "Greg Dortch 4 Yd Rush (Chad Ryland Kick)",
+      "abbreviation": "TD"
+    },
+    {
+      "text": "Jason Myers 46 Yd Field Goal",
+      "abbreviation": "FG"
+    },
+    {
+      "text": "Trey McBride 15 Yd pass from Jacoby Brissett (Jacoby Brissett Pass to Marvin Harrison Jr. for Two-Point Conversion)",
+      "abbreviation": "TD"
+    },
+    {
+      "text": "Jason Myers 32 Yd Field Goal",
+      "abbreviation": "FG"
+    },
+    {
+      "text": "Marvin Harrison Jr. 9 Yd pass from Jacoby Brissett (Chad Ryland Kick)",
+      "abbreviation": "TD"
+    },
+    {
+      "text": "Jason Myers 34 Yd Field Goal",
+      "abbreviation": "FG"
+    }
+  ]
+}

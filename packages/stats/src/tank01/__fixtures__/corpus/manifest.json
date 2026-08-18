@@ -1,0 +1,248 @@
+{
+  "$schema": "../../../corpus/manifest.ts",
+  "$note": "Hand-written. Everything else under corpus/ is captured or generated. See corpus/manifest.ts for what each field guarantees, and docs/TANK01.md for how to add a game.",
+  "games": [
+    {
+      "gameRef": "20250904_DAL@PHI",
+      "season": 2025,
+      "week": 1,
+      "boxScore": "box-score.json",
+      "why": "The baseline. An ordinary, high-profile game with nothing rare in it, so a translator change that breaks everyday scoring cannot hide behind the edge cases.",
+      "classes": ["FG_40_49", "FG_50_59"]
+    },
+    {
+      "gameRef": "20250907_ARI@NO",
+      "season": 2025,
+      "week": 1,
+      "boxScore": "box-score-blocked-fg.json",
+      "why": "A blocked field goal that led to no score at all. 27 of 2025's 44 blocked kicks did not score, and every one of them was invisible until teamStats was read.",
+      "classes": ["FG_0_39", "FG_40_49", "FG_50_59", "FG_MISSED", "BLOCKED_KICK_NO_SCORE"]
+    },
+    {
+      "gameRef": "20250921_ARI@SF",
+      "season": 2025,
+      "week": 3,
+      "boxScore": "box-score-safety.json",
+      "why": "The verbose safety wording, 'Defensive Holding in Endzone for Safety', which shares no tokens with the terse form and is the reason safeties are counted from scoreType rather than parsed.",
+      "classes": ["FG_0_39", "FG_50_59", "FG_MISSED", "SAFETY"]
+    },
+    {
+      "gameRef": "20250928_CAR@NE",
+      "season": 2025,
+      "week": 4,
+      "boxScore": "box-score-def-st-overlap.json",
+      "why": "Marcus Jones's punt return: a special-teams touchdown by a defensive player, so DST.defTD already holds it and adding one from the text pays the unit twice.",
+      "classes": ["FG_MISSED", "DST_TD_OVERLAP"]
+    },
+    {
+      "gameRef": "20251103_ARI@DAL",
+      "season": 2025,
+      "week": 9,
+      "boxScore": "box-score-blocked-punt-td.json",
+      "why": "'Marshawn Kneeland Blocked Punt Recovery in End Zone' — a special-teams touchdown with no 'return' anywhere in it, which the old pattern scored as nothing.",
+      "classes": [
+        "FG_0_39",
+        "FG_40_49",
+        "FG_MISSED",
+        "BLOCKED_KICK_TOUCHDOWN",
+        "SCORER_NOT_IN_PLAYERIDS",
+        "DST_TD_NO_OVERLAP",
+        "OWN_FUMBLE_RECOVERY"
+      ]
+    },
+    {
+      "gameRef": "20251218_LAR@SEA",
+      "season": 2025,
+      "week": 16,
+      "boxScore": "box-score-return-td.json",
+      "why": "Rashid Shaheed's punt return, where Tank01 orders playerIDs [passer, returner, receiver] — the ordering that paid a quarterback six points for a punt return.",
+      "classes": [
+        "FG_0_39",
+        "FG_40_49",
+        "FG_MISSED",
+        "DST_YARDS_BOTTOM_TIER",
+        "TWO_POINT_CONVERSION",
+        "DST_TD_NO_OVERLAP"
+      ]
+    },
+    {
+      "gameRef": "20241208_BUF@LAR",
+      "season": 2024,
+      "week": 14,
+      "boxScore": "box-score-blocked-punt-scoretype.json",
+      "why": "The only scoreType 'BP' in two seasons. Twelve points on one play, paid to nobody, and neither provider counter made it up.",
+      "classes": ["SCORE_TYPE_BP", "FG_0_39", "BLOCKED_KICK_TOUCHDOWN", "DST_TD_NO_OVERLAP"],
+      "espnTypeDisagreements": [
+        {
+          "text": "Hunter Long 22 Yd Return of Blocked Punt (Joshua Karty Kick)",
+          "reason": "The only scoreType 'BP' in two seasons, and ESPN leaves scoringType null on the same play — so 'BP' appears to be Tank01's own filing for a play ESPN declines to type rather than a value ESPN publishes."
+        }
+      ]
+    },
+    {
+      "gameRef": "20241229_CAR@TB",
+      "season": 2024,
+      "week": 17,
+      "boxScore": "box-score-returner-not-in-playerids.json",
+      "why": "J.J. Russell's blocked-punt return: playerIDs holds the kicker alone and Russell's whole record is a snapCounts block. Also both open-ended bottom tiers.",
+      "classes": [
+        "FG_0_39",
+        "FG_MISSED",
+        "DST_POINTS_BOTTOM_TIER",
+        "DST_YARDS_BOTTOM_TIER",
+        "BLOCKED_KICK_TOUCHDOWN",
+        "SCORER_NOT_IN_PLAYERIDS",
+        "DST_TD_NO_OVERLAP",
+        "OWN_FUMBLE_RECOVERY"
+      ]
+    },
+    {
+      "gameRef": "20250928_PHI@TB",
+      "season": 2025,
+      "week": 4,
+      "boxScore": "box-score-fg-buckets.json",
+      "why": "All four field-goal buckets in one game including a 65-yarder, an abbreviated name in the play text, and the terse safety wording.",
+      "classes": [
+        "FG_0_39",
+        "FG_40_49",
+        "FG_50_59",
+        "FG_60_PLUS",
+        "SAFETY",
+        "SAFETY_TERSE",
+        "ABBREVIATED_NAME_IN_PLAY",
+        "BLOCKED_KICK_TOUCHDOWN",
+        "DST_TD_OVERLAP",
+        "OWN_FUMBLE_RECOVERY"
+      ]
+    },
+    {
+      "gameRef": "20250914_SEA@PIT",
+      "season": 2025,
+      "week": 2,
+      "boxScore": "box-score-scoretype-absent.json",
+      "why": "George Holani's recovered kickoff: a coverage score ESPN pays the player 0 for and Sleeper pays 6, plus two identical field-goal texts and an ESPN play with no scoringType.",
+      "classes": [
+        "FG_40_49",
+        "FG_50_59",
+        "FG_MISSED",
+        "TWO_POINT_CONVERSION",
+        "DUPLICATE_SCORING_PLAY_TEXT",
+        "KICKOFF_RECOVERY_NOT_A_RETURN"
+      ],
+      "espnTypeDisagreements": [
+        {
+          "text": "George Holani Recovered Kickoff in End Zone for a Touchdown (Jason Myers Kick)",
+          "reason": "ESPN leaves scoringType null and files the play under stat id 104, its fumble-return touchdown; Tank01 types it TD. The one play in the corpus where the two feeds put different labels on the same sentence."
+        }
+      ]
+    },
+    {
+      "gameRef": "20251019_LV@KC",
+      "season": 2025,
+      "week": 7,
+      "boxScore": "box-score-dst-top-tier.json",
+      "why": "A shutout and under 100 yards allowed: the top tier of both defensive ladders, neither of which any other corpus game reaches.",
+      "classes": ["FG_0_39", "DST_SHUTOUT", "DST_YARDS_TOP_TIER", "OWN_FUMBLE_RECOVERY"]
+    },
+    {
+      "gameRef": "20251109_ARI@SEA",
+      "season": 2025,
+      "week": 10,
+      "boxScore": "box-score-fumble-recovery-td.json",
+      "why": "A fumble-recovery touchdown as a negative case — it must pay the unit def_td and must never reach the scorer as ret_td.",
+      "classes": [
+        "FG_0_39",
+        "FG_40_49",
+        "TWO_POINT_CONVERSION",
+        "FUMBLE_OR_INTERCEPTION_RETURN_TD",
+        "OWN_FUMBLE_RECOVERY"
+      ]
+    },
+    {
+      "gameRef": "20250907_MIA@IND",
+      "season": 2025,
+      "week": 1,
+      "boxScore": "box-score-two-pt-receiver.json",
+      "why": "A two-point conversion whose receiver, Julian Hill, is absent from playerIDs and has no category block of his own. box-score.ts resolves him from the parenthetical text and the ledger credits him, so this is the fixture that would notice that text path being removed. Refs #155, which stays open for the conversions the text does not name.",
+      "classes": [
+        "FG_0_39",
+        "FG_40_49",
+        "TWO_POINT_CONVERSION",
+        "TWO_PT_RECEIVER_NOT_IN_PLAYERIDS"
+      ]
+    }
+  ],
+  "knownDisagreements": [
+    {
+      "gameRef": "20250921_ARI@SF",
+      "subject": "dst:SF",
+      "kind": "DELIBERATE",
+      "issue": 184,
+      "reason": "Points allowed. Arizona scored 15 including a safety; Tank01 charges San Francisco's unit all 15 and Sleeper charges 13. Sleeper excludes a safety from points allowed and ESPN does not. We follow ESPN because the whole scoring table came from ESPN.",
+      "ourMilliPoints": 4000,
+      "sleeperMilliPoints": 6000
+    },
+    {
+      "gameRef": "20250928_CAR@NE",
+      "subject": "dst:CAR",
+      "kind": "DELIBERATE",
+      "issue": 184,
+      "reason": "Points allowed, same convention as PHI@TB. New England scored 42 including Marcus Jones's punt return; ESPN subtracts 6 for it and charges Carolina 36, Sleeper charges the full 42. Both readings land in the same tier here, so the two units are paid identically — which is exactly why this one was invisible until the comparison was made on stats rather than on totals.",
+      "ourMilliPoints": -2000,
+      "sleeperMilliPoints": -2000
+    },
+    {
+      "gameRef": "20250928_PHI@TB",
+      "subject": "dst:TB",
+      "kind": "DELIBERATE",
+      "issue": 184,
+      "reason": "Points allowed, the other direction. Philadelphia scored 31 including Sydney Brown's blocked-punt return; ESPN subtracts 6 for it (not 7 — the extra point still counts) and charges Tampa 25, Sleeper charges the full 31.",
+      "ourMilliPoints": 6000,
+      "sleeperMilliPoints": 5000
+    },
+    {
+      "gameRef": "20250928_PHI@TB",
+      "subject": "dst:PHI",
+      "kind": "DELIBERATE",
+      "issue": 184,
+      "reason": "Points allowed, the safety direction, in the same game as the dst:TB entry above. Tampa scored 25 including a safety; Sleeper excludes a safety from points allowed and charges 23, ESPN does not and charges 25. Same tier either way, so the totals agree and only the stat differs.",
+      "ourMilliPoints": 13000,
+      "sleeperMilliPoints": 13000
+    },
+    {
+      "gameRef": "20250914_SEA@PIT",
+      "subject": "dst:PIT",
+      "kind": "DELIBERATE",
+      "issue": 184,
+      "reason": "The same convention as PHI@TB. Seattle scored 31 including George Holani's recovered kickoff; ESPN subtracts 6 and charges Pittsburgh 25, Sleeper charges 31.",
+      "ourMilliPoints": 5000,
+      "sleeperMilliPoints": 4000
+    },
+    {
+      "gameRef": "20251109_ARI@SEA",
+      "subject": "dst:SEA",
+      "kind": "DEFECT",
+      "issue": 157,
+      "reason": "Tank01 reports DST.defTD 4 for two fumble-recovery touchdowns, all four on DeMarcus Lawrence's own Defense.defTD. teamStats says 2 and Sleeper says 2. We pay Seattle 24 points where 12 are due. The existing cross-check already fires with an arithmetically impossible negative count and nothing refuses the value.",
+      "ourMilliPoints": 33000,
+      "sleeperMilliPoints": 21000
+    },
+    {
+      "gameRef": "20251109_ARI@SEA",
+      "subject": "dst:ARI",
+      "kind": "DEFECT",
+      "issue": 157,
+      "reason": "The same wrong count reaching the other unit. ESPN derives points allowed as the opponent's score minus 6 per defensive touchdown, so Seattle's 44 becomes 20 against the four it believes in and 32 against the two that happened. def_pts_allowed is tiered, so this is a tier boundary as well as a number.",
+      "ourMilliPoints": 6000,
+      "sleeperMilliPoints": 5000
+    }
+  ],
+  "unjoinable": [
+    {
+      "ref": "4429835",
+      "name": "George Holani",
+      "issue": 185,
+      "reason": "Tank01's player list gives him sleeperBotID 8063, which is George Silvanic. The surname check in the capture refuses the pair rather than comparing two different people, so his line in 20251109_ARI@SEA is not checked against Sleeper at all."
+    }
+  ]
+}

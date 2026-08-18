@@ -1,0 +1,231 @@
+{
+  "gameRef": "20250921_ARI@SF",
+  "playersTranslated": 94,
+  "warnings": [],
+  "fatal": [],
+  "players": [
+    {
+      "ref": "16002",
+      "name": "Kyle Juszczyk",
+      "stats": {
+        "rec": 1,
+        "rec_td": 1,
+        "rec_yd": 1
+      },
+      "milliPoints": 7100
+    },
+    {
+      "ref": "3045147",
+      "name": "James Conner",
+      "stats": {
+        "rec": 3,
+        "rec_yd": 15,
+        "rush_yd": 22
+      },
+      "milliPoints": 6700
+    },
+    {
+      "ref": "3045523",
+      "name": "Kendrick Bourne",
+      "stats": {
+        "rec": 4,
+        "rec_yd": 38
+      },
+      "milliPoints": 7800
+    },
+    {
+      "ref": "3051738",
+      "name": "Marquez Valdes-Scantling",
+      "stats": {
+        "rec": 1,
+        "rec_yd": 9
+      },
+      "milliPoints": 1900
+    },
+    {
+      "ref": "3059722",
+      "name": "Zay Jones",
+      "stats": {
+        "rec": 2,
+        "rec_yd": 25
+      },
+      "milliPoints": 4500
+    },
+    {
+      "ref": "3117251",
+      "name": "Christian McCaffrey",
+      "stats": {
+        "rec": 10,
+        "rec_yd": 88,
+        "rush_yd": 52
+      },
+      "milliPoints": 24000
+    },
+    {
+      "ref": "3917315",
+      "name": "Kyler Murray",
+      "stats": {
+        "pass_td": 1,
+        "pass_yd": 159,
+        "rush_yd": 37
+      },
+      "milliPoints": 14060
+    },
+    {
+      "ref": "4034949",
+      "name": "Eddy Pineiro",
+      "stats": {
+        "fg_0_39": 2,
+        "fg_50_59": 1,
+        "xp_made": 1
+      },
+      "milliPoints": 12000
+    },
+    {
+      "ref": "4037235",
+      "name": "Greg Dortch",
+      "stats": {
+        "rec": 2,
+        "rec_yd": 3,
+        "rush_yd": 5
+      },
+      "milliPoints": 2800
+    },
+    {
+      "ref": "4241464",
+      "name": "Mac Jones",
+      "stats": {
+        "pass_int": 1,
+        "pass_td": 1,
+        "pass_yd": 284,
+        "rush_yd": -1
+      },
+      "milliPoints": 13260
+    },
+    {
+      "ref": "4241474",
+      "name": "Brian Robinson Jr.",
+      "stats": {
+        "rush_yd": 22
+      },
+      "milliPoints": 2200
+    },
+    {
+      "ref": "4259147",
+      "name": "Jake Tonges",
+      "stats": {
+        "rec": 2,
+        "rec_yd": 21
+      },
+      "milliPoints": 4100
+    },
+    {
+      "ref": "4360761",
+      "name": "Michael Wilson",
+      "stats": {
+        "rec": 1,
+        "rec_yd": 5
+      },
+      "milliPoints": 1500
+    },
+    {
+      "ref": "4361307",
+      "name": "Trey McBride",
+      "stats": {
+        "rec": 5,
+        "rec_td": 1,
+        "rec_yd": 43
+      },
+      "milliPoints": 15300
+    },
+    {
+      "ref": "4363538",
+      "name": "Chad Ryland",
+      "stats": {
+        "fg_0_39": 2,
+        "fg_missed": 1,
+        "xp_made": 1
+      },
+      "milliPoints": 6000
+    },
+    {
+      "ref": "4426844",
+      "name": "Elijah Higgins",
+      "stats": {
+        "rec": 1,
+        "rec_yd": 7
+      },
+      "milliPoints": 1700
+    },
+    {
+      "ref": "4428209",
+      "name": "Ricky Pearsall",
+      "stats": {
+        "rec": 8,
+        "rec_yd": 117
+      },
+      "milliPoints": 19700
+    },
+    {
+      "ref": "4429275",
+      "name": "Trey Benson",
+      "stats": {
+        "rec": 3,
+        "rec_yd": 9,
+        "rush_yd": 42
+      },
+      "milliPoints": 8100
+    },
+    {
+      "ref": "4430191",
+      "name": "Skyy Moore",
+      "stats": {
+        "rec": 1,
+        "rec_yd": 10
+      },
+      "milliPoints": 2000
+    },
+    {
+      "ref": "4432708",
+      "name": "Marvin Harrison Jr.",
+      "stats": {
+        "rec": 3,
+        "rec_yd": 44
+      },
+      "milliPoints": 7400
+    },
+    {
+      "ref": "4696700",
+      "name": "Tip Reiman",
+      "stats": {
+        "rec": 2,
+        "rec_yd": 8
+      },
+      "milliPoints": 2800
+    }
+  ],
+  "teamDefense": [
+    {
+      "ref": "ARI",
+      "name": "ARI D/ST",
+      "stats": {
+        "def_int": 1,
+        "def_pts_allowed": 16,
+        "def_sack": 1,
+        "def_safety": 1,
+        "def_yds_allowed": 355
+      },
+      "milliPoints": 5000
+    },
+    {
+      "ref": "SF",
+      "name": "SF D/ST",
+      "stats": {
+        "def_pts_allowed": 15,
+        "def_sack": 1,
+        "def_yds_allowed": 260
+      },
+      "milliPoints": 4000
+    }
+  ]
+}

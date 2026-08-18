@@ -1,0 +1,50 @@
+{
+  "gameRef": "20250928_PHI@TB",
+  "eventId": "401772845",
+  "scoringPlays": [
+    {
+      "text": "Sydney Brown 35 yd. return of blocked punt (J.Elliott kick)",
+      "abbreviation": "TD"
+    },
+    {
+      "text": "Dallas Goedert 2 Yd pass from Jalen Hurts (Jake Elliott Kick)",
+      "abbreviation": "TD"
+    },
+    {
+      "text": "Chase McLaughlin 42 Yd Field Goal",
+      "abbreviation": "FG"
+    },
+    {
+      "text": "Dallas Goedert 5 Yd pass from Jalen Hurts (Jake Elliott Kick)",
+      "abbreviation": "TD"
+    },
+    {
+      "text": "Jake Elliott 39 Yd Field Goal ",
+      "abbreviation": "FG"
+    },
+    {
+      "text": "Chase McLaughlin 65 Yd Field Goal",
+      "abbreviation": "FG"
+    },
+    {
+      "text": "Emeka Egbuka 77 Yd pass from Baker Mayfield (Chase McLaughlin Kick)",
+      "abbreviation": "TD"
+    },
+    {
+      "text": "Saquon Barkley 6 Yd Rush (Jake Elliott Kick)",
+      "abbreviation": "TD"
+    },
+    {
+      "text": "Bucky Irving 72 Yd pass from Baker Mayfield (Chase McLaughlin Kick)",
+      "abbreviation": "TD"
+    },
+    {
+      "text": "Chase McLaughlin 58 Yd Field Goal ",
+      "abbreviation": "FG"
+    },
+    {
+      "text": "Kaevon Merriweather Safety",
+      "abbreviation": "SF"
+    }
+  ]
+}

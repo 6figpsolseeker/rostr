@@ -1,0 +1,229 @@
+{
+  "gameRef": "20250928_PHI@TB",
+  "playersTranslated": 93,
+  "warnings": [
+    "TB: DST.safeties is 0 but 1 safety scoring play(s) were found — the larger was used"
+  ],
+  "fatal": [],
+  "players": [
+    {
+      "ref": "2976592",
+      "name": "Sterling Shepard",
+      "stats": {
+        "rec": 2,
+        "rec_yd": 14,
+        "rush_yd": 6
+      },
+      "milliPoints": 4000
+    },
+    {
+      "ref": "3050478",
+      "name": "Jake Elliott",
+      "stats": {
+        "fg_0_39": 1,
+        "xp_made": 4
+      },
+      "milliPoints": 7000
+    },
+    {
+      "ref": "3052587",
+      "name": "Baker Mayfield",
+      "stats": {
+        "pass_int": 1,
+        "pass_td": 2,
+        "pass_yd": 289,
+        "rush_yd": 13
+      },
+      "milliPoints": 18860
+    },
+    {
+      "ref": "3116165",
+      "name": "Chris Godwin Jr.",
+      "stats": {
+        "rec": 3,
+        "rec_yd": 26
+      },
+      "milliPoints": 5600
+    },
+    {
+      "ref": "3121023",
+      "name": "Dallas Goedert",
+      "stats": {
+        "rec": 4,
+        "rec_td": 2,
+        "rec_yd": 37
+      },
+      "milliPoints": 19700
+    },
+    {
+      "ref": "3150744",
+      "name": "Chase McLaughlin",
+      "stats": {
+        "fg_40_49": 1,
+        "fg_50_59": 1,
+        "fg_60_plus": 1,
+        "xp_made": 2
+      },
+      "milliPoints": 17000
+    },
+    {
+      "ref": "3929630",
+      "name": "Saquon Barkley",
+      "stats": {
+        "rec": 4,
+        "rec_yd": 31,
+        "rush_td": 1,
+        "rush_yd": 43
+      },
+      "milliPoints": 17400
+    },
+    {
+      "ref": "4035239",
+      "name": "Braden Mann",
+      "stats": {
+        "rush_yd": -34
+      },
+      "milliPoints": -3400
+    },
+    {
+      "ref": "4040715",
+      "name": "Jalen Hurts",
+      "stats": {
+        "pass_td": 2,
+        "pass_yd": 130,
+        "rush_yd": 62
+      },
+      "milliPoints": 19400
+    },
+    {
+      "ref": "4047646",
+      "name": "A.J. Brown",
+      "stats": {
+        "rec": 2,
+        "rec_yd": 7
+      },
+      "milliPoints": 2700
+    },
+    {
+      "ref": "4239934",
+      "name": "AJ Dillon",
+      "stats": {
+        "rush_yd": 17
+      },
+      "milliPoints": 1700
+    },
+    {
+      "ref": "4241374",
+      "name": "Grant Calcaterra",
+      "stats": {
+        "rec": 1,
+        "rec_yd": 16
+      },
+      "milliPoints": 2600
+    },
+    {
+      "ref": "4241478",
+      "name": "DeVonta Smith",
+      "stats": {
+        "rec": 2,
+        "rec_yd": 29
+      },
+      "milliPoints": 4900
+    },
+    {
+      "ref": "4243331",
+      "name": "Cade Otton",
+      "stats": {
+        "rec": 3,
+        "rec_yd": 9
+      },
+      "milliPoints": 3900
+    },
+    {
+      "ref": "4360386",
+      "name": "Sydney Brown",
+      "stats": {
+        "ret_td": 1
+      },
+      "milliPoints": 6000
+    },
+    {
+      "ref": "4567096",
+      "name": "John Metchie III",
+      "stats": {
+        "rec": 2,
+        "rec_yd": 10
+      },
+      "milliPoints": 3000
+    },
+    {
+      "ref": "4567750",
+      "name": "Emeka Egbuka",
+      "stats": {
+        "rec": 4,
+        "rec_td": 1,
+        "rec_yd": 101
+      },
+      "milliPoints": 20100
+    },
+    {
+      "ref": "4596448",
+      "name": "Bucky Irving",
+      "stats": {
+        "fum_lost": 1,
+        "rec": 5,
+        "rec_td": 1,
+        "rec_yd": 102,
+        "rush_yd": 63
+      },
+      "milliPoints": 25500
+    },
+    {
+      "ref": "4608810",
+      "name": "Tez Johnson",
+      "stats": {
+        "rec": 1,
+        "rec_yd": 8,
+        "rush_yd": 5
+      },
+      "milliPoints": 2300
+    },
+    {
+      "ref": "4697815",
+      "name": "Rachaad White",
+      "stats": {
+        "rec": 4,
+        "rec_yd": 29,
+        "rush_yd": 17
+      },
+      "milliPoints": 8600
+    }
+  ],
+  "teamDefense": [
+    {
+      "ref": "PHI",
+      "name": "PHI D/ST",
+      "stats": {
+        "def_blk_kick": 1,
+        "def_fum_rec": 1,
+        "def_int": 1,
+        "def_pts_allowed": 25,
+        "def_sack": 2,
+        "def_td": 1,
+        "def_yds_allowed": 376
+      },
+      "milliPoints": 13000
+    },
+    {
+      "ref": "TB",
+      "name": "TB D/ST",
+      "stats": {
+        "def_pts_allowed": 25,
+        "def_sack": 2,
+        "def_safety": 1,
+        "def_yds_allowed": 200
+      },
+      "milliPoints": 6000
+    }
+  ]
+}

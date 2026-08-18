@@ -1,0 +1,2751 @@
+{
+  "DST": {
+    "away": {
+      "teamAbv": "SEA",
+      "teamID": "29",
+      "defTD": "1",
+      "defensiveInterceptions": "2",
+      "sacks": "3",
+      "ydsAllowed": "267",
+      "fumblesRecovered": "0",
+      "ptsAllowed": "17",
+      "safeties": "0"
+    },
+    "home": {
+      "teamAbv": "PIT",
+      "teamID": "26",
+      "defTD": "0",
+      "defensiveInterceptions": "2",
+      "sacks": "2",
+      "ydsAllowed": "395",
+      "fumblesRecovered": "0",
+      "ptsAllowed": "25",
+      "safeties": "0"
+    }
+  },
+  "Referees": "Terry Brown, Scott Novak, Mark Pellis, Tony Josselyn, Mark Stewart, Don Willard, Brian Sakowski",
+  "arena": "Acrisure Stadium",
+  "arenaCapacity": "68,400",
+  "attendance": "66,347",
+  "away": "SEA",
+  "awayPts": "31",
+  "awayResult": "W",
+  "currentPeriod": "Final",
+  "gameClock": "",
+  "gameDate": "20250914",
+  "gameLocation": "Pittsburgh, PA",
+  "gameStatus": "Completed",
+  "gameWeek": "Week 2",
+  "home": "PIT",
+  "homePts": "17",
+  "homeResult": "L",
+  "lineScore": {
+    "period": "Final",
+    "gameClock": "",
+    "away": {
+      "Q1": "7",
+      "Q2": "0",
+      "Q3": "7",
+      "Q4": "17",
+      "teamID": "29",
+      "currentlyInPossession": "False",
+      "totalPts": "31",
+      "teamAbv": "SEA"
+    },
+    "home": {
+      "Q1": "6",
+      "Q2": "8",
+      "Q3": "0",
+      "Q4": "3",
+      "teamID": "26",
+      "currentlyInPossession": "False",
+      "totalPts": "17",
+      "teamAbv": "PIT"
+    }
+  },
+  "network": "FOX",
+  "playerStats": {
+    "8439": {
+      "gameID": "20250914_SEA@PIT",
+      "Rushing": {
+        "rushAvg": "3.0",
+        "rushYds": "3",
+        "carries": "1",
+        "longRush": "3",
+        "rushTD": "0"
+      },
+      "Passing": {
+        "qbr": "32.4",
+        "rtg": "58.0",
+        "sacked": "3-20",
+        "passAttempts": "33",
+        "passAvg": "6.2",
+        "passTD": "1",
+        "passYds": "203",
+        "int": "2",
+        "passingTwoPointConversion": "1",
+        "passCompletions": "18"
+      },
+      "scoringPlays": [
+        {
+          "score": "DK Metcalf 2 Yd pass from Aaron Rodgers (Aaron Rodgers Pass to Darnell Washington for Two-Point Conversion)",
+          "scorePeriod": "Q2",
+          "homeScore": "14",
+          "awayScore": "7",
+          "teamID": "26",
+          "scoreDetails": "6 plays, 21 yards, 2:20",
+          "scoreType": "TD",
+          "scoreTime": "1:09",
+          "team": "PIT",
+          "playerIDs": ["8439", "4047650", "4430802"]
+        }
+      ],
+      "teamID": "26",
+      "snapCounts": {
+        "offSnapPct": "0.95",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "59",
+        "defSnapPct": "0.00"
+      },
+      "team": "PIT",
+      "teamAbv": "PIT",
+      "playerID": "8439",
+      "longName": "Aaron Rodgers"
+    },
+    "13977": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "26",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "48",
+        "stSnap": "6",
+        "stSnapPct": "0.21",
+        "offSnap": "0",
+        "defSnapPct": "0.74"
+      },
+      "team": "PIT",
+      "teamAbv": "PIT",
+      "Defense": {
+        "totalTackles": "5",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "2",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "1"
+      },
+      "playerID": "13977",
+      "longName": "Cameron Heyward"
+    },
+    "15863": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "26",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "65",
+        "stSnap": "7",
+        "stSnapPct": "0.25",
+        "offSnap": "0",
+        "defSnapPct": "1.00"
+      },
+      "team": "PIT",
+      "teamAbv": "PIT",
+      "Defense": {
+        "totalTackles": "2",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "2",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "1"
+      },
+      "playerID": "15863",
+      "longName": "Darius Slay"
+    },
+    "16802": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "29",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "34",
+        "stSnap": "3",
+        "stSnapPct": "0.11",
+        "offSnap": "0",
+        "defSnapPct": "0.55"
+      },
+      "team": "SEA",
+      "teamAbv": "SEA",
+      "Defense": {
+        "totalTackles": "3",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "0",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "16802",
+      "longName": "DeMarcus Lawrence"
+    },
+    "17372": {
+      "gameID": "20250914_SEA@PIT",
+      "scoringPlays": [
+        {
+          "score": "Chris Boswell 48 Yd Field Goal",
+          "scorePeriod": "Q1",
+          "homeScore": "3",
+          "awayScore": "7",
+          "teamID": "26",
+          "scoreDetails": "10 plays, 46 yards, 5:42",
+          "scoreType": "FG",
+          "scoreTime": "4:47",
+          "team": "PIT",
+          "playerIDs": ["17372"]
+        },
+        {
+          "score": "Chris Boswell 48 Yd Field Goal",
+          "scorePeriod": "Q1",
+          "homeScore": "6",
+          "awayScore": "7",
+          "teamID": "26",
+          "scoreDetails": "6 plays, 14 yards, 2:20",
+          "scoreType": "FG",
+          "scoreTime": "2:13",
+          "team": "PIT",
+          "playerIDs": ["17372"]
+        },
+        {
+          "score": "Chris Boswell 45 Yd Field Goal",
+          "scorePeriod": "Q4",
+          "homeScore": "17",
+          "awayScore": "24",
+          "teamID": "26",
+          "scoreDetails": "9 plays, 45 yards, 4:57",
+          "scoreType": "FG",
+          "scoreTime": "7:49",
+          "team": "PIT",
+          "playerIDs": ["17372"]
+        }
+      ],
+      "teamID": "26",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "8",
+        "stSnapPct": "0.29",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "Kicking": {
+        "fgLong": "48",
+        "fgMade": "3",
+        "fgAttempts": "3",
+        "xpMade": "0",
+        "fgPct": "100.0",
+        "kickingPts": "9",
+        "xpAttempts": "0",
+        "fgMissed": "0",
+        "xpMissed": "0"
+      },
+      "team": "PIT",
+      "teamAbv": "PIT",
+      "playerID": "17372",
+      "longName": "Chris Boswell"
+    },
+    "2473037": {
+      "gameID": "20250914_SEA@PIT",
+      "scoringPlays": [
+        {
+          "score": "Tory Horton 21 Yd pass from Sam Darnold (Jason Myers Kick)",
+          "scorePeriod": "Q1",
+          "homeScore": "0",
+          "awayScore": "7",
+          "teamID": "29",
+          "scoreDetails": "8 plays, 65 yards, 4:31",
+          "scoreType": "TD",
+          "scoreTime": "10:29",
+          "team": "SEA",
+          "playerIDs": ["3912547", "4597703", "2473037"]
+        },
+        {
+          "score": "AJ Barner 7 Yd pass from Sam Darnold (Jason Myers Kick)",
+          "scorePeriod": "Q3",
+          "homeScore": "14",
+          "awayScore": "14",
+          "teamID": "29",
+          "scoreDetails": "9 plays, 80 yards, 5:01",
+          "scoreType": "TD",
+          "scoreTime": "6:10",
+          "team": "SEA",
+          "playerIDs": ["3912547", "4576297", "2473037"]
+        },
+        {
+          "score": "Jason Myers 54 Yd Field Goal",
+          "scorePeriod": "Q4",
+          "homeScore": "14",
+          "awayScore": "17",
+          "teamID": "29",
+          "scoreDetails": "10 plays, 55 yards, 3:47",
+          "scoreType": "FG",
+          "scoreTime": "12:46",
+          "team": "SEA",
+          "playerIDs": ["2473037"]
+        },
+        {
+          "score": "George Holani Recovered Kickoff in End Zone for a Touchdown (Jason Myers Kick)",
+          "scorePeriod": "Q4",
+          "homeScore": "14",
+          "awayScore": "24",
+          "teamID": "29",
+          "scoreDetails": "0 plays, 0 yards, 0:00",
+          "scoreType": "TD",
+          "scoreTime": "12:46",
+          "team": "SEA",
+          "playerIDs": ["4429835", "2473037"]
+        },
+        {
+          "score": "Kenneth Walker III 19 Yd Rush (Jason Myers Kick)",
+          "scorePeriod": "Q4",
+          "homeScore": "17",
+          "awayScore": "31",
+          "teamID": "29",
+          "scoreDetails": "7 plays, 73 yards, 4:08",
+          "scoreType": "TD",
+          "scoreTime": "3:41",
+          "team": "SEA",
+          "playerIDs": ["4567048", "2473037"]
+        }
+      ],
+      "teamID": "29",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "12",
+        "stSnapPct": "0.43",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "Kicking": {
+        "fgLong": "54",
+        "fgMade": "1",
+        "fgAttempts": "2",
+        "xpMade": "4",
+        "fgPct": "50.0",
+        "kickingPts": "6",
+        "xpAttempts": "4",
+        "fgMissed": "1",
+        "xpMissed": "0"
+      },
+      "team": "SEA",
+      "teamAbv": "SEA",
+      "playerID": "2473037",
+      "longName": "Jason Myers"
+    },
+    "2575164": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "26",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "18",
+        "stSnapPct": "0.64",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "PIT",
+      "teamAbv": "PIT",
+      "Defense": {
+        "totalTackles": "2",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "2",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "2575164",
+      "longName": "Miles Killebrew"
+    },
+    "2971622": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "29",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "48",
+        "stSnap": "3",
+        "stSnapPct": "0.11",
+        "offSnap": "0",
+        "defSnapPct": "0.77"
+      },
+      "team": "SEA",
+      "teamAbv": "SEA",
+      "Defense": {
+        "totalTackles": "4",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "2",
+        "tfl": "0",
+        "qbHits": "2",
+        "defensiveInterceptions": "0",
+        "sacks": "0.5",
+        "passDeflections": "0"
+      },
+      "playerID": "2971622",
+      "longName": "Leonard Williams"
+    },
+    "2975863": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "29",
+      "snapCounts": {
+        "offSnapPct": "0.37",
+        "defSnap": "0",
+        "stSnap": "16",
+        "stSnapPct": "0.57",
+        "offSnap": "24",
+        "defSnapPct": "0.00"
+      },
+      "team": "SEA",
+      "teamAbv": "SEA",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "2975863",
+      "longName": "Eric Saubert"
+    },
+    "2977187": {
+      "gameID": "20250914_SEA@PIT",
+      "Receiving": {
+        "receptions": "7",
+        "recTD": "0",
+        "longRec": "17",
+        "targets": "9",
+        "recYds": "90",
+        "recAvg": "12.9"
+      },
+      "teamID": "29",
+      "snapCounts": {
+        "offSnapPct": "0.69",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "45",
+        "defSnapPct": "0.00"
+      },
+      "team": "SEA",
+      "teamAbv": "SEA",
+      "playerID": "2977187",
+      "longName": "Cooper Kupp"
+    },
+    "2978247": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "26",
+      "snapCounts": {
+        "offSnapPct": "0.95",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "59",
+        "defSnapPct": "0.00"
+      },
+      "team": "PIT",
+      "teamAbv": "PIT",
+      "playerID": "2978247",
+      "longName": "Isaac Seumalo"
+    },
+    "2978524": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "26",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "7",
+        "stSnapPct": "0.25",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "PIT",
+      "teamAbv": "PIT",
+      "playerID": "2978524",
+      "longName": "Christian Kuntz"
+    },
+    "3045282": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "26",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "50",
+        "stSnap": "2",
+        "stSnapPct": "0.07",
+        "offSnap": "0",
+        "defSnapPct": "0.77"
+      },
+      "team": "PIT",
+      "teamAbv": "PIT",
+      "Defense": {
+        "totalTackles": "4",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "2",
+        "tfl": "0",
+        "qbHits": "2",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "3045282",
+      "longName": "T.J. Watt"
+    },
+    "3045373": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "26",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "65",
+        "stSnap": "6",
+        "stSnapPct": "0.21",
+        "offSnap": "0",
+        "defSnapPct": "1.00"
+      },
+      "team": "PIT",
+      "teamAbv": "PIT",
+      "Defense": {
+        "totalTackles": "6",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "4",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "1",
+        "defensiveInterceptionsYards": "2",
+        "interceptionTDs": "0",
+        "sacks": "0",
+        "passDeflections": "2"
+      },
+      "playerID": "3045373",
+      "longName": "Jalen Ramsey"
+    },
+    "3045463": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "26",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "57",
+        "stSnap": "13",
+        "stSnapPct": "0.47",
+        "offSnap": "0",
+        "defSnapPct": "0.88"
+      },
+      "team": "PIT",
+      "teamAbv": "PIT",
+      "Defense": {
+        "totalTackles": "8",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "6",
+        "tfl": "0",
+        "qbHits": "1",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "3045463",
+      "longName": "Chuck Clark"
+    },
+    "3052059": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "26",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "20",
+        "stSnap": "4",
+        "stSnapPct": "0.14",
+        "offSnap": "0",
+        "defSnapPct": "0.31"
+      },
+      "team": "PIT",
+      "teamAbv": "PIT",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "0",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "1"
+      },
+      "playerID": "3052059",
+      "longName": "Daniel Ekuale"
+    },
+    "3054026": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "29",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "3",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "0.05"
+      },
+      "team": "SEA",
+      "teamAbv": "SEA",
+      "playerID": "3054026",
+      "longName": "Shaquill Griffin"
+    },
+    "3054212": {
+      "gameID": "20250914_SEA@PIT",
+      "Receiving": {
+        "receptions": "4",
+        "recTD": "0",
+        "longRec": "10",
+        "targets": "4",
+        "recYds": "27",
+        "recAvg": "6.8"
+      },
+      "teamID": "26",
+      "snapCounts": {
+        "offSnapPct": "0.56",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "35",
+        "defSnapPct": "0.00"
+      },
+      "team": "PIT",
+      "teamAbv": "PIT",
+      "playerID": "3054212",
+      "longName": "Jonnu Smith"
+    },
+    "3115312": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "29",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "33",
+        "stSnap": "3",
+        "stSnapPct": "0.11",
+        "offSnap": "0",
+        "defSnapPct": "0.53"
+      },
+      "team": "SEA",
+      "teamAbv": "SEA",
+      "Defense": {
+        "totalTackles": "3",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "3",
+        "tfl": "1",
+        "qbHits": "1",
+        "defensiveInterceptions": "0",
+        "sacks": "1",
+        "passDeflections": "0"
+      },
+      "playerID": "3115312",
+      "longName": "Jarran Reed"
+    },
+    "3115962": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "26",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "7",
+        "stSnapPct": "0.25",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "PIT",
+      "teamAbv": "PIT",
+      "playerID": "3115962",
+      "longName": "Jabrill Peppers"
+    },
+    "3116407": {
+      "gameID": "20250914_SEA@PIT",
+      "Passing": {
+        "qbr": "18.0",
+        "rtg": "91.7",
+        "sacked": "0-0",
+        "passAttempts": "2",
+        "passAvg": "6.0",
+        "passTD": "0",
+        "passYds": "12",
+        "int": "0",
+        "passCompletions": "2"
+      },
+      "teamID": "26",
+      "snapCounts": {
+        "offSnapPct": "0.05",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "3",
+        "defSnapPct": "0.00"
+      },
+      "team": "PIT",
+      "teamAbv": "PIT",
+      "playerID": "3116407",
+      "longName": "Mason Rudolph"
+    },
+    "3116689": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "26",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "13",
+        "stSnap": "19",
+        "stSnapPct": "0.68",
+        "offSnap": "0",
+        "defSnapPct": "0.20"
+      },
+      "team": "PIT",
+      "teamAbv": "PIT",
+      "Defense": {
+        "totalTackles": "2",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "2",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "3116689",
+      "longName": "Cole Holcomb"
+    },
+    "3120358": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "29",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "16",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "0.26"
+      },
+      "team": "SEA",
+      "teamAbv": "SEA",
+      "Defense": {
+        "totalTackles": "2",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "2",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "3120358",
+      "longName": "Uchenna Nwosu"
+    },
+    "3125280": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "26",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "7",
+        "stSnapPct": "0.25",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "Punting": {
+        "puntYds": "221",
+        "punts": "4",
+        "puntAvg": "55.3",
+        "puntsin20": "1",
+        "puntTouchBacks": "1",
+        "puntLong": "64"
+      },
+      "team": "PIT",
+      "teamAbv": "PIT",
+      "playerID": "3125280",
+      "longName": "Corliss Waitman"
+    },
+    "3912547": {
+      "gameID": "20250914_SEA@PIT",
+      "Passing": {
+        "qbr": "44.0",
+        "rtg": "89.8",
+        "sacked": "2-17",
+        "passAttempts": "33",
+        "passAvg": "8.9",
+        "passTD": "2",
+        "passYds": "295",
+        "int": "2",
+        "passCompletions": "22"
+      },
+      "scoringPlays": [
+        {
+          "score": "Tory Horton 21 Yd pass from Sam Darnold (Jason Myers Kick)",
+          "scorePeriod": "Q1",
+          "homeScore": "0",
+          "awayScore": "7",
+          "teamID": "29",
+          "scoreDetails": "8 plays, 65 yards, 4:31",
+          "scoreType": "TD",
+          "scoreTime": "10:29",
+          "team": "SEA",
+          "playerIDs": ["3912547", "4597703", "2473037"]
+        },
+        {
+          "score": "AJ Barner 7 Yd pass from Sam Darnold (Jason Myers Kick)",
+          "scorePeriod": "Q3",
+          "homeScore": "14",
+          "awayScore": "14",
+          "teamID": "29",
+          "scoreDetails": "9 plays, 80 yards, 5:01",
+          "scoreType": "TD",
+          "scoreTime": "6:10",
+          "team": "SEA",
+          "playerIDs": ["3912547", "4576297", "2473037"]
+        }
+      ],
+      "teamID": "29",
+      "snapCounts": {
+        "offSnapPct": "1.00",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "65",
+        "defSnapPct": "0.00"
+      },
+      "team": "SEA",
+      "teamAbv": "SEA",
+      "playerID": "3912547",
+      "longName": "Sam Darnold"
+    },
+    "3914397": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "26",
+      "snapCounts": {
+        "offSnapPct": "0.15",
+        "defSnap": "0",
+        "stSnap": "1",
+        "stSnapPct": "0.04",
+        "offSnap": "9",
+        "defSnapPct": "0.00"
+      },
+      "team": "PIT",
+      "teamAbv": "PIT",
+      "playerID": "3914397",
+      "longName": "Scotty Miller"
+    },
+    "3914630": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "29",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "6",
+        "stSnapPct": "0.21",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "SEA",
+      "teamAbv": "SEA",
+      "playerID": "3914630",
+      "longName": "Josh Jones"
+    },
+    "3917909": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "26",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "65",
+        "stSnap": "9",
+        "stSnapPct": "0.32",
+        "offSnap": "0",
+        "defSnapPct": "1.00"
+      },
+      "team": "PIT",
+      "teamAbv": "PIT",
+      "Defense": {
+        "totalTackles": "7",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "5",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "3917909",
+      "longName": "Juan Thornhill"
+    },
+    "3929851": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "29",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "10",
+        "stSnapPct": "0.36",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "Punting": {
+        "puntYds": "175",
+        "punts": "4",
+        "puntAvg": "43.8",
+        "puntsin20": "2",
+        "puntTouchBacks": "1",
+        "puntLong": "52"
+      },
+      "team": "SEA",
+      "teamAbv": "SEA",
+      "playerID": "3929851",
+      "longName": "Michael Dickson"
+    },
+    "4035253": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "26",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "3",
+        "stSnapPct": "0.11",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "PIT",
+      "teamAbv": "PIT",
+      "playerID": "4035253",
+      "longName": "Ryan McCollum"
+    },
+    "4035656": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "26",
+      "snapCounts": {
+        "offSnapPct": "0.05",
+        "defSnap": "0",
+        "stSnap": "18",
+        "stSnapPct": "0.64",
+        "offSnap": "3",
+        "defSnapPct": "0.00"
+      },
+      "team": "PIT",
+      "teamAbv": "PIT",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "0",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4035656",
+      "longName": "Ben Skowronek"
+    },
+    "4035798": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "26",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "6",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "0.09"
+      },
+      "team": "PIT",
+      "teamAbv": "PIT",
+      "playerID": "4035798",
+      "longName": "Isaiahh Loudermilk"
+    },
+    "4037333": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "26",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "10",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "0.15"
+      },
+      "team": "PIT",
+      "teamAbv": "PIT",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4037333",
+      "longName": "Alex Highsmith"
+    },
+    "4037521": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "29",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "19",
+        "stSnapPct": "0.68",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "SEA",
+      "teamAbv": "SEA",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "0",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4037521",
+      "longName": "Chazz Surratt"
+    },
+    "4046675": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "29",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "62",
+        "stSnap": "3",
+        "stSnapPct": "0.11",
+        "offSnap": "0",
+        "defSnapPct": "1.00"
+      },
+      "team": "SEA",
+      "teamAbv": "SEA",
+      "Defense": {
+        "totalTackles": "2",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "1"
+      },
+      "playerID": "4046675",
+      "longName": "Julian Love"
+    },
+    "4047650": {
+      "gameID": "20250914_SEA@PIT",
+      "Receiving": {
+        "receptions": "3",
+        "recTD": "1",
+        "longRec": "9",
+        "targets": "6",
+        "recYds": "20",
+        "recAvg": "6.7"
+      },
+      "scoringPlays": [
+        {
+          "score": "DK Metcalf 2 Yd pass from Aaron Rodgers (Aaron Rodgers Pass to Darnell Washington for Two-Point Conversion)",
+          "scorePeriod": "Q2",
+          "homeScore": "14",
+          "awayScore": "7",
+          "teamID": "26",
+          "scoreDetails": "6 plays, 21 yards, 2:20",
+          "scoreType": "TD",
+          "scoreTime": "1:09",
+          "team": "PIT",
+          "playerIDs": ["8439", "4047650", "4430802"]
+        }
+      ],
+      "teamID": "26",
+      "snapCounts": {
+        "offSnapPct": "0.90",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "56",
+        "defSnapPct": "0.00"
+      },
+      "team": "PIT",
+      "teamAbv": "PIT",
+      "playerID": "4047650",
+      "longName": "DK Metcalf"
+    },
+    "4239094": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "29",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "62",
+        "stSnap": "3",
+        "stSnapPct": "0.11",
+        "offSnap": "0",
+        "defSnapPct": "1.00"
+      },
+      "team": "SEA",
+      "teamAbv": "SEA",
+      "Defense": {
+        "totalTackles": "4",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "2",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "1",
+        "defensiveInterceptionsYards": "28",
+        "interceptionTDs": "0",
+        "sacks": "0",
+        "passDeflections": "1"
+      },
+      "playerID": "4239094",
+      "longName": "Coby Bryant"
+    },
+    "4240754": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "29",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "42",
+        "stSnap": "3",
+        "stSnapPct": "0.11",
+        "offSnap": "0",
+        "defSnapPct": "0.68"
+      },
+      "team": "SEA",
+      "teamAbv": "SEA",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "0",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4240754",
+      "longName": "Boye Mafe"
+    },
+    "4241961": {
+      "gameID": "20250914_SEA@PIT",
+      "Receiving": {
+        "receptions": "1",
+        "recTD": "0",
+        "longRec": "6",
+        "targets": "1",
+        "recYds": "6",
+        "recAvg": "6.0"
+      },
+      "teamID": "26",
+      "snapCounts": {
+        "offSnapPct": "0.15",
+        "defSnap": "0",
+        "stSnap": "18",
+        "stSnapPct": "0.64",
+        "offSnap": "9",
+        "defSnapPct": "0.00"
+      },
+      "team": "PIT",
+      "teamAbv": "PIT",
+      "playerID": "4241961",
+      "longName": "Connor Heyward"
+    },
+    "4242207": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "26",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "60",
+        "stSnap": "7",
+        "stSnapPct": "0.25",
+        "offSnap": "0",
+        "defSnapPct": "0.92"
+      },
+      "team": "PIT",
+      "teamAbv": "PIT",
+      "Defense": {
+        "totalTackles": "6",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "3",
+        "tfl": "1",
+        "qbHits": "1",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4242207",
+      "longName": "Patrick Queen"
+    },
+    "4243176": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "29",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "25",
+        "stSnapPct": "0.89",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "SEA",
+      "teamAbv": "SEA",
+      "Defense": {
+        "totalTackles": "2",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4243176",
+      "longName": "Brady Russell"
+    },
+    "4243389": {
+      "gameID": "20250914_SEA@PIT",
+      "Receiving": {
+        "receptions": "1",
+        "recTD": "0",
+        "longRec": "22",
+        "targets": "4",
+        "recYds": "22",
+        "recAvg": "22.0"
+      },
+      "teamID": "26",
+      "snapCounts": {
+        "offSnapPct": "0.92",
+        "defSnap": "0",
+        "stSnap": "4",
+        "stSnapPct": "0.14",
+        "offSnap": "57",
+        "defSnapPct": "0.00"
+      },
+      "team": "PIT",
+      "teamAbv": "PIT",
+      "playerID": "4243389",
+      "longName": "Calvin Austin III"
+    },
+    "4245171": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "29",
+      "snapCounts": {
+        "offSnapPct": "1.00",
+        "defSnap": "0",
+        "stSnap": "6",
+        "stSnapPct": "0.21",
+        "offSnap": "65",
+        "defSnapPct": "0.00"
+      },
+      "team": "SEA",
+      "teamAbv": "SEA",
+      "playerID": "4245171",
+      "longName": "Abraham Lucas"
+    },
+    "4245185": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "29",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "59",
+        "stSnap": "2",
+        "stSnapPct": "0.07",
+        "offSnap": "0",
+        "defSnapPct": "0.95"
+      },
+      "team": "SEA",
+      "teamAbv": "SEA",
+      "Defense": {
+        "totalTackles": "3",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "3",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4245185",
+      "longName": "Riq Woolen"
+    },
+    "4247808": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "29",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "9",
+        "stSnap": "19",
+        "stSnapPct": "0.68",
+        "offSnap": "0",
+        "defSnapPct": "0.15"
+      },
+      "team": "SEA",
+      "teamAbv": "SEA",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4247808",
+      "longName": "Ty Okada"
+    },
+    "4258485": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "26",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "6",
+        "stSnapPct": "0.21",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "PIT",
+      "teamAbv": "PIT",
+      "playerID": "4258485",
+      "longName": "Jon Rhattigan"
+    },
+    "4259252": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "26",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "13",
+        "stSnapPct": "0.47",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "PIT",
+      "teamAbv": "PIT",
+      "playerID": "4259252",
+      "longName": "James Pierre"
+    },
+    "4259606": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "29",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "10",
+        "stSnapPct": "0.36",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "SEA",
+      "teamAbv": "SEA",
+      "playerID": "4259606",
+      "longName": "Chris Stoll"
+    },
+    "4259651": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "29",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "8",
+        "stSnap": "1",
+        "stSnapPct": "0.04",
+        "offSnap": "0",
+        "defSnapPct": "0.13"
+      },
+      "team": "SEA",
+      "teamAbv": "SEA",
+      "playerID": "4259651",
+      "longName": "Brandon Pili"
+    },
+    "4360307": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "29",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "42",
+        "stSnap": "3",
+        "stSnapPct": "0.11",
+        "offSnap": "0",
+        "defSnapPct": "0.68"
+      },
+      "team": "SEA",
+      "teamAbv": "SEA",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "1",
+        "defensiveInterceptionsYards": "0",
+        "interceptionTDs": "0",
+        "sacks": "0",
+        "passDeflections": "2"
+      },
+      "playerID": "4360307",
+      "longName": "Derion Kendrick"
+    },
+    "4360405": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "29",
+      "snapCounts": {
+        "offSnapPct": "0.15",
+        "defSnap": "0",
+        "stSnap": "8",
+        "stSnapPct": "0.29",
+        "offSnap": "10",
+        "defSnapPct": "0.00"
+      },
+      "team": "SEA",
+      "teamAbv": "SEA",
+      "playerID": "4360405",
+      "longName": "Jake Bobo"
+    },
+    "4361411": {
+      "gameID": "20250914_SEA@PIT",
+      "Receiving": {
+        "receptions": "3",
+        "recTD": "0",
+        "longRec": "20",
+        "targets": "4",
+        "recYds": "31",
+        "recAvg": "10.3"
+      },
+      "teamID": "26",
+      "snapCounts": {
+        "offSnapPct": "0.50",
+        "defSnap": "0",
+        "stSnap": "3",
+        "stSnapPct": "0.11",
+        "offSnap": "31",
+        "defSnapPct": "0.00"
+      },
+      "team": "PIT",
+      "teamAbv": "PIT",
+      "playerID": "4361411",
+      "longName": "Pat Freiermuth"
+    },
+    "4361652": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "26",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "56",
+        "stSnap": "11",
+        "stSnapPct": "0.39",
+        "offSnap": "0",
+        "defSnapPct": "0.86"
+      },
+      "team": "PIT",
+      "teamAbv": "PIT",
+      "Defense": {
+        "totalTackles": "10",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "8",
+        "tfl": "1",
+        "qbHits": "1",
+        "defensiveInterceptions": "0",
+        "sacks": "1",
+        "passDeflections": "0"
+      },
+      "playerID": "4361652",
+      "longName": "Payton Wilson"
+    },
+    "4362851": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "29",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "62",
+        "stSnap": "4",
+        "stSnapPct": "0.14",
+        "offSnap": "0",
+        "defSnapPct": "1.00"
+      },
+      "team": "SEA",
+      "teamAbv": "SEA",
+      "Defense": {
+        "totalTackles": "10",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "8",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4362851",
+      "longName": "Ernest Jones IV"
+    },
+    "4368304": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "26",
+      "snapCounts": {
+        "offSnapPct": "1.00",
+        "defSnap": "0",
+        "stSnap": "3",
+        "stSnapPct": "0.11",
+        "offSnap": "62",
+        "defSnapPct": "0.00"
+      },
+      "team": "PIT",
+      "teamAbv": "PIT",
+      "playerID": "4368304",
+      "longName": "Mason McCormick"
+    },
+    "4370807": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "29",
+      "snapCounts": {
+        "offSnapPct": "0.14",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "9",
+        "defSnapPct": "0.00"
+      },
+      "team": "SEA",
+      "teamAbv": "SEA",
+      "playerID": "4370807",
+      "longName": "Olu Oluwatimi"
+    },
+    "4371733": {
+      "gameID": "20250914_SEA@PIT",
+      "Rushing": {
+        "rushAvg": "4.0",
+        "rushYds": "20",
+        "carries": "5",
+        "longRush": "13",
+        "rushTD": "0"
+      },
+      "Receiving": {
+        "receptions": "3",
+        "recTD": "0",
+        "longRec": "6",
+        "targets": "5",
+        "recYds": "16",
+        "recAvg": "5.3"
+      },
+      "teamID": "26",
+      "snapCounts": {
+        "offSnapPct": "0.42",
+        "defSnap": "0",
+        "stSnap": "11",
+        "stSnapPct": "0.39",
+        "offSnap": "26",
+        "defSnapPct": "0.00"
+      },
+      "Kicking": {
+        "kickReturns": "1",
+        "kickReturnTD": "0",
+        "kickReturnYds": "20",
+        "kickReturnAvg": "20.0",
+        "kickReturnLong": "20"
+      },
+      "team": "PIT",
+      "teamAbv": "PIT",
+      "playerID": "4371733",
+      "longName": "Kenneth Gainwell"
+    },
+    "4372020": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "29",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "60",
+        "stSnap": "3",
+        "stSnapPct": "0.11",
+        "offSnap": "0",
+        "defSnapPct": "0.97"
+      },
+      "team": "SEA",
+      "teamAbv": "SEA",
+      "Defense": {
+        "totalTackles": "4",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "3",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "1"
+      },
+      "playerID": "4372020",
+      "longName": "Josh Jobe"
+    },
+    "4372056": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "26",
+      "snapCounts": {
+        "offSnapPct": "0.06",
+        "defSnap": "0",
+        "stSnap": "3",
+        "stSnapPct": "0.11",
+        "offSnap": "4",
+        "defSnapPct": "0.00"
+      },
+      "team": "PIT",
+      "teamAbv": "PIT",
+      "playerID": "4372056",
+      "longName": "Spencer Anderson"
+    },
+    "4383409": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "29",
+      "snapCounts": {
+        "offSnapPct": "0.86",
+        "defSnap": "0",
+        "stSnap": "5",
+        "stSnapPct": "0.18",
+        "offSnap": "56",
+        "defSnapPct": "0.00"
+      },
+      "team": "SEA",
+      "teamAbv": "SEA",
+      "playerID": "4383409",
+      "longName": "Jalen Sundell"
+    },
+    "4401805": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "29",
+      "snapCounts": {
+        "offSnapPct": "0.12",
+        "defSnap": "0",
+        "stSnap": "15",
+        "stSnapPct": "0.54",
+        "offSnap": "8",
+        "defSnapPct": "0.00"
+      },
+      "team": "SEA",
+      "teamAbv": "SEA",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "0",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4401805",
+      "longName": "Dareke Young"
+    },
+    "4426376": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "29",
+      "snapCounts": {
+        "offSnapPct": "1.00",
+        "defSnap": "0",
+        "stSnap": "6",
+        "stSnapPct": "0.21",
+        "offSnap": "65",
+        "defSnapPct": "0.00"
+      },
+      "team": "SEA",
+      "teamAbv": "SEA",
+      "playerID": "4426376",
+      "longName": "Charles Cross"
+    },
+    "4426385": {
+      "gameID": "20250914_SEA@PIT",
+      "Rushing": {
+        "rushAvg": "0.7",
+        "rushYds": "10",
+        "carries": "15",
+        "longRush": "6",
+        "rushTD": "0"
+      },
+      "teamID": "29",
+      "snapCounts": {
+        "offSnapPct": "0.55",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "36",
+        "defSnapPct": "0.00"
+      },
+      "team": "SEA",
+      "teamAbv": "SEA",
+      "playerID": "4426385",
+      "longName": "Zach Charbonnet"
+    },
+    "4426694": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "26",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "47",
+        "stSnap": "5",
+        "stSnapPct": "0.18",
+        "offSnap": "0",
+        "defSnapPct": "0.72"
+      },
+      "team": "PIT",
+      "teamAbv": "PIT",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "0",
+        "tfl": "0",
+        "qbHits": "1",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4426694",
+      "longName": "Keeanu Benton"
+    },
+    "4427170": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "26",
+      "snapCounts": {
+        "offSnapPct": "1.00",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "62",
+        "defSnapPct": "0.00"
+      },
+      "team": "PIT",
+      "teamAbv": "PIT",
+      "playerID": "4427170",
+      "longName": "Troy Fautanu"
+    },
+    "4428659": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "29",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "7",
+        "stSnap": "19",
+        "stSnapPct": "0.68",
+        "offSnap": "0",
+        "defSnapPct": "0.11"
+      },
+      "team": "SEA",
+      "teamAbv": "SEA",
+      "playerID": "4428659",
+      "longName": "Drake Thomas"
+    },
+    "4428990": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "26",
+      "snapCounts": {
+        "offSnapPct": "1.00",
+        "defSnap": "0",
+        "stSnap": "3",
+        "stSnapPct": "0.11",
+        "offSnap": "62",
+        "defSnapPct": "0.00"
+      },
+      "team": "PIT",
+      "teamAbv": "PIT",
+      "playerID": "4428990",
+      "longName": "Broderick Jones"
+    },
+    "4429164": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "26",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "51",
+        "stSnap": "12",
+        "stSnapPct": "0.43",
+        "offSnap": "0",
+        "defSnapPct": "0.78"
+      },
+      "team": "PIT",
+      "teamAbv": "PIT",
+      "Defense": {
+        "totalTackles": "3",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "2",
+        "tfl": "2",
+        "qbHits": "1",
+        "defensiveInterceptions": "1",
+        "defensiveInterceptionsYards": "41",
+        "interceptionTDs": "0",
+        "sacks": "0",
+        "passDeflections": "1"
+      },
+      "playerID": "4429164",
+      "longName": "Nick Herbig"
+    },
+    "4429211": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "29",
+      "snapCounts": {
+        "offSnapPct": "1.00",
+        "defSnap": "0",
+        "stSnap": "6",
+        "stSnapPct": "0.21",
+        "offSnap": "65",
+        "defSnapPct": "0.00"
+      },
+      "team": "SEA",
+      "teamAbv": "SEA",
+      "playerID": "4429211",
+      "longName": "Anthony Bradford"
+    },
+    "4429490": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "26",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "1",
+        "stSnap": "18",
+        "stSnapPct": "0.64",
+        "offSnap": "0",
+        "defSnapPct": "0.02"
+      },
+      "team": "PIT",
+      "teamAbv": "PIT",
+      "Defense": {
+        "totalTackles": "2",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4429490",
+      "longName": "Carson Bruener"
+    },
+    "4429775": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "26",
+      "snapCounts": {
+        "offSnapPct": "1.00",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "62",
+        "defSnapPct": "0.00"
+      },
+      "team": "PIT",
+      "teamAbv": "PIT",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4429775",
+      "longName": "Zach Frazier"
+    },
+    "4429835": {
+      "gameID": "20250914_SEA@PIT",
+      "scoringPlays": [
+        {
+          "score": "George Holani Recovered Kickoff in End Zone for a Touchdown (Jason Myers Kick)",
+          "scorePeriod": "Q4",
+          "homeScore": "14",
+          "awayScore": "24",
+          "teamID": "29",
+          "scoreDetails": "0 plays, 0 yards, 0:00",
+          "scoreType": "TD",
+          "scoreTime": "12:46",
+          "team": "SEA",
+          "playerIDs": ["4429835", "2473037"]
+        }
+      ],
+      "teamID": "29",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "18",
+        "stSnapPct": "0.64",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "Kicking": {
+        "kickReturns": "5",
+        "kickReturnTD": "0",
+        "kickReturnYds": "133",
+        "kickReturnAvg": "26.6",
+        "kickReturnLong": "32"
+      },
+      "team": "SEA",
+      "teamAbv": "SEA",
+      "Defense": {
+        "totalTackles": "0",
+        "defTD": "1",
+        "forcedFumbles": "0",
+        "soloTackles": "0",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4429835",
+      "longName": "George Holani"
+    },
+    "4430802": {
+      "gameID": "20250914_SEA@PIT",
+      "Receiving": {
+        "receptions": "0",
+        "recTD": "0",
+        "recAvg": "0.0",
+        "receivingTwoPointConversion": "1",
+        "longRec": "0",
+        "targets": "1",
+        "recYds": "0"
+      },
+      "scoringPlays": [
+        {
+          "score": "DK Metcalf 2 Yd pass from Aaron Rodgers (Aaron Rodgers Pass to Darnell Washington for Two-Point Conversion)",
+          "scorePeriod": "Q2",
+          "homeScore": "14",
+          "awayScore": "7",
+          "teamID": "26",
+          "scoreDetails": "6 plays, 21 yards, 2:20",
+          "scoreType": "TD",
+          "scoreTime": "1:09",
+          "team": "PIT",
+          "playerIDs": ["8439", "4047650", "4430802"]
+        }
+      ],
+      "teamID": "26",
+      "snapCounts": {
+        "offSnapPct": "0.37",
+        "defSnap": "0",
+        "stSnap": "3",
+        "stSnapPct": "0.11",
+        "offSnap": "23",
+        "defSnapPct": "0.00"
+      },
+      "team": "PIT",
+      "teamAbv": "PIT",
+      "playerID": "4430802",
+      "longName": "Darnell Washington"
+    },
+    "4430878": {
+      "gameID": "20250914_SEA@PIT",
+      "Receiving": {
+        "receptions": "8",
+        "recTD": "0",
+        "longRec": "43",
+        "targets": "10",
+        "recYds": "103",
+        "recAvg": "12.9"
+      },
+      "teamID": "29",
+      "snapCounts": {
+        "offSnapPct": "0.65",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "42",
+        "defSnapPct": "0.00"
+      },
+      "team": "SEA",
+      "teamAbv": "SEA",
+      "playerID": "4430878",
+      "longName": "Jaxon Smith-Njigba"
+    },
+    "4430947": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "26",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "40",
+        "stSnap": "7",
+        "stSnapPct": "0.25",
+        "offSnap": "0",
+        "defSnapPct": "0.62"
+      },
+      "team": "PIT",
+      "teamAbv": "PIT",
+      "Defense": {
+        "totalTackles": "3",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "2",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4430947",
+      "longName": "Yahya Black"
+    },
+    "4431492": {
+      "gameID": "20250914_SEA@PIT",
+      "Receiving": {
+        "receptions": "1",
+        "recTD": "0",
+        "longRec": "7",
+        "targets": "2",
+        "recYds": "7",
+        "recAvg": "7.0"
+      },
+      "teamID": "26",
+      "snapCounts": {
+        "offSnapPct": "0.35",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "22",
+        "defSnapPct": "0.00"
+      },
+      "team": "PIT",
+      "teamAbv": "PIT",
+      "playerID": "4431492",
+      "longName": "Roman Wilson"
+    },
+    "4431590": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "26",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "26",
+        "stSnap": "25",
+        "stSnapPct": "0.90",
+        "offSnap": "0",
+        "defSnapPct": "0.40"
+      },
+      "team": "PIT",
+      "teamAbv": "PIT",
+      "Defense": {
+        "totalTackles": "7",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "4",
+        "tfl": "2",
+        "qbHits": "1",
+        "defensiveInterceptions": "0",
+        "sacks": "1",
+        "passDeflections": "0"
+      },
+      "playerID": "4431590",
+      "longName": "Jack Sawyer"
+    },
+    "4567048": {
+      "gameID": "20250914_SEA@PIT",
+      "Rushing": {
+        "rushAvg": "8.1",
+        "rushYds": "105",
+        "carries": "13",
+        "longRush": "20",
+        "rushTD": "1"
+      },
+      "Receiving": {
+        "receptions": "1",
+        "recTD": "0",
+        "longRec": "13",
+        "targets": "1",
+        "recYds": "13",
+        "recAvg": "13.0"
+      },
+      "scoringPlays": [
+        {
+          "score": "Kenneth Walker III 19 Yd Rush (Jason Myers Kick)",
+          "scorePeriod": "Q4",
+          "homeScore": "17",
+          "awayScore": "31",
+          "teamID": "29",
+          "scoreDetails": "7 plays, 73 yards, 4:08",
+          "scoreType": "TD",
+          "scoreTime": "3:41",
+          "team": "SEA",
+          "playerIDs": ["4567048", "2473037"]
+        }
+      ],
+      "teamID": "29",
+      "snapCounts": {
+        "offSnapPct": "0.35",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "23",
+        "defSnapPct": "0.00"
+      },
+      "team": "SEA",
+      "teamAbv": "SEA",
+      "playerID": "4567048",
+      "longName": "Kenneth Walker III"
+    },
+    "4567222": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "29",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "2",
+        "stSnap": "15",
+        "stSnapPct": "0.54",
+        "offSnap": "0",
+        "defSnapPct": "0.03"
+      },
+      "team": "SEA",
+      "teamAbv": "SEA",
+      "playerID": "4567222",
+      "longName": "Nehemiah Pritchett"
+    },
+    "4567226": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "29",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "33",
+        "stSnap": "4",
+        "stSnapPct": "0.14",
+        "offSnap": "0",
+        "defSnapPct": "0.53"
+      },
+      "team": "SEA",
+      "teamAbv": "SEA",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "2",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4567226",
+      "longName": "Derick Hall"
+    },
+    "4567979": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "26",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "23",
+        "stSnap": "9",
+        "stSnapPct": "0.32",
+        "offSnap": "0",
+        "defSnapPct": "0.35"
+      },
+      "team": "PIT",
+      "teamAbv": "PIT",
+      "playerID": "4567979",
+      "longName": "Brandin Echols"
+    },
+    "4569474": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "26",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "12",
+        "stSnap": "5",
+        "stSnapPct": "0.18",
+        "offSnap": "0",
+        "defSnapPct": "0.18"
+      },
+      "team": "PIT",
+      "teamAbv": "PIT",
+      "playerID": "4569474",
+      "longName": "Logan Lee"
+    },
+    "4569987": {
+      "gameID": "20250914_SEA@PIT",
+      "Rushing": {
+        "rushAvg": "3.4",
+        "rushYds": "48",
+        "carries": "14",
+        "longRush": "9",
+        "rushTD": "0"
+      },
+      "Receiving": {
+        "receptions": "4",
+        "recTD": "0",
+        "longRec": "65",
+        "targets": "4",
+        "recYds": "86",
+        "recAvg": "21.5"
+      },
+      "teamID": "26",
+      "snapCounts": {
+        "offSnapPct": "0.58",
+        "defSnap": "0",
+        "stSnap": "2",
+        "stSnapPct": "0.07",
+        "offSnap": "36",
+        "defSnapPct": "0.00"
+      },
+      "team": "PIT",
+      "teamAbv": "PIT",
+      "playerID": "4569987",
+      "longName": "Jaylen Warren"
+    },
+    "4570040": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "29",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "39",
+        "stSnap": "3",
+        "stSnapPct": "0.11",
+        "offSnap": "0",
+        "defSnapPct": "0.63"
+      },
+      "team": "SEA",
+      "teamAbv": "SEA",
+      "Defense": {
+        "totalTackles": "5",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "2",
+        "tfl": "1",
+        "qbHits": "3",
+        "defensiveInterceptions": "0",
+        "sacks": "1.5",
+        "passDeflections": "0"
+      },
+      "playerID": "4570040",
+      "longName": "Byron Murphy II"
+    },
+    "4572055": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "29",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "6",
+        "stSnap": "14",
+        "stSnapPct": "0.50",
+        "offSnap": "0",
+        "defSnapPct": "0.10"
+      },
+      "team": "SEA",
+      "teamAbv": "SEA",
+      "Defense": {
+        "totalTackles": "2",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "2",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4572055",
+      "longName": "Mike Morris"
+    },
+    "4576297": {
+      "gameID": "20250914_SEA@PIT",
+      "Rushing": {
+        "rushAvg": "2.0",
+        "rushYds": "2",
+        "carries": "1",
+        "longRush": "2",
+        "rushTD": "0"
+      },
+      "Receiving": {
+        "receptions": "2",
+        "recTD": "1",
+        "longRec": "19",
+        "targets": "3",
+        "recYds": "26",
+        "recAvg": "13.0"
+      },
+      "scoringPlays": [
+        {
+          "score": "AJ Barner 7 Yd pass from Sam Darnold (Jason Myers Kick)",
+          "scorePeriod": "Q3",
+          "homeScore": "14",
+          "awayScore": "14",
+          "teamID": "29",
+          "scoreDetails": "9 plays, 80 yards, 5:01",
+          "scoreType": "TD",
+          "scoreTime": "6:10",
+          "team": "SEA",
+          "playerIDs": ["3912547", "4576297", "2473037"]
+        }
+      ],
+      "teamID": "29",
+      "snapCounts": {
+        "offSnapPct": "0.89",
+        "defSnap": "0",
+        "stSnap": "11",
+        "stSnapPct": "0.39",
+        "offSnap": "58",
+        "defSnapPct": "0.00"
+      },
+      "team": "SEA",
+      "teamAbv": "SEA",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "0",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4576297",
+      "longName": "AJ Barner"
+    },
+    "4597703": {
+      "gameID": "20250914_SEA@PIT",
+      "Receiving": {
+        "receptions": "2",
+        "recTD": "1",
+        "longRec": "21",
+        "targets": "4",
+        "recYds": "32",
+        "recAvg": "16.0"
+      },
+      "scoringPlays": [
+        {
+          "score": "Tory Horton 21 Yd pass from Sam Darnold (Jason Myers Kick)",
+          "scorePeriod": "Q1",
+          "homeScore": "0",
+          "awayScore": "7",
+          "teamID": "29",
+          "scoreDetails": "8 plays, 65 yards, 4:31",
+          "scoreType": "TD",
+          "scoreTime": "10:29",
+          "team": "SEA",
+          "playerIDs": ["3912547", "4597703", "2473037"]
+        }
+      ],
+      "teamID": "29",
+      "snapCounts": {
+        "offSnapPct": "0.40",
+        "defSnap": "0",
+        "stSnap": "4",
+        "stSnapPct": "0.14",
+        "offSnap": "26",
+        "defSnapPct": "0.00"
+      },
+      "Punting": {
+        "puntReturns": "2",
+        "puntReturnYds": "30",
+        "puntReturnAvg": "15.0",
+        "puntReturnLong": "22",
+        "puntReturnTD": "0"
+      },
+      "team": "SEA",
+      "teamAbv": "SEA",
+      "playerID": "4597703",
+      "longName": "Tory Horton"
+    },
+    "4608386": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "29",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "12",
+        "stSnap": "14",
+        "stSnapPct": "0.50",
+        "offSnap": "0",
+        "defSnapPct": "0.19"
+      },
+      "team": "SEA",
+      "teamAbv": "SEA",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4608386",
+      "longName": "D'Anthony Bell"
+    },
+    "4612077": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "29",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "1",
+        "stSnapPct": "0.04",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "SEA",
+      "teamAbv": "SEA",
+      "playerID": "4612077",
+      "longName": "Bryce Cabeldue"
+    },
+    "4678006": {
+      "gameID": "20250914_SEA@PIT",
+      "Receiving": {
+        "receptions": "2",
+        "recTD": "0",
+        "longRec": "24",
+        "targets": "3",
+        "recYds": "31",
+        "recAvg": "15.5"
+      },
+      "teamID": "29",
+      "snapCounts": {
+        "offSnapPct": "0.40",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "26",
+        "defSnapPct": "0.00"
+      },
+      "team": "SEA",
+      "teamAbv": "SEA",
+      "playerID": "4678006",
+      "longName": "Elijah Arroyo"
+    },
+    "4686540": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "29",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "43",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "0.69"
+      },
+      "team": "SEA",
+      "teamAbv": "SEA",
+      "Defense": {
+        "totalTackles": "8",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "5",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4686540",
+      "longName": "Tyrice Knight"
+    },
+    "4691688": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "29",
+      "snapCounts": {
+        "offSnapPct": "0.42",
+        "defSnap": "0",
+        "stSnap": "5",
+        "stSnapPct": "0.18",
+        "offSnap": "27",
+        "defSnapPct": "0.00"
+      },
+      "team": "SEA",
+      "teamAbv": "SEA",
+      "Defense": {
+        "totalTackles": "2",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4691688",
+      "longName": "Robbie Ouzts"
+    },
+    "4693346": {
+      "gameID": "20250914_SEA@PIT",
+      "teamID": "29",
+      "snapCounts": {
+        "offSnapPct": "1.00",
+        "defSnap": "0",
+        "stSnap": "6",
+        "stSnapPct": "0.21",
+        "offSnap": "65",
+        "defSnapPct": "0.00"
+      },
+      "team": "SEA",
+      "teamAbv": "SEA",
+      "playerID": "4693346",
+      "longName": "Grey Zabel"
+    },
+    "4819231": {
+      "gameID": "20250914_SEA@PIT",
+      "Rushing": {
+        "rushAvg": "1.0",
+        "rushYds": "1",
+        "carries": "1",
+        "longRush": "1",
+        "rushTD": "0"
+      },
+      "teamID": "26",
+      "snapCounts": {
+        "offSnapPct": "0.03",
+        "defSnap": "0",
+        "stSnap": "4",
+        "stSnapPct": "0.14",
+        "offSnap": "2",
+        "defSnapPct": "0.00"
+      },
+      "Kicking": {
+        "kickReturns": "3",
+        "kickReturnTD": "0",
+        "kickReturnYds": "58",
+        "kickReturnAvg": "19.3",
+        "kickReturnLong": "24"
+      },
+      "team": "PIT",
+      "teamAbv": "PIT",
+      "playerID": "4819231",
+      "longName": "Kaleb Johnson"
+    }
+  },
+  "scoringPlays": [
+    {
+      "score": "Tory Horton 21 Yd pass from Sam Darnold (Jason Myers Kick)",
+      "scorePeriod": "Q1",
+      "homeScore": "0",
+      "awayScore": "7",
+      "teamID": "29",
+      "scoreDetails": "8 plays, 65 yards, 4:31",
+      "scoreType": "TD",
+      "scoreTime": "10:29",
+      "team": "SEA",
+      "playerIDs": ["3912547", "4597703", "2473037"]
+    },
+    {
+      "score": "Chris Boswell 48 Yd Field Goal",
+      "scorePeriod": "Q1",
+      "homeScore": "3",
+      "awayScore": "7",
+      "teamID": "26",
+      "scoreDetails": "10 plays, 46 yards, 5:42",
+      "scoreType": "FG",
+      "scoreTime": "4:47",
+      "team": "PIT",
+      "playerIDs": ["17372"]
+    },
+    {
+      "score": "Chris Boswell 48 Yd Field Goal",
+      "scorePeriod": "Q1",
+      "homeScore": "6",
+      "awayScore": "7",
+      "teamID": "26",
+      "scoreDetails": "6 plays, 14 yards, 2:20",
+      "scoreType": "FG",
+      "scoreTime": "2:13",
+      "team": "PIT",
+      "playerIDs": ["17372"]
+    },
+    {
+      "score": "DK Metcalf 2 Yd pass from Aaron Rodgers (Aaron Rodgers Pass to Darnell Washington for Two-Point Conversion)",
+      "scorePeriod": "Q2",
+      "homeScore": "14",
+      "awayScore": "7",
+      "teamID": "26",
+      "scoreDetails": "6 plays, 21 yards, 2:20",
+      "scoreType": "TD",
+      "scoreTime": "1:09",
+      "team": "PIT",
+      "playerIDs": ["8439", "4047650", "4430802"]
+    },
+    {
+      "score": "AJ Barner 7 Yd pass from Sam Darnold (Jason Myers Kick)",
+      "scorePeriod": "Q3",
+      "homeScore": "14",
+      "awayScore": "14",
+      "teamID": "29",
+      "scoreDetails": "9 plays, 80 yards, 5:01",
+      "scoreType": "TD",
+      "scoreTime": "6:10",
+      "team": "SEA",
+      "playerIDs": ["3912547", "4576297", "2473037"]
+    },
+    {
+      "score": "Jason Myers 54 Yd Field Goal",
+      "scorePeriod": "Q4",
+      "homeScore": "14",
+      "awayScore": "17",
+      "teamID": "29",
+      "scoreDetails": "10 plays, 55 yards, 3:47",
+      "scoreType": "FG",
+      "scoreTime": "12:46",
+      "team": "SEA",
+      "playerIDs": ["2473037"]
+    },
+    {
+      "score": "George Holani Recovered Kickoff in End Zone for a Touchdown (Jason Myers Kick)",
+      "scorePeriod": "Q4",
+      "homeScore": "14",
+      "awayScore": "24",
+      "teamID": "29",
+      "scoreDetails": "0 plays, 0 yards, 0:00",
+      "scoreType": "TD",
+      "scoreTime": "12:46",
+      "team": "SEA",
+      "playerIDs": ["4429835", "2473037"]
+    },
+    {
+      "score": "Chris Boswell 45 Yd Field Goal",
+      "scorePeriod": "Q4",
+      "homeScore": "17",
+      "awayScore": "24",
+      "teamID": "26",
+      "scoreDetails": "9 plays, 45 yards, 4:57",
+      "scoreType": "FG",
+      "scoreTime": "7:49",
+      "team": "PIT",
+      "playerIDs": ["17372"]
+    },
+    {
+      "score": "Kenneth Walker III 19 Yd Rush (Jason Myers Kick)",
+      "scorePeriod": "Q4",
+      "homeScore": "17",
+      "awayScore": "31",
+      "teamID": "29",
+      "scoreDetails": "7 plays, 73 yards, 4:08",
+      "scoreType": "TD",
+      "scoreTime": "3:41",
+      "team": "SEA",
+      "playerIDs": ["4567048", "2473037"]
+    }
+  ],
+  "seasonType": "Regular Season",
+  "teamIDAway": "29",
+  "teamIDHome": "26",
+  "teamStats": {
+    "away": {
+      "totalYards": "395",
+      "rushingAttempts": "29",
+      "rushingYards": "117",
+      "fumblesLost": "0",
+      "penalties": "2-10",
+      "totalPlays": "64",
+      "possession": "31:17",
+      "safeties": "0",
+      "passCompletionsAndAttempts": "22-33",
+      "passingFirstDowns": "13",
+      "interceptionsThrown": "2",
+      "sacksAndYardsLost": "2-17",
+      "thirdDownEfficiency": "6-14",
+      "blockedPunt": "0",
+      "yardsPerPlay": "6.2",
+      "redZoneScoredAndAttempted": "2-3",
+      "teamID": "29",
+      "defensiveInterceptions": "2",
+      "defensiveOrSpecialTeamsTds": "1",
+      "totalDrives": "12",
+      "rushingFirstDowns": "8",
+      "blockedFG": "0",
+      "rushTD": "1",
+      "twoPointConversions": "0",
+      "firstDowns": "21",
+      "passTD": "2",
+      "team": "SEA",
+      "blockedXP": "0",
+      "teamAbv": "SEA",
+      "firstDownsFromPenalties": "0",
+      "fourthDownEfficiency": "1-2",
+      "defensiveTwoPointConversionReturns": "0",
+      "passingYards": "278",
+      "yardsPerRush": "4.0",
+      "snapCounts": {
+        "totalSpecialTeams": "28",
+        "totalOffensive": "65",
+        "totalDefensive": "62"
+      },
+      "turnovers": "2",
+      "yardsPerPass": "7.9"
+    },
+    "home": {
+      "totalYards": "267",
+      "rushingAttempts": "21",
+      "rushingYards": "72",
+      "fumblesLost": "0",
+      "penalties": "2-15",
+      "totalPlays": "59",
+      "possession": "28:43",
+      "safeties": "0",
+      "passCompletionsAndAttempts": "20-35",
+      "passingFirstDowns": "6",
+      "interceptionsThrown": "2",
+      "sacksAndYardsLost": "3-20",
+      "thirdDownEfficiency": "5-15",
+      "blockedPunt": "0",
+      "yardsPerPlay": "4.5",
+      "redZoneScoredAndAttempted": "1-2",
+      "teamID": "26",
+      "defensiveInterceptions": "2",
+      "defensiveOrSpecialTeamsTds": "0",
+      "totalDrives": "12",
+      "rushingFirstDowns": "6",
+      "blockedFG": "0",
+      "rushTD": "0",
+      "twoPointConversions": "1",
+      "firstDowns": "13",
+      "passTD": "1",
+      "team": "PIT",
+      "blockedXP": "0",
+      "teamAbv": "PIT",
+      "firstDownsFromPenalties": "1",
+      "fourthDownEfficiency": "1-2",
+      "defensiveTwoPointConversionReturns": "0",
+      "passingYards": "195",
+      "yardsPerRush": "3.4",
+      "snapCounts": {
+        "totalSpecialTeams": "28",
+        "totalOffensive": "62",
+        "totalDefensive": "65"
+      },
+      "turnovers": "2",
+      "yardsPerPass": "5.1"
+    }
+  },
+  "gameID": "20250914_SEA@PIT",
+  "gameStatusCode": "2"
+}

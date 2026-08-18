@@ -1,0 +1,236 @@
+{
+  "gameRef": "20251109_ARI@SEA",
+  "playersTranslated": 96,
+  "warnings": [
+    "SEA: teamStats implies -2 special teams touchdown(s) (defensiveOrSpecialTeamsTds 2 - DST.defTD 4) but 0 were read from the scoring text"
+  ],
+  "fatal": [],
+  "players": [
+    {
+      "ref": "2473037",
+      "name": "Jason Myers",
+      "stats": {
+        "fg_0_39": 2,
+        "fg_40_49": 1,
+        "xp_made": 5
+      },
+      "milliPoints": 15000
+    },
+    {
+      "ref": "2578570",
+      "name": "Jacoby Brissett",
+      "stats": {
+        "fum_lost": 2,
+        "pass_td": 2,
+        "pass_yd": 258,
+        "rush_yd": 31,
+        "two_pt": 1
+      },
+      "milliPoints": 19420
+    },
+    {
+      "ref": "2977187",
+      "name": "Cooper Kupp",
+      "stats": {
+        "rec": 2,
+        "rec_yd": 74
+      },
+      "milliPoints": 9400
+    },
+    {
+      "ref": "3912547",
+      "name": "Sam Darnold",
+      "stats": {
+        "fum_lost": 2,
+        "pass_int": 1,
+        "pass_td": 1,
+        "pass_yd": 178,
+        "rush_yd": -2
+      },
+      "milliPoints": 4920
+    },
+    {
+      "ref": "3924327",
+      "name": "Drew Lock",
+      "stats": {
+        "rush_yd": -4
+      },
+      "milliPoints": -400
+    },
+    {
+      "ref": "4032473",
+      "name": "Rashid Shaheed",
+      "stats": {
+        "rec": 1,
+        "rec_yd": 3,
+        "rush_yd": 20
+      },
+      "milliPoints": 3300
+    },
+    {
+      "ref": "4037235",
+      "name": "Greg Dortch",
+      "stats": {
+        "rush_td": 1,
+        "rush_yd": 2
+      },
+      "milliPoints": 6200
+    },
+    {
+      "ref": "4240657",
+      "name": "Michael Carter",
+      "stats": {
+        "rush_yd": 4
+      },
+      "milliPoints": 400
+    },
+    {
+      "ref": "4360761",
+      "name": "Michael Wilson",
+      "stats": {
+        "rec": 4,
+        "rec_yd": 34
+      },
+      "milliPoints": 7400
+    },
+    {
+      "ref": "4361307",
+      "name": "Trey McBride",
+      "stats": {
+        "rec": 9,
+        "rec_td": 1,
+        "rec_yd": 127
+      },
+      "milliPoints": 27700
+    },
+    {
+      "ref": "4362478",
+      "name": "Emari Demercado",
+      "stats": {
+        "rec": 3,
+        "rec_yd": 40,
+        "rush_yd": 64
+      },
+      "milliPoints": 13400
+    },
+    {
+      "ref": "4363538",
+      "name": "Chad Ryland",
+      "stats": {
+        "xp_made": 2
+      },
+      "milliPoints": 2000
+    },
+    {
+      "ref": "4426385",
+      "name": "Zach Charbonnet",
+      "stats": {
+        "rush_td": 1,
+        "rush_yd": 83
+      },
+      "milliPoints": 14300
+    },
+    {
+      "ref": "4426844",
+      "name": "Elijah Higgins",
+      "stats": {
+        "rec": 2,
+        "rec_yd": 19
+      },
+      "milliPoints": 3900
+    },
+    {
+      "ref": "4427728",
+      "name": "Bam Knight",
+      "stats": {
+        "rec": 1,
+        "rec_yd": 5,
+        "rush_yd": 28
+      },
+      "milliPoints": 4300
+    },
+    {
+      "ref": "4429835",
+      "name": "George Holani",
+      "stats": {
+        "rush_td": 1,
+        "rush_yd": 31
+      },
+      "milliPoints": 9100
+    },
+    {
+      "ref": "4430878",
+      "name": "Jaxon Smith-Njigba",
+      "stats": {
+        "rec": 5,
+        "rec_td": 1,
+        "rec_yd": 93
+      },
+      "milliPoints": 20300
+    },
+    {
+      "ref": "4432708",
+      "name": "Marvin Harrison Jr.",
+      "stats": {
+        "rec": 3,
+        "rec_td": 1,
+        "rec_yd": 33,
+        "two_pt": 1
+      },
+      "milliPoints": 14300
+    },
+    {
+      "ref": "4567048",
+      "name": "Kenneth Walker III",
+      "stats": {
+        "rec": 1,
+        "rec_yd": 3,
+        "rush_yd": 67
+      },
+      "milliPoints": 8000
+    },
+    {
+      "ref": "4576297",
+      "name": "AJ Barner",
+      "stats": {
+        "rush_yd": 3
+      },
+      "milliPoints": 300
+    },
+    {
+      "ref": "4678006",
+      "name": "Elijah Arroyo",
+      "stats": {
+        "rec": 1,
+        "rec_yd": 5
+      },
+      "milliPoints": 1500
+    }
+  ],
+  "teamDefense": [
+    {
+      "ref": "ARI",
+      "name": "ARI D/ST",
+      "stats": {
+        "def_fum_rec": 2,
+        "def_int": 1,
+        "def_pts_allowed": 20,
+        "def_sack": 1,
+        "def_yds_allowed": 372
+      },
+      "milliPoints": 6000
+    },
+    {
+      "ref": "SEA",
+      "name": "SEA D/ST",
+      "stats": {
+        "def_fum_rec": 2,
+        "def_pts_allowed": 22,
+        "def_sack": 5,
+        "def_td": 4,
+        "def_yds_allowed": 335
+      },
+      "milliPoints": 33000
+    }
+  ]
+}

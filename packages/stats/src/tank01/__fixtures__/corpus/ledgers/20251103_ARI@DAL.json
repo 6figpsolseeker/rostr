@@ -1,0 +1,225 @@
+{
+  "gameRef": "20251103_ARI@DAL",
+  "playersTranslated": 93,
+  "warnings": [],
+  "fatal": [],
+  "players": [
+    {
+      "ref": "2577417",
+      "name": "Dak Prescott",
+      "stats": {
+        "pass_int": 1,
+        "pass_td": 1,
+        "pass_yd": 250,
+        "rush_yd": 34
+      },
+      "milliPoints": 15400
+    },
+    {
+      "ref": "2578570",
+      "name": "Jacoby Brissett",
+      "stats": {
+        "pass_td": 2,
+        "pass_yd": 261,
+        "rush_td": 1,
+        "rush_yd": 4
+      },
+      "milliPoints": 24840
+    },
+    {
+      "ref": "3676833",
+      "name": "KaVontae Turpin",
+      "stats": {
+        "rec": 2,
+        "rec_yd": 10,
+        "rush_yd": 3
+      },
+      "milliPoints": 3300
+    },
+    {
+      "ref": "3953687",
+      "name": "Brandon Aubrey",
+      "stats": {
+        "fg_0_39": 1,
+        "fg_missed": 1,
+        "xp_made": 2
+      },
+      "milliPoints": 4000
+    },
+    {
+      "ref": "4037235",
+      "name": "Greg Dortch",
+      "stats": {
+        "rush_yd": 9
+      },
+      "milliPoints": 900
+    },
+    {
+      "ref": "4240603",
+      "name": "Malik Davis",
+      "stats": {
+        "rush_yd": 3
+      },
+      "milliPoints": 300
+    },
+    {
+      "ref": "4241389",
+      "name": "CeeDee Lamb",
+      "stats": {
+        "rec": 7,
+        "rec_yd": 85
+      },
+      "milliPoints": 15500
+    },
+    {
+      "ref": "4242355",
+      "name": "Jake Ferguson",
+      "stats": {
+        "fum_lost": 1,
+        "rec": 5,
+        "rec_yd": 50
+      },
+      "milliPoints": 8000
+    },
+    {
+      "ref": "4360761",
+      "name": "Michael Wilson",
+      "stats": {
+        "rec": 3,
+        "rec_yd": 61
+      },
+      "milliPoints": 9100
+    },
+    {
+      "ref": "4361307",
+      "name": "Trey McBride",
+      "stats": {
+        "rec": 5,
+        "rec_td": 1,
+        "rec_yd": 55
+      },
+      "milliPoints": 16500
+    },
+    {
+      "ref": "4361579",
+      "name": "Javonte Williams",
+      "stats": {
+        "fum_lost": 1,
+        "rec": 1,
+        "rush_yd": 83
+      },
+      "milliPoints": 7300
+    },
+    {
+      "ref": "4362478",
+      "name": "Emari Demercado",
+      "stats": {
+        "rec": 1,
+        "rec_yd": -1,
+        "rush_yd": 79
+      },
+      "milliPoints": 8800
+    },
+    {
+      "ref": "4363538",
+      "name": "Chad Ryland",
+      "stats": {
+        "fg_0_39": 1,
+        "fg_40_49": 1,
+        "xp_made": 3
+      },
+      "milliPoints": 10000
+    },
+    {
+      "ref": "4372096",
+      "name": "Luke Schoonmaker",
+      "stats": {
+        "rec": 1,
+        "rec_yd": 14
+      },
+      "milliPoints": 2400
+    },
+    {
+      "ref": "4426354",
+      "name": "George Pickens",
+      "stats": {
+        "rec": 6,
+        "rec_yd": 79
+      },
+      "milliPoints": 13900
+    },
+    {
+      "ref": "4426844",
+      "name": "Elijah Higgins",
+      "stats": {
+        "rec": 3,
+        "rec_yd": 30
+      },
+      "milliPoints": 6000
+    },
+    {
+      "ref": "4427728",
+      "name": "Bam Knight",
+      "stats": {
+        "rec": 2,
+        "rec_yd": 20,
+        "rush_yd": 27
+      },
+      "milliPoints": 6700
+    },
+    {
+      "ref": "4429996",
+      "name": "Marshawn Kneeland",
+      "stats": {
+        "ret_td": 1
+      },
+      "milliPoints": 6000
+    },
+    {
+      "ref": "4432708",
+      "name": "Marvin Harrison Jr.",
+      "stats": {
+        "rec": 7,
+        "rec_td": 1,
+        "rec_yd": 96
+      },
+      "milliPoints": 22600
+    },
+    {
+      "ref": "5083754",
+      "name": "Ryan Flournoy",
+      "stats": {
+        "rec": 2,
+        "rec_td": 1,
+        "rec_yd": 12
+      },
+      "milliPoints": 9200
+    }
+  ],
+  "teamDefense": [
+    {
+      "ref": "ARI",
+      "name": "ARI D/ST",
+      "stats": {
+        "def_fum_rec": 2,
+        "def_int": 1,
+        "def_pts_allowed": 17,
+        "def_sack": 5,
+        "def_yds_allowed": 333
+      },
+      "milliPoints": 12000
+    },
+    {
+      "ref": "DAL",
+      "name": "DAL D/ST",
+      "stats": {
+        "def_blk_kick": 1,
+        "def_pts_allowed": 27,
+        "def_sack": 5,
+        "def_td": 1,
+        "def_yds_allowed": 340
+      },
+      "milliPoints": 13000
+    }
+  ]
+}

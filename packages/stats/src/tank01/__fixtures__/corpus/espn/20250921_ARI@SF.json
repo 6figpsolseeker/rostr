@@ -1,0 +1,38 @@
+{
+  "gameRef": "20250921_ARI@SF",
+  "eventId": "401772843",
+  "scoringPlays": [
+    {
+      "text": "Chad Ryland 34 Yd Field Goal",
+      "abbreviation": "FG"
+    },
+    {
+      "text": "Eddy Pineiro 38 Yd Field Goal",
+      "abbreviation": "FG"
+    },
+    {
+      "text": "Eddy Pineiro 51 Yd Field Goal",
+      "abbreviation": "FG"
+    },
+    {
+      "text": "Chad Ryland 28 Yd Field Goal",
+      "abbreviation": "FG"
+    },
+    {
+      "text": "Kyle Juszczyk 1 Yd pass from Mac Jones (Eddy Pineiro Kick)",
+      "abbreviation": "TD"
+    },
+    {
+      "text": "Trey McBride 1 Yd pass from Kyler Murray (Chad Ryland Kick)",
+      "abbreviation": "TD"
+    },
+    {
+      "text": "Defensive Holding in Endzone for Safety",
+      "abbreviation": "SF"
+    },
+    {
+      "text": "Eddy Pineiro 35 Yd Field Goal",
+      "abbreviation": "FG"
+    }
+  ]
+}

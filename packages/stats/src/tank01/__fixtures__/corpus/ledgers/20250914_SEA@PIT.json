@@ -1,0 +1,239 @@
+{
+  "gameRef": "20250914_SEA@PIT",
+  "playersTranslated": 94,
+  "warnings": [],
+  "fatal": [],
+  "players": [
+    {
+      "ref": "17372",
+      "name": "Chris Boswell",
+      "stats": {
+        "fg_40_49": 3
+      },
+      "milliPoints": 12000
+    },
+    {
+      "ref": "2473037",
+      "name": "Jason Myers",
+      "stats": {
+        "fg_50_59": 1,
+        "fg_missed": 1,
+        "xp_made": 4
+      },
+      "milliPoints": 8000
+    },
+    {
+      "ref": "2977187",
+      "name": "Cooper Kupp",
+      "stats": {
+        "rec": 7,
+        "rec_yd": 90
+      },
+      "milliPoints": 16000
+    },
+    {
+      "ref": "3054212",
+      "name": "Jonnu Smith",
+      "stats": {
+        "rec": 4,
+        "rec_yd": 27
+      },
+      "milliPoints": 6700
+    },
+    {
+      "ref": "3116407",
+      "name": "Mason Rudolph",
+      "stats": {
+        "pass_yd": 12
+      },
+      "milliPoints": 480
+    },
+    {
+      "ref": "3912547",
+      "name": "Sam Darnold",
+      "stats": {
+        "pass_int": 2,
+        "pass_td": 2,
+        "pass_yd": 295
+      },
+      "milliPoints": 15800
+    },
+    {
+      "ref": "4047650",
+      "name": "DK Metcalf",
+      "stats": {
+        "rec": 3,
+        "rec_td": 1,
+        "rec_yd": 20
+      },
+      "milliPoints": 11000
+    },
+    {
+      "ref": "4241961",
+      "name": "Connor Heyward",
+      "stats": {
+        "rec": 1,
+        "rec_yd": 6
+      },
+      "milliPoints": 1600
+    },
+    {
+      "ref": "4243389",
+      "name": "Calvin Austin III",
+      "stats": {
+        "rec": 1,
+        "rec_yd": 22
+      },
+      "milliPoints": 3200
+    },
+    {
+      "ref": "4361411",
+      "name": "Pat Freiermuth",
+      "stats": {
+        "rec": 3,
+        "rec_yd": 31
+      },
+      "milliPoints": 6100
+    },
+    {
+      "ref": "4371733",
+      "name": "Kenneth Gainwell",
+      "stats": {
+        "rec": 3,
+        "rec_yd": 16,
+        "rush_yd": 20
+      },
+      "milliPoints": 6600
+    },
+    {
+      "ref": "4426385",
+      "name": "Zach Charbonnet",
+      "stats": {
+        "rush_yd": 10
+      },
+      "milliPoints": 1000
+    },
+    {
+      "ref": "4430802",
+      "name": "Darnell Washington",
+      "stats": {
+        "two_pt": 1
+      },
+      "milliPoints": 2000
+    },
+    {
+      "ref": "4430878",
+      "name": "Jaxon Smith-Njigba",
+      "stats": {
+        "rec": 8,
+        "rec_yd": 103
+      },
+      "milliPoints": 18300
+    },
+    {
+      "ref": "4431492",
+      "name": "Roman Wilson",
+      "stats": {
+        "rec": 1,
+        "rec_yd": 7
+      },
+      "milliPoints": 1700
+    },
+    {
+      "ref": "4567048",
+      "name": "Kenneth Walker III",
+      "stats": {
+        "rec": 1,
+        "rec_yd": 13,
+        "rush_td": 1,
+        "rush_yd": 105
+      },
+      "milliPoints": 18800
+    },
+    {
+      "ref": "4569987",
+      "name": "Jaylen Warren",
+      "stats": {
+        "rec": 4,
+        "rec_yd": 86,
+        "rush_yd": 48
+      },
+      "milliPoints": 17400
+    },
+    {
+      "ref": "4576297",
+      "name": "AJ Barner",
+      "stats": {
+        "rec": 2,
+        "rec_td": 1,
+        "rec_yd": 26,
+        "rush_yd": 2
+      },
+      "milliPoints": 10800
+    },
+    {
+      "ref": "4597703",
+      "name": "Tory Horton",
+      "stats": {
+        "rec": 2,
+        "rec_td": 1,
+        "rec_yd": 32
+      },
+      "milliPoints": 11200
+    },
+    {
+      "ref": "4678006",
+      "name": "Elijah Arroyo",
+      "stats": {
+        "rec": 2,
+        "rec_yd": 31
+      },
+      "milliPoints": 5100
+    },
+    {
+      "ref": "4819231",
+      "name": "Kaleb Johnson",
+      "stats": {
+        "rush_yd": 1
+      },
+      "milliPoints": 100
+    },
+    {
+      "ref": "8439",
+      "name": "Aaron Rodgers",
+      "stats": {
+        "pass_int": 2,
+        "pass_td": 1,
+        "pass_yd": 203,
+        "rush_yd": 3,
+        "two_pt": 1
+      },
+      "milliPoints": 10420
+    }
+  ],
+  "teamDefense": [
+    {
+      "ref": "PIT",
+      "name": "PIT D/ST",
+      "stats": {
+        "def_int": 2,
+        "def_pts_allowed": 25,
+        "def_sack": 2,
+        "def_yds_allowed": 395
+      },
+      "milliPoints": 5000
+    },
+    {
+      "ref": "SEA",
+      "name": "SEA D/ST",
+      "stats": {
+        "def_int": 2,
+        "def_pts_allowed": 17,
+        "def_sack": 3,
+        "def_td": 1,
+        "def_yds_allowed": 267
+      },
+      "milliPoints": 16000
+    }
+  ]
+}

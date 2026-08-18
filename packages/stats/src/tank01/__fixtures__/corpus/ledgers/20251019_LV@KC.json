@@ -1,0 +1,236 @@
+{
+  "gameRef": "20251019_LV@KC",
+  "playersTranslated": 95,
+  "warnings": [],
+  "fatal": [],
+  "players": [
+    {
+      "ref": "15847",
+      "name": "Travis Kelce",
+      "stats": {
+        "rec": 3,
+        "rec_yd": 54
+      },
+      "milliPoints": 8400
+    },
+    {
+      "ref": "15864",
+      "name": "Geno Smith",
+      "stats": {
+        "pass_yd": 67,
+        "rush_yd": 1
+      },
+      "milliPoints": 2780
+    },
+    {
+      "ref": "2576414",
+      "name": "Raheem Mostert",
+      "stats": {
+        "rec": 1,
+        "rec_yd": 2
+      },
+      "milliPoints": 1200
+    },
+    {
+      "ref": "3055899",
+      "name": "Harrison Butker",
+      "stats": {
+        "fg_0_39": 1,
+        "xp_made": 4
+      },
+      "milliPoints": 7000
+    },
+    {
+      "ref": "3059915",
+      "name": "Kareem Hunt",
+      "stats": {
+        "rush_yd": 18
+      },
+      "milliPoints": 1800
+    },
+    {
+      "ref": "3120348",
+      "name": "JuJu Smith-Schuster",
+      "stats": {
+        "rec": 3,
+        "rec_yd": 35
+      },
+      "milliPoints": 6500
+    },
+    {
+      "ref": "3139477",
+      "name": "Patrick Mahomes",
+      "stats": {
+        "pass_td": 3,
+        "pass_yd": 286,
+        "rush_yd": 28
+      },
+      "milliPoints": 26240
+    },
+    {
+      "ref": "4038524",
+      "name": "Gardner Minshew",
+      "stats": {
+        "rush_yd": -3
+      },
+      "milliPoints": -300
+    },
+    {
+      "ref": "4240472",
+      "name": "Noah Gray",
+      "stats": {
+        "rec": 1,
+        "rec_yd": 28
+      },
+      "milliPoints": 3800
+    },
+    {
+      "ref": "4240703",
+      "name": "Kenny Pickett",
+      "stats": {
+        "fum_lost": 1,
+        "pass_yd": 8
+      },
+      "milliPoints": -1680
+    },
+    {
+      "ref": "4241372",
+      "name": "Hollywood Brown",
+      "stats": {
+        "rec": 2,
+        "rec_td": 1,
+        "rec_yd": 14
+      },
+      "milliPoints": 9400
+    },
+    {
+      "ref": "4361529",
+      "name": "Isiah Pacheco",
+      "stats": {
+        "rec": 1,
+        "rec_yd": -3,
+        "rush_td": 1,
+        "rush_yd": 57
+      },
+      "milliPoints": 12400
+    },
+    {
+      "ref": "4362921",
+      "name": "Tyquan Thornton",
+      "stats": {
+        "rec": 1,
+        "rec_yd": 39
+      },
+      "milliPoints": 4900
+    },
+    {
+      "ref": "4366963",
+      "name": "Dylan Laube",
+      "stats": {
+        "rec": 1,
+        "rec_yd": 1,
+        "rush_yd": 3
+      },
+      "milliPoints": 1400
+    },
+    {
+      "ref": "4428331",
+      "name": "Rashee Rice",
+      "stats": {
+        "rec": 7,
+        "rec_td": 2,
+        "rec_yd": 42
+      },
+      "milliPoints": 23200
+    },
+    {
+      "ref": "4428718",
+      "name": "Tre Tucker",
+      "stats": {
+        "rec": 5,
+        "rec_yd": 33
+      },
+      "milliPoints": 8300
+    },
+    {
+      "ref": "4429086",
+      "name": "Michael Mayer",
+      "stats": {
+        "rec": 1,
+        "rec_yd": 10
+      },
+      "milliPoints": 2000
+    },
+    {
+      "ref": "4596602",
+      "name": "Brashard Smith",
+      "stats": {
+        "rec": 5,
+        "rec_yd": 42,
+        "rush_yd": 39
+      },
+      "milliPoints": 13100
+    },
+    {
+      "ref": "4603186",
+      "name": "Jack Bech",
+      "stats": {
+        "rec": 2,
+        "rec_yd": 13
+      },
+      "milliPoints": 3300
+    },
+    {
+      "ref": "4683062",
+      "name": "Xavier Worthy",
+      "stats": {
+        "rec": 3,
+        "rec_yd": 35,
+        "rush_yd": 13
+      },
+      "milliPoints": 7800
+    },
+    {
+      "ref": "4890973",
+      "name": "Ashton Jeanty",
+      "stats": {
+        "rec": 1,
+        "rec_yd": 13,
+        "rush_yd": 21
+      },
+      "milliPoints": 4400
+    },
+    {
+      "ref": "5155825",
+      "name": "Carter Runyon",
+      "stats": {
+        "rec": 1,
+        "rec_yd": 3
+      },
+      "milliPoints": 1300
+    }
+  ],
+  "teamDefense": [
+    {
+      "ref": "KC",
+      "name": "KC D/ST",
+      "stats": {
+        "def_fum_rec": 1,
+        "def_pts_allowed": 0,
+        "def_sack": 1,
+        "def_yds_allowed": 95
+      },
+      "milliPoints": 13000
+    },
+    {
+      "ref": "LV",
+      "name": "LV D/ST",
+      "stats": {
+        "def_pts_allowed": 31,
+        "def_sack": 1,
+        "def_yds_allowed": 434
+      },
+      "milliPoints": -3000
+    }
+  ]
+}

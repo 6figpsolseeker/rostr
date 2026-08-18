@@ -14,6 +14,14 @@ node packages/stats/dist/cli.js deep       # detail on the ones we use
 node packages/stats/dist/cli.js verify 1,2,3   # hunt rare scoring events
 ```
 
+The conformance corpus below is the standing version of all of that — thirteen real
+games checked in and compared offline on every `pnpm test`:
+
+```bash
+pnpm stats:corpus-sync   # capture whatever the manifest is missing (metered)
+pnpm corpus:stats        # regenerate the ledgers (never run in CI)
+```
+
 ---
 
 ## Endpoints that exist
@@ -679,6 +687,149 @@ Note `"35 yd. return of blocked punt (J.Elliott kick)"`: lowercase, abbreviated
 name, full stop after "yd". Tank01's play text comes from more than one source
 and its formatting is not uniform — another reason to match tokens rather than
 whole phrases.
+
+---
+
+## The conformance corpus
+
+**Thirteen real games, checked in, compared on every `pnpm test` — offline, with no
+credentials.** `packages/stats/src/corpus/`, fixtures under
+`packages/stats/src/tank01/__fixtures__/corpus/`. Refs #160.
+
+Everything above on this page was established by a sweep of all 544 games of 2025 and
+2024, and **that sweep was a throwaway script.** It cost hundreds of metered calls, it
+ran once, and it left nothing behind that would notice the same class of defect arriving
+again. Every scoring bug this repo has fixed — `BP`, the returner nobody paid, the
+two-point receiver, the blocked kicks that never scored, the D/ST touchdown counted
+twice — was found that way and could have returned unobserved.
+
+The cost of noticing late is not "a bug for a while". Points are recomputed on every run
+until the correction window closes, then `finalized_at` is set and **a finalised week is
+never rescored**. A translator regression landing on a Thursday has decided real
+matchups, real playoff seeds and — in weeks 14 and 17 — real money by the following
+Wednesday, permanently.
+
+### Four checks, and none of them is "the numbers still match"
+
+1. **Coverage.** Every game declares what it is FOR, and the claim is re-derived from the
+   Tank01 fixture on every run. A corpus that reconciles perfectly and contains no `BP`
+   play, no shutout and no 60-yard field goal is worthless and looks green. `classes.ts`
+   is what stops it becoming that quietly. Derived from the **Tank01** response, never
+   from the ESPN column — ESPN's labels are richer and easier to search, but the
+   translator reads Tank01, and `SCORE_TYPE_BP` names a value ESPN does not publish at
+   all.
+
+2. **The ledger.** What our translator and our scoring table pay every player **and every
+   D/ST unit** in every game, generated and diffable, including the translator's own
+   `warnings` and `fatal` arrays in full. Units matter as much as players here: three of
+   #81's four defects, and every blocked-kick and safety defect, live in
+   `translateTeamDefense`, so a player-only ledger would be blind to them.
+
+3. **Sleeper.** The only genuine second source, compared as **stats run through our own
+   `scorePlayer`** — never Sleeper's own points. Their table is not ours and their
+   `pts_ppr` bakes in bonuses we do not have, so comparing totals would disagree on
+   almost every player and force an exceptions list long enough to hide a real defect.
+   Note `def_fum_rec` is `fum_rec` **+** `def_st_fum_rec`: Sleeper files a recovery made
+   on a kick or punt in the second field and both pay the unit.
+
+4. **ESPN as a republication, not corroboration.** Tank01 _is_ ESPN reserialised, so an
+   ESPN column would be a second reading of one source dressed up as a second opinion.
+   What is asserted instead is the republication itself — per scoring play,
+   `tank.score === espn.text` and `tank.scoreType === espn.scoringType.abbreviation`.
+   That detects the two feeds diverging. It cannot ratify either.
+
+### What is in it
+
+| Game               | Wk       | What it is for                                               |
+| ------------------ | -------- | ------------------------------------------------------------ |
+| `20250904_DAL@PHI` | 2025 w1  | The baseline — nothing rare, so everyday scoring cannot hide |
+| `20250907_ARI@NO`  | 2025 w1  | A blocked FG that scored nothing (27 of 2025's 44 did not)   |
+| `20250907_MIA@IND` | 2025 w1  | Two-point receiver absent from `playerIDs` (#155, open)      |
+| `20250914_SEA@PIT` | 2025 w2  | Kickoff recovery that is not a return; duplicate play texts  |
+| `20250921_ARI@SF`  | 2025 w3  | The verbose safety wording, sharing no tokens with the terse |
+| `20250928_CAR@NE`  | 2025 w4  | Def/ST overlap — a ST touchdown by a defensive player        |
+| `20250928_PHI@TB`  | 2025 w4  | All four FG buckets incl. a 65-yarder; terse safety          |
+| `20251019_LV@KC`   | 2025 w7  | D/ST top tier — shutout and under 100 yards allowed          |
+| `20251103_ARI@DAL` | 2025 w9  | Blocked-punt TD with no "return" in the text                 |
+| `20251109_ARI@SEA` | 2025 w10 | Fumble-recovery TD as a **negative** case (must not pay ret) |
+| `20251218_LAR@SEA` | 2025 w16 | Return TD where `playerIDs` is [passer, returner, receiver]  |
+| `20241208_BUF@LAR` | 2024 w14 | The only `scoreType: "BP"` in two seasons                    |
+| `20241229_CAR@TB`  | 2024 w17 | Returner absent from `playerIDs`; both bottom tiers          |
+
+Seven disagreements with Sleeper are declared in the manifest, each with a reason and an
+issue number. Five are `DELIBERATE` — points allowed, where ESPN and Sleeper genuinely
+differ on whether a safety and a defensive touchdown count against the unit, and we follow
+ESPN because the whole scoring table came from ESPN (#184). Two are `DEFECT`, the live
+#157 bug where Tank01 reports `DST.defTD` 4 for two fumble-recovery touchdowns.
+
+**Two of those five were invisible until the comparison was made per-stat.** `push()` used
+to return early when the two totals matched, so a `def_pts_allowed` that differed by six
+reported nothing whenever both readings landed in the same tier — which is most of the
+time, because the tier is a range. A stat gap worth nothing this week is worth six the
+week the number lands either side of a boundary, and that is precisely the week nobody is
+looking at it.
+
+### What it cannot catch
+
+Worth stating plainly, because a green corpus reads as more assurance than it is.
+
+- **It is thirteen games.** A defect in a play class no fixture contains is invisible.
+  Coverage guards only the classes registered in `classes.ts`; a class nobody has thought
+  of is an unknown unknown, and the sweep that would find one is the expensive thing this
+  corpus replaced.
+- **ESPN is not a second opinion, and the corpus does not make it one.** Asserting the
+  republication catches Tank01 drifting from ESPN. It cannot catch **ESPN being wrong**,
+  because our scoring table was derived from ESPN in the first place. `RULES.md` §7's
+  two-source requirement is satisfied by Sleeper here, not by ESPN.
+- **Where Sleeper is silent, nothing checks us.** A player the id map cannot join is
+  compared against nothing, which looks identical to agreement — so unjoinable players
+  are declared in the manifest rather than skipped. One stands today (#185).
+- **A declared disagreement suppresses that subject's comparison entirely** while it
+  stands. That is the price of tolerating a known gap, and it is why every entry pins
+  both totals and expires when the gap closes **or moves**.
+- **It does not check our table against `RULES.md`.** It checks that the translator and
+  the table together reproduce a real game consistently with Sleeper. Whether the table
+  itself is the one members signed is the golden-hash test's job.
+- **It is a snapshot.** A provider changing its response shape for _new_ games is
+  invisible until somebody captures one. Nothing here runs live; a broken credential or a
+  moved endpoint is caught by `pnpm stats:check`, not by this.
+- **Parts of the machinery are reasoned rather than exercised.** No captured game makes
+  ESPN and Tank01 disagree on how many scoring plays there are, so the claim-once matching
+  path is argued for rather than demonstrated by a fixture; no game carries
+  `def_st_fum_rec`, so half of the fumble-recovery sum is untested against real data; and
+  `SLEEPER_TEAM_ALIASES` has one entry (`WSH`→`WAS`) that no corpus game reaches. Unit
+  tests cover the branches; a fixture would be better.
+- **The ledger is generated, so regenerate-to-green is the standing hazard** — but it does
+  not actually work, which was verified by mutation rather than assumed. Perturbing
+  `translateTeamDefense` to pay one extra `def_td` fails four ledgers; regenerating them to
+  make that go quiet moves the same four failures onto the **Sleeper** column, which is an
+  independent source and cannot be regenerated. What regeneration _can_ silence is a
+  subject Sleeper does not cover, or one already carrying a declared disagreement. For
+  those the diff is the only defence, so **read the diff** — a changed number there means
+  somebody's score moved.
+
+### Adding a game
+
+The manifest drives everything; nothing else needs editing.
+
+1. Add an entry to `__fixtures__/corpus/manifest.json` — `gameRef`, `season`, `week`,
+   `boxScore` file name, a one-sentence `why`, and the `classes` it is expected to prove.
+   A game claiming no class is refused: that is a fixture, not a corpus entry.
+2. `pnpm stats:corpus-sync` — **one metered Tank01 call** for the box score, plus one
+   more only if a player is not already in the id map. Idempotent: anything already on
+   disk is left alone, so adding one game costs one call rather than thirteen. Sleeper
+   and ESPN are free.
+3. `pnpm corpus:stats` — regenerate the ledgers. **CI never runs this.**
+4. `pnpm test`, then read the ledger diff before committing it.
+
+A **new coverage class** needs a `classes.ts` entry and a game that claims it. Both
+directions are enforced: an unknown class is a typo, and a registered class no game
+claims is a check with no data behind it — the more expensive of the two, because it
+reads as coverage.
+
+`corpus-sync` deliberately never re-fetches a box score that already exists, even under
+`--force`. Those are the artifacts under test, they are metered, and a silent recapture
+is how a fixture stops containing the rare play it was chosen for.
 
 ---
 
