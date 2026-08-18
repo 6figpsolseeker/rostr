@@ -69,6 +69,7 @@ const EVER_DEFINED = [
   "def_blk_kick",
   "def_pts_allowed",
   "def_yds_allowed",
+  "def_2pt_ret",
 ] as const;
 
 /**

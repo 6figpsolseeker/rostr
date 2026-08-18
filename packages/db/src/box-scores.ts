@@ -92,7 +92,30 @@ export interface BoxScoreSyncResult {
   readonly unchanged: number;
   /** Named, not counted. A bare count once hid "every kicker in the league". */
   readonly unmatched: readonly string[];
+  /**
+   * Games that could not be ingested at all.
+   *
+   * The provider threw, the response translated to nothing, or the sport
+   * registry and the provider map have diverged. Nothing was written for these.
+   */
   readonly failures: readonly { readonly gameRef: string; readonly reason: string }[];
+  /**
+   * Games that **were** ingested, carrying something that did not reconcile.
+   *
+   * Separate from {@link failures}, and it was not: every warning the translator
+   * raised was pushed onto that array, so the stats cron reported a game whose
+   * ninety players all landed correctly as one that "failed to ingest". Both
+   * directions of that are bad. A discrepancy read as a failure is a false alarm
+   * on a healthy run, and — worse — it buries a real failure in the same count,
+   * which is how a check stops being read at all.
+   *
+   * It matters more here than the mislabelling suggests. A week finalises after
+   * 48 hours and is never rescored, so a warning nobody reads before then is a
+   * permanently wrong score, and this is the only path by which a novel play
+   * type or a renamed provider field becomes visible without somebody sweeping a
+   * season by hand.
+   */
+  readonly warnings: readonly { readonly gameRef: string; readonly warning: string }[];
 }
 
 interface DueGame {
@@ -224,6 +247,7 @@ export async function syncBoxScores(
   let unchanged = 0;
   const unmatched: string[] = [];
   const failures: { gameRef: string; reason: string }[] = [];
+  const warnings: { gameRef: string; warning: string }[] = [];
 
   for (const game of due) {
     try {
@@ -235,8 +259,11 @@ export async function syncBoxScores(
       retracted += outcome.retracted;
       unchanged += outcome.unchanged;
       unmatched.push(...outcome.unmatched);
-      if (outcome.problem) {
-        failures.push({ gameRef: game.external_ref, reason: outcome.problem });
+      // One entry per warning rather than one joined string per game, so a
+      // caller can count them and a reader can see them. The joined form still
+      // goes to `games.stats_error`, which is a column and wants one value.
+      for (const warning of outcome.warnings) {
+        warnings.push({ gameRef: game.external_ref, warning });
       }
     } catch (error) {
       // **One game's failure never stops the other fifteen.** The shape every
@@ -257,7 +284,82 @@ export async function syncBoxScores(
     }
   }
 
-  return { games: due.length, inserted, revised, retracted, unchanged, unmatched, failures };
+  return {
+    games: due.length,
+    inserted,
+    revised,
+    retracted,
+    unchanged,
+    unmatched,
+    failures,
+    warnings,
+  };
+}
+
+/**
+ * Games still carrying an unresolved ingest problem.
+ *
+ * **The reader `games.stats_error` never had.** The column has been written
+ * since `0027` — by warnings as much as by failures, which is exactly what paces
+ * the retry — and nothing anywhere read it back. So a discrepancy survived the
+ * run that found it, survived the week finalising around it, and was visible to
+ * nobody: `cron_runs.last_outcome` holds one row per job and the next clean run
+ * overwrites it, so a warning raised at noon is gone by ten past.
+ *
+ * Ordered most recent first and bounded, because this is read on a ten-minute
+ * cadence and the interesting thing is that there are problems rather than the
+ * full list of them. The count is returned alongside so a truncated list cannot
+ * read as the whole of it.
+ *
+ * Not scoped to a season on purpose. A game inside its correction window is
+ * still being re-read, and one past it never will be again — that second case is
+ * the one worth surfacing, because whatever it says is now permanent.
+ */
+export async function unresolvedStatsProblems(
+  db: SqlClient,
+  sportKey: string,
+  limit = 20,
+): Promise<{
+  readonly total: number;
+  readonly games: readonly {
+    readonly gameRef: string;
+    readonly season: number;
+    readonly week: number;
+    readonly problem: string;
+  }[];
+}> {
+  const ids = await loadSportIds(db, sportKey);
+
+  const [counted] = await db.query<{ total: string }>(
+    `SELECT count(*)::text AS total
+       FROM games
+      WHERE sport_id = $1 AND stats_error IS NOT NULL`,
+    [ids.sportId],
+  );
+
+  const games = await db.query<{
+    external_ref: string;
+    season: number;
+    week: number;
+    stats_error: string;
+  }>(
+    `SELECT external_ref, season, week, stats_error
+       FROM games
+      WHERE sport_id = $1 AND stats_error IS NOT NULL
+      ORDER BY kickoff_at DESC
+      LIMIT $2`,
+    [ids.sportId, limit],
+  );
+
+  return {
+    total: Number(counted?.total ?? 0),
+    games: games.map((row) => ({
+      gameRef: row.external_ref,
+      season: Number(row.season),
+      week: Number(row.week),
+      problem: row.stats_error,
+    })),
+  };
 }
 
 interface GameOutcome {
@@ -266,8 +368,14 @@ interface GameOutcome {
   readonly retracted: number;
   readonly unchanged: number;
   readonly unmatched: string[];
-  /** Set when the game was only partly ingested and must be re-read. */
-  readonly problem: string | null;
+  /**
+   * Everything about this game that did not reconcile.
+   *
+   * The game was still ingested — that is the whole of the `fatal`/`warnings`
+   * split the translator makes, and it is why these are not failures. They are
+   * joined into `games.stats_error`, which is what paces the re-read.
+   */
+  readonly warnings: string[];
 }
 
 async function ingestOneGame(
@@ -406,6 +514,10 @@ async function ingestOneGame(
       [season, week, source, covered, rowPlayer, rowStatKey, ptsAllowedId],
     );
 
+    // Joined into one column, and still called `stats_error` because that is
+    // what `0027` named it and what the work-list query above reads to pace a
+    // re-read. The column's own comment says it is set by warnings too. What the
+    // *caller* is handed is the list, unjoined — see `GameOutcome.warnings`.
     const problem = problems.length > 0 ? problems.join("; ") : null;
     await tx.query("UPDATE games SET stats_synced_at = now(), stats_error = $2 WHERE id = $1", [
       game.id,
@@ -425,7 +537,7 @@ async function ingestOneGame(
       retracted: zeroed.length,
       unchanged: rowValue.length - written.length,
       unmatched,
-      problem,
+      warnings: problems,
     };
   });
 }

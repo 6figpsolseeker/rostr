@@ -77,14 +77,20 @@ Missed extra points are unpenalised, which is ESPN's default too.
 
 Scored as a single unit.
 
-| Event                                | Points |
-| ------------------------------------ | ------ |
-| Sack                                 | **1**  |
-| Interception                         | **2**  |
-| Fumble recovery                      | **2**  |
-| Safety                               | **2**  |
-| Defensive or special teams touchdown | **6**  |
-| Blocked kick                         | **2**  |
+| Event                                 | Points |
+| ------------------------------------- | ------ |
+| Sack                                  | **1**  |
+| Interception                          | **2**  |
+| Fumble recovery                       | **2**  |
+| Safety                                | **2**  |
+| Defensive or special teams touchdown  | **6**  |
+| Blocked kick                          | **2**  |
+| Defensive two-point conversion return | **2**  |
+
+A **defensive two-point conversion return** is a failed conversion attempt taken
+back the other way by the defending team. ESPN's value, and Sleeper pays the same.
+It happened three times across the 2024 and 2025 seasons, so it is rare rather
+than theoretical.
 
 **Points allowed**, awarded once per week on the unit's own game:
 

@@ -1,18 +1,24 @@
 import { describe, expect, it } from "vitest";
+import { NFL } from "@rostr/core";
 import {
   bucketFieldGoal,
   isBlockedKick,
   isBlockedKickTouchdown,
   isDefensiveReturnTouchdown,
   isExtraPointMade,
+  isKnownScoreType,
   isSpecialTeamsReturnTouchdown,
   isSuccessfulTwoPointConversion,
+  isTouchdownScoringPlay,
+  isUncountedSpecialTeamsScoreType,
+  KNOWN_SCORE_TYPES,
   parseFieldGoalYards,
   parseStatValue,
   TANK01_DST_MAP,
   TANK01_STAT_MAP,
   TANK01_TEAM_BLOCKED_KICK_FIELDS,
   TANK01_TEAM_DEF_ST_TD_FIELD,
+  TANK01_TEAM_STATS_MAP,
   TANK01_UNMAPPED_PLAYER_DEFENSE_FIELDS,
 } from "./stat-map.js";
 
@@ -189,6 +195,11 @@ const REAL_RETURNS = {
   puntWithTwoPoint: "Parker Washington 87 Yd Punt Return (Two-Point Pass Conversion Failed)",
   blockedPunt: "Sydney Brown 35 yd. return of blocked punt (J.Elliott kick)",
   blockedFieldGoal: "Jared Verse 76 Yd Return of Blocked Field Goal (Harrison Mevis Kick)",
+  // 2024, and the two that were losing points until 2026-08-17. The first is the
+  // only `BP` play in either season; the second is a `TD` whose `playerIDs` name
+  // the kicker and nobody else. See `box-score.test.ts` for what each cost.
+  blockedPuntBp: "Hunter Long 22 Yd Return of Blocked Punt (Joshua Karty Kick)",
+  blockedPuntNoIds: "J.J. Russell 23 Yd Return of Blocked Punt (Chase McLaughlin Kick)",
   interception: "Christian Benford 63 Yd Interception Return (Matt Prater Kick)",
   interception2: "T.J. Edwards 34 Yd Interception Return (Cairo Santos Kick)",
 } as const;
@@ -209,6 +220,27 @@ describe("isSpecialTeamsReturnTouchdown", () => {
     // abbreviated name, full stop after "yd". Tank01's text is not uniform.
     expect(isSpecialTeamsReturnTouchdown(REAL_RETURNS.blockedPunt)).toBe(true);
     expect(isSpecialTeamsReturnTouchdown(REAL_RETURNS.blockedFieldGoal)).toBe(true);
+    expect(isSpecialTeamsReturnTouchdown(REAL_RETURNS.blockedPuntBp)).toBe(true);
+    expect(isSpecialTeamsReturnTouchdown(REAL_RETURNS.blockedPuntNoIds)).toBe(true);
+  });
+
+  it("does not read a blocked extra point taken the other way as a touchdown", () => {
+    // The narrowing of 2026-08-17, and the reason it had to happen in the same
+    // change as the deny-list. `return of blocked` used to match anything, and
+    // `scoreType === "TD"` was the only thing keeping a conversion attempt out —
+    // so removing that equality test without this would have paid **six** points
+    // for a play worth **two**, to a unit, on a return of a blocked PAT.
+    //
+    // `BLOCKED_KICK_RECOVERY` already excluded the extra point in as many words.
+    // This makes the sibling pattern say the same thing rather than relying on a
+    // guard somewhere else.
+    for (const text of [
+      "Somebody 40 Yd Return of Blocked Extra Point",
+      "Somebody 40 Yd Return of Blocked PAT",
+      "Somebody Blocked Extra Point Recovery in End Zone",
+    ]) {
+      expect(isSpecialTeamsReturnTouchdown(text), text).toBe(false);
+    }
   });
 
   it("does NOT count interception returns", () => {
@@ -252,42 +284,36 @@ describe("field goals against real plays", () => {
 });
 
 describe("mapping integrity", () => {
-  const REGISTRY_KEYS = new Set([
-    "pass_yd",
-    "pass_td",
-    "pass_int",
-    "rush_yd",
-    "rush_td",
-    "rec",
-    "rec_yd",
-    "rec_td",
-    "fum_lost",
-    "two_pt",
-    "fg_0_39",
-    "fg_40_49",
-    "fg_50_59",
-    "fg_60_plus",
-    "fg_missed",
-    "xp_made",
-    "def_sack",
-    "def_int",
-    "def_fum_rec",
-    "def_safety",
-    "def_td",
-    "def_blk_kick",
-    "def_pts_allowed",
-    "def_yds_allowed",
-  ]);
+  /**
+   * Read from the registry rather than copied out of it.
+   *
+   * This was a hand-written list until 2026-08-17, and it had already gone
+   * stale: `ret_td` was missing from it, so any map pointing at that key would
+   * have been reported as unknown. A duplicate of a list whose whole purpose is
+   * to be the one true list is the drift it exists to catch.
+   */
+  const REGISTRY_KEYS = new Set(NFL.statKeys.map((key) => key.key));
 
   it("maps only to registry stat keys", () => {
     // A provider field name leaking through as a stat key would put Tank01's
     // vocabulary inside the scoring engine.
-    for (const statKey of Object.values(TANK01_STAT_MAP)) {
-      expect(REGISTRY_KEYS, `unknown stat key: ${statKey}`).toContain(statKey);
+    for (const map of [TANK01_STAT_MAP, TANK01_DST_MAP, TANK01_TEAM_STATS_MAP]) {
+      for (const statKey of Object.values(map)) {
+        expect(REGISTRY_KEYS, `unknown stat key: ${statKey}`).toContain(statKey);
+      }
     }
-    for (const statKey of Object.values(TANK01_DST_MAP)) {
-      expect(REGISTRY_KEYS, `unknown stat key: ${statKey}`).toContain(statKey);
-    }
+  });
+
+  it("reads each stat key from exactly one provider field", () => {
+    // Three maps now, and they all feed the same `totals` for a unit. Two of
+    // them naming one stat key would accumulate it twice — a doubled score with
+    // nothing to catch it, since both values would be real numbers from a real
+    // response.
+    const emitted = [TANK01_STAT_MAP, TANK01_DST_MAP, TANK01_TEAM_STATS_MAP].flatMap((map) =>
+      Object.values(map),
+    );
+
+    expect(new Set(emitted).size).toBe(emitted.length);
   });
 
   it("keeps fumbles under Defense, where Tank01 actually puts them", () => {
@@ -509,5 +535,92 @@ describe("the team-level fields", () => {
     // touchdown in week 4.
     expect(Object.keys(TANK01_DST_MAP)).not.toContain(TANK01_TEAM_DEF_ST_TD_FIELD);
     expect(Object.keys(TANK01_STAT_MAP)).not.toContain(TANK01_TEAM_DEF_ST_TD_FIELD);
+    expect(Object.keys(TANK01_TEAM_STATS_MAP)).not.toContain(TANK01_TEAM_DEF_ST_TD_FIELD);
+  });
+
+  it("reads defensive two-point returns from teamStats, which is the only block carrying them", () => {
+    // The `DST` block's fields, verbatim from every captured fixture:
+    // `teamAbv teamID defTD defensiveInterceptions sacks ydsAllowed
+    // fumblesRecovered ptsAllowed safeties`. This is not among them, which is
+    // why the map is separate rather than a stylistic split.
+    expect(TANK01_TEAM_STATS_MAP["defensiveTwoPointConversionReturns"]).toBe("def_2pt_ret");
+    expect(Object.keys(TANK01_DST_MAP)).not.toContain("defensiveTwoPointConversionReturns");
+  });
+});
+
+describe("which scoring plays may be touchdowns", () => {
+  it("accepts the two types that carry one", () => {
+    // `BP` is the one this function exists for. It was in the feed for two
+    // seasons and `scoreType === "TD"` sent it to neither the returner nor the
+    // unit — 12 points a play, silently. `20241208_BUF@LAR`.
+    expect(isTouchdownScoringPlay("TD")).toBe(true);
+    expect(isTouchdownScoringPlay("BP")).toBe(true);
+  });
+
+  it("refuses the three that carry something else", () => {
+    expect(isTouchdownScoringPlay("FG")).toBe(false);
+    expect(isTouchdownScoringPlay("SF")).toBe(false);
+    expect(isTouchdownScoringPlay("2PTC")).toBe(false);
+  });
+
+  it("treats an unfamiliar value as eligible rather than as a refusal", () => {
+    // The inversion, and the whole point. An allow-list of TD and BP fixes the
+    // one play we found and leaves the next one exactly as expensive; the text
+    // pattern is what actually names the event. `isKnownScoreType` is how the
+    // next unfamiliar value gets looked at instead of being trusted quietly.
+    expect(isTouchdownScoringPlay("XPR")).toBe(true);
+    expect(isTouchdownScoringPlay(undefined)).toBe(true);
+    expect(isTouchdownScoringPlay(null)).toBe(true);
+    expect(isTouchdownScoringPlay("")).toBe(true);
+  });
+
+  it("is not fooled by case or padding", () => {
+    expect(isTouchdownScoringPlay(" fg ")).toBe(false);
+    expect(isTouchdownScoringPlay("sf")).toBe(false);
+  });
+});
+
+describe("isKnownScoreType", () => {
+  it("knows every value two seasons of sweeping have turned up", () => {
+    expect([...KNOWN_SCORE_TYPES].sort()).toEqual(["2PTC", "BP", "FG", "SF", "TD"]);
+
+    for (const scoreType of KNOWN_SCORE_TYPES) {
+      expect(isKnownScoreType(scoreType), scoreType).toBe(true);
+    }
+  });
+
+  it("counts an absent value as known, because one was observed", () => {
+    // Warning about it would put noise on ordinary games, which is how a
+    // tripwire stops being read.
+    expect(isKnownScoreType(undefined)).toBe(true);
+    expect(isKnownScoreType(null)).toBe(true);
+    expect(isKnownScoreType("")).toBe(true);
+  });
+
+  it("does not know anything else", () => {
+    expect(isKnownScoreType("XPR")).toBe(false);
+    expect(isKnownScoreType("DEF2PT")).toBe(false);
+  });
+});
+
+describe("isUncountedSpecialTeamsScoreType", () => {
+  it("names BP, and only BP", () => {
+    // Not a scoring question. It tells the `defensiveOrSpecialTeamsTds`
+    // cross-check which plays the provider leaves out of its own totals, so that
+    // paying a `BP` play does not make the check fire on a game we have just
+    // started scoring correctly. `20241208_BUF@LAR` reads `0` and `0` for the
+    // Rams while the scoring text plainly shows one.
+    expect(isUncountedSpecialTeamsScoreType("BP")).toBe(true);
+    expect(isUncountedSpecialTeamsScoreType("bp")).toBe(true);
+
+    for (const scoreType of ["TD", "FG", "SF", "2PTC", "", undefined, null]) {
+      expect(isUncountedSpecialTeamsScoreType(scoreType), String(scoreType)).toBe(false);
+    }
+  });
+
+  it("does not decide whether the play scores", () => {
+    // The two questions are independent, and conflating them would have been the
+    // easy mistake: a `BP` play is a touchdown that pays six twice over.
+    expect(isTouchdownScoringPlay("BP")).toBe(true);
   });
 });

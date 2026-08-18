@@ -105,6 +105,26 @@ export const TANK01_DST_MAP: Readonly<Record<string, string>> = {
   ydsAllowed: "def_yds_allowed",
   sacks: "def_sack",
   defensiveInterceptions: "def_int",
+  // **This is the opponent's fumbles *lost*, not this unit's recoveries**, and it
+  // is kept anyway because Tank01 offers nothing that is the latter. Established
+  // 2026-08-17 by separating the two readings across 22 team-games:
+  // `20251005_TEN@ARI` discriminates them and the field follows fumbles-lost.
+  //
+  // The two agree on almost every game, because almost every fumble a team loses
+  // is recovered by the defence. They part company when a *defender* fumbles
+  // during a return and the intercepted team recovers: ESPN pays the recovering
+  // unit 2, and this field does not see it. Measured across 2024 and 2025:
+  // `20250925_SEA@ARI`, `20251130_MIN@SEA` and `20251208_PHI@LAC` — three
+  // team-weeks, 2 points each, Sleeper right in all three.
+  //
+  // **No substitute exists and none was invented.** `teamStats` carries no
+  // recovery counter at all (see `docs/TANK01.md`), and the per-player
+  // `Defense.fumblesRecovered` is contaminated by design — a player who falls on
+  // his own fumble carries it, 185 player-weeks of 2025 did, and a teammate
+  // recovering a teammate's fumble is indistinguishable from a defender
+  // recovering an opponent's. Summing it per team and subtracting an estimate of
+  // the own-fumble half would be a derivation dressed as a reading, and a
+  // three-team-week undercount is a better answer than a number nobody can check.
   fumblesRecovered: "def_fum_rec",
   defTD: "def_td",
   safeties: "def_safety",
@@ -165,6 +185,31 @@ export const TANK01_TEAM_BLOCKED_KICK_FIELDS: readonly string[] = [
 export const TANK01_TEAM_DEF_ST_TD_FIELD = "defensiveOrSpecialTeamsTds";
 
 /**
+ * `teamStats` fields read as a **source**, not as a cross-check.
+ *
+ * The only one so far, and the reason it is here rather than in
+ * {@link TANK01_DST_MAP} is simply that the `DST` block does not carry it: the
+ * `DST` keys are `teamAbv teamID defTD defensiveInterceptions sacks ydsAllowed
+ * fumblesRecovered ptsAllowed safeties` and nothing else.
+ *
+ * **A defensive two-point conversion return** is what happens when a defence
+ * takes a failed conversion attempt back the other way. ESPN pays the D/ST **2**
+ * for it and we had no stat key at all until 2026-08-17, so it scored nothing.
+ * Three occurrences across 2024 and 2025 — Dallas in 2025 week 4
+ * (`"Markquese Bell Defensive PAT Conversion"`), Miami in 2025 week 13, and
+ * Philadelphia in 2024 week 4.
+ *
+ * Read from the number rather than parsed out of the text, deliberately. The
+ * wording varies (`"Defensive PAT Conversion"` is not the only form), the event
+ * is rare enough that a pattern would go years without being exercised, and
+ * unlike a field goal's distance there is nothing here that only the prose
+ * knows.
+ */
+export const TANK01_TEAM_STATS_MAP: Readonly<Record<string, string>> = {
+  defensiveTwoPointConversionReturns: "def_2pt_ret",
+};
+
+/**
  * Everything our scoring table needs is obtainable.
  *
  * An earlier version of this file claimed blocked kicks were unavailable. They
@@ -210,9 +255,9 @@ export function parseFieldGoalYards(scoreText: string): number | null {
  * `TD`, `FG` and `SF` are the three that carry meaning here, and they were the
  * only three seen across 48 games of 2025 weeks 1-3. **That is not the whole
  * vocabulary**, and this comment used to say it was: a sweep of the full season
- * also found `2PTC` and a `null`. Nothing below enumerates the set — every use
- * is an equality test against one of the three — so an unfamiliar value is inert
- * rather than a crash, and that is deliberate.
+ * also found `2PTC` and a `null`, and a sweep of 2024 found **`BP`** — see
+ * {@link isTouchdownScoringPlay}, which is why nothing decides a touchdown by
+ * asking whether this field equals `"TD"` any more.
  *
  * Extra points, two-point conversions, and blocked kicks are not score types at
  * all: they live in the trailing parenthetical of a touchdown's `score` text, the
@@ -266,6 +311,108 @@ export function isBlockedKick(scoreText: string): boolean {
 /** Whether the play's PAT attempt was a successful kick. */
 export function isExtraPointMade(scoreText: string): boolean {
   return /\(\s*[^)]*\bKick\s*\)/i.test(scoreText) && !FAILED_PATTERN.test(scoreText);
+}
+
+// ---------------------------------------------------------------------------
+// Which scoring plays are touchdowns
+// ---------------------------------------------------------------------------
+
+/**
+ * The `scoreType` values this adapter has actually seen.
+ *
+ * Not consulted to decide anything — {@link isTouchdownScoringPlay} deliberately
+ * does not read it — but a value outside it is worth saying out loud, because
+ * this list has now been wrong twice and both times the symptom was silence. See
+ * {@link isKnownScoreType}.
+ *
+ * `TD` `FG` `SF` across 96 games of 2025 weeks 1-3; `2PTC` and an absent value
+ * from the full 2025 sweep; `BP` from 2024, verbatim below.
+ */
+export const KNOWN_SCORE_TYPES: ReadonlySet<string> = new Set(["TD", "FG", "SF", "2PTC", "BP"]);
+
+/**
+ * `scoreType` values that are definitely **not** a touchdown.
+ *
+ * The list this file is prepared to be exhaustive about, because each member was
+ * observed carrying its own non-touchdown event: a field goal, a safety, a
+ * conversion attempt. Everything else is *eligible*, and the text decides.
+ */
+const NON_TOUCHDOWN_SCORE_TYPES: ReadonlySet<string> = new Set(["FG", "SF", "2PTC"]);
+
+/**
+ * Whether a scoring play may be a touchdown.
+ *
+ * **A deny-list, and that inversion is the whole point.** This used to be
+ * `play.scoreType === "TD"` in the two places that pay six points, and Tank01
+ * has a fifth value. Verbatim, from `20241208_BUF@LAR`:
+ *
+ *     BP | LAR | Hunter Long 22 Yd Return of Blocked Punt (Joshua Karty Kick)
+ *
+ * That is a touchdown. Under the equality test the returner got no `ret_td` and
+ * the Rams' unit no `def_td` — **12 points on one play, in silence**, because
+ * `DST.defTD` reads `"0"` and `defensiveOrSpecialTeamsTds` reads `"0"` too, so
+ * no other path and no cross-check made it up.
+ *
+ * An allow-list of `TD` and `BP` would fix that one play and leave the next
+ * unknown value exactly as expensive. So the question asked is the negative one:
+ * a play is eligible unless its type names something that is known not to be a
+ * touchdown. An unfamiliar value, and an absent one, are eligible.
+ *
+ * **This is only safe because the type is never the deciding evidence.** Both
+ * callers require {@link isSpecialTeamsReturnTouchdown} on the play text as
+ * well, and that pattern names the event — a kickoff, punt or blocked-kick
+ * return. What this function removes is a veto, not a requirement. The
+ * deliberate exclusion of the extra point from {@link BLOCKED_KICK_RECOVERY} and
+ * from {@link SPECIAL_TEAMS_RETURN} is what stops the one thing that would
+ * otherwise leak in: a blocked *extra point* taken back the other way is a
+ * defensive two-point conversion return worth 2, not a touchdown worth 6.
+ */
+export function isTouchdownScoringPlay(scoreType: string | null | undefined): boolean {
+  return !NON_TOUCHDOWN_SCORE_TYPES.has((scoreType ?? "").trim().toUpperCase());
+}
+
+/**
+ * Whether this `scoreType` is one we have seen before.
+ *
+ * The tripwire, and the reason it exists rather than being inferred later:
+ * `"BP"` was invisible for as long as it was, and cost 12 points every time it
+ * appeared, precisely because nothing anywhere said "this is a value we do not
+ * know". A season sweep is what found it, and a season sweep is not something
+ * that happens on a schedule.
+ *
+ * An absent or empty value counts as known — the full-2025 sweep found one, so
+ * warning about it would be noise on the very first game rather than a signal.
+ */
+export function isKnownScoreType(scoreType: string | null | undefined): boolean {
+  const value = (scoreType ?? "").trim().toUpperCase();
+  return value === "" || KNOWN_SCORE_TYPES.has(value);
+}
+
+/**
+ * Whether Tank01 leaves this play out of {@link TANK01_TEAM_DEF_ST_TD_FIELD}.
+ *
+ * Read by the cross-check in `box-score.ts` and by nothing that scores. A `BP`
+ * play is a special-teams touchdown we now pay for, and it appears in **neither**
+ * of the provider's own two counters, so a comparison that includes it reports a
+ * discrepancy on a game we have just started scoring correctly — which is the
+ * defect #181 fixed for blocked kicks filed as defensive, arriving from the
+ * other direction.
+ *
+ * **This rests on one observation and says so.** `20241208_BUF@LAR` is the only
+ * `BP` play in 2024 or 2025: the Rams have one blocked-punt return touchdown,
+ * `defensiveOrSpecialTeamsTds` reads `"0"` and `DST.defTD` reads `"0"`.
+ * (`teamStats.blockedPunt` reads `"1"`, so the block itself is counted; it is
+ * the touchdown that is not.) Whether that is how `BP` is always filed or how
+ * one game happened to be filed cannot be told apart from a single play — but a
+ * warning that fires on a correctly scored game trains people to dismiss the
+ * next real one, and the exclusion is reported in the warning text when the
+ * check still disagrees, so a genuinely uncounted play cannot read as one nobody
+ * noticed.
+ */
+export function isUncountedSpecialTeamsScoreType(
+  scoreType: string | null | undefined,
+): boolean {
+  return (scoreType ?? "").trim().toUpperCase() === "BP";
 }
 
 /**
@@ -341,7 +488,24 @@ export function isExtraPointMade(scoreText: string): boolean {
  * `ret_td` of 0 here is the right answer rather than a gap waiting on evidence.
  */
 const DEFENSIVE_RETURN = /\b(interception|fumble)\s+(return|recovery)\b/i;
-const SPECIAL_TEAMS_RETURN = /\b(kickoff|kick|punt)\s+return\b|\breturn\s+of\s+blocked\b/i;
+/**
+ * A return, named by what was returned.
+ *
+ * **The second alternative used to be a bare `return of blocked`**, and it was
+ * narrowed on 2026-08-17 to name the kick, so that it carries the same exclusion
+ * {@link BLOCKED_KICK_RECOVERY} spells out below: a blocked **extra point**
+ * taken the other way is a two-point defensive conversion return, not a
+ * touchdown. That mattered only once {@link isTouchdownScoringPlay} stopped
+ * insisting on a `scoreType` of `"TD"` — the equality test was previously doing
+ * the job this narrowing now does explicitly, which is exactly the shape of
+ * guard that stops holding the moment somebody edits the thing in front of it.
+ *
+ * No known string moves. All four blocked-kick returns name a punt or a field
+ * goal: `"22 Yd Return of Blocked Punt"`, `"35 yd. return of blocked punt"`,
+ * `"76 Yd Return of Blocked Field Goal"`.
+ */
+const SPECIAL_TEAMS_RETURN =
+  /\b(kickoff|kick|punt)\s+return\b|\breturn\s+of\s+blocked\s+(kick|punt|field\s+goal|fg)\b/i;
 /**
  * A blocked kick recovered rather than returned. Anchored on "blocked".
  *
@@ -418,18 +582,17 @@ export function mainClause(scoreText: string): string {
   return scoreText.replace(/\([^)]*\)/g, " ");
 }
 
-/**
- * Whether this player is the one the main clause says scored.
- *
- * A substring match, like `twoPointCredit`'s, and safe for the same reason: it
- * is only ever asked about players the play already names in `playerIDs`, so a
- * coincidental hit needs two participants in one play whose names contain one
- * another. It is **not** safe to widen this to the whole roster without a
- * stricter comparison.
+/*
+ * `scoredInMainClause` used to live here — a raw substring test, safe only
+ * because it was asked exclusively about players the play already named in
+ * `playerIDs`, and saying so. It was removed on 2026-08-17 when return
+ * touchdowns stopped being gated on `playerIDs` at all, because that gate
+ * dropped the scorer outright on `20241229_CAR@TB`. Its own docstring named the
+ * condition for widening — "not safe … without a stricter comparison" — and
+ * `returnTouchdownCredits` is that comparison: normalised name forms, every
+ * spelling, and a refusal when more than one player answers. Deleted rather than
+ * left, so nothing reaches for the weaker one.
  */
-export function scoredInMainClause(scoreText: string, longName: string): boolean {
-  return mainClause(scoreText).includes(longName);
-}
 
 /**
  * Whether a touchdown was a defensive return — an interception or a fumble,
