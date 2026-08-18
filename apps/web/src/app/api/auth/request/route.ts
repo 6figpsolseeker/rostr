@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { beginEmailSignIn, IdentityError, SIGN_IN_PER_EMAIL, SIGN_IN_PER_IP } from "@rostr/db";
 import { db } from "@/lib/db";
-import { EmailDeliveryError, EmailNotConfiguredError, sendSignInLink } from "@/lib/email";
+import { EmailDeliveryError, EmailNotConfiguredError, sendSignInCode } from "@/lib/email";
 import { byIp, enforceRateLimit } from "@/lib/rate-limit";
 import { safeRedirect } from "@/lib/session";
 
@@ -37,18 +37,17 @@ export async function POST(request: Request): Promise<NextResponse> {
   ]);
   if (limited) return limited;
 
-  const origin = new URL(request.url).origin;
-  const next = safeRedirect(body.next ?? null);
-
   try {
     const { token } = await beginEmailSignIn(db(), body.email, body.displayName);
 
-    const link = `${origin}/api/auth/verify?token=${encodeURIComponent(token.token)}&next=${encodeURIComponent(next)}`;
-    const result = await sendSignInLink(body.email, link);
+    // The code goes in the body of the email and nowhere near a URL. That is
+    // the entire point: a credential in a link is spent by whatever follows the
+    // link, and plenty of things follow a link without a person deciding to.
+    const result = await sendSignInCode(body.email, token.token);
 
     return NextResponse.json({
       sent: true,
-      ...(result.devLink ? { devLink: result.devLink } : {}),
+      ...(result.devCode ? { devCode: result.devCode } : {}),
     });
   } catch (error) {
     if (error instanceof EmailNotConfiguredError) {

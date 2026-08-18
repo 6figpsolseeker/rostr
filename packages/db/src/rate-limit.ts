@@ -167,6 +167,29 @@ export const SIGN_IN_PER_IP: RateLimitRule = {
   windowMs: HOUR,
 };
 
+/**
+ * Sign-in code *attempts*, per address.
+ *
+ * The other half of what makes six digits safe. `MAX_CODE_ATTEMPTS` bounds
+ * guesses against any one code; without this, an attacker could exhaust a code,
+ * request another, and keep going — a million possibilities is not many when
+ * the only cost is a round trip.
+ *
+ * Deliberately not per-email: the attacker chooses the address they are
+ * attacking, so a per-email bucket would let them work through one victim at
+ * their leisure while never touching their own limit. Per-address caps the
+ * machine doing the guessing.
+ *
+ * 30/hour against a code that dies after 5 wrong tries means roughly six codes
+ * can be attacked an hour — about 30 guesses out of 1,000,000. A legitimate
+ * person mistyping a few times never comes close.
+ */
+export const SIGN_IN_ATTEMPT_PER_IP: RateLimitRule = {
+  bucket: "auth:code:ip",
+  limit: 30,
+  windowMs: HOUR,
+};
+
 /** Wallet challenges, per signed-in account. */
 export const WALLET_CHALLENGE_PER_USER: RateLimitRule = {
   bucket: "auth:wallet:user",

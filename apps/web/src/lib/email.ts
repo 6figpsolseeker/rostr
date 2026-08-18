@@ -13,13 +13,14 @@ import "server-only";
 export interface DeliveryResult {
   readonly delivered: boolean;
   /**
-   * The link, returned only when there is no provider **and** we are not in
-   * production, so the developer can click it.
+   * The code, returned only when there is no provider **and** we are not in
+   * production, so a developer can sign in locally.
    *
-   * Never in production: handing a sign-in link back over the same HTTP response
-   * would let anyone who can hit the endpoint sign in as any email they name.
+   * Never in production: handing the code back over the same HTTP response
+   * would let anyone who can reach the endpoint sign in as any address they
+   * name.
    */
-  readonly devLink?: string;
+  readonly devCode?: string;
 }
 
 /**
@@ -60,7 +61,7 @@ export class EmailNotConfiguredError extends Error {
   }
 }
 
-export async function sendSignInLink(email: string, link: string): Promise<DeliveryResult> {
+export async function sendSignInCode(email: string, code: string): Promise<DeliveryResult> {
   const apiKey = process.env["RESEND_API_KEY"];
   const from = process.env["EMAIL_FROM"];
 
@@ -68,8 +69,10 @@ export async function sendSignInLink(email: string, link: string): Promise<Deliv
     if (process.env.NODE_ENV === "production") throw new EmailNotConfiguredError();
 
     // eslint-disable-next-line no-console
-    console.info(`\n  Sign-in link for ${email}:\n  ${link}\n`);
-    return { delivered: false, devLink: link };
+    console.info(`
+  Sign-in code for ${email}:  ${code}
+`);
+    return { delivered: false, devCode: code };
   }
 
   const response = await fetch("https://api.resend.com/emails", {
@@ -81,13 +84,15 @@ export async function sendSignInLink(email: string, link: string): Promise<Deliv
     body: JSON.stringify({
       from,
       to: email,
-      subject: "Your rostr sign-in link",
+      subject: `${code} is your rostr sign-in code`,
       text: [
-        "Sign in to rostr:",
+        `Your sign-in code is ${code}`,
         "",
-        link,
+        "Type it into the page you already have open. There is deliberately",
+        "no link to click: a credential in a URL is spent by whatever visits",
+        "it, and plenty of things visit a URL without a person deciding to.",
         "",
-        "The link works once and expires in 24 hours.",
+        "It works once and expires in ten minutes.",
         "If you did not ask for this, ignore it — nothing has changed.",
       ].join("\n"),
     }),
