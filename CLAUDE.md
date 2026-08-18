@@ -667,15 +667,21 @@ partial fix write `Refs #79` and close it by hand when the last part lands.
    work end to end and are exercised against a validator on every CI run (#62, #63), so
    the structural barrier is gone: money can go in and come back out through the
    unconditional refund, but it cannot be _distributed_. What closes the gap is
-   `potDepositGate`, which shuts the stake button on mainnet until the committed IDL
-   carries a settlement instruction. See "Deposit and refund" below.
+   `potDepositGate`, which shuts a mainnet buy-in — on **both** paths that offer one —
+   until the committed IDL carries a settlement instruction. See "Deposit and refund"
+   below.
 
-   **That is true of `DepositPanel` and false of `JoinPanel` — issue #168, found
-   2026-08-17.** The page passes `depositsOpen()` to the first and an ungated
-   `hasPot` to the second, and `JoinPanel` batches `deposit` into the join
-   transaction from that boolean alone. So the gate is not consulted on the path
-   every new member actually takes, and the sentence above describes the panel
-   almost nobody uses. Do not treat this as a structural barrier until #168 lands.
+   **It was true of `DepositPanel` and false of `JoinPanel` until 2026-08-18** (issue
+   #168). The page passed `depositsOpen()` to the first and an ungated `hasPot` to the
+   second, and `JoinPanel` batches `deposit` into the join transaction from that boolean
+   alone — so the gate was enforced on the control almost nobody uses and bypassed on the
+   path every new member takes. Both now read the same value.
+
+   **The join is not refused when the gate is shut, and must never be.** The field locks
+   at the frozen draft time on INSERT _and_ DELETE (`0028`) and nothing dissolves a
+   league, so a member turned away at the door has no second chance at the seat. The seat
+   is taken and the stake alone is omitted, which is the `deposited == 0` state the retry
+   already understood and `DepositPanel` already existed to finish.
 
    The missing piece is the payout (#28, D6). PR #31 offered one and was closed on
    2026-08-14 — see the review above; the short version is that it declared a winner,
@@ -1666,6 +1672,20 @@ stops them. It is weaker than what it replaces, and the comment there says so ra
 reprising the sentence it retired. And it is **not** applied in the deposit route — see
 that file for why refusing to record a deposit the chain has already accepted produces
 amnesia rather than an emptier vault.
+
+**Both panels read it, and the join panel decides through `joinPlan`** —
+`packages/escrow/src/join-plan.ts`, not four booleans inside a component this app cannot
+render in a test. That function answers what to **send** and what to **record** together,
+which is the whole point: #168's second half is that gating only the transaction leaves
+`onchainJoin` POSTing `/deposit` for a stake it did not send, and `/deposit` reads the
+`Membership` account back — so it 409s `NOT_DEPOSITED`, the retry re-posts it, and a
+member whose join succeeded is told forever that it failed.
+
+It also separates **ever staked** (`deposited > 0`, which is what the _program_ will
+accept, since `deposit` refuses a second stake) from **currently staked**
+(`deposited > 0 && !refunded`, which is what the _verifier_ will accept). Conflating them
+puts a refunded membership in a permanent `ALREADY_REFUNDED` loop, and that is reachable
+today rather than hypothetical.
 
 **Off mainnet the gate is open**, deliberately: the funding path has to be exercisable end
 to end, which is what Aug 22's "fundable" asks for and what `stake.test.ts` already proves

@@ -40,6 +40,12 @@ export {
   type RulesLikeTerms,
 } from "./verify.js";
 export {
+  joinPlan,
+  type JoinPlan,
+  type JoinPlanInput,
+  type MembershipState,
+} from "./join-plan.js";
+export {
   SETTLEMENT_PREFIXES,
   instructionNames,
   potDepositGate,

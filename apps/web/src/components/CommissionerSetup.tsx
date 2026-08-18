@@ -45,7 +45,15 @@ const COPY: Record<SetupStepKey, { title: string; detail: string }> = {
   ONCHAIN: {
     title: "Record your membership on-chain",
     detail:
-      "One approval, which also stakes your buy-in if this league has a pot. Both or neither.",
+      // It used to promise "which also stakes your buy-in if this league has a " +
+      // "pot. Both or neither." That was accurate only because of #168 — the
+      // batch ignored the deposit gate — and stating it here would be a promise
+      // this screen cannot keep, since whether a buy-in is taken depends on the
+      // gate rather than on the league. The join panel says which of the two it
+      // is about to do, where the answer is actually known.
+      "One approval. It takes your seat on-chain, and stakes your buy-in in the same " +
+      "transaction when this league has a pot and buy-ins are open — both or neither, " +
+      "never one without the other.",
   },
 };
 
