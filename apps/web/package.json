@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "vercel-build": "cd ../.. && pnpm --filter \"@rostr/web...\" build",
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit"
