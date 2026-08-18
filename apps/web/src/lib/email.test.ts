@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { EmailDeliveryError, EmailNotConfiguredError, sendSignInLink } from "./email.js";
+import { EmailDeliveryError, EmailNotConfiguredError, sendSignInCode } from "./email.js";
 
 /**
  * Sending the sign-in link, and — the point of this file — what happens when
@@ -23,7 +23,7 @@ const configure = (): void => {
   vi.stubEnv("EMAIL_FROM", "onboarding@resend.dev");
 };
 
-describe("sendSignInLink", () => {
+describe("sendSignInCode", () => {
   it("reports a provider refusal as EmailDeliveryError, not a bare Error", async () => {
     configure();
     vi.stubGlobal(
@@ -35,7 +35,7 @@ describe("sendSignInLink", () => {
         ),
     );
 
-    await expect(sendSignInLink("someone@example.com", "https://x/y")).rejects.toBeInstanceOf(
+    await expect(sendSignInCode("someone@example.com", "418302")).rejects.toBeInstanceOf(
       EmailDeliveryError,
     );
   });
@@ -50,7 +50,7 @@ describe("sendSignInLink", () => {
       vi.fn().mockResolvedValue(new Response("domain not verified", { status: 422 })),
     );
 
-    const error = await sendSignInLink("a@b.com", "https://x/y").catch((e: unknown) => e);
+    const error = await sendSignInCode("a@b.com", "418302").catch((e: unknown) => e);
 
     expect(error).toBeInstanceOf(EmailDeliveryError);
     expect((error as EmailDeliveryError).status).toBe(422);
@@ -61,9 +61,7 @@ describe("sendSignInLink", () => {
     configure();
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("nope", { status: 500 })));
 
-    const error = (await sendSignInLink("a@b.com", "https://x/y").catch(
-      (e: unknown) => e,
-    )) as Error;
+    const error = (await sendSignInCode("a@b.com", "418302").catch((e: unknown) => e)) as Error;
 
     expect(error.message).toMatch(/delivery problem/i);
     expect(error.message).not.toMatch(/Unexpected end of JSON/);
@@ -76,7 +74,7 @@ describe("sendSignInLink", () => {
       vi.fn().mockResolvedValue(new Response(JSON.stringify({ id: "abc" }), { status: 200 })),
     );
 
-    await expect(sendSignInLink("a@b.com", "https://x/y")).resolves.toEqual({
+    await expect(sendSignInCode("a@b.com", "418302")).resolves.toEqual({
       delivered: true,
     });
   });
@@ -88,7 +86,7 @@ describe("sendSignInLink", () => {
     vi.stubEnv("RESEND_API_KEY", "");
     vi.stubEnv("EMAIL_FROM", "");
 
-    await expect(sendSignInLink("a@b.com", "https://x/y")).rejects.toBeInstanceOf(
+    await expect(sendSignInCode("a@b.com", "418302")).rejects.toBeInstanceOf(
       EmailNotConfiguredError,
     );
   });
@@ -98,9 +96,9 @@ describe("sendSignInLink", () => {
     vi.stubEnv("RESEND_API_KEY", "");
     vi.stubEnv("EMAIL_FROM", "");
 
-    const result = await sendSignInLink("a@b.com", "https://x/y");
+    const result = await sendSignInCode("a@b.com", "418302");
 
     expect(result.delivered).toBe(false);
-    expect(result.devLink).toBe("https://x/y");
+    expect(result.devCode).toBe("418302");
   });
 });

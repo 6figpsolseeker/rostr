@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { ed25519 } from "@noble/curves/ed25519";
 import bs58 from "bs58";
 import { buildWalletLinkMessage, sha256Hex } from "@rostr/core";
-import { beginEmailSignIn, getWallets, verifyEmail } from "./identity.js";
+import { beginEmailSignIn, getWallets, verifySignInCode } from "./identity.js";
 import {
   CHALLENGE_TTL_MS,
   createSession,
@@ -48,7 +48,8 @@ describe("beginEmailSignIn", () => {
 
     expect(result.isNew).toBe(true);
     expect(result.user.email).toBe("new@example.com");
-    expect(result.token.token).toHaveLength(43);
+    // Six digits, typed rather than followed — see migration 0031.
+    expect(result.token.token).toMatch(/^[0-9]{6}$/);
   });
 
   it("reuses the account on a second sign-in", async () => {
@@ -63,15 +64,15 @@ describe("beginEmailSignIn", () => {
     expect(second.user.id).toBe(first.user.id);
   });
 
-  it("supersedes the previous link", async () => {
-    // Otherwise an old link forwarded to someone else still works.
+  it("supersedes the previous code", async () => {
+    // Otherwise an old code forwarded to someone else still works.
     db = await createTestDatabase();
     const first = await beginEmailSignIn(db, "super@example.com", "S", NOW);
     await beginEmailSignIn(db, "super@example.com", undefined, NOW);
 
-    await expect(verifyEmail(db, first.token.token, NOW)).rejects.toMatchObject({
-      code: "TOKEN_INVALID",
-    });
+    await expect(
+      verifySignInCode(db, "super@example.com", first.token.token, NOW),
+    ).rejects.toMatchObject({ code: "TOKEN_INVALID" });
   });
 
   it("defaults a display name from the address", async () => {
@@ -87,14 +88,14 @@ describe("beginEmailSignIn", () => {
   });
 
   it("keeps the original verification time across later sign-ins", async () => {
-    // These tokens double as sign-in links, so verifyEmail runs on every login.
+    // These codes double as sign-in credentials, so this runs on every login.
     db = await createTestDatabase();
     const first = await beginEmailSignIn(db, "keep@example.com", "K", NOW);
-    await verifyEmail(db, first.token.token, NOW);
+    await verifySignInCode(db, "keep@example.com", first.token.token, NOW);
 
     const later = new Date(NOW.getTime() + 86_400_000);
     const second = await beginEmailSignIn(db, "keep@example.com", undefined, later);
-    await verifyEmail(db, second.token.token, later);
+    await verifySignInCode(db, "keep@example.com", second.token.token, later);
 
     const [row] = await db.query<{ email_verified_at: string }>(
       "SELECT email_verified_at FROM users WHERE lower(email) = 'keep@example.com'",

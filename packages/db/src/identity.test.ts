@@ -8,7 +8,8 @@ import {
   IdentityError,
   issueVerificationToken,
   linkWallet,
-  verifyEmail,
+  verifySignInCode,
+  MAX_CODE_ATTEMPTS,
   VERIFICATION_TTL_MS,
 } from "./identity.js";
 import { createTestDatabase } from "./testing.js";
@@ -56,22 +57,34 @@ describe("createUser", () => {
   });
 });
 
-describe("email verification", () => {
-  it("verifies with a valid token", async () => {
+describe("signing in with a code", () => {
+  const EMAIL = "a@example.com";
+
+  it("signs in with the right code", async () => {
     const client = await fresh();
-    const user = await createUser(client, "a@example.com", "Alice");
+    const user = await createUser(client, EMAIL, "Alice");
     const { token } = await issueVerificationToken(client, user.id);
 
-    const verified = await verifyEmail(client, token);
+    const verified = await verifySignInCode(client, EMAIL, token);
     expect(verified.emailVerified).toBe(true);
   });
 
-  it("stores only the hash, never the token", async () => {
+  it("issues six digits, which is what makes it typeable", async () => {
     const client = await fresh();
-    const user = await createUser(client, "a@example.com", "Alice");
+    const user = await createUser(client, EMAIL, "Alice");
     const { token } = await issueVerificationToken(client, user.id);
 
-    // A database leak must not yield working verification links.
+    expect(token).toMatch(/^[0-9]{6}$/);
+  });
+
+  it("stores only the hash, never the code", async () => {
+    // A six-digit code is far weaker than the token it replaced, so the
+    // database must be no help at all: a leak yields hashes, and reversing a
+    // SHA-256 of an unknown-at-rest value is the attacker's problem.
+    const client = await fresh();
+    const user = await createUser(client, EMAIL, "Alice");
+    const { token } = await issueVerificationToken(client, user.id);
+
     const rows = await client.query<{ token_hash: string }>(
       "SELECT token_hash FROM email_verification_tokens",
     );
@@ -81,34 +94,88 @@ describe("email verification", () => {
 
   it("is single use", async () => {
     const client = await fresh();
-    const user = await createUser(client, "a@example.com", "Alice");
+    const user = await createUser(client, EMAIL, "Alice");
     const { token } = await issueVerificationToken(client, user.id);
 
-    await verifyEmail(client, token);
-    await expect(verifyEmail(client, token)).rejects.toSatisfy(
+    await verifySignInCode(client, EMAIL, token);
+    await expect(verifySignInCode(client, EMAIL, token)).rejects.toSatisfy(
       (e: unknown) => e instanceof IdentityError && e.code === "TOKEN_INVALID",
     );
   });
 
-  it("supersedes an earlier token", async () => {
+  it("supersedes an earlier code", async () => {
     const client = await fresh();
-    const user = await createUser(client, "a@example.com", "Alice");
+    const user = await createUser(client, EMAIL, "Alice");
     const first = await issueVerificationToken(client, user.id);
     await issueVerificationToken(client, user.id);
 
-    await expect(verifyEmail(client, first.token)).rejects.toSatisfy(
+    await expect(verifySignInCode(client, EMAIL, first.token)).rejects.toSatisfy(
       (e: unknown) => e instanceof IdentityError && e.code === "TOKEN_INVALID",
     );
   });
 
-  it("rejects an expired token and consumes it anyway", async () => {
+  it("survives a wrong guess rather than dying on a typo", async () => {
+    // Destroying the code on the first mistake would send people back to their
+    // inbox for a mistyped digit, which is its own kind of broken.
     const client = await fresh();
-    const user = await createUser(client, "a@example.com", "Alice");
+    const user = await createUser(client, EMAIL, "Alice");
+    const { token } = await issueVerificationToken(client, user.id);
+
+    await expect(verifySignInCode(client, EMAIL, wrong(token))).rejects.toSatisfy(
+      (e: unknown) => e instanceof IdentityError && e.code === "TOKEN_INVALID",
+    );
+
+    const verified = await verifySignInCode(client, EMAIL, token);
+    expect(verified.emailVerified).toBe(true);
+  });
+
+  it("destroys the code after MAX_CODE_ATTEMPTS wrong guesses", async () => {
+    // The whole reason six digits is safe. Without this, a million guesses is
+    // an afternoon's work.
+    const client = await fresh();
+    const user = await createUser(client, EMAIL, "Alice");
+    const { token } = await issueVerificationToken(client, user.id);
+
+    for (let i = 0; i < MAX_CODE_ATTEMPTS; i++) {
+      await expect(verifySignInCode(client, EMAIL, wrong(token))).rejects.toThrow();
+    }
+
+    // Even the correct code is now worthless.
+    await expect(verifySignInCode(client, EMAIL, token)).rejects.toSatisfy(
+      (e: unknown) => e instanceof IdentityError && e.code === "TOKEN_INVALID",
+    );
+
+    const rows = await client.query("SELECT user_id FROM email_verification_tokens");
+    expect(rows).toEqual([]);
+  });
+
+  it("counts attempts against the code, so a new one starts fresh", async () => {
+    const client = await fresh();
+    const user = await createUser(client, EMAIL, "Alice");
+    const first = await issueVerificationToken(client, user.id);
+
+    for (let i = 0; i < MAX_CODE_ATTEMPTS - 1; i++) {
+      await expect(verifySignInCode(client, EMAIL, wrong(first.token))).rejects.toThrow();
+    }
+
+    const second = await issueVerificationToken(client, user.id);
+    const [row] = await client.query<{ attempts: number }>(
+      "SELECT attempts FROM email_verification_tokens",
+    );
+    expect(Number(row?.attempts)).toBe(0);
+
+    const verified = await verifySignInCode(client, EMAIL, second.token);
+    expect(verified.emailVerified).toBe(true);
+  });
+
+  it("rejects an expired code and consumes it anyway", async () => {
+    const client = await fresh();
+    const user = await createUser(client, EMAIL, "Alice");
     const issuedAt = new Date("2026-08-01T00:00:00Z");
     const { token } = await issueVerificationToken(client, user.id, issuedAt);
 
     const tooLate = new Date(issuedAt.getTime() + VERIFICATION_TTL_MS + 1000);
-    await expect(verifyEmail(client, token, tooLate)).rejects.toSatisfy(
+    await expect(verifySignInCode(client, EMAIL, token, tooLate)).rejects.toSatisfy(
       (e: unknown) => e instanceof IdentityError && e.code === "TOKEN_EXPIRED",
     );
 
@@ -116,9 +183,25 @@ describe("email verification", () => {
     expect(rows).toEqual([]);
   });
 
-  it("rejects an unknown token", async () => {
+  it("expires in minutes, not a day", async () => {
+    // The link could afford 24 hours; a six-digit code cannot. The window in
+    // which guessing is possible at all is part of what pays for the shortness.
+    expect(VERIFICATION_TTL_MS).toBeLessThanOrEqual(15 * 60 * 1000);
+  });
+
+  it("says the same thing for an unknown address as for a wrong code", async () => {
+    // Distinguishing them would answer "does this person have an account here",
+    // which `beginEmailSignIn` goes to some trouble not to.
     const client = await fresh();
-    await expect(verifyEmail(client, "made-up")).rejects.toSatisfy(
+    await expect(verifySignInCode(client, "nobody@example.com", "123456")).rejects.toSatisfy(
+      (e: unknown) => e instanceof IdentityError && e.code === "TOKEN_INVALID",
+    );
+  });
+
+  it("rejects a code when none is outstanding", async () => {
+    const client = await fresh();
+    await createUser(client, EMAIL, "Alice");
+    await expect(verifySignInCode(client, EMAIL, "123456")).rejects.toSatisfy(
       (e: unknown) => e instanceof IdentityError && e.code === "TOKEN_INVALID",
     );
   });
@@ -132,6 +215,12 @@ describe("email verification", () => {
     );
   });
 });
+
+/** A code that is definitely not this one, and still six digits. */
+function wrong(code: string): string {
+  const shifted = (Number(code) + 1) % 1_000_000;
+  return shifted.toString().padStart(6, "0");
+}
 
 describe("linkWallet", () => {
   it("makes the first wallet primary", async () => {
