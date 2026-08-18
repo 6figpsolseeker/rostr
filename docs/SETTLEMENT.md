@@ -1,6 +1,6 @@
 # Settlement — how a pot pays out without anyone declaring a winner
 
-**Status: the chain half is complete end to end.** A commissioner writes the settlement
+**Status: the chain half is complete end to end, and the payout has been watched to run.** A commissioner writes the settlement
 account, the draw checks it against the signed rules, weeks are posted and frozen, and
 `settle` derives the three prizes and pays them. Both derivation kernels
 now exist — `derive.rs` for seeding, `bracket.rs` for the ladder — each pinned to the
@@ -601,13 +601,16 @@ belongs here with a date and the reason, like these four.
    `roster.len() × buy_in`, decrements `total_deposited` rather than zeroing it, and takes
    no argument naming a team, a wallet or an amount.
 
-   **The outstanding piece is a test that reaches the transfer.** The hold makes that
-   impossible against `solana-test-validator`, which is a wall clock. A harness that can
-   warp the clock — `litesvm` or `solana-bankrun` — is what closes it, and until it does
-   the money path is reasoned about rather than exercised. **That is the state in which
-   mainnet deposits are currently open**, because the gate keys on the IDL and the IDL is
-   honest. If they should stay shut until then, that is a condition somebody adds to
-   `potDepositGate` deliberately.
+   **And the transfer is now tested.** `settle.test.ts` runs the compiled program under
+   `solana-bankrun`, sets the `Clock` sysvar forward seven days, and asserts the tokens
+   land: champion, runner-up, best record and the fee, summing to exactly the pot with an
+   empty vault behind them. Removing the hold from the program makes it fail.
+
+   `litesvm` was tried first and does not fit — its 1.x line speaks `@solana/kit`, where
+   an address is a string, which would mean a second way of building every instruction
+   beside the Anchor builders; its 0.x line is web3.js v1 but too old to load a program
+   built by Solana 4.0, and aborts the process rather than erroring. Recorded so nobody
+   repeats the hour.
 
 5. **D8** — the adversarial suite, which does not exist.
 6. **D9/G10** — multisig, then burn. Note `BUILD-PLAN.md` currently orders the burn _before_

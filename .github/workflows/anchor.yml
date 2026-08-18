@@ -108,6 +108,24 @@ jobs:
       - name: anchor test
         run: anchor test
 
+      # The payout, watched to actually happen.
+      #
+      # `settle` refuses until seven days after the last week is finalised — the
+      # window in which anyone can compare the posted scores against the
+      # providers before money moves — so no wall-clock validator can reach the
+      # successful transfer. `solana-bankrun` loads the program built by the step
+      # above and sets the `Clock` sysvar directly, so the seven days pass in a
+      # line of code.
+      #
+      # **After `anchor test` rather than beside it**, and that is not a
+      # preference. Run inside that suite this took three minutes and timed out,
+      # and starved the validator badly enough that an unrelated test lost a
+      # blockhash; run on its own it takes under a second. There is nothing for
+      # the two to share — bankrun never opens a socket — so they only ever
+      # compete for the machine.
+      - name: settlement payout (bankrun)
+        run: pnpm test:bankrun
+
       # The web app cannot build the IDL — no Rust on Vercel or in the CI job
       # that runs the TypeScript suite — so `@rostr/escrow` ships a committed
       # copy. This is the only job that has both halves to compare, which makes

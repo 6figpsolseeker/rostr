@@ -1616,6 +1616,7 @@ describe("the draw refuses a pot league whose season has not started", () => {
         refundUnlockAt: SCHEDULED_SECONDS + 200 * 24 * 3600,
         feeBps: NFL_DEFAULT_FEE_BPS,
         feeRecipient: "6dNUCTMTgoHhbfgDzKtiPvBpJ2LzMwGqBpKmUDgQtNMK",
+        settlementOracle: "US517G5965aydkZ46HS38QLi7UQiSojurfbQfKCELFx",
       },
     }) as LeagueRules;
 

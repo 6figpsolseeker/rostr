@@ -2776,12 +2776,20 @@ building and testing an unrelated Anchor program against a local validator.
 
 Six things that have each cost an hour and will cost it again:
 
-- **`anchor test` throws `Blockhash not found` under load, and it is a flake rather than
-  a failure.** Seen 2026-08-17 in `divergence.test.ts` on a run that took 725s; the same
-  commit passed 102/102 on a re-run at 12 minutes. A blockhash lives ~60–90 seconds, vitest
-  runs the program files concurrently, and a suite heavy enough to queue a transaction past
-  that expiry gets this error with an empty log array — which reads like a program failure
-  and is not one.
+- **`anchor test` throws `Blockhash not found` when something starves the validator, and
+  the cause is usually nameable.** A blockhash lives ~60–90 seconds; a transaction queued
+  past that gets this error with an empty log array, which reads like a program failure and
+  is not one.
+
+  Seen twice. On 2026-08-17 in `divergence.test.ts` on a 725s run, passing on a re-run —
+  cause never identified. On 2026-08-18 **in the same test, and that time the cause was
+  visible**: a `solana-bankrun` test had been added to the same suite, and bankrun loads a
+  program in-process and needs no validator, so the two only ever competed for the machine.
+  It held things up for three minutes and the validator lost a blockhash underneath it.
+  Splitting bankrun into its own project (`pnpm test:bankrun`) fixed both failures at once
+  and took the payout test from three minutes to under a second.
+
+  **So re-running is the wrong first move.** Ask what else was consuming the machine.
 
   **Recorded here because issue #115 asks for exactly this and names no file.** That issue
   is about the _TypeScript_ suite and a determinism concern; this is the program suite and

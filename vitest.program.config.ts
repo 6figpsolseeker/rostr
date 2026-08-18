@@ -33,6 +33,12 @@ export default defineConfig({
   },
   test: {
     include: ["programs/*/tests/**/*.test.ts"],
+    // Bankrun tests are excluded: they load the compiled program in-process and
+    // need no validator, so running them inside `anchor test` means competing
+    // with one for a machine's memory rather than sharing anything with it.
+    // `settle.bankrun.test.ts` passed alone in under a second and timed out at
+    // three minutes beside the validator, which is what prompted the split.
+    exclude: ["**/*.bankrun.test.ts", "**/node_modules/**"],
     // A cold validator plus deploy is slow, and the default 5s timeout expires
     // partway through the first confirmation.
     testTimeout: 60_000,
