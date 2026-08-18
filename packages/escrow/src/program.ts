@@ -24,6 +24,7 @@ const utf8 = (s: string): Uint8Array => new TextEncoder().encode(s);
 const LEAGUE_SEED = utf8("league");
 const VAULT_SEED = utf8("vault");
 const MEMBERSHIP_SEED = utf8("membership");
+const SCORES_SEED = utf8("scores");
 
 /**
  * A league's Postgres UUID as the raw 16 bytes the program uses for its seed.
@@ -66,6 +67,24 @@ export function leaguePda(leagueId: string): PublicKey {
     [LEAGUE_SEED, leagueIdBytes(leagueId)],
     ESCROW_PROGRAM_ID,
   )[0];
+}
+
+/**
+ * The payee roster and the posted results. One per league.
+ *
+ * Two forms because callers arrive with different things in hand: a route holds
+ * the league's uuid, and a helper that has already derived the league PDA should
+ * not derive it twice.
+ */
+export function scoresPdaFor(league: PublicKey): PublicKey {
+  return PublicKey.findProgramAddressSync(
+    [SCORES_SEED, league.toBytes()],
+    ESCROW_PROGRAM_ID,
+  )[0];
+}
+
+export function scoresPda(leagueId: string): PublicKey {
+  return scoresPdaFor(leaguePda(leagueId));
 }
 
 /**

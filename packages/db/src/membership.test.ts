@@ -27,7 +27,7 @@ import {
   removeBot,
 } from "./membership.js";
 import { seedSport } from "./sports.js";
-import { createDraftRecord, drawDraftOrder } from "./draft.js";
+import { createDraftRecord, drawDraftOrder, FixedSettlementAccount } from "./draft.js";
 import { FixedBeacon } from "./randomness.js";
 import { addTestTeam, createTestDatabase } from "./testing.js";
 import type { PGliteClient } from "./testing.js";
@@ -791,6 +791,7 @@ describe("bots", () => {
             blockTime: SCHEDULED_SECONDS + 1,
           },
         ]),
+        settlement: new FixedSettlementAccount(),
         now: new Date(SCHEDULED.getTime() + 5_000),
       });
 

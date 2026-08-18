@@ -1364,6 +1364,25 @@ commissioner` is what stops a stranger front-running creation with a hostile ros
   in the design that bounds an oracle which _works and lies_; everything else bounds one
   that is absent.
 
+**And the draw is what enforces it.** `drawDraftOrder` refuses `SCORES_MISMATCH` unless the
+on-chain `Scores` account agrees with the signed rules — `scoresTermMismatches` against
+`expectedScoreTerms` in `@rostr/escrow`. The program cannot make that comparison itself: a
+rules hash is 32 opaque bytes to it, so whoever writes the account could otherwise pick the
+tiebreaker chain, and its last link decides seed 1, which is a paid prize. A league that
+never draws has no order, no roster, no schedule and nothing to score, which is what makes
+this a gate rather than advice — the same relationship `joinLeague` has with
+`anchorTermMismatches`.
+
+Two details there are load-bearing. **A missing `Scores` account is a mismatch, not an
+absence** — refusing costs a commissioner one transaction, and the other way costs a pot
+that cannot be settled. And **`TIEBREAKER_DISCRIMINANTS` is written out rather than taken
+from the union's declaration order**, which is the lesson `PRIZE_ORDER` paid for: the two
+agree today and nothing makes them, so a reordered union would renumber the chain silently.
+
+**What it still cannot compare is `oracle`**, the key allowed to post scores. That belongs
+in the hashed rule set so members sign it, which is a schemaVersion move — until then the
+commissioner picks it freely, and `docs/SETTLEMENT.md` §6 is where that gap is written down.
+
 Two Anchor mechanics cost a build cycle each and are commented in place: `#[program]`
 resolves `Accounts` structs from the **crate root**, so a submodule needs a `pub use`; and
 it takes the **first path segment** of `Context<scores::InitializeScores>`, so instruction

@@ -25,6 +25,7 @@ import {
   DraftPersistenceError,
   draftsWithExpiredPicks,
   drawDraftOrder,
+  FixedSettlementAccount,
   getQueue,
   isCurrentPickExpired,
   loadDraft,
@@ -91,6 +92,15 @@ const BEACON = new FixedBeacon([
     blockTime: SCHEDULED_SECONDS + 3,
   },
 ]);
+
+/**
+ * A settlement account that agrees with the rules.
+ *
+ * Every fixture here is a free league bar the pot block at the bottom, so the
+ * check is not consulted — but the field is required, deliberately, so each call
+ * has to say something.
+ */
+const SETTLEMENT_OK = new FixedSettlementAccount();
 
 /** After the draft time, so the draw is allowed. */
 const DRAW_TIME = new Date(SCHEDULED.getTime() + 5_000);
@@ -190,6 +200,7 @@ async function scheduled(fx: Fixture): Promise<readonly string[]> {
   const drawn = await drawDraftOrder(fx.client, {
     leagueId: fx.leagueId,
     beacon: BEACON,
+    settlement: SETTLEMENT_OK,
     now: DRAW_TIME,
   });
   return drawn.order;
@@ -322,6 +333,7 @@ describe("drawDraftOrder", () => {
       drawDraftOrder(fx.client, {
         leagueId: fx.leagueId,
         beacon: BEACON,
+        settlement: SETTLEMENT_OK,
         now: new Date(SCHEDULED.getTime() - 1000),
       }),
     ).rejects.toMatchObject({ code: "TOO_EARLY_TO_DRAW" });
@@ -336,6 +348,7 @@ describe("drawDraftOrder", () => {
       drawDraftOrder(fx.client, {
         leagueId: fx.leagueId,
         beacon: BEACON,
+        settlement: SETTLEMENT_OK,
         now: DRAW_TIME,
       }),
     ).rejects.toMatchObject({ code: "ORDER_ALREADY_DRAWN" });
@@ -346,7 +359,12 @@ describe("drawDraftOrder", () => {
     await createDraftRecord(fx.client, scheduleArgs(fx.leagueId));
 
     await expect(
-      drawDraftOrder(fx.client, { leagueId: fx.leagueId, beacon: BEACON, now: DRAW_TIME }),
+      drawDraftOrder(fx.client, {
+        leagueId: fx.leagueId,
+        beacon: BEACON,
+        settlement: SETTLEMENT_OK,
+        now: DRAW_TIME,
+      }),
     ).rejects.toMatchObject({ code: "NO_TEAMS" });
   });
 
@@ -354,7 +372,12 @@ describe("drawDraftOrder", () => {
     const fx = await setup();
 
     await expect(
-      drawDraftOrder(fx.client, { leagueId: fx.leagueId, beacon: BEACON, now: DRAW_TIME }),
+      drawDraftOrder(fx.client, {
+        leagueId: fx.leagueId,
+        beacon: BEACON,
+        settlement: SETTLEMENT_OK,
+        now: DRAW_TIME,
+      }),
     ).rejects.toMatchObject({ code: "DRAFT_NOT_FOUND" });
   });
 
@@ -1393,7 +1416,12 @@ describe("the draw refuses an odd field", () => {
     await createDraftRecord(fx.client, scheduleArgs(fx.leagueId));
 
     await expect(
-      drawDraftOrder(fx.client, { leagueId: fx.leagueId, beacon: BEACON, now: DRAW_TIME }),
+      drawDraftOrder(fx.client, {
+        leagueId: fx.leagueId,
+        beacon: BEACON,
+        settlement: SETTLEMENT_OK,
+        now: DRAW_TIME,
+      }),
     ).rejects.toMatchObject({ code: "ODD_FIELD" });
   });
 
@@ -1402,7 +1430,12 @@ describe("the draw refuses an odd field", () => {
     await createDraftRecord(fx.client, scheduleArgs(fx.leagueId));
 
     await expect(
-      drawDraftOrder(fx.client, { leagueId: fx.leagueId, beacon: BEACON, now: DRAW_TIME }),
+      drawDraftOrder(fx.client, {
+        leagueId: fx.leagueId,
+        beacon: BEACON,
+        settlement: SETTLEMENT_OK,
+        now: DRAW_TIME,
+      }),
     ).resolves.toBeDefined();
   });
 
@@ -1414,7 +1447,12 @@ describe("the draw refuses an odd field", () => {
     await createDraftRecord(fx.client, scheduleArgs(fx.leagueId));
 
     await expect(
-      drawDraftOrder(fx.client, { leagueId: fx.leagueId, beacon: BEACON, now: DRAW_TIME }),
+      drawDraftOrder(fx.client, {
+        leagueId: fx.leagueId,
+        beacon: BEACON,
+        settlement: SETTLEMENT_OK,
+        now: DRAW_TIME,
+      }),
     ).rejects.toThrow(/5 teams/);
   });
 
@@ -1425,7 +1463,12 @@ describe("the draw refuses an odd field", () => {
     await createDraftRecord(fx.client, scheduleArgs(fx.leagueId));
 
     await expect(
-      drawDraftOrder(fx.client, { leagueId: fx.leagueId, beacon: BEACON, now: DRAW_TIME }),
+      drawDraftOrder(fx.client, {
+        leagueId: fx.leagueId,
+        beacon: BEACON,
+        settlement: SETTLEMENT_OK,
+        now: DRAW_TIME,
+      }),
     ).rejects.toMatchObject({ code: "BELOW_MIN_HUMANS" });
   });
 });
@@ -1436,7 +1479,12 @@ describe("the draw refuses a field below minHumans", () => {
     await createDraftRecord(fx.client, scheduleArgs(fx.leagueId));
 
     await expect(
-      drawDraftOrder(fx.client, { leagueId: fx.leagueId, beacon: BEACON, now: DRAW_TIME }),
+      drawDraftOrder(fx.client, {
+        leagueId: fx.leagueId,
+        beacon: BEACON,
+        settlement: SETTLEMENT_OK,
+        now: DRAW_TIME,
+      }),
     ).rejects.toMatchObject({ code: "BELOW_MIN_HUMANS" });
   });
 
@@ -1447,7 +1495,12 @@ describe("the draw refuses a field below minHumans", () => {
     await createDraftRecord(fx.client, scheduleArgs(fx.leagueId));
 
     await expect(
-      drawDraftOrder(fx.client, { leagueId: fx.leagueId, beacon: BEACON, now: DRAW_TIME }),
+      drawDraftOrder(fx.client, {
+        leagueId: fx.leagueId,
+        beacon: BEACON,
+        settlement: SETTLEMENT_OK,
+        now: DRAW_TIME,
+      }),
     ).rejects.toThrow(/1 manager and its rules require 2/);
   });
 
@@ -1458,7 +1511,12 @@ describe("the draw refuses a field below minHumans", () => {
     await createDraftRecord(fx.client, scheduleArgs(fx.leagueId));
 
     await expect(
-      drawDraftOrder(fx.client, { leagueId: fx.leagueId, beacon: BEACON, now: DRAW_TIME }),
+      drawDraftOrder(fx.client, {
+        leagueId: fx.leagueId,
+        beacon: BEACON,
+        settlement: SETTLEMENT_OK,
+        now: DRAW_TIME,
+      }),
     ).rejects.toMatchObject({ code: "NO_TEAMS" });
   });
 
@@ -1473,7 +1531,12 @@ describe("the draw refuses a field below minHumans", () => {
     await createDraftRecord(fx.client, scheduleArgs(fx.leagueId));
 
     await expect(
-      drawDraftOrder(fx.client, { leagueId: fx.leagueId, beacon: BEACON, now: DRAW_TIME }),
+      drawDraftOrder(fx.client, {
+        leagueId: fx.leagueId,
+        beacon: BEACON,
+        settlement: SETTLEMENT_OK,
+        now: DRAW_TIME,
+      }),
     ).rejects.toMatchObject({ code: "BELOW_MIN_HUMANS" });
   });
 
@@ -1574,7 +1637,12 @@ describe("the draw refuses a pot league whose season has not started", () => {
   }
 
   const draw = (fx: Fixture) =>
-    drawDraftOrder(fx.client, { leagueId: fx.leagueId, beacon: BEACON, now: DRAW_TIME });
+    drawDraftOrder(fx.client, {
+      leagueId: fx.leagueId,
+      beacon: BEACON,
+      settlement: SETTLEMENT_OK,
+      now: DRAW_TIME,
+    });
 
   it("refuses a pot league with everything else in order", async () => {
     // Four managers, an even field, and nobody owing a stake — so the only thing
@@ -1623,7 +1691,12 @@ describe("the draw refuses a pot league whose season has not started", () => {
     await createDraftRecord(fx.client, scheduleArgs(fx.leagueId));
 
     await expect(
-      drawDraftOrder(fx.client, { leagueId: fx.leagueId, beacon: BEACON, now: DRAW_TIME }),
+      drawDraftOrder(fx.client, {
+        leagueId: fx.leagueId,
+        beacon: BEACON,
+        settlement: SETTLEMENT_OK,
+        now: DRAW_TIME,
+      }),
     ).resolves.toBeDefined();
   });
 });

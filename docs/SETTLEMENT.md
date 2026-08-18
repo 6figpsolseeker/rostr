@@ -1,10 +1,10 @@
 # Settlement — how a pot pays out without anyone declaring a winner
 
-**Status: the program is built; the off-chain check that binds it is not.** Both derivation kernels
+**Status: G7 is complete apart from the oracle key.** Both derivation kernels
 now exist — `derive.rs` for seeding, `bracket.rs` for the ladder — each pinned to the
-TypeScript by a generated corpus, and **no instruction calls either.** G7 has landed too — `scores.rs` holds the payee roster and the posted results. What is
-missing is the draw-time comparison that binds a `Scores` account to the signed rules
-(§8a, §10), and then D6/G9, the payout. Issue #28 tracks the chain.
+TypeScript by a generated corpus, and **no instruction calls either.** G7 has landed — `scores.rs` holds the payee roster and the posted results, and the draw
+refuses an account that disagrees with the signed rules. What is missing is the oracle key
+as a signed term (§6, a schemaVersion move) and then D6/G9, the payout. Issue #28 tracks the chain.
 
 **Revised 2026-08-17, after three independent reviews of the first draft.** Section 8
 records what that draft got wrong, because two of its errors were the kind that look
@@ -551,11 +551,16 @@ belongs here with a date and the reason, like these four.
    `initialize_scores`, `post_week`, `finalize_week`, 17 tests against a validator. The
    account carries the roster **and** the four frozen parameters.
 
-   **What is not done is the check that binds them to the signed rules** — the draw must
-   refuse a `Scores` account whose terms disagree with the document members signed, and
-   that is TypeScript, not Rust. Until it exists the account is written honestly by
-   convention rather than by enforcement, which is precisely the gap §8a says the draw
-   closes. It is the next thing.
+   **And the check that binds it to the signed rules has landed too.**
+   `scoresTermMismatches` in `@rostr/escrow` compares the account against
+   `expectedScoreTerms`, and `drawDraftOrder` refuses `SCORES_MISMATCH` on any
+   disagreement — a league that never draws never plays, so it is a gate rather than
+   advice.
+
+   **One thing it still cannot compare is `oracle`**, the key allowed to post. That
+   should be a term members sign, which puts it in the hashed rule set and makes it a
+   schemaVersion move (6 → 7). Until then the commissioner who creates the account picks
+   it freely, which is the attack §6 describes. It is the next thing.
 
 4. **D6/G9** — payout, under §7.
 5. **D8** — the adversarial suite, which does not exist.

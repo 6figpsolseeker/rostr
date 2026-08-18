@@ -200,6 +200,7 @@ export {
   DraftPersistenceError,
   draftsWithExpiredPicks,
   drawDraftOrder,
+  FixedSettlementAccount,
   getQueue,
   isCurrentPickExpired,
   loadDraft,
@@ -216,6 +217,7 @@ export {
   type OrderDraw,
   type RecordedPick,
   type RecordPickInput,
+  type SettlementAccountCheck,
 } from "./draft.js";
 
 export {

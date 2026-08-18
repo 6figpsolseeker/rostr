@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { DraftPersistenceError, drawDraftOrder, SolanaBeacon, startDraft } from "@rostr/db";
 import { BeaconError } from "@rostr/db";
 import { db } from "@/lib/db";
+import { settlementAccountCheck } from "@/lib/settlement-preflight";
 import { draftContext, DraftContextError } from "@/lib/draft-context";
 
 // A code missing from this map falls through to 400 below, which ships a good
@@ -14,6 +15,7 @@ const STATUS: Record<string, number> = {
   ODD_FIELD: 409,
   POT_NOT_FUNDED: 409,
   SEASON_NOT_STARTED: 409,
+  SCORES_MISMATCH: 409,
   ORDER_ALREADY_DRAWN: 409,
   TOO_EARLY_TO_DRAW: 425,
   ORDER_NOT_DRAWN: 409,
@@ -63,7 +65,15 @@ export async function POST(
     // Idempotent: a second press after a failed start draws nothing new and
     // simply starts the clock.
     try {
-      await drawDraftOrder(client, { leagueId: id, beacon, now });
+      await drawDraftOrder(client, {
+        leagueId: id,
+        beacon,
+        // The settlement gate reaches this route too, and it has to: this draws
+        // when the order is missing, so a commissioner who skips the lobby
+        // comes through here.
+        settlement: settlementAccountCheck(),
+        now,
+      });
     } catch (error) {
       if (!(error instanceof DraftPersistenceError) || error.code !== "ORDER_ALREADY_DRAWN") {
         throw error;

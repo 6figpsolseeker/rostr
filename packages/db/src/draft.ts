@@ -74,6 +74,9 @@ export class DraftPersistenceError extends Error {
       // the failed-league refund is still open. See the check in
       // `drawDraftOrder`.
       | "SEASON_NOT_STARTED"
+      // A pot league whose on-chain settlement account does not match the rules
+      // its members signed. See `SettlementAccountCheck`.
+      | "SCORES_MISMATCH"
       | "RULES_MISSING"
       | "NOT_IN_PROGRESS"
       | "ALREADY_STARTED"
@@ -181,9 +184,57 @@ export async function createDraftRecord(
 // Drawing the order
 // ---------------------------------------------------------------------------
 
+/**
+ * Whether a league's on-chain settlement account says what its signed rules do.
+ *
+ * ## Why the draw is what asks
+ *
+ * The `Scores` account carries the payee roster and the four terms the on-chain
+ * derivation runs under — the tiebreaker chain, the playoff window, the bye
+ * count, whether third place is played. **The program cannot check any of them
+ * against the signed document**, because a rules hash is 32 opaque bytes to it.
+ * So whoever writes that account could otherwise pick the tiebreakers, and the
+ * last link in that chain decides seed 1, which is a paid prize.
+ *
+ * The draw is where it is caught because a league that never draws never plays:
+ * no order, no roster, no schedule, nothing to score. That is what makes this a
+ * gate rather than advice — the same relationship `joinLeague` has with
+ * `anchorTermMismatches`.
+ *
+ * ## Injected, unlike the season-start check beside it
+ *
+ * `season_started_at` is a column: a route verifies the chain once and records
+ * it, so the draw reads Postgres. This cannot follow that pattern, because the
+ * comparison is against the *current* contents of an account and the rules, and
+ * both halves live outside `@rostr/db` — the rule set in `@rostr/core`, the
+ * decoding in `@rostr/escrow`. Injecting keeps this package free of a Solana
+ * dependency, exactly as `RandomnessBeacon` does.
+ *
+ * Takes the team count because the expected bye count depends on the field that
+ * actually formed, not only on the frozen rules.
+ */
+export interface SettlementAccountCheck {
+  /** Everything the account says that the rules do not. Empty means it agrees. */
+  mismatches(leagueId: string, teamCount: number): Promise<readonly string[]>;
+}
+
+/** A `SettlementAccountCheck` with its mind made up. **Test-only.** */
+export class FixedSettlementAccount implements SettlementAccountCheck {
+  constructor(private readonly problems: readonly string[] = []) {}
+
+  mismatches(): Promise<readonly string[]> {
+    return Promise.resolve(this.problems);
+  }
+}
+
 export interface DrawOrderInput {
   readonly leagueId: string;
   readonly beacon: RandomnessBeacon;
+  /**
+   * Consulted for pot leagues only. A free league has no vault, nothing to
+   * settle, and `initialize_scores` refuses it outright.
+   */
+  readonly settlement: SettlementAccountCheck;
   readonly now: Date;
 }
 
@@ -275,6 +326,29 @@ export async function drawDraftOrder(
   // Fetched outside the transaction: an RPC round trip should not hold a lock,
   // and the block is immutable once produced, so nothing changes underneath.
   const block = await input.beacon.firstBlockAtOrAfter(scheduledAt);
+
+  /*
+    The settlement account, read before the transaction opens.
+
+    An RPC round trip must not hold a lock, and the team count it needs cannot
+    change underneath: migration `0028` locks the field at `scheduledAt` on
+    INSERT *and* DELETE, and this runs at or after that instant.
+
+    Not immutable, unlike the block — a corrected account could land between this
+    read and the write. That direction is harmless: it refuses a draw that would
+    now be legal, and the remedy is to press the button again.
+  */
+  let settlementProblems: readonly string[] = [];
+  if (stored.rules.pot) {
+    const [counted] = await db.query<{ count: number }>(
+      "SELECT count(*)::int AS count FROM teams WHERE league_id = $1",
+      [input.leagueId],
+    );
+    settlementProblems = await input.settlement.mismatches(
+      input.leagueId,
+      Number(counted?.count ?? 0),
+    );
+  }
 
   return withTransaction(db, async (tx) => {
     const [draft] = await tx.query<DraftRow>(
@@ -448,6 +522,29 @@ export async function drawDraftOrder(
             `stake mid-season while still playing for the pot. The commissioner sends ` +
             `start_season from their own wallet, and it has to land before the order is drawn.`,
           "SEASON_NOT_STARTED",
+        );
+      }
+
+      /*
+        And the settlement account says what the signed rules say.
+
+        Last, after every refusal about the field itself and after the season
+        check: a commissioner holding an odd field is told to find a player, not
+        handed a list of on-chain terms to reconcile on a league that cannot
+        draft anyway.
+
+        Every mismatch is reported rather than the first. They were frozen
+        together and the account can never be rewritten, so whoever has to
+        recreate the league needs the whole list rather than one item per
+        attempt.
+      */
+      if (settlementProblems.length > 0) {
+        throw new DraftPersistenceError(
+          `This league's on-chain settlement account does not match the rules its members ` +
+            `signed, so the season it would settle is not the season they agreed to: ` +
+            `${settlementProblems.join("; ")}. The account is write-once, so this league ` +
+            `cannot draft and has to be recreated.`,
+          "SCORES_MISMATCH",
         );
       }
     }

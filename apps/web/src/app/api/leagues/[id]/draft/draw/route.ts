@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { BeaconError, DraftPersistenceError, drawDraftOrder, SolanaBeacon } from "@rostr/db";
 import { db } from "@/lib/db";
+import { settlementAccountCheck } from "@/lib/settlement-preflight";
 import { draftContext, DraftContextError } from "@/lib/draft-context";
 
 // A code missing from this map falls through to 400, which ships a good message
@@ -14,6 +15,7 @@ const STATUS: Record<string, number> = {
   ODD_FIELD: 409,
   POT_NOT_FUNDED: 409,
   SEASON_NOT_STARTED: 409,
+  SCORES_MISMATCH: 409,
   ORDER_ALREADY_DRAWN: 409,
   TOO_EARLY_TO_DRAW: 425,
 };
@@ -71,6 +73,7 @@ export async function POST(
       await drawDraftOrder(db(), {
         leagueId: id,
         beacon: new SolanaBeacon({ endpoint }),
+        settlement: settlementAccountCheck(),
         now: new Date(),
       });
     } catch (error) {

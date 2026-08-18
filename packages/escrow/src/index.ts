@@ -81,12 +81,25 @@ export {
   type SeasonStartState,
 } from "./start.js";
 export {
+  expectedScoreTerms,
+  fetchOnChainScores,
+  scoresTermMismatches,
+  TIEBREAKER_DISCRIMINANTS,
+  uuidToHex,
+  type ExpectedScoreTerms,
+  type OnChainRosterEntry,
+  type OnChainScores,
+  type ScoreTermRules,
+} from "./scores.js";
+export {
   ESCROW_PROGRAM_ID,
   leagueAddresses,
   leagueIdBytes,
   leagueIdFromBytes,
   leaguePda,
   membershipPda,
+  scoresPda,
+  scoresPdaFor,
   vaultPda,
   type LeagueAddresses,
 } from "./program.js";
