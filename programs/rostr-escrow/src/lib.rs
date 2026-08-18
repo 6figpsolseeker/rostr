@@ -59,6 +59,18 @@ pub mod bracket;
 /// it replaces it; see the comment on those variants.
 pub mod derive;
 
+/// Scores, and the roster they pay. G7 — see `docs/SETTLEMENT.md`.
+///
+/// The one account in this program that is written to after creation, and the
+/// only place a team is connected to a wallet. Its instructions move no tokens.
+pub mod scores;
+
+// Anchor's `#[program]` macro resolves each instruction's `Accounts` struct and
+// the `__client_accounts_*` module it generates **from the crate root**, so a
+// struct defined in a submodule has to be re-exported here or the expansion
+// fails with "could not find `__client_accounts_…` in the crate root".
+pub use scores::*;
+
 /// Number of prizes in a payout split. Fixed at five by the rule schema:
 /// champion, runner-up, regular season, consolation, third place.
 pub const PRIZE_COUNT: usize = 5;
@@ -590,6 +602,33 @@ pub mod rostr_escrow {
 
         Ok(())
     }
+
+    // -----------------------------------------------------------------------
+    // Scores — G7. See `scores.rs` and `docs/SETTLEMENT.md`.
+    //
+    // **None of these three moves a token**, and that is worth stating where
+    // somebody reading the instruction list will see it. They write a payee
+    // roster and a set of results; the instruction that spends the vault does
+    // not exist yet, and `potDepositGate` stays shut until it does.
+    // -----------------------------------------------------------------------
+
+    /// Write the payee roster and the terms the derivation runs under. Once.
+    pub fn initialize_scores(
+        ctx: Context<InitializeScores>,
+        args: InitializeScoresArgs,
+    ) -> Result<()> {
+        scores::initialize_scores(ctx, args)
+    }
+
+    /// Replace one week's games. Legal until that week is finalised.
+    pub fn post_week(ctx: Context<PostWeek>, week: u8, games: Vec<PostedGame>) -> Result<()> {
+        scores::post_week(ctx, week, games)
+    }
+
+    /// Freeze a week, and restart the settlement hold from now.
+    pub fn finalize_week(ctx: Context<PostWeek>, week: u8) -> Result<()> {
+        scores::finalize_week(ctx, week)
+    }
 }
 
 /// The terms of a league, frozen at creation.
@@ -1047,4 +1086,19 @@ pub enum EscrowError {
     NotEnoughWeeks,
     #[msg("The playoff ladder reached a state it should not be able to reach")]
     BracketInvariant,
+    // Appended for the scores account — `scores.rs`.
+    #[msg("Only the key this league named may post scores")]
+    NotTheOracle,
+    #[msg("A week outside the season this program can hold")]
+    UnknownWeek,
+    #[msg("This week has been finalised and can never change")]
+    WeekAlreadyFinal,
+    #[msg("More games in one week than a league this size can play")]
+    TooManyGames,
+    #[msg("One membership account is required for every team in the roster")]
+    RosterIncomplete,
+    #[msg("An account passed as a membership is not one")]
+    NotAMembership,
+    #[msg("The same team or wallet appears twice in the roster")]
+    DuplicateRosterEntry,
 }

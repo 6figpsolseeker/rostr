@@ -1,9 +1,10 @@
 # Settlement — how a pot pays out without anyone declaring a winner
 
-**Status: designed; the pure halves are built, nothing is wired.** Both derivation kernels
+**Status: the program is built; the off-chain check that binds it is not.** Both derivation kernels
 now exist — `derive.rs` for seeding, `bracket.rs` for the ladder — each pinned to the
-TypeScript by a generated corpus, and **no instruction calls either.** What is missing is
-G7 (post finalised scores on-chain) and then D6/G9, the payout. Issue #28 tracks the chain.
+TypeScript by a generated corpus, and **no instruction calls either.** G7 has landed too — `scores.rs` holds the payee roster and the posted results. What is
+missing is the draw-time comparison that binds a `Scores` account to the signed rules
+(§8a, §10), and then D6/G9, the payout. Issue #28 tracks the chain.
 
 **Revised 2026-08-17, after three independent reviews of the first draft.** Section 8
 records what that draft got wrong, because two of its errors were the kind that look
@@ -546,9 +547,16 @@ belongs here with a date and the reason, like these four.
 2. ~~**`max_teams` bound**~~ — **done.** `MAX_TEAMS_PER_LEAGUE` is twelve in `@rostr/core`
    and mirrored in the program, checked at creation in both. A twenty-team pot league was
    creatable, anchorable, and unsettleable.
-3. **G7** — the `Scores` PDA, the roster, and posting. Under §2, §4, §6 and §8a. The
-   account carries the roster **and** the four frozen parameters; the draw verifies both
-   against the signed rules.
+3. ~~**G7**~~ — **the program half is done.** `programs/rostr-escrow/src/scores.rs`:
+   `initialize_scores`, `post_week`, `finalize_week`, 17 tests against a validator. The
+   account carries the roster **and** the four frozen parameters.
+
+   **What is not done is the check that binds them to the signed rules** — the draw must
+   refuse a `Scores` account whose terms disagree with the document members signed, and
+   that is TypeScript, not Rust. Until it exists the account is written honestly by
+   convention rather than by enforcement, which is precisely the gap §8a says the draw
+   closes. It is the next thing.
+
 4. **D6/G9** — payout, under §7.
 5. **D8** — the adversarial suite, which does not exist.
 6. **D9/G10** — multisig, then burn. Note `BUILD-PLAN.md` currently orders the burn _before_

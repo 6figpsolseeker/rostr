@@ -138,6 +138,61 @@ export type RostrEscrow = {
       "args": []
     },
     {
+      "name": "finalizeWeek",
+      "docs": [
+        "Freeze a week, and restart the settlement hold from now."
+      ],
+      "discriminator": [
+        227,
+        56,
+        54,
+        207,
+        50,
+        114,
+        148,
+        65
+      ],
+      "accounts": [
+        {
+          "name": "scores",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  99,
+                  111,
+                  114,
+                  101,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "scores.league",
+                "account": "scores"
+              }
+            ]
+          }
+        },
+        {
+          "name": "oracle",
+          "signer": true,
+          "relations": [
+            "scores"
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "week",
+          "type": "u8"
+        }
+      ]
+    },
+    {
       "name": "initializeFreeLeague",
       "docs": [
         "Anchor the rules of a league that plays for nothing.",
@@ -319,6 +374,92 @@ export type RostrEscrow = {
       ]
     },
     {
+      "name": "initializeScores",
+      "docs": [
+        "Write the payee roster and the terms the derivation runs under. Once."
+      ],
+      "discriminator": [
+        80,
+        120,
+        220,
+        27,
+        57,
+        76,
+        179,
+        116
+      ],
+      "accounts": [
+        {
+          "name": "league",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  101,
+                  97,
+                  103,
+                  117,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "league.league_id",
+                "account": "league"
+              }
+            ]
+          }
+        },
+        {
+          "name": "scores",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  99,
+                  111,
+                  114,
+                  101,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "league"
+              }
+            ]
+          }
+        },
+        {
+          "name": "commissioner",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "league"
+          ]
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "initializeScoresArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "joinLeague",
       "docs": [
         "Join a league by accepting its rules hash.",
@@ -419,6 +560,71 @@ export type RostrEscrow = {
               "u8",
               32
             ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "postWeek",
+      "docs": [
+        "Replace one week's games. Legal until that week is finalised."
+      ],
+      "discriminator": [
+        170,
+        153,
+        100,
+        104,
+        94,
+        167,
+        215,
+        201
+      ],
+      "accounts": [
+        {
+          "name": "scores",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  99,
+                  111,
+                  114,
+                  101,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "scores.league",
+                "account": "scores"
+              }
+            ]
+          }
+        },
+        {
+          "name": "oracle",
+          "signer": true,
+          "relations": [
+            "scores"
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "week",
+          "type": "u8"
+        },
+        {
+          "name": "games",
+          "type": {
+            "vec": {
+              "defined": {
+                "name": "postedGame"
+              }
+            }
           }
         }
       ]
@@ -657,6 +863,19 @@ export type RostrEscrow = {
         175,
         166
       ]
+    },
+    {
+      "name": "scores",
+      "discriminator": [
+        3,
+        209,
+        136,
+        174,
+        119,
+        96,
+        162,
+        243
+      ]
     }
   ],
   "errors": [
@@ -854,6 +1073,41 @@ export type RostrEscrow = {
       "code": 6038,
       "name": "bracketInvariant",
       "msg": "The playoff ladder reached a state it should not be able to reach"
+    },
+    {
+      "code": 6039,
+      "name": "notTheOracle",
+      "msg": "Only the key this league named may post scores"
+    },
+    {
+      "code": 6040,
+      "name": "unknownWeek",
+      "msg": "A week outside the season this program can hold"
+    },
+    {
+      "code": 6041,
+      "name": "weekAlreadyFinal",
+      "msg": "This week has been finalised and can never change"
+    },
+    {
+      "code": 6042,
+      "name": "tooManyGames",
+      "msg": "More games in one week than a league this size can play"
+    },
+    {
+      "code": 6043,
+      "name": "rosterIncomplete",
+      "msg": "One membership account is required for every team in the roster"
+    },
+    {
+      "code": 6044,
+      "name": "notAMembership",
+      "msg": "An account passed as a membership is not one"
+    },
+    {
+      "code": 6045,
+      "name": "duplicateRosterEntry",
+      "msg": "The same team or wallet appears twice in the roster"
     }
   ],
   "types": [
@@ -946,6 +1200,53 @@ export type RostrEscrow = {
               "order is stable. See the field on `League`."
             ],
             "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "initializeScoresArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "teamIds",
+            "docs": [
+              "One per team, in any order — the derivation indexes by position, and the",
+              "roster's own order is what those indices mean from here on."
+            ],
+            "type": {
+              "vec": {
+                "array": [
+                  "u8",
+                  16
+                ]
+              }
+            }
+          },
+          {
+            "name": "oracle",
+            "type": "pubkey"
+          },
+          {
+            "name": "tiebreakers",
+            "type": "bytes"
+          },
+          {
+            "name": "playoffWeeks",
+            "type": "bytes"
+          },
+          {
+            "name": "regularSeasonWeeks",
+            "type": "u8"
+          },
+          {
+            "name": "firstRoundByes",
+            "type": "u8"
+          },
+          {
+            "name": "thirdPlace",
+            "type": "bool"
           }
         ]
       }
@@ -1129,6 +1430,168 @@ export type RostrEscrow = {
           {
             "name": "bump",
             "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "postedGame",
+      "docs": [
+        "One completed game.",
+        "",
+        "**A bye is not representable, deliberately.** `compute_records` treats a bye",
+        "as \"not a game, not a point, not a record\", so posting one would change",
+        "nothing; making it unrepresentable removes a way to write a row that means",
+        "nothing and can still be got wrong."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "home",
+            "type": "u8"
+          },
+          {
+            "name": "away",
+            "type": "u8"
+          },
+          {
+            "name": "homeMilliPoints",
+            "type": "u32"
+          },
+          {
+            "name": "awayMilliPoints",
+            "type": "u32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "rosterEntry",
+      "docs": [
+        "One team's place in the payee list."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "teamId",
+            "docs": [
+              "The team's Postgres UUID, raw bytes. Feeds `LOWEST_TEAM_ID`, the last",
+              "link in the default tiebreaker chain — so this is not merely a label, it",
+              "participates in the seeding and cannot be replaced by the wallet."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                16
+              ]
+            }
+          },
+          {
+            "name": "wallet",
+            "docs": [
+              "Where this team's prize is paid. Read from a funded `Membership` at",
+              "creation, never supplied by the caller."
+            ],
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "scores",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "league",
+            "type": "pubkey"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "oracle",
+            "docs": [
+              "The only key that may post. **Compared against a `Signer`, never inferred",
+              "from the instruction stack** — a program that identifies its caller",
+              "through the `instruction_sysvar` breaks under a multisig, because that",
+              "sysvar sees only top-level instructions and would return the multisig",
+              "program's id. A stored key against a signer is unforgeable however deeply",
+              "the call is nested, which is what lets this be a Squads vault address."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "roster",
+            "type": {
+              "vec": {
+                "defined": {
+                  "name": "rosterEntry"
+                }
+              }
+            }
+          },
+          {
+            "name": "tiebreakers",
+            "type": "bytes"
+          },
+          {
+            "name": "playoffWeeks",
+            "docs": [
+              "The weeks the playoff bracket may use, ascending."
+            ],
+            "type": "bytes"
+          },
+          {
+            "name": "regularSeasonWeeks",
+            "docs": [
+              "Weeks 1..=this are the regular season, and only those feed the seeding."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "firstRoundByes",
+            "type": "u8"
+          },
+          {
+            "name": "thirdPlace",
+            "type": "bool"
+          },
+          {
+            "name": "games",
+            "docs": [
+              "Games by week. Index `w` holds week `w + 1`."
+            ],
+            "type": {
+              "vec": {
+                "vec": {
+                  "defined": {
+                    "name": "postedGame"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "name": "finalizedWeeks",
+            "docs": [
+              "Bit `w` set means week `w + 1` has been finalised and can never change."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "lastFinalizedAt",
+            "docs": [
+              "When the most recent week was finalised. Zero until one is.",
+              "",
+              "Payout reads this, not the individual weeks: the hold runs from the",
+              "*last* finalisation, so a late correction to any week restarts the clock",
+              "that lets somebody notice it."
+            ],
+            "type": "i64"
           }
         ]
       }

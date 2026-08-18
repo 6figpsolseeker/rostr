@@ -8,11 +8,24 @@ import { instructionNames, potDepositGate, settlementShipped } from "./settlemen
  * Pinned deliberately. See the tripwire test at the bottom of this file for why
  * this list is the thing that opens the mainnet deposit gate.
  */
+/**
+ * Sorted, because the assertion sorts the actual list and compares it to this
+ * one as written. A new name goes in its alphabetical place, not at the end.
+ *
+ * `finalize_week`, `initialize_scores` and `post_week` arrived 2026-08-17 with
+ * G7. All three write a payee roster or a set of results and **move no tokens**,
+ * so the gate must still be shut with them present — the test below asserts
+ * that explicitly, and it is the one that matters. Settlement is the
+ * instruction that spends the vault, and it does not exist.
+ */
 const TODAY = [
   "deposit",
+  "finalize_week",
   "initialize_free_league",
   "initialize_league",
+  "initialize_scores",
   "join_league",
+  "post_week",
   "refund_stake",
   // Added 2026-08-17 with the failed-league refund (#170). It closes a refund
   // window; it pays nobody, so the gate below must stay shut — see the test
