@@ -51,10 +51,45 @@ jobs:
       - name: Test
         run: pnpm test
 
-      # Builds the workspace packages to dist as a side effect of typecheck
-      # above, then compiles the web app against them.
-      - name: Build web app
-        run: pnpm --filter @rostr/web build
+      # Deliberately NOT a web app build. That lived here and proved less than
+      # it appeared to: `pnpm typecheck` above runs `tsc --build`, which fills
+      # every package's `dist/`, so the build ran against packages that were
+      # already compiled — a state no deploy is ever in. The `deploy-build` job
+      # below is the honest version, on a clean checkout.
+
+  # The build a deploy actually performs, on a tree that has never been built.
+  #
+  # This exists because the first production deploy failed with
+  # `Module not found: Can't resolve '@rostr/escrow'` while CI was green. The web
+  # app imports five workspace packages, each resolving to `./dist/index.js`;
+  # `dist/` is gitignored, so a fresh clone has none of them, and the host runs
+  # only the app's own build script. Every gate in `check` misses this, because
+  # each one either compiles the packages first or runs where they are already
+  # compiled.
+  #
+  # A separate job rather than a step, because the isolation is the whole point:
+  # it needs a runner where nothing has run `tsc` yet. Adding it to `check`
+  # would put it after the typecheck that hides the failure.
+  #
+  # It runs the app's `vercel-build` script — the same command the host runs —
+  # so if that script is removed or broken, this fails here rather than on a
+  # deploy nobody watches.
+  deploy-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      # No typecheck, no test, no build of any kind before this. If a step is
+      # ever added above it, this job stops testing what it was written for.
+      - name: Build as the host does, from a clean tree
+        run: pnpm vercel-build
+        working-directory: apps/web
 
   # The rules hash is what members sign when they join a league. If canonical
   # encoding drifts, previously created leagues become unverifiable — so the
