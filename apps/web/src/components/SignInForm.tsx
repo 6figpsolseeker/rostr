@@ -28,8 +28,21 @@ export function SignInForm({ next }: { next: string }) {
         body: JSON.stringify({ email, displayName, next }),
       });
 
-      const body = (await response.json()) as { devLink?: string; error?: string };
-      if (!response.ok) throw new Error(body.error ?? "Could not send the link");
+      // Parsed defensively, because a response is not guaranteed to carry a
+      // body. An unhandled throw in a route handler returns 500 with nothing at
+      // all, and calling `.json()` on that threw a `SyntaxError` whose message
+      // — "Unexpected end of JSON input" — was then shown to the user as though
+      // it explained something. The status is the fact; the body is a courtesy.
+      const body = ((await response.json().catch(() => null)) ?? {}) as {
+        devLink?: string;
+        error?: string;
+      };
+
+      if (!response.ok) {
+        throw new Error(
+          body.error ?? `Could not send the link (error ${response.status}). Please try again.`,
+        );
+      }
 
       setDevLink(body.devLink ?? null);
       setStatus("sent");

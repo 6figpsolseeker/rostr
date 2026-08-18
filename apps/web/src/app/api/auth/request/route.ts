@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { beginEmailSignIn, IdentityError, SIGN_IN_PER_EMAIL, SIGN_IN_PER_IP } from "@rostr/db";
 import { db } from "@/lib/db";
-import { EmailNotConfiguredError, sendSignInLink } from "@/lib/email";
+import { EmailDeliveryError, EmailNotConfiguredError, sendSignInLink } from "@/lib/email";
 import { byIp, enforceRateLimit } from "@/lib/rate-limit";
 import { safeRedirect } from "@/lib/session";
 
@@ -53,6 +53,21 @@ export async function POST(request: Request): Promise<NextResponse> {
   } catch (error) {
     if (error instanceof EmailNotConfiguredError) {
       return NextResponse.json({ error: error.message }, { status: 503 });
+    }
+    // A provider refusing to send is expected, not exceptional — a suppressed
+    // address, an exhausted quota, a sender the account may not use. It used to
+    // fall through to the rethrow below, and an unhandled throw here is a 500
+    // with **no body**, which the client then tries to parse as JSON: the user
+    // was shown "Unexpected end of JSON input" for a mail problem.
+    //
+    // 502 rather than 500: the failure is upstream of us and retrying may well
+    // work. The provider's own text is deliberately not forwarded — it can name
+    // the recipient and the sending domain, and this endpoint answers
+    // identically whether or not an account exists.
+    if (error instanceof EmailDeliveryError) {
+      // eslint-disable-next-line no-console
+      console.error(`[auth] provider refused (${error.status}): ${error.detail}`);
+      return NextResponse.json({ error: error.message }, { status: 502 });
     }
     if (error instanceof IdentityError) {
       return NextResponse.json({ error: error.message, code: error.code }, { status: 400 });

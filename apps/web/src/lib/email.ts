@@ -22,6 +22,34 @@ export interface DeliveryResult {
   readonly devLink?: string;
 }
 
+/**
+ * The provider was asked to send and refused.
+ *
+ * Separate from {@link EmailNotConfiguredError} because the two need different
+ * answers: that one is a deployment that was never finished, this one is a
+ * working deployment whose provider said no — a suppressed address, an
+ * exhausted quota, a sender the account is not permitted to use, or the
+ * provider being down.
+ *
+ * It is **expected**, not exceptional. The commonest cause in practice is a
+ * shared test sender, which only delivers to the account owner, so every other
+ * address fails here. Letting it escape as an unhandled throw produced a 500
+ * with an empty body, and the browser then showed the user a JSON parse error
+ * instead of anything about email.
+ */
+export class EmailDeliveryError extends Error {
+  constructor(
+    readonly status: number,
+    readonly detail: string,
+  ) {
+    super(
+      "The email provider refused to send the sign-in link. That is a delivery " +
+        "problem rather than a problem with the address.",
+    );
+    this.name = "EmailDeliveryError";
+  }
+}
+
 export class EmailNotConfiguredError extends Error {
   constructor() {
     super(
@@ -66,7 +94,11 @@ export async function sendSignInLink(email: string, link: string): Promise<Deliv
   });
 
   if (!response.ok) {
-    throw new Error(`Email provider returned ${response.status}: ${await response.text()}`);
+    // Typed, so the route can answer with a readable JSON body. This used to be
+    // a bare `Error`, which the route rethrew — and an unhandled throw in a
+    // route handler is a 500 with no body at all. The client then parses that
+    // body as JSON and shows the user the parse failure.
+    throw new EmailDeliveryError(response.status, await response.text());
   }
 
   return { delivered: true };
