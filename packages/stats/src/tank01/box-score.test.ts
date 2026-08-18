@@ -8,6 +8,8 @@ import rawBlockedFgGame from "./__fixtures__/box-score-blocked-fg.json" with { t
 import rawSafetyGame from "./__fixtures__/box-score-safety.json" with { type: "json" };
 import rawBlockedPuntTdGame from "./__fixtures__/box-score-blocked-punt-td.json" with { type: "json" };
 import rawOverlapGame from "./__fixtures__/box-score-def-st-overlap.json" with { type: "json" };
+import rawBpGame from "./__fixtures__/box-score-blocked-punt-scoretype.json" with { type: "json" };
+import rawNoPlayerIdGame from "./__fixtures__/box-score-returner-not-in-playerids.json" with { type: "json" };
 
 /**
  * Tests run against a **real captured box score** — Cowboys at Eagles, the 2025
@@ -1056,25 +1058,377 @@ describe("safeties", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// Two more real games, from 2024, and between them the two ways a special-teams
+// touchdown could vanish entirely. Both were found by sweeping all 544 games of
+// 2024 and 2025 against Sleeper; both fixtures are captured `getNFLBoxScore`
+// responses.
+// ---------------------------------------------------------------------------
+
+const bpGame = translateBoxScore(rawBpGame);
+const noPlayerIdGame = translateBoxScore(rawNoPlayerIdGame);
+
+/**
+ * `scoreType` has a fifth value, and it paid nobody anything.
+ *
+ * `20241208_BUF@LAR`, verbatim from the fixture:
+ *
+ *     BP | LAR | Hunter Long 22 Yd Return of Blocked Punt (Joshua Karty Kick)
+ *
+ * Both places that pay six points for a special-teams score asked
+ * `play.scoreType === "TD"`, so this play reached neither. And nothing else in
+ * the pipeline made it up: `DST.defTD` reads `"0"`, so the unit had no other
+ * source, and `defensiveOrSpecialTeamsTds` reads `"0"` too, so the cross-check
+ * that exists to catch exactly this agreed with the silence. **Twelve points on
+ * one play, in two roster spots, with `warnings: []`.**
+ */
+describe("a blocked punt filed under scoreType BP", () => {
+  const LONG = "4239944";
+
+  it("is the play the fixture was captured for", () => {
+    const play = rawBpGame.scoringPlays.find((p) => p.scoreType === "BP");
+
+    expect(play?.score).toBe("Hunter Long 22 Yd Return of Blocked Punt (Joshua Karty Kick)");
+    expect(play?.team).toBe("LAR");
+  });
+
+  it("pays the returner his six", () => {
+    expect(playerOf(bpGame, LONG).get("ret_td")).toBe(1);
+    expect(scorePlayer(bpGame.players.get(LONG) ?? [], RULES)).toBeGreaterThanOrEqual(6000);
+  });
+
+  it("pays the returning unit its six, which no field in the response reports", () => {
+    // The half with no numeric fallback anywhere. Both of the provider's own
+    // touchdown counters read zero for the Rams in this game.
+    expect(rawBpGame.DST.home.defTD).toBe("0");
+    expect(rawBpGame.teamStats.home.defensiveOrSpecialTeamsTds).toBe("0");
+
+    expect(unitOf(bpGame, "LAR").get("def_td")).toBe(1);
+  });
+
+  it("does not credit the opponent", () => {
+    expect(unitOf(bpGame, "BUF").get("def_td")).toBeUndefined();
+  });
+
+  it("still counts the block itself exactly once", () => {
+    // `teamStats.blockedPunt` is "1" and the scoring text describes the same
+    // block, so this is the case the `Math.max` in `def_blk_kick` exists for.
+    expect(rawBpGame.teamStats.home.blockedPunt).toBe("1");
+    expect(unitOf(bpGame, "LAR").get("def_blk_kick")).toBe(1);
+  });
+
+  it("says nothing, because the cross-check knows BP is in neither counter", () => {
+    // The trap in fixing this. Paying the play makes `readFromText` 1 while
+    // `defensiveOrSpecialTeamsTds - DST.defTD` is still 0, so the check would
+    // now fire on a game we have just started scoring correctly — which is the
+    // defect #181 removed for blocked kicks ESPN files as defensive, arriving
+    // from the other side. See `isUncountedSpecialTeamsScoreType`.
+    expect(bpGame.warnings).toEqual([]);
+  });
+});
+
+/**
+ * The returner is not in `playerIDs`, and has no record of his own either.
+ *
+ * `20241229_CAR@TB`, verbatim:
+ *
+ *     TD | TB | J.J. Russell 23 Yd Return of Blocked Punt (Chase McLaughlin Kick)
+ *        | playerIDs: ["3150744"]
+ *
+ * `3150744` is Chase McLaughlin, the kicker. The man the sentence names is not
+ * in the array, and Tank01's entire record for him in this game is a
+ * `snapCounts` block — no `scoringPlays`, no `Defense`, nothing. So the old
+ * per-player loop had two independent reasons to miss him and would have needed
+ * both fixed.
+ *
+ * **This is not a `BP` play.** Its `scoreType` is `TD`, which matters because it
+ * means the two defects are genuinely separate: widening the score type alone
+ * would have left these six points on the floor.
+ */
+describe("a return touchdown whose scorer the play does not list", () => {
+  const RUSSELL = "4243366";
+  const KICKER = "3150744";
+
+  it("is the play the fixture was captured for", () => {
+    const play = rawNoPlayerIdGame.scoringPlays.find((p) => /Blocked Punt/i.test(p.score));
+
+    expect(play?.scoreType).toBe("TD");
+    expect(play?.score).toBe(
+      "J.J. Russell 23 Yd Return of Blocked Punt (Chase McLaughlin Kick)",
+    );
+    expect(play?.playerIDs).toEqual([KICKER]);
+  });
+
+  it("has no record of its own to be found in", () => {
+    // The second half of why `playerIDs` could not simply be widened: even a
+    // loop that ignored the array entirely would run zero times for this player.
+    const russell = rawNoPlayerIdGame.playerStats[RUSSELL] as Record<string, unknown>;
+
+    expect(russell["longName"]).toBe("J.J. Russell");
+    expect(russell["scoringPlays"]).toBeUndefined();
+    expect(russell["Defense"]).toBeUndefined();
+  });
+
+  it("credits the man the main clause names", () => {
+    expect(playerOf(noPlayerIdGame, RUSSELL).get("ret_td")).toBe(1);
+  });
+
+  it("does not credit the kicker, who is the only id on the play", () => {
+    // The mirror of the Darnold case: `playerIDs` names whoever the provider
+    // felt like naming, and here that is nobody who scored.
+    expect(playerOf(noPlayerIdGame, KICKER).get("ret_td")).toBeUndefined();
+  });
+
+  it("leaves the unit's own six where it already was", () => {
+    // Tampa's `def_td` was correct before this change and must stay correct: the
+    // unit path reads the text rather than `playerIDs`, so it never lost the
+    // play. Stated because "fix the returner" and "fix the unit" are different
+    // code paths and only one of them was broken here.
+    expect(rawNoPlayerIdGame.teamStats.home.defensiveOrSpecialTeamsTds).toBe("1");
+
+    expect(unitOf(noPlayerIdGame, "TB").get("def_td")).toBe(1);
+    expect(unitOf(noPlayerIdGame, "CAR").get("def_td")).toBeUndefined();
+  });
+});
+
+describe("a return touchdown nobody can be credited for is never silent", () => {
+  const play = {
+    score: "Somebody Nobodyknows 40 Yd Punt Return (A Kicker Kick)",
+    scoreType: "TD",
+    team: "PHI",
+    playerIDs: [] as string[],
+  };
+
+  // `ydsAllowed` included because these assertions read the whole warning list,
+  // and a unit missing a tiered field warns about it — correctly, and here it
+  // would only be noise from the fixture rather than from the code under test.
+  const dst = {
+    home: { teamAbv: "PHI", ptsAllowed: "20", ydsAllowed: "300", defTD: "0" },
+    away: { teamAbv: "DAL", ptsAllowed: "24", ydsAllowed: "310", defTD: "0" },
+  };
+
+  it("warns when the main clause names no player in the game", () => {
+    // Six points that would otherwise go to nobody, on a play the unit is
+    // simultaneously being paid six for — so the response is internally
+    // inconsistent and says so rather than reading as a clean game.
+    const translated = translateBoxScore({
+      gameID: "g",
+      playerStats: { p: { playerID: "p", longName: "Someone Else", team: "PHI" } },
+      DST: dst,
+      scoringPlays: [play],
+    });
+
+    expect(translated.warnings.join(" ")).toMatch(
+      /return touchdown ".*" names no player this game recognises/,
+    );
+    expect(unitOf(translated, "PHI").get("def_td")).toBe(1);
+  });
+
+  /**
+   * The genuine ambiguity: one abbreviation, two players.
+   *
+   * `"C.Smith"` normalises to `csmith`, and so does the initial-plus-surname
+   * form of both a Chris Smith and a Carl Smith. Tank01 really does write plays
+   * this way — `"(J.Elliott kick)"` is recorded verbatim in `docs/TANK01.md` —
+   * so this is the shape that reaches us rather than an invented collision.
+   */
+  const twoSmiths = {
+    a: { playerID: "a", longName: "Chris Smith", team: "PHI" },
+    b: { playerID: "b", longName: "Carl Smith", team: "PHI" },
+  };
+
+  it("credits nobody, and says so, when one spelling fits two players", () => {
+    // The same answer the two-point pass gives, for the same reason: crediting
+    // the wrong man costs six points twice, once in each direction. A return has
+    // exactly one scorer, so two matches is a fact about our name matching.
+    const translated = translateBoxScore({
+      gameID: "g",
+      playerStats: twoSmiths,
+      DST: dst,
+      scoringPlays: [{ ...play, score: "C.Smith 40 Yd Punt Return" }],
+    });
+
+    expect(translated.warnings.join(" ")).toMatch(/return touchdown ".*" matches/);
+    expect(playerOf(translated, "a").get("ret_td")).toBeUndefined();
+    expect(playerOf(translated, "b").get("ret_td")).toBeUndefined();
+  });
+
+  it("uses playerIDs to break that tie rather than refusing", () => {
+    // `playerIDs` is demoted to a tiebreak, not deleted, and this is why: the
+    // old rule required it *and* the main clause, so anything it used to credit
+    // uniquely must still be credited. Only a play that used to pay two players
+    // six each can be lost, and that was never right.
+    const translated = translateBoxScore({
+      gameID: "g",
+      playerStats: twoSmiths,
+      DST: dst,
+      scoringPlays: [{ ...play, score: "C.Smith 40 Yd Punt Return", playerIDs: ["a"] }],
+    });
+
+    expect(playerOf(translated, "a").get("ret_td")).toBe(1);
+    expect(playerOf(translated, "b").get("ret_td")).toBeUndefined();
+    expect(translated.warnings).toEqual([]);
+  });
+});
+
+describe("an unfamiliar scoreType is reported rather than absorbed", () => {
+  const base = {
+    gameID: "g",
+    playerStats: {},
+    DST: {
+      home: { teamAbv: "PHI", ptsAllowed: "20" },
+      away: { teamAbv: "DAL", ptsAllowed: "24" },
+    },
+  };
+
+  it("names a value it has never seen", () => {
+    // The whole reason this exists. `BP` was in the feed for two seasons costing
+    // 12 points an appearance, and what found it was a human sweeping 544 games.
+    // An unrecognised value is inert in the scoring by design; inert and silent
+    // are different things.
+    const translated = translateBoxScore({
+      ...base,
+      scoringPlays: [{ score: "Something new", scoreType: "XPR", team: "PHI" }],
+    });
+
+    expect(translated.warnings.join(" ")).toMatch(/scoreType "XPR" has not been seen before/);
+  });
+
+  it("says it once per game, however many plays carry it", () => {
+    const translated = translateBoxScore({
+      ...base,
+      scoringPlays: [
+        { score: "a", scoreType: "XPR", team: "PHI" },
+        { score: "b", scoreType: "XPR", team: "PHI" },
+        { score: "c", scoreType: "XPR", team: "DAL" },
+      ],
+    });
+
+    expect(translated.warnings.filter((w) => w.includes("XPR"))).toHaveLength(1);
+  });
+
+  it.each(["TD", "FG", "SF", "2PTC", "BP", undefined])("says nothing about %s", (scoreType) => {
+    // The absent value is in here deliberately: the full-2025 sweep found one,
+    // so warning about it would put noise on ordinary games.
+    const translated = translateBoxScore({
+      ...base,
+      scoringPlays: [{ score: "Ordinary play", scoreType, team: "PHI" }],
+    });
+
+    expect(translated.warnings.join(" ")).not.toMatch(/has not been seen before/);
+  });
+});
+
+/**
+ * A defensive two-point conversion return.
+ *
+ * ESPN pays the D/ST 2 for taking a failed conversion attempt back the other
+ * way. We had no stat key at all, so it scored nothing — three occurrences over
+ * 2024 and 2025. `teamStats.defensiveTwoPointConversionReturns` carries it, and
+ * it is read as a number rather than parsed out of the play text.
+ */
+describe("defensive two-point conversion returns", () => {
+  const withReturns = (value: string): ReturnType<typeof translateBoxScore> =>
+    translateBoxScore({
+      gameID: "g",
+      playerStats: {},
+      DST: {
+        home: { teamAbv: "DAL", ptsAllowed: "20" },
+        away: { teamAbv: "PHI", ptsAllowed: "24" },
+      },
+      teamStats: {
+        home: { teamAbv: "DAL", defensiveTwoPointConversionReturns: value },
+        away: { teamAbv: "PHI", defensiveTwoPointConversionReturns: "0" },
+      },
+      scoringPlays: [],
+    });
+
+  it("credits the returning unit two points", () => {
+    const translated = withReturns("1");
+
+    expect(unitOf(translated, "DAL").get("def_2pt_ret")).toBe(1);
+    expect(scorePlayer(translated.teamDefense.get("DAL") ?? [], RULES)).toBe(2000);
+  });
+
+  it("emits nothing at zero, unlike the tiered rules", () => {
+    // A plain counter, so absent and zero score identically — and a row a week
+    // for every unit in the league would be a lot of rows for an event that
+    // happens about once a season.
+    expect(unitOf(withReturns("1"), "PHI").get("def_2pt_ret")).toBeUndefined();
+  });
+
+  it("says so when the field is present but unreadable", () => {
+    const translated = withReturns("two");
+
+    expect(translated.warnings.join(" ")).toMatch(
+      /DAL: defensiveTwoPointConversionReturns is "two", which is not a number/,
+    );
+    expect(unitOf(translated, "DAL").get("def_2pt_ret")).toBeUndefined();
+  });
+
+  it("still pays nobody for the failed conversion itself", () => {
+    // The offensive half must not move. Tank01's wording for a conversion the
+    // defence returned names the interception in the same sentence, and the
+    // `Failed` token is the only thing that stops two points being handed to the
+    // offence — which would be the conversion paid to the team that missed it.
+    const translated = translateBoxScore({
+      gameID: "g",
+      playerStats: {
+        q: { playerID: "q", longName: "Minkah Fitzpatrick", team: "PIT" },
+      },
+      DST: {
+        home: { teamAbv: "PIT", ptsAllowed: "20" },
+        away: { teamAbv: "BAL", ptsAllowed: "24" },
+      },
+      scoringPlays: [
+        {
+          score:
+            "Some Guy 3 Yd Run (Two-Point Pass Conversion Failed. " +
+            "Minkah Fitzpatrick Interception Return)",
+          scoreType: "TD",
+          team: "BAL",
+          playerIDs: ["q"],
+        },
+      ],
+    });
+
+    expect(playerOf(translated, "q").get("two_pt")).toBeUndefined();
+    // And it is not a return touchdown either, in either direction: the text
+    // says "Interception Return", which `DEFENSIVE_RETURN` claims first.
+    expect(playerOf(translated, "q").get("ret_td")).toBeUndefined();
+    expect(unitOf(translated, "PIT").get("def_td")).toBeUndefined();
+  });
+});
+
 describe("the newly captured games reconcile", () => {
   it.each([
     ["20250907_ARI@NO", () => blockedFgGame],
     ["20250921_ARI@SF", () => safetyGame],
     ["20251103_ARI@DAL", () => blockedPuntTdGame],
     ["20250928_CAR@NE", () => overlapGame],
+    ["20241208_BUF@LAR", () => bpGame],
+    ["20241229_CAR@TB", () => noPlayerIdGame],
   ])("%s reads cleanly", (gameRef, get) => {
     const translated = get();
 
     expect(translated.gameRef).toBe(gameRef);
     expect(translated.fatal).toEqual([]);
     // Zero warnings is the claim worth making: every cross-check added here
-    // agrees with the provider on four independently captured responses.
+    // agrees with the provider on six independently captured responses, two of
+    // them from a season the rest of this file does not cover.
     expect(translated.warnings).toEqual([]);
     expect(translated.players.size).toBeGreaterThan(50);
   });
 
   it("scores every player and every unit in them without throwing", () => {
-    for (const translated of [blockedFgGame, safetyGame, blockedPuntTdGame, overlapGame]) {
+    for (const translated of [
+      blockedFgGame,
+      safetyGame,
+      blockedPuntTdGame,
+      overlapGame,
+      bpGame,
+      noPlayerIdGame,
+    ]) {
       for (const lines of translated.players.values()) {
         expect(() => scorePlayer(lines, RULES)).not.toThrow();
       }

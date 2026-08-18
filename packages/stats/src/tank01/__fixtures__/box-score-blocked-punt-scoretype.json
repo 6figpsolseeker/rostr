@@ -1,0 +1,2801 @@
+{
+  "DST": {
+    "away": {
+      "teamAbv": "BUF",
+      "teamID": "4",
+      "defTD": "0",
+      "defensiveInterceptions": "0",
+      "sacks": "0",
+      "ydsAllowed": "457",
+      "fumblesRecovered": "0",
+      "ptsAllowed": "44",
+      "safeties": "0"
+    },
+    "home": {
+      "teamAbv": "LAR",
+      "teamID": "19",
+      "defTD": "0",
+      "defensiveInterceptions": "0",
+      "sacks": "0",
+      "ydsAllowed": "445",
+      "fumblesRecovered": "0",
+      "ptsAllowed": "42",
+      "safeties": "0"
+    }
+  },
+  "Referees": "Frank Steratore, Craig Wrolstad, Rich Martinez, Steve Woods, Danny Short, Jeff Shears, Brett Bergman",
+  "arena": "SoFi Stadium",
+  "arenaCapacity": "71,500",
+  "attendance": "73,493",
+  "away": "BUF",
+  "awayPts": "42",
+  "awayResult": "L",
+  "currentPeriod": "Final",
+  "gameClock": "",
+  "gameDate": "20241208",
+  "gameLocation": "Inglewood, CA",
+  "gameStatus": "Completed",
+  "gameWeek": "Week 14",
+  "home": "LAR",
+  "homePts": "44",
+  "homeResult": "W",
+  "lineScore": {
+    "period": "Final",
+    "gameClock": "",
+    "away": {
+      "Q1": "7",
+      "Q2": "7",
+      "Q3": "7",
+      "Q4": "21",
+      "teamID": "4",
+      "currentlyInPossession": "False",
+      "totalPts": "42",
+      "teamAbv": "BUF"
+    },
+    "home": {
+      "Q1": "7",
+      "Q2": "17",
+      "Q3": "14",
+      "Q4": "6",
+      "teamID": "19",
+      "currentlyInPossession": "False",
+      "totalPts": "44",
+      "teamAbv": "LAR"
+    }
+  },
+  "network": "FOX",
+  "playerStats": {
+    "12483": {
+      "gameID": "20241208_BUF@LAR",
+      "Passing": {
+        "qbr": "97.5",
+        "rtg": "132.6",
+        "sacked": "0-0",
+        "passAttempts": "30",
+        "passAvg": "10.7",
+        "passTD": "2",
+        "passYds": "320",
+        "int": "0",
+        "passCompletions": "23"
+      },
+      "scoringPlays": [
+        {
+          "score": "Cooper Kupp 17 Yd pass from Matthew Stafford (Joshua Karty Kick)",
+          "scorePeriod": "Q3",
+          "homeScore": "38",
+          "awayScore": "21",
+          "teamID": "19",
+          "scoreDetails": "7 plays, 70 yards, 3:36",
+          "scoreType": "TD",
+          "scoreTime": "0:18",
+          "team": "LAR",
+          "playerIDs": ["12483", "2977187", "4566192"]
+        },
+        {
+          "score": "Puka Nacua 19 Yd pass from Matthew Stafford (Joshua Karty PAT failed)",
+          "scorePeriod": "Q4",
+          "homeScore": "44",
+          "awayScore": "35",
+          "teamID": "19",
+          "scoreDetails": "11 plays, 71 yards, 6:55",
+          "scoreType": "TD",
+          "scoreTime": "1:54",
+          "team": "LAR",
+          "playerIDs": ["12483", "4426515", "4566192"]
+        }
+      ],
+      "teamID": "19",
+      "snapCounts": {
+        "offSnapPct": "1.00",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "77",
+        "defSnapPct": "0.00"
+      },
+      "team": "LAR",
+      "teamAbv": "LAR",
+      "playerID": "12483",
+      "longName": "Matthew Stafford"
+    },
+    "13976": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "4",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "25",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "0.32"
+      },
+      "team": "BUF",
+      "teamAbv": "BUF",
+      "Defense": {
+        "totalTackles": "3",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "2",
+        "tfl": "1",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "13976",
+      "longName": "Von Miller"
+    },
+    "15928": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "4",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "9",
+        "stSnapPct": "0.27",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "Punting": {
+        "puntYds": "101",
+        "punts": "2",
+        "puntAvg": "50.5",
+        "puntsin20": "1",
+        "puntTouchBacks": "0",
+        "puntLong": "55"
+      },
+      "team": "BUF",
+      "teamAbv": "BUF",
+      "playerID": "15928",
+      "longName": "Sam Martin"
+    },
+    "16910": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "4",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "44",
+        "stSnap": "7",
+        "stSnapPct": "0.21",
+        "offSnap": "0",
+        "defSnapPct": "0.57"
+      },
+      "team": "BUF",
+      "teamAbv": "BUF",
+      "Defense": {
+        "totalTackles": "4",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "1",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "16910",
+      "longName": "DaQuan Jones"
+    },
+    "2310331": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "19",
+      "snapCounts": {
+        "offSnapPct": "0.21",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "16",
+        "defSnapPct": "0.00"
+      },
+      "team": "LAR",
+      "teamAbv": "LAR",
+      "playerID": "2310331",
+      "longName": "Tyler Johnson"
+    },
+    "2515613": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "19",
+      "snapCounts": {
+        "offSnapPct": "1.00",
+        "defSnap": "0",
+        "stSnap": "7",
+        "stSnapPct": "0.21",
+        "offSnap": "77",
+        "defSnapPct": "0.00"
+      },
+      "team": "LAR",
+      "teamAbv": "LAR",
+      "playerID": "2515613",
+      "longName": "Rob Havenstein"
+    },
+    "2577078": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "4",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "19",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "0.25"
+      },
+      "team": "BUF",
+      "teamAbv": "BUF",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "0",
+        "tfl": "0",
+        "qbHits": "1",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "2577078",
+      "longName": "Quinton Jefferson"
+    },
+    "2976499": {
+      "gameID": "20241208_BUF@LAR",
+      "Receiving": {
+        "receptions": "6",
+        "recTD": "0",
+        "longRec": "26",
+        "targets": "14",
+        "recYds": "95",
+        "recAvg": "15.8"
+      },
+      "teamID": "4",
+      "snapCounts": {
+        "offSnapPct": "0.53",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "32",
+        "defSnapPct": "0.00"
+      },
+      "team": "BUF",
+      "teamAbv": "BUF",
+      "playerID": "2976499",
+      "longName": "Amari Cooper"
+    },
+    "2976549": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "4",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "9",
+        "stSnapPct": "0.27",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "BUF",
+      "teamAbv": "BUF",
+      "playerID": "2976549",
+      "longName": "Reid Ferguson"
+    },
+    "2977187": {
+      "gameID": "20241208_BUF@LAR",
+      "Receiving": {
+        "receptions": "5",
+        "recTD": "1",
+        "longRec": "37",
+        "targets": "8",
+        "recYds": "92",
+        "recAvg": "18.4"
+      },
+      "scoringPlays": [
+        {
+          "score": "Cooper Kupp 17 Yd pass from Matthew Stafford (Joshua Karty Kick)",
+          "scorePeriod": "Q3",
+          "homeScore": "38",
+          "awayScore": "21",
+          "teamID": "19",
+          "scoreDetails": "7 plays, 70 yards, 3:36",
+          "scoreType": "TD",
+          "scoreTime": "0:18",
+          "team": "LAR",
+          "playerIDs": ["12483", "2977187", "4566192"]
+        }
+      ],
+      "teamID": "19",
+      "snapCounts": {
+        "offSnapPct": "0.83",
+        "defSnap": "0",
+        "stSnap": "1",
+        "stSnapPct": "0.03",
+        "offSnap": "64",
+        "defSnapPct": "0.00"
+      },
+      "team": "LAR",
+      "teamAbv": "LAR",
+      "playerID": "2977187",
+      "longName": "Cooper Kupp"
+    },
+    "2979591": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "4",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "21",
+        "stSnap": "7",
+        "stSnapPct": "0.21",
+        "offSnap": "0",
+        "defSnapPct": "0.27"
+      },
+      "team": "BUF",
+      "teamAbv": "BUF",
+      "Defense": {
+        "totalTackles": "3",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "2",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "2979591",
+      "longName": "Austin Johnson"
+    },
+    "2991662": {
+      "gameID": "20241208_BUF@LAR",
+      "Receiving": {
+        "receptions": "4",
+        "recTD": "1",
+        "longRec": "21",
+        "targets": "6",
+        "recYds": "57",
+        "recAvg": "14.3"
+      },
+      "scoringPlays": [
+        {
+          "score": "Mack Hollins 21 Yd pass from Josh Allen (Tyler Bass Kick)",
+          "scorePeriod": "Q4",
+          "homeScore": "38",
+          "awayScore": "35",
+          "teamID": "4",
+          "scoreDetails": "10 plays, 91 yards, 4:03",
+          "scoreType": "TD",
+          "scoreTime": "8:49",
+          "team": "BUF",
+          "playerIDs": ["3918298", "2991662", "3917232"]
+        }
+      ],
+      "teamID": "4",
+      "snapCounts": {
+        "offSnapPct": "0.77",
+        "defSnap": "0",
+        "stSnap": "1",
+        "stSnapPct": "0.03",
+        "offSnap": "46",
+        "defSnapPct": "0.00"
+      },
+      "team": "BUF",
+      "teamAbv": "BUF",
+      "playerID": "2991662",
+      "longName": "Mack Hollins"
+    },
+    "3043116": {
+      "gameID": "20241208_BUF@LAR",
+      "Receiving": {
+        "receptions": "0",
+        "recTD": "0",
+        "longRec": "0",
+        "targets": "1",
+        "recYds": "0",
+        "recAvg": "0.0"
+      },
+      "teamID": "19",
+      "snapCounts": {
+        "offSnapPct": "0.61",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "47",
+        "defSnapPct": "0.00"
+      },
+      "team": "LAR",
+      "teamAbv": "LAR",
+      "playerID": "3043116",
+      "longName": "Demarcus Robinson"
+    },
+    "3046287": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "4",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "65",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "0.84"
+      },
+      "team": "BUF",
+      "teamAbv": "BUF",
+      "Defense": {
+        "totalTackles": "3",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "2",
+        "tfl": "1",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "3046287",
+      "longName": "Matt Milano"
+    },
+    "3051324": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "4",
+      "snapCounts": {
+        "offSnapPct": "1.00",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "60",
+        "defSnapPct": "0.00"
+      },
+      "team": "BUF",
+      "teamAbv": "BUF",
+      "playerID": "3051324",
+      "longName": "Dion Dawkins"
+    },
+    "3121003": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "4",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "76",
+        "stSnap": "1",
+        "stSnapPct": "0.03",
+        "offSnap": "0",
+        "defSnapPct": "0.99"
+      },
+      "team": "BUF",
+      "teamAbv": "BUF",
+      "Defense": {
+        "totalTackles": "7",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "6",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "3121003",
+      "longName": "Taron Johnson"
+    },
+    "3121427": {
+      "gameID": "20241208_BUF@LAR",
+      "Rushing": {
+        "rushAvg": "1.0",
+        "rushYds": "1",
+        "carries": "1",
+        "longRush": "1",
+        "rushTD": "0"
+      },
+      "Receiving": {
+        "receptions": "2",
+        "recTD": "0",
+        "longRec": "11",
+        "targets": "3",
+        "recYds": "15",
+        "recAvg": "7.5"
+      },
+      "teamID": "4",
+      "snapCounts": {
+        "offSnapPct": "0.60",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "36",
+        "defSnapPct": "0.00"
+      },
+      "team": "BUF",
+      "teamAbv": "BUF",
+      "playerID": "3121427",
+      "longName": "Curtis Samuel"
+    },
+    "3122630": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "19",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "6",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "0.10"
+      },
+      "team": "LAR",
+      "teamAbv": "LAR",
+      "playerID": "3122630",
+      "longName": "Ahkello Witherspoon"
+    },
+    "3892883": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "19",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "15",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "0.25"
+      },
+      "team": "LAR",
+      "teamAbv": "LAR",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "3892883",
+      "longName": "Neville Gallimore"
+    },
+    "3909013": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "19",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "48",
+        "stSnap": "10",
+        "stSnapPct": "0.30",
+        "offSnap": "0",
+        "defSnapPct": "0.80"
+      },
+      "team": "LAR",
+      "teamAbv": "LAR",
+      "Defense": {
+        "totalTackles": "8",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "3",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "3909013",
+      "longName": "Christian Rozeboom"
+    },
+    "3915411": {
+      "gameID": "20241208_BUF@LAR",
+      "Receiving": {
+        "receptions": "2",
+        "recTD": "1",
+        "longRec": "41",
+        "targets": "3",
+        "recYds": "55",
+        "recAvg": "27.5"
+      },
+      "scoringPlays": [
+        {
+          "score": "Ty Johnson 41 Yd pass from Josh Allen (Tyler Bass Kick)",
+          "scorePeriod": "Q2",
+          "homeScore": "17",
+          "awayScore": "14",
+          "teamID": "4",
+          "scoreDetails": "4 plays, 70 yards, 2:06",
+          "scoreType": "TD",
+          "scoreTime": "10:23",
+          "team": "BUF",
+          "playerIDs": ["3918298", "3915411", "3917232"]
+        }
+      ],
+      "teamID": "4",
+      "snapCounts": {
+        "offSnapPct": "0.35",
+        "defSnap": "0",
+        "stSnap": "4",
+        "stSnapPct": "0.12",
+        "offSnap": "21",
+        "defSnapPct": "0.00"
+      },
+      "team": "BUF",
+      "teamAbv": "BUF",
+      "playerID": "3915411",
+      "longName": "Ty Johnson"
+    },
+    "3916577": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "4",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "13",
+        "stSnap": "27",
+        "stSnapPct": "0.82",
+        "offSnap": "0",
+        "defSnapPct": "0.17"
+      },
+      "team": "BUF",
+      "teamAbv": "BUF",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "3916577",
+      "longName": "Cam Lewis"
+    },
+    "3917232": {
+      "gameID": "20241208_BUF@LAR",
+      "scoringPlays": [
+        {
+          "score": "Josh Allen 1 Yd Run (Tyler Bass Kick)",
+          "scorePeriod": "Q1",
+          "homeScore": "7",
+          "awayScore": "7",
+          "teamID": "4",
+          "scoreDetails": "9 plays, 70 yards, 5:04",
+          "scoreType": "TD",
+          "scoreTime": "3:22",
+          "team": "BUF",
+          "playerIDs": ["3918298", "3917232"]
+        },
+        {
+          "score": "Ty Johnson 41 Yd pass from Josh Allen (Tyler Bass Kick)",
+          "scorePeriod": "Q2",
+          "homeScore": "17",
+          "awayScore": "14",
+          "teamID": "4",
+          "scoreDetails": "4 plays, 70 yards, 2:06",
+          "scoreType": "TD",
+          "scoreTime": "10:23",
+          "team": "BUF",
+          "playerIDs": ["3918298", "3915411", "3917232"]
+        },
+        {
+          "score": "Khalil Shakir 51 Yd pass from Josh Allen (Tyler Bass Kick)",
+          "scorePeriod": "Q3",
+          "homeScore": "31",
+          "awayScore": "21",
+          "teamID": "4",
+          "scoreDetails": "6 plays, 80 yards, 4:32",
+          "scoreType": "TD",
+          "scoreTime": "3:54",
+          "team": "BUF",
+          "playerIDs": ["3918298", "4373678", "3917232"]
+        },
+        {
+          "score": "Josh Allen 1 Yd Run (Tyler Bass Kick)",
+          "scorePeriod": "Q4",
+          "homeScore": "38",
+          "awayScore": "28",
+          "teamID": "4",
+          "scoreDetails": "5 plays, 70 yards, 0:51",
+          "scoreType": "TD",
+          "scoreTime": "14:27",
+          "team": "BUF",
+          "playerIDs": ["3918298", "3917232"]
+        },
+        {
+          "score": "Mack Hollins 21 Yd pass from Josh Allen (Tyler Bass Kick)",
+          "scorePeriod": "Q4",
+          "homeScore": "38",
+          "awayScore": "35",
+          "teamID": "4",
+          "scoreDetails": "10 plays, 91 yards, 4:03",
+          "scoreType": "TD",
+          "scoreTime": "8:49",
+          "team": "BUF",
+          "playerIDs": ["3918298", "2991662", "3917232"]
+        },
+        {
+          "score": "Josh Allen 1 Yd Run (Tyler Bass Kick)",
+          "scorePeriod": "Q4",
+          "homeScore": "44",
+          "awayScore": "42",
+          "teamID": "4",
+          "scoreDetails": "8 plays, 70 yards, 0:54",
+          "scoreType": "TD",
+          "scoreTime": "1:00",
+          "team": "BUF",
+          "playerIDs": ["3918298", "3917232"]
+        }
+      ],
+      "teamID": "4",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "13",
+        "stSnapPct": "0.40",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "Kicking": {
+        "fgLong": "0",
+        "fgMade": "0",
+        "fgAttempts": "0",
+        "xpMade": "6",
+        "fgPct": "0.0",
+        "kickingPts": "5",
+        "xpAttempts": "6",
+        "fgMissed": "0",
+        "xpMissed": "0"
+      },
+      "team": "BUF",
+      "teamAbv": "BUF",
+      "playerID": "3917232",
+      "longName": "Tyler Bass"
+    },
+    "3917599": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "19",
+      "snapCounts": {
+        "offSnapPct": "1.00",
+        "defSnap": "0",
+        "stSnap": "7",
+        "stSnapPct": "0.21",
+        "offSnap": "77",
+        "defSnapPct": "0.00"
+      },
+      "team": "LAR",
+      "teamAbv": "LAR",
+      "playerID": "3917599",
+      "longName": "Kevin Dotson"
+    },
+    "3917660": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "4",
+      "snapCounts": {
+        "offSnapPct": "1.00",
+        "defSnap": "0",
+        "stSnap": "6",
+        "stSnapPct": "0.18",
+        "offSnap": "60",
+        "defSnapPct": "0.00"
+      },
+      "team": "BUF",
+      "teamAbv": "BUF",
+      "playerID": "3917660",
+      "longName": "David Edwards"
+    },
+    "3918298": {
+      "gameID": "20241208_BUF@LAR",
+      "Rushing": {
+        "rushAvg": "8.2",
+        "rushYds": "82",
+        "carries": "10",
+        "longRush": "30",
+        "rushTD": "3"
+      },
+      "Passing": {
+        "qbr": "90.8",
+        "rtg": "117.2",
+        "sacked": "0-0",
+        "passAttempts": "37",
+        "passAvg": "9.2",
+        "passTD": "3",
+        "passYds": "342",
+        "int": "0",
+        "passCompletions": "22"
+      },
+      "scoringPlays": [
+        {
+          "score": "Josh Allen 1 Yd Run (Tyler Bass Kick)",
+          "scorePeriod": "Q1",
+          "homeScore": "7",
+          "awayScore": "7",
+          "teamID": "4",
+          "scoreDetails": "9 plays, 70 yards, 5:04",
+          "scoreType": "TD",
+          "scoreTime": "3:22",
+          "team": "BUF",
+          "playerIDs": ["3918298", "3917232"]
+        },
+        {
+          "score": "Ty Johnson 41 Yd pass from Josh Allen (Tyler Bass Kick)",
+          "scorePeriod": "Q2",
+          "homeScore": "17",
+          "awayScore": "14",
+          "teamID": "4",
+          "scoreDetails": "4 plays, 70 yards, 2:06",
+          "scoreType": "TD",
+          "scoreTime": "10:23",
+          "team": "BUF",
+          "playerIDs": ["3918298", "3915411", "3917232"]
+        },
+        {
+          "score": "Khalil Shakir 51 Yd pass from Josh Allen (Tyler Bass Kick)",
+          "scorePeriod": "Q3",
+          "homeScore": "31",
+          "awayScore": "21",
+          "teamID": "4",
+          "scoreDetails": "6 plays, 80 yards, 4:32",
+          "scoreType": "TD",
+          "scoreTime": "3:54",
+          "team": "BUF",
+          "playerIDs": ["3918298", "4373678", "3917232"]
+        },
+        {
+          "score": "Josh Allen 1 Yd Run (Tyler Bass Kick)",
+          "scorePeriod": "Q4",
+          "homeScore": "38",
+          "awayScore": "28",
+          "teamID": "4",
+          "scoreDetails": "5 plays, 70 yards, 0:51",
+          "scoreType": "TD",
+          "scoreTime": "14:27",
+          "team": "BUF",
+          "playerIDs": ["3918298", "3917232"]
+        },
+        {
+          "score": "Mack Hollins 21 Yd pass from Josh Allen (Tyler Bass Kick)",
+          "scorePeriod": "Q4",
+          "homeScore": "38",
+          "awayScore": "35",
+          "teamID": "4",
+          "scoreDetails": "10 plays, 91 yards, 4:03",
+          "scoreType": "TD",
+          "scoreTime": "8:49",
+          "team": "BUF",
+          "playerIDs": ["3918298", "2991662", "3917232"]
+        },
+        {
+          "score": "Josh Allen 1 Yd Run (Tyler Bass Kick)",
+          "scorePeriod": "Q4",
+          "homeScore": "44",
+          "awayScore": "42",
+          "teamID": "4",
+          "scoreDetails": "8 plays, 70 yards, 0:54",
+          "scoreType": "TD",
+          "scoreTime": "1:00",
+          "team": "BUF",
+          "playerIDs": ["3918298", "3917232"]
+        }
+      ],
+      "teamID": "4",
+      "snapCounts": {
+        "offSnapPct": "1.00",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "60",
+        "defSnapPct": "0.00"
+      },
+      "team": "BUF",
+      "teamAbv": "BUF",
+      "playerID": "3918298",
+      "longName": "Josh Allen"
+    },
+    "3930086": {
+      "gameID": "20241208_BUF@LAR",
+      "Receiving": {
+        "receptions": "1",
+        "recTD": "0",
+        "longRec": "5",
+        "targets": "1",
+        "recYds": "5",
+        "recAvg": "5.0"
+      },
+      "teamID": "4",
+      "snapCounts": {
+        "offSnapPct": "0.82",
+        "defSnap": "0",
+        "stSnap": "1",
+        "stSnapPct": "0.03",
+        "offSnap": "49",
+        "defSnapPct": "0.00"
+      },
+      "team": "BUF",
+      "teamAbv": "BUF",
+      "playerID": "3930086",
+      "longName": "Dawson Knox"
+    },
+    "3931408": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "4",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "12",
+        "stSnap": "7",
+        "stSnapPct": "0.21",
+        "offSnap": "0",
+        "defSnapPct": "0.16"
+      },
+      "team": "BUF",
+      "teamAbv": "BUF",
+      "playerID": "3931408",
+      "longName": "Casey Toohill"
+    },
+    "3943270": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "4",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "61",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "0.79"
+      },
+      "team": "BUF",
+      "teamAbv": "BUF",
+      "Defense": {
+        "totalTackles": "6",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "4",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "3943270",
+      "longName": "Rasul Douglas"
+    },
+    "4030899": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "4",
+      "snapCounts": {
+        "offSnapPct": "1.00",
+        "defSnap": "0",
+        "stSnap": "6",
+        "stSnapPct": "0.18",
+        "offSnap": "60",
+        "defSnapPct": "0.00"
+      },
+      "team": "BUF",
+      "teamAbv": "BUF",
+      "playerID": "4030899",
+      "longName": "Spencer Brown"
+    },
+    "4033234": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "19",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "36",
+        "stSnap": "14",
+        "stSnapPct": "0.42",
+        "offSnap": "0",
+        "defSnapPct": "0.60"
+      },
+      "team": "LAR",
+      "teamAbv": "LAR",
+      "playerID": "4033234",
+      "longName": "Michael Hoecht"
+    },
+    "4033748": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "4",
+      "snapCounts": {
+        "offSnapPct": "1.00",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "60",
+        "defSnapPct": "0.00"
+      },
+      "team": "BUF",
+      "teamAbv": "BUF",
+      "playerID": "4033748",
+      "longName": "Connor McGovern"
+    },
+    "4036060": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "4",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "77",
+        "stSnap": "7",
+        "stSnapPct": "0.21",
+        "offSnap": "0",
+        "defSnapPct": "1.00"
+      },
+      "team": "BUF",
+      "teamAbv": "BUF",
+      "Defense": {
+        "totalTackles": "13",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "7",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4036060",
+      "longName": "Damar Hamlin"
+    },
+    "4036135": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "19",
+      "snapCounts": {
+        "offSnapPct": "1.00",
+        "defSnap": "0",
+        "stSnap": "7",
+        "stSnapPct": "0.21",
+        "offSnap": "77",
+        "defSnapPct": "0.00"
+      },
+      "team": "LAR",
+      "teamAbv": "LAR",
+      "playerID": "4036135",
+      "longName": "Alaric Jackson"
+    },
+    "4036448": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "4",
+      "snapCounts": {
+        "offSnapPct": "0.02",
+        "defSnap": "0",
+        "stSnap": "9",
+        "stSnapPct": "0.27",
+        "offSnap": "1",
+        "defSnapPct": "0.00"
+      },
+      "team": "BUF",
+      "teamAbv": "BUF",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4036448",
+      "longName": "Jalen Virgil"
+    },
+    "4039007": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "4",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "77",
+        "stSnap": "6",
+        "stSnapPct": "0.18",
+        "offSnap": "0",
+        "defSnapPct": "1.00"
+      },
+      "team": "BUF",
+      "teamAbv": "BUF",
+      "Defense": {
+        "totalTackles": "13",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "8",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4039007",
+      "longName": "Taylor Rapp"
+    },
+    "4039303": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "4",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "53",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "0.69"
+      },
+      "team": "BUF",
+      "teamAbv": "BUF",
+      "Defense": {
+        "totalTackles": "3",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "0",
+        "tfl": "0",
+        "qbHits": "2",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4039303",
+      "longName": "Ed Oliver"
+    },
+    "4039505": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "4",
+      "snapCounts": {
+        "offSnapPct": "0.05",
+        "defSnap": "0",
+        "stSnap": "24",
+        "stSnapPct": "0.73",
+        "offSnap": "3",
+        "defSnapPct": "0.00"
+      },
+      "team": "BUF",
+      "teamAbv": "BUF",
+      "playerID": "4039505",
+      "longName": "Reggie Gilliam"
+    },
+    "4239140": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "4",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "6",
+        "stSnapPct": "0.18",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "BUF",
+      "teamAbv": "BUF",
+      "playerID": "4239140",
+      "longName": "Ryan Van Demark"
+    },
+    "4239833": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "19",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "58",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "0.97"
+      },
+      "team": "LAR",
+      "teamAbv": "LAR",
+      "Defense": {
+        "totalTackles": "6",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "5",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4239833",
+      "longName": "Darious Williams"
+    },
+    "4239944": {
+      "gameID": "20241208_BUF@LAR",
+      "Receiving": {
+        "receptions": "0",
+        "recTD": "0",
+        "longRec": "0",
+        "targets": "1",
+        "recYds": "0",
+        "recAvg": "0.0"
+      },
+      "scoringPlays": [
+        {
+          "score": "Hunter Long 22 Yd Return of Blocked Punt (Joshua Karty Kick)",
+          "scorePeriod": "Q2",
+          "homeScore": "17",
+          "awayScore": "7",
+          "teamID": "19",
+          "scoreDetails": "4 plays, 18 yards, 1:08",
+          "scoreType": "BP",
+          "scoreTime": "12:29",
+          "team": "LAR",
+          "playerIDs": ["4239944", "4566192"]
+        }
+      ],
+      "teamID": "19",
+      "snapCounts": {
+        "offSnapPct": "0.23",
+        "defSnap": "0",
+        "stSnap": "26",
+        "stSnapPct": "0.79",
+        "offSnap": "18",
+        "defSnapPct": "0.00"
+      },
+      "team": "LAR",
+      "teamAbv": "LAR",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4239944",
+      "longName": "Hunter Long"
+    },
+    "4240059": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "4",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "16",
+        "stSnap": "23",
+        "stSnapPct": "0.70",
+        "offSnap": "0",
+        "defSnapPct": "0.21"
+      },
+      "team": "BUF",
+      "teamAbv": "BUF",
+      "Defense": {
+        "totalTackles": "3",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4240059",
+      "longName": "Ja'Marcus Ingram"
+    },
+    "4240585": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "4",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "52",
+        "stSnap": "7",
+        "stSnapPct": "0.21",
+        "offSnap": "0",
+        "defSnapPct": "0.68"
+      },
+      "team": "BUF",
+      "teamAbv": "BUF",
+      "Defense": {
+        "totalTackles": "4",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "2",
+        "tfl": "1",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4240585",
+      "longName": "AJ Epenesa"
+    },
+    "4241250": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "19",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "2",
+        "stSnap": "24",
+        "stSnapPct": "0.73",
+        "offSnap": "0",
+        "defSnapPct": "0.03"
+      },
+      "team": "LAR",
+      "teamAbv": "LAR",
+      "playerID": "4241250",
+      "longName": "Jacob Hummel"
+    },
+    "4242154": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "19",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "56",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "0.93"
+      },
+      "team": "LAR",
+      "teamAbv": "LAR",
+      "Defense": {
+        "totalTackles": "4",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "3",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4242154",
+      "longName": "Kamren Curl"
+    },
+    "4242557": {
+      "gameID": "20241208_BUF@LAR",
+      "Receiving": {
+        "receptions": "1",
+        "recTD": "0",
+        "longRec": "11",
+        "targets": "1",
+        "recYds": "11",
+        "recAvg": "11.0"
+      },
+      "teamID": "19",
+      "snapCounts": {
+        "offSnapPct": "0.48",
+        "defSnap": "0",
+        "stSnap": "9",
+        "stSnapPct": "0.27",
+        "offSnap": "37",
+        "defSnapPct": "0.00"
+      },
+      "team": "LAR",
+      "teamAbv": "LAR",
+      "playerID": "4242557",
+      "longName": "Colby Parkinson"
+    },
+    "4243003": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "19",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "19",
+        "stSnapPct": "0.58",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "LAR",
+      "teamAbv": "LAR",
+      "playerID": "4243003",
+      "longName": "Ronnie Rivers"
+    },
+    "4243545": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "19",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "9",
+        "stSnapPct": "0.27",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "LAR",
+      "teamAbv": "LAR",
+      "playerID": "4243545",
+      "longName": "Alex Ward"
+    },
+    "4249128": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "19",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "60",
+        "stSnap": "8",
+        "stSnapPct": "0.24",
+        "offSnap": "0",
+        "defSnapPct": "1.00"
+      },
+      "team": "LAR",
+      "teamAbv": "LAR",
+      "Defense": {
+        "totalTackles": "3",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "2",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "1"
+      },
+      "playerID": "4249128",
+      "longName": "Quentin Lake"
+    },
+    "4250621": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "19",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "45",
+        "stSnap": "7",
+        "stSnapPct": "0.21",
+        "offSnap": "0",
+        "defSnapPct": "0.75"
+      },
+      "team": "LAR",
+      "teamAbv": "LAR",
+      "Defense": {
+        "totalTackles": "2",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "2",
+        "tfl": "0",
+        "qbHits": "1",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4250621",
+      "longName": "Kobie Turner"
+    },
+    "4259166": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "4",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "77",
+        "stSnap": "8",
+        "stSnapPct": "0.24",
+        "offSnap": "0",
+        "defSnapPct": "1.00"
+      },
+      "team": "BUF",
+      "teamAbv": "BUF",
+      "Defense": {
+        "totalTackles": "10",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "4",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4259166",
+      "longName": "Terrel Bernard"
+    },
+    "4360773": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "19",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "3",
+        "stSnap": "19",
+        "stSnapPct": "0.58",
+        "offSnap": "0",
+        "defSnapPct": "0.05"
+      },
+      "team": "LAR",
+      "teamAbv": "LAR",
+      "playerID": "4360773",
+      "longName": "Nick Hampton"
+    },
+    "4360797": {
+      "gameID": "20241208_BUF@LAR",
+      "Receiving": {
+        "receptions": "3",
+        "recTD": "0",
+        "longRec": "21",
+        "targets": "3",
+        "recYds": "45",
+        "recAvg": "15.0"
+      },
+      "teamID": "19",
+      "snapCounts": {
+        "offSnapPct": "0.45",
+        "defSnap": "0",
+        "stSnap": "1",
+        "stSnapPct": "0.03",
+        "offSnap": "35",
+        "defSnapPct": "0.00"
+      },
+      "team": "LAR",
+      "teamAbv": "LAR",
+      "playerID": "4360797",
+      "longName": "Tutu Atwell"
+    },
+    "4360859": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "19",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "7",
+        "stSnapPct": "0.21",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "LAR",
+      "teamAbv": "LAR",
+      "playerID": "4360859",
+      "longName": "Justin Dedich"
+    },
+    "4362245": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "19",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "38",
+        "stSnap": "7",
+        "stSnapPct": "0.21",
+        "offSnap": "0",
+        "defSnapPct": "0.63"
+      },
+      "team": "LAR",
+      "teamAbv": "LAR",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4362245",
+      "longName": "Braden Fiske"
+    },
+    "4362294": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "19",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "13",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "0.22"
+      },
+      "team": "LAR",
+      "teamAbv": "LAR",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "0",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4362294",
+      "longName": "Desjuan Johnson"
+    },
+    "4362474": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "19",
+      "snapCounts": {
+        "offSnapPct": "1.00",
+        "defSnap": "0",
+        "stSnap": "7",
+        "stSnapPct": "0.21",
+        "offSnap": "77",
+        "defSnapPct": "0.00"
+      },
+      "team": "LAR",
+      "teamAbv": "LAR",
+      "playerID": "4362474",
+      "longName": "Steve Avila"
+    },
+    "4362506": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "4",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "58",
+        "stSnap": "7",
+        "stSnapPct": "0.21",
+        "offSnap": "0",
+        "defSnapPct": "0.75"
+      },
+      "team": "BUF",
+      "teamAbv": "BUF",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "0",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4362506",
+      "longName": "Greg Rousseau"
+    },
+    "4366349": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "4",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "26",
+        "stSnapPct": "0.79",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "BUF",
+      "teamAbv": "BUF",
+      "Defense": {
+        "totalTackles": "2",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4366349",
+      "longName": "Joe Andreessen"
+    },
+    "4367203": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "4",
+      "snapCounts": {
+        "offSnapPct": "0.15",
+        "defSnap": "0",
+        "stSnap": "10",
+        "stSnapPct": "0.30",
+        "offSnap": "9",
+        "defSnapPct": "0.00"
+      },
+      "team": "BUF",
+      "teamAbv": "BUF",
+      "playerID": "4367203",
+      "longName": "Alec Anderson"
+    },
+    "4368113": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "19",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "17",
+        "stSnapPct": "0.52",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "LAR",
+      "teamAbv": "LAR",
+      "playerID": "4368113",
+      "longName": "Charles Woods"
+    },
+    "4372518": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "19",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "15",
+        "stSnap": "7",
+        "stSnapPct": "0.21",
+        "offSnap": "0",
+        "defSnapPct": "0.25"
+      },
+      "team": "LAR",
+      "teamAbv": "LAR",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4372518",
+      "longName": "Bobby Brown III"
+    },
+    "4373678": {
+      "gameID": "20241208_BUF@LAR",
+      "Receiving": {
+        "receptions": "5",
+        "recTD": "1",
+        "longRec": "51",
+        "targets": "8",
+        "recYds": "106",
+        "recAvg": "21.2"
+      },
+      "scoringPlays": [
+        {
+          "score": "Khalil Shakir 51 Yd pass from Josh Allen (Tyler Bass Kick)",
+          "scorePeriod": "Q3",
+          "homeScore": "31",
+          "awayScore": "21",
+          "teamID": "4",
+          "scoreDetails": "6 plays, 80 yards, 4:32",
+          "scoreType": "TD",
+          "scoreTime": "3:54",
+          "team": "BUF",
+          "playerIDs": ["3918298", "4373678", "3917232"]
+        }
+      ],
+      "teamID": "4",
+      "snapCounts": {
+        "offSnapPct": "0.78",
+        "defSnap": "0",
+        "stSnap": "1",
+        "stSnapPct": "0.03",
+        "offSnap": "47",
+        "defSnapPct": "0.00"
+      },
+      "team": "BUF",
+      "teamAbv": "BUF",
+      "playerID": "4373678",
+      "longName": "Khalil Shakir"
+    },
+    "4379399": {
+      "gameID": "20241208_BUF@LAR",
+      "Rushing": {
+        "rushAvg": "3.3",
+        "rushYds": "20",
+        "carries": "6",
+        "longRush": "8",
+        "rushTD": "0"
+      },
+      "Receiving": {
+        "receptions": "2",
+        "recTD": "0",
+        "longRec": "5",
+        "targets": "2",
+        "recYds": "9",
+        "recAvg": "4.5"
+      },
+      "teamID": "4",
+      "snapCounts": {
+        "offSnapPct": "0.45",
+        "defSnap": "0",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "27",
+        "defSnapPct": "0.00"
+      },
+      "team": "BUF",
+      "teamAbv": "BUF",
+      "playerID": "4379399",
+      "longName": "James Cook"
+    },
+    "4379778": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "4",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "77",
+        "stSnap": "1",
+        "stSnapPct": "0.03",
+        "offSnap": "0",
+        "defSnapPct": "1.00"
+      },
+      "team": "BUF",
+      "teamAbv": "BUF",
+      "Defense": {
+        "totalTackles": "8",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "6",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "2"
+      },
+      "playerID": "4379778",
+      "longName": "Christian Benford"
+    },
+    "4384549": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "19",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "50",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "0.83"
+      },
+      "team": "LAR",
+      "teamAbv": "LAR",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "1"
+      },
+      "playerID": "4384549",
+      "longName": "Cobie Durant"
+    },
+    "4386544": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "19",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "6",
+        "stSnapPct": "0.18",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "Punting": {
+        "puntReturns": "1",
+        "puntReturnYds": "8",
+        "puntReturnAvg": "8.0",
+        "puntReturnLong": "8",
+        "puntReturnTD": "0"
+      },
+      "team": "LAR",
+      "teamAbv": "LAR",
+      "playerID": "4386544",
+      "longName": "Xavier Smith"
+    },
+    "4426515": {
+      "gameID": "20241208_BUF@LAR",
+      "Rushing": {
+        "rushAvg": "3.2",
+        "rushYds": "16",
+        "carries": "5",
+        "longRush": "9",
+        "rushTD": "1"
+      },
+      "Receiving": {
+        "receptions": "12",
+        "recTD": "1",
+        "longRec": "21",
+        "targets": "14",
+        "recYds": "162",
+        "recAvg": "13.5"
+      },
+      "scoringPlays": [
+        {
+          "score": "Puka Nacua 4 Yd Run (Joshua Karty Kick)",
+          "scorePeriod": "Q2",
+          "homeScore": "24",
+          "awayScore": "14",
+          "teamID": "19",
+          "scoreDetails": "12 plays, 76 yards, 7:47",
+          "scoreType": "TD",
+          "scoreTime": "2:36",
+          "team": "LAR",
+          "playerIDs": ["4426515", "4566192"]
+        },
+        {
+          "score": "Puka Nacua 19 Yd pass from Matthew Stafford (Joshua Karty PAT failed)",
+          "scorePeriod": "Q4",
+          "homeScore": "44",
+          "awayScore": "35",
+          "teamID": "19",
+          "scoreDetails": "11 plays, 71 yards, 6:55",
+          "scoreType": "TD",
+          "scoreTime": "1:54",
+          "team": "LAR",
+          "playerIDs": ["12483", "4426515", "4566192"]
+        }
+      ],
+      "teamID": "19",
+      "snapCounts": {
+        "offSnapPct": "0.77",
+        "defSnap": "0",
+        "stSnap": "1",
+        "stSnapPct": "0.03",
+        "offSnap": "59",
+        "defSnapPct": "0.00"
+      },
+      "team": "LAR",
+      "teamAbv": "LAR",
+      "playerID": "4426515",
+      "longName": "Puka Nacua"
+    },
+    "4426536": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "4",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "16",
+        "stSnapPct": "0.49",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "BUF",
+      "teamAbv": "BUF",
+      "playerID": "4426536",
+      "longName": "Lewis Cine"
+    },
+    "4426553": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "19",
+      "snapCounts": {
+        "offSnapPct": "0.29",
+        "defSnap": "0",
+        "stSnap": "7",
+        "stSnapPct": "0.21",
+        "offSnap": "22",
+        "defSnapPct": "0.00"
+      },
+      "team": "LAR",
+      "teamAbv": "LAR",
+      "playerID": "4426553",
+      "longName": "Davis Allen"
+    },
+    "4426883": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "4",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "24",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "0.31"
+      },
+      "team": "BUF",
+      "teamAbv": "BUF",
+      "playerID": "4426883",
+      "longName": "DeWayne Carter"
+    },
+    "4427120": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "19",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "24",
+        "stSnap": "23",
+        "stSnapPct": "0.70",
+        "offSnap": "0",
+        "defSnapPct": "0.40"
+      },
+      "team": "LAR",
+      "teamAbv": "LAR",
+      "Defense": {
+        "totalTackles": "2",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4427120",
+      "longName": "Jaylen McCollough"
+    },
+    "4428548": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "4",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "18",
+        "stSnapPct": "0.55",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "BUF",
+      "teamAbv": "BUF",
+      "playerID": "4428548",
+      "longName": "Javon Solomon"
+    },
+    "4428550": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "19",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "36",
+        "stSnap": "14",
+        "stSnapPct": "0.42",
+        "offSnap": "0",
+        "defSnapPct": "0.60"
+      },
+      "team": "LAR",
+      "teamAbv": "LAR",
+      "Defense": {
+        "totalTackles": "4",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "2",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4428550",
+      "longName": "Omar Speights"
+    },
+    "4428696": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "4",
+      "snapCounts": {
+        "offSnapPct": "1.00",
+        "defSnap": "0",
+        "stSnap": "6",
+        "stSnapPct": "0.18",
+        "offSnap": "60",
+        "defSnapPct": "0.00"
+      },
+      "team": "BUF",
+      "teamAbv": "BUF",
+      "playerID": "4428696",
+      "longName": "O'Cyrus Torrence"
+    },
+    "4429096": {
+      "gameID": "20241208_BUF@LAR",
+      "Rushing": {
+        "rushAvg": "4.3",
+        "rushYds": "34",
+        "carries": "8",
+        "longRush": "11",
+        "rushTD": "0"
+      },
+      "teamID": "19",
+      "snapCounts": {
+        "offSnapPct": "0.17",
+        "defSnap": "0",
+        "stSnap": "16",
+        "stSnapPct": "0.48",
+        "offSnap": "13",
+        "defSnapPct": "0.00"
+      },
+      "team": "LAR",
+      "teamAbv": "LAR",
+      "playerID": "4429096",
+      "longName": "Blake Corum"
+    },
+    "4429501": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "4",
+      "snapCounts": {
+        "offSnapPct": "0.22",
+        "defSnap": "0",
+        "stSnap": "9",
+        "stSnapPct": "0.27",
+        "offSnap": "13",
+        "defSnapPct": "0.00"
+      },
+      "Kicking": {
+        "kickReturns": "1",
+        "kickReturnTD": "0",
+        "kickReturnYds": "14",
+        "kickReturnAvg": "14.0",
+        "kickReturnLong": "14"
+      },
+      "team": "BUF",
+      "teamAbv": "BUF",
+      "playerID": "4429501",
+      "longName": "Ray Davis"
+    },
+    "4430737": {
+      "gameID": "20241208_BUF@LAR",
+      "Rushing": {
+        "rushAvg": "3.0",
+        "rushYds": "87",
+        "carries": "29",
+        "longRush": "12",
+        "rushTD": "2"
+      },
+      "Receiving": {
+        "receptions": "2",
+        "recTD": "0",
+        "longRec": "6",
+        "targets": "2",
+        "recYds": "10",
+        "recAvg": "5.0"
+      },
+      "scoringPlays": [
+        {
+          "score": "Kyren Williams 3 Yd Run (Joshua Karty Kick)",
+          "scorePeriod": "Q1",
+          "homeScore": "7",
+          "awayScore": "0",
+          "teamID": "19",
+          "scoreDetails": "12 plays, 70 yards, 6:34",
+          "scoreType": "TD",
+          "scoreTime": "8:26",
+          "team": "LAR",
+          "playerIDs": ["4430737", "4566192"]
+        },
+        {
+          "score": "Kyren Williams 7 Yd Run (Joshua Karty Kick)",
+          "scorePeriod": "Q3",
+          "homeScore": "31",
+          "awayScore": "14",
+          "teamID": "19",
+          "scoreDetails": "11 plays, 76 yards, 5:29",
+          "scoreType": "TD",
+          "scoreTime": "8:26",
+          "team": "LAR",
+          "playerIDs": ["4430737", "4566192"]
+        }
+      ],
+      "teamID": "19",
+      "snapCounts": {
+        "offSnapPct": "0.83",
+        "defSnap": "0",
+        "stSnap": "1",
+        "stSnapPct": "0.03",
+        "offSnap": "64",
+        "defSnapPct": "0.00"
+      },
+      "team": "LAR",
+      "teamAbv": "LAR",
+      "playerID": "4430737",
+      "longName": "Kyren Williams"
+    },
+    "4430815": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "4",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "6",
+        "stSnapPct": "0.18",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "BUF",
+      "teamAbv": "BUF",
+      "playerID": "4430815",
+      "longName": "Sedrick Van Pran-Granger"
+    },
+    "4566192": {
+      "gameID": "20241208_BUF@LAR",
+      "scoringPlays": [
+        {
+          "score": "Kyren Williams 3 Yd Run (Joshua Karty Kick)",
+          "scorePeriod": "Q1",
+          "homeScore": "7",
+          "awayScore": "0",
+          "teamID": "19",
+          "scoreDetails": "12 plays, 70 yards, 6:34",
+          "scoreType": "TD",
+          "scoreTime": "8:26",
+          "team": "LAR",
+          "playerIDs": ["4430737", "4566192"]
+        },
+        {
+          "score": "Joshua Karty 22 Yd Field Goal ",
+          "scorePeriod": "Q2",
+          "homeScore": "10",
+          "awayScore": "7",
+          "teamID": "19",
+          "scoreDetails": "10 plays, 65 yards, 4:45",
+          "scoreType": "FG",
+          "scoreTime": "13:37",
+          "team": "LAR",
+          "playerIDs": ["4566192"]
+        },
+        {
+          "score": "Hunter Long 22 Yd Return of Blocked Punt (Joshua Karty Kick)",
+          "scorePeriod": "Q2",
+          "homeScore": "17",
+          "awayScore": "7",
+          "teamID": "19",
+          "scoreDetails": "4 plays, 18 yards, 1:08",
+          "scoreType": "BP",
+          "scoreTime": "12:29",
+          "team": "LAR",
+          "playerIDs": ["4239944", "4566192"]
+        },
+        {
+          "score": "Puka Nacua 4 Yd Run (Joshua Karty Kick)",
+          "scorePeriod": "Q2",
+          "homeScore": "24",
+          "awayScore": "14",
+          "teamID": "19",
+          "scoreDetails": "12 plays, 76 yards, 7:47",
+          "scoreType": "TD",
+          "scoreTime": "2:36",
+          "team": "LAR",
+          "playerIDs": ["4426515", "4566192"]
+        },
+        {
+          "score": "Kyren Williams 7 Yd Run (Joshua Karty Kick)",
+          "scorePeriod": "Q3",
+          "homeScore": "31",
+          "awayScore": "14",
+          "teamID": "19",
+          "scoreDetails": "11 plays, 76 yards, 5:29",
+          "scoreType": "TD",
+          "scoreTime": "8:26",
+          "team": "LAR",
+          "playerIDs": ["4430737", "4566192"]
+        },
+        {
+          "score": "Cooper Kupp 17 Yd pass from Matthew Stafford (Joshua Karty Kick)",
+          "scorePeriod": "Q3",
+          "homeScore": "38",
+          "awayScore": "21",
+          "teamID": "19",
+          "scoreDetails": "7 plays, 70 yards, 3:36",
+          "scoreType": "TD",
+          "scoreTime": "0:18",
+          "team": "LAR",
+          "playerIDs": ["12483", "2977187", "4566192"]
+        },
+        {
+          "score": "Puka Nacua 19 Yd pass from Matthew Stafford (Joshua Karty PAT failed)",
+          "scorePeriod": "Q4",
+          "homeScore": "44",
+          "awayScore": "35",
+          "teamID": "19",
+          "scoreDetails": "11 plays, 71 yards, 6:55",
+          "scoreType": "TD",
+          "scoreTime": "1:54",
+          "team": "LAR",
+          "playerIDs": ["12483", "4426515", "4566192"]
+        }
+      ],
+      "teamID": "19",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "7",
+        "stSnapPct": "0.21",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "Kicking": {
+        "fgLong": "22",
+        "fgMade": "1",
+        "fgAttempts": "1",
+        "xpMade": "5",
+        "fgPct": "100.0",
+        "kickingPts": "8",
+        "xpAttempts": "6",
+        "fgMissed": "0",
+        "xpMissed": "1"
+      },
+      "team": "LAR",
+      "teamAbv": "LAR",
+      "playerID": "4566192",
+      "longName": "Joshua Karty"
+    },
+    "4567175": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "19",
+      "snapCounts": {
+        "offSnapPct": "1.00",
+        "defSnap": "0",
+        "stSnap": "7",
+        "stSnapPct": "0.21",
+        "offSnap": "77",
+        "defSnapPct": "0.00"
+      },
+      "team": "LAR",
+      "teamAbv": "LAR",
+      "playerID": "4567175",
+      "longName": "Beaux Limmer"
+    },
+    "4568217": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "19",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "11",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "0.18"
+      },
+      "team": "LAR",
+      "teamAbv": "LAR",
+      "playerID": "4568217",
+      "longName": "Tyler Davis"
+    },
+    "4568624": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "4",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "27",
+        "stSnapPct": "0.82",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "BUF",
+      "teamAbv": "BUF",
+      "playerID": "4568624",
+      "longName": "Dorian Williams"
+    },
+    "4569382": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "19",
+      "snapCounts": {
+        "offSnapPct": "0.13",
+        "defSnap": "0",
+        "stSnap": "18",
+        "stSnapPct": "0.55",
+        "offSnap": "10",
+        "defSnapPct": "0.00"
+      },
+      "Kicking": {
+        "kickReturns": "3",
+        "kickReturnTD": "0",
+        "kickReturnYds": "82",
+        "kickReturnAvg": "27.3",
+        "kickReturnLong": "33"
+      },
+      "team": "LAR",
+      "teamAbv": "LAR",
+      "playerID": "4569382",
+      "longName": "Jordan Whittington"
+    },
+    "4572371": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "19",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "23",
+        "stSnapPct": "0.70",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "LAR",
+      "teamAbv": "LAR",
+      "Defense": {
+        "totalTackles": "1",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "0",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4572371",
+      "longName": "Josh Wallace"
+    },
+    "4576069": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "4",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "10",
+        "stSnapPct": "0.30",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "Kicking": {
+        "kickReturns": "1",
+        "kickReturnTD": "0",
+        "kickReturnYds": "20",
+        "kickReturnAvg": "20.0",
+        "kickReturnLong": "20"
+      },
+      "team": "BUF",
+      "teamAbv": "BUF",
+      "playerID": "4576069",
+      "longName": "Brandon Codrington"
+    },
+    "4578085": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "19",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "45",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "0.75"
+      },
+      "team": "LAR",
+      "teamAbv": "LAR",
+      "Defense": {
+        "totalTackles": "2",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4578085",
+      "longName": "Jared Verse"
+    },
+    "4596363": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "19",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "47",
+        "stSnap": "10",
+        "stSnapPct": "0.30",
+        "offSnap": "0",
+        "defSnapPct": "0.78"
+      },
+      "team": "LAR",
+      "teamAbv": "LAR",
+      "Defense": {
+        "totalTackles": "3",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "2",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "1"
+      },
+      "playerID": "4596363",
+      "longName": "Kamren Kinchens"
+    },
+    "4676004": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "4",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "20",
+        "stSnapPct": "0.61",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "team": "BUF",
+      "teamAbv": "BUF",
+      "playerID": "4676004",
+      "longName": "Cole Bishop"
+    },
+    "4746079": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "4",
+      "snapCounts": {
+        "offSnapPct": "0.27",
+        "defSnap": "0",
+        "stSnap": "16",
+        "stSnapPct": "0.49",
+        "offSnap": "16",
+        "defSnapPct": "0.00"
+      },
+      "team": "BUF",
+      "teamAbv": "BUF",
+      "playerID": "4746079",
+      "longName": "Zach Davidson"
+    },
+    "4875196": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "19",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "52",
+        "stSnap": "0",
+        "stSnapPct": "0.00",
+        "offSnap": "0",
+        "defSnapPct": "0.87"
+      },
+      "team": "LAR",
+      "teamAbv": "LAR",
+      "Defense": {
+        "totalTackles": "4",
+        "defTD": "0",
+        "forcedFumbles": "0",
+        "soloTackles": "1",
+        "tfl": "0",
+        "qbHits": "0",
+        "defensiveInterceptions": "0",
+        "sacks": "0",
+        "passDeflections": "0"
+      },
+      "playerID": "4875196",
+      "longName": "Byron Young"
+    },
+    "5125875": {
+      "gameID": "20241208_BUF@LAR",
+      "teamID": "19",
+      "snapCounts": {
+        "offSnapPct": "0.00",
+        "defSnap": "0",
+        "stSnap": "17",
+        "stSnapPct": "0.52",
+        "offSnap": "0",
+        "defSnapPct": "0.00"
+      },
+      "Punting": {
+        "puntYds": "95",
+        "punts": "2",
+        "puntAvg": "47.5",
+        "puntsin20": "1",
+        "puntTouchBacks": "1",
+        "puntLong": "53"
+      },
+      "team": "LAR",
+      "teamAbv": "LAR",
+      "playerID": "5125875",
+      "longName": "Ethan Evans"
+    }
+  },
+  "scoringPlays": [
+    {
+      "score": "Kyren Williams 3 Yd Run (Joshua Karty Kick)",
+      "scorePeriod": "Q1",
+      "homeScore": "7",
+      "awayScore": "0",
+      "teamID": "19",
+      "scoreDetails": "12 plays, 70 yards, 6:34",
+      "scoreType": "TD",
+      "scoreTime": "8:26",
+      "team": "LAR",
+      "playerIDs": ["4430737", "4566192"]
+    },
+    {
+      "score": "Josh Allen 1 Yd Run (Tyler Bass Kick)",
+      "scorePeriod": "Q1",
+      "homeScore": "7",
+      "awayScore": "7",
+      "teamID": "4",
+      "scoreDetails": "9 plays, 70 yards, 5:04",
+      "scoreType": "TD",
+      "scoreTime": "3:22",
+      "team": "BUF",
+      "playerIDs": ["3918298", "3917232"]
+    },
+    {
+      "score": "Joshua Karty 22 Yd Field Goal ",
+      "scorePeriod": "Q2",
+      "homeScore": "10",
+      "awayScore": "7",
+      "teamID": "19",
+      "scoreDetails": "10 plays, 65 yards, 4:45",
+      "scoreType": "FG",
+      "scoreTime": "13:37",
+      "team": "LAR",
+      "playerIDs": ["4566192"]
+    },
+    {
+      "score": "Hunter Long 22 Yd Return of Blocked Punt (Joshua Karty Kick)",
+      "scorePeriod": "Q2",
+      "homeScore": "17",
+      "awayScore": "7",
+      "teamID": "19",
+      "scoreDetails": "4 plays, 18 yards, 1:08",
+      "scoreType": "BP",
+      "scoreTime": "12:29",
+      "team": "LAR",
+      "playerIDs": ["4239944", "4566192"]
+    },
+    {
+      "score": "Ty Johnson 41 Yd pass from Josh Allen (Tyler Bass Kick)",
+      "scorePeriod": "Q2",
+      "homeScore": "17",
+      "awayScore": "14",
+      "teamID": "4",
+      "scoreDetails": "4 plays, 70 yards, 2:06",
+      "scoreType": "TD",
+      "scoreTime": "10:23",
+      "team": "BUF",
+      "playerIDs": ["3918298", "3915411", "3917232"]
+    },
+    {
+      "score": "Puka Nacua 4 Yd Run (Joshua Karty Kick)",
+      "scorePeriod": "Q2",
+      "homeScore": "24",
+      "awayScore": "14",
+      "teamID": "19",
+      "scoreDetails": "12 plays, 76 yards, 7:47",
+      "scoreType": "TD",
+      "scoreTime": "2:36",
+      "team": "LAR",
+      "playerIDs": ["4426515", "4566192"]
+    },
+    {
+      "score": "Kyren Williams 7 Yd Run (Joshua Karty Kick)",
+      "scorePeriod": "Q3",
+      "homeScore": "31",
+      "awayScore": "14",
+      "teamID": "19",
+      "scoreDetails": "11 plays, 76 yards, 5:29",
+      "scoreType": "TD",
+      "scoreTime": "8:26",
+      "team": "LAR",
+      "playerIDs": ["4430737", "4566192"]
+    },
+    {
+      "score": "Khalil Shakir 51 Yd pass from Josh Allen (Tyler Bass Kick)",
+      "scorePeriod": "Q3",
+      "homeScore": "31",
+      "awayScore": "21",
+      "teamID": "4",
+      "scoreDetails": "6 plays, 80 yards, 4:32",
+      "scoreType": "TD",
+      "scoreTime": "3:54",
+      "team": "BUF",
+      "playerIDs": ["3918298", "4373678", "3917232"]
+    },
+    {
+      "score": "Cooper Kupp 17 Yd pass from Matthew Stafford (Joshua Karty Kick)",
+      "scorePeriod": "Q3",
+      "homeScore": "38",
+      "awayScore": "21",
+      "teamID": "19",
+      "scoreDetails": "7 plays, 70 yards, 3:36",
+      "scoreType": "TD",
+      "scoreTime": "0:18",
+      "team": "LAR",
+      "playerIDs": ["12483", "2977187", "4566192"]
+    },
+    {
+      "score": "Josh Allen 1 Yd Run (Tyler Bass Kick)",
+      "scorePeriod": "Q4",
+      "homeScore": "38",
+      "awayScore": "28",
+      "teamID": "4",
+      "scoreDetails": "5 plays, 70 yards, 0:51",
+      "scoreType": "TD",
+      "scoreTime": "14:27",
+      "team": "BUF",
+      "playerIDs": ["3918298", "3917232"]
+    },
+    {
+      "score": "Mack Hollins 21 Yd pass from Josh Allen (Tyler Bass Kick)",
+      "scorePeriod": "Q4",
+      "homeScore": "38",
+      "awayScore": "35",
+      "teamID": "4",
+      "scoreDetails": "10 plays, 91 yards, 4:03",
+      "scoreType": "TD",
+      "scoreTime": "8:49",
+      "team": "BUF",
+      "playerIDs": ["3918298", "2991662", "3917232"]
+    },
+    {
+      "score": "Puka Nacua 19 Yd pass from Matthew Stafford (Joshua Karty PAT failed)",
+      "scorePeriod": "Q4",
+      "homeScore": "44",
+      "awayScore": "35",
+      "teamID": "19",
+      "scoreDetails": "11 plays, 71 yards, 6:55",
+      "scoreType": "TD",
+      "scoreTime": "1:54",
+      "team": "LAR",
+      "playerIDs": ["12483", "4426515", "4566192"]
+    },
+    {
+      "score": "Josh Allen 1 Yd Run (Tyler Bass Kick)",
+      "scorePeriod": "Q4",
+      "homeScore": "44",
+      "awayScore": "42",
+      "teamID": "4",
+      "scoreDetails": "8 plays, 70 yards, 0:54",
+      "scoreType": "TD",
+      "scoreTime": "1:00",
+      "team": "BUF",
+      "playerIDs": ["3918298", "3917232"]
+    }
+  ],
+  "seasonType": "Regular Season",
+  "teamIDAway": "4",
+  "teamIDHome": "19",
+  "teamStats": {
+    "away": {
+      "totalYards": "445",
+      "rushingAttempts": "17",
+      "rushingYards": "103",
+      "fumblesLost": "0",
+      "penalties": "7-59",
+      "totalPlays": "54",
+      "possession": "21:30",
+      "safeties": "0",
+      "passCompletionsAndAttempts": "22-37",
+      "passingFirstDowns": "14",
+      "interceptionsThrown": "0",
+      "sacksAndYardsLost": "0-0",
+      "thirdDownEfficiency": "5-9",
+      "blockedPunt": "0",
+      "yardsPerPlay": "8.2",
+      "redZoneScoredAndAttempted": "3-3",
+      "teamID": "4",
+      "defensiveInterceptions": "0",
+      "defensiveOrSpecialTeamsTds": "0",
+      "totalDrives": "9",
+      "rushingFirstDowns": "6",
+      "blockedFG": "0",
+      "rushTD": "3",
+      "twoPointConversions": "0",
+      "firstDowns": "25",
+      "passTD": "3",
+      "team": "BUF",
+      "blockedXP": "0",
+      "teamAbv": "BUF",
+      "firstDownsFromPenalties": "5",
+      "fourthDownEfficiency": "0-0",
+      "defensiveTwoPointConversionReturns": "0",
+      "passingYards": "342",
+      "yardsPerRush": "6.1",
+      "snapCounts": {
+        "totalSpecialTeams": "33",
+        "totalOffensive": "60",
+        "totalDefensive": "77"
+      },
+      "turnovers": "0",
+      "yardsPerPass": "9.2"
+    },
+    "home": {
+      "totalYards": "457",
+      "rushingAttempts": "42",
+      "rushingYards": "137",
+      "fumblesLost": "0",
+      "penalties": "9-99",
+      "totalPlays": "72",
+      "possession": "38:30",
+      "safeties": "0",
+      "passCompletionsAndAttempts": "23-30",
+      "passingFirstDowns": "15",
+      "interceptionsThrown": "0",
+      "sacksAndYardsLost": "0-0",
+      "thirdDownEfficiency": "11-15",
+      "blockedPunt": "1",
+      "yardsPerPlay": "6.3",
+      "redZoneScoredAndAttempted": "5-6",
+      "teamID": "19",
+      "defensiveInterceptions": "0",
+      "defensiveOrSpecialTeamsTds": "0",
+      "totalDrives": "9",
+      "rushingFirstDowns": "10",
+      "blockedFG": "0",
+      "rushTD": "3",
+      "twoPointConversions": "0",
+      "firstDowns": "28",
+      "passTD": "2",
+      "team": "LAR",
+      "blockedXP": "0",
+      "teamAbv": "LAR",
+      "firstDownsFromPenalties": "3",
+      "fourthDownEfficiency": "1-1",
+      "defensiveTwoPointConversionReturns": "0",
+      "passingYards": "320",
+      "yardsPerRush": "3.3",
+      "snapCounts": {
+        "totalSpecialTeams": "33",
+        "totalOffensive": "77",
+        "totalDefensive": "60"
+      },
+      "turnovers": "0",
+      "yardsPerPass": "10.7"
+    }
+  },
+  "gameID": "20241208_BUF@LAR",
+  "gameStatusCode": "2"
+}

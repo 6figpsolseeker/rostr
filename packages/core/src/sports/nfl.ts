@@ -65,6 +65,13 @@ export const NFL_STAT_KEYS = [
   // points and yards; we had only points, which meant a unit that bent without
   // breaking scored identically to one that did not.
   { key: "def_yds_allowed", displayName: "Yards Allowed", kind: "TIERED" },
+  // A failed two-point conversion taken back the other way, added 2026-08-17.
+  // ESPN pays the unit 2 and we had no key at all, so it scored nothing: three
+  // occurrences across 2024 and 2025. Appended rather than slotted in beside the
+  // other defensive counters — stat keys are append-only, and while a *position*
+  // in this list is not what a frozen league holds on to, keeping additions at
+  // the end is what makes the history readable next to `stat-keys.test.ts`.
+  { key: "def_2pt_ret", displayName: "Defensive Two-Point Returns", kind: "LINEAR" },
 ] as const satisfies SportDef["statKeys"];
 
 export const NFL_POSITIONS = [

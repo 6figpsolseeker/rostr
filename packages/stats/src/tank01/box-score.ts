@@ -25,16 +25,19 @@ import {
   bucketFieldGoal,
   isBlockedKick,
   isBlockedKickTouchdown,
+  isKnownScoreType,
   isSpecialTeamsReturnTouchdown,
   isSuccessfulTwoPointConversion,
+  isTouchdownScoringPlay,
+  isUncountedSpecialTeamsScoreType,
   mainClause,
   parseFieldGoalYards,
   parseStatValue,
-  scoredInMainClause,
   TANK01_DST_MAP,
   TANK01_STAT_MAP,
   TANK01_TEAM_BLOCKED_KICK_FIELDS,
   TANK01_TEAM_DEF_ST_TD_FIELD,
+  TANK01_TEAM_STATS_MAP,
 } from "./stat-map.js";
 
 interface ScoringPlay {
@@ -145,6 +148,32 @@ function nameForms(longName: string): readonly string[] {
   return abbreviated ? [full, abbreviated] : [full];
 }
 
+interface RosterEntry {
+  readonly playerID: string;
+  readonly longName: string;
+  readonly forms: readonly string[];
+}
+
+/**
+ * Every named player in the game, with the spellings a play might use.
+ *
+ * Built once and shared by the two passes that resolve a name to a player. A
+ * player carrying no stat categories at all is still in here as long as Tank01
+ * gave him a `longName` — which matters more than it sounds, because those are
+ * exactly the players the per-player loops cannot see. J.J. Russell's entire
+ * record in `20241229_CAR@TB` is a `snapCounts` block, and he scored a
+ * touchdown.
+ */
+function rosterOf(playerStats: Record<string, RawPlayer>): readonly RosterEntry[] {
+  return Object.values(playerStats)
+    .filter((player) => player.playerID && player.longName)
+    .map((player) => ({
+      playerID: player.playerID as string,
+      longName: player.longName as string,
+      forms: nameForms(player.longName as string),
+    }));
+}
+
 /**
  * Everyone credited with a two-point conversion in this game, by player id.
  *
@@ -184,14 +213,7 @@ function twoPointCreditsByPlayer(
   warnings: string[],
 ): Map<string, number> {
   const credits = new Map<string, number>();
-
-  const roster = Object.values(playerStats)
-    .filter((player) => player.playerID && player.longName)
-    .map((player) => ({
-      playerID: player.playerID as string,
-      longName: player.longName as string,
-      forms: nameForms(player.longName as string),
-    }));
+  const roster = rosterOf(playerStats);
 
   for (const play of scoringPlays) {
     const text = play.score ?? "";
@@ -242,6 +264,91 @@ function twoPointCreditsByPlayer(
 }
 
 /**
+ * Everyone credited with a special-teams return touchdown, by player id.
+ *
+ * ## Why this is a game-level pass, like the conversions above
+ *
+ * It used to run inside each player's own loop, over his own `scoringPlays`,
+ * gated on `play.playerIDs` naming him. **Both halves lose the scorer**, and
+ * unlike the conversion case they lose him on a play that is entirely his.
+ * Verbatim, from `20241229_CAR@TB`:
+ *
+ *     TD | TB | J.J. Russell 23 Yd Return of Blocked Punt (Chase McLaughlin Kick)
+ *        | playerIDs: ["3150744"]
+ *
+ * `3150744` is the kicker. The returner is not in `playerIDs`, and Tank01's
+ * whole record for him in that game is a `snapCounts` block — no `scoringPlays`,
+ * no `Defense` — so his own loop ran zero times whatever the gate said. Six
+ * points, in silence, on a play whose text names him first. This is issue #155's
+ * shape exactly, one category over.
+ *
+ * ## The main clause, and only one scorer
+ *
+ * A conversion legitimately credits two players — a passer and a receiver — so
+ * that pass tolerates several matches. A return touchdown has exactly one
+ * scorer, so several distinct matches is a fact about our name matching rather
+ * than about the play, and this refuses instead.
+ *
+ * **`playerIDs` is the tiebreak, not the gate.** Demoting it that far and no
+ * further is deliberate: this pass matches names against every player in the
+ * game, where the old per-player check was only ever asked about players the
+ * play already named, and `scoredInMainClause` said in as many words that
+ * widening it needed a stricter comparison. Falling back to the intersection
+ * makes the new rule a superset of the old one — anything the gate used to
+ * credit uniquely is still credited — so the only behaviour that can be lost is
+ * a play crediting *two* players six points each, which was never right.
+ */
+function returnTouchdownCredits(
+  scoringPlays: readonly ScoringPlay[],
+  playerStats: Record<string, RawPlayer>,
+  warnings: string[],
+): Map<string, number> {
+  const credits = new Map<string, number>();
+  const roster = rosterOf(playerStats);
+
+  for (const play of scoringPlays) {
+    const text = play.score ?? "";
+    if (!isTouchdownScoringPlay(play.scoreType)) continue;
+    if (!isSpecialTeamsReturnTouchdown(text)) continue;
+
+    // The complement of the window a conversion is read in: who scored is
+    // outside the parentheses, the PAT or conversion inside them.
+    const haystack = normaliseName(mainClause(text));
+    const matched = roster.filter((player) =>
+      player.forms.some((form) => haystack.includes(form)),
+    );
+
+    const distinct = [...new Map(matched.map((player) => [player.playerID, player])).values()];
+
+    const candidates =
+      distinct.length === 1
+        ? distinct
+        : distinct.filter((player) => play.playerIDs?.includes(player.playerID));
+
+    const only = candidates.length === 1 ? candidates[0] : undefined;
+
+    if (!only) {
+      // Never silent. A return touchdown definitely happened — the text says so
+      // and the unit is about to be paid six for it — so a scorer we cannot name
+      // is six points nobody receives, which is the failure this whole pass
+      // exists to make loud.
+      warnings.push(
+        distinct.length === 0
+          ? `return touchdown "${text}" names no player this game recognises, ` +
+              `so nobody was credited for it`
+          : `return touchdown "${text}" matches ` +
+              `${distinct.map((c) => c.longName).join(" and ")}, so nobody was credited for it`,
+      );
+      continue;
+    }
+
+    credits.set(only.playerID, (credits.get(only.playerID) ?? 0) + 1);
+  }
+
+  return credits;
+}
+
+/**
  * Cross-check the conversions parsed from text against the numbers Tank01 gives.
  *
  * Field goals have had this since they were written, for the reason stated
@@ -283,6 +390,8 @@ function translatePlayerWithConversions(
   warnings: string[],
   /** Decided for the whole game — see `twoPointCreditsByPlayer`. */
   twoPointConversions: number,
+  /** Decided for the whole game — see `returnTouchdownCredits`. */
+  returnTouchdowns: number,
 ): { playerID: string; lines: StatLine[] } | null {
   const playerID = player.playerID;
   if (!playerID) return null;
@@ -308,7 +417,12 @@ function translatePlayerWithConversions(
     }
   }
 
-  // 2. Scoring plays this player was involved in.
+  // 2. Field goals, whose distances exist only in this player's own play text.
+  //
+  //    Still per-player, and it is the one thing here that should be: a kicker's
+  //    own `scoringPlays` array is exactly his own field goals, which is what
+  //    makes distance attribution need no name matching at all, and `fgMade` is
+  //    on the same record to check it against.
   let fieldGoalsParsed = 0;
 
   for (const play of player.scoringPlays ?? []) {
@@ -324,26 +438,15 @@ function translatePlayerWithConversions(
       }
       accumulate(totals, bucketFieldGoal(yards), 1);
       fieldGoalsParsed++;
-      continue;
-    }
-
-    if (play.scoreType === "TD") {
-      // The scorer is whoever the main clause names — not `playerIDs[0]`, which
-      // is the conversion passer when the parenthetical holds a successful
-      // two-pointer. See `scoredInMainClause`.
-      if (
-        isSpecialTeamsReturnTouchdown(text) &&
-        player.longName &&
-        scoredInMainClause(text, player.longName)
-      ) {
-        accumulate(totals, "ret_td", 1);
-      }
     }
   }
 
-  // Two-point conversions are decided for the whole game, not here: the player
-  // credited is often absent from this play's `playerIDs` and sometimes has no
-  // `scoringPlays` of his own at all. See `twoPointCreditsByPlayer`.
+  // Return touchdowns and two-point conversions are both decided for the whole
+  // game rather than here, and for the same reason in the end: the player who
+  // scored is often absent from the play's `playerIDs`, and sometimes has no
+  // `scoringPlays` of his own at all. See `returnTouchdownCredits` and
+  // `twoPointCreditsByPlayer`.
+  if (returnTouchdowns > 0) accumulate(totals, "ret_td", returnTouchdowns);
   if (twoPointConversions > 0) accumulate(totals, "two_pt", twoPointConversions);
 
   // 3. Cross-check parsed field goals against the count Tank01 reports.
@@ -565,6 +668,33 @@ function translateTeamDefense(
     }
 
     // ---------------------------------------------------------------------
+    // Team-level counters that are a source in their own right
+    // ---------------------------------------------------------------------
+    //
+    // Only `def_2pt_ret` so far. Kept apart from the `DST` loop above because the
+    // block genuinely does not carry the field, not as a stylistic split — and
+    // apart from the blocked-kick and safety sections below because those
+    // reconcile two readings against each other and this has exactly one.
+    //
+    // Not emitted at zero. It is a plain counter rather than a tiered rule, so
+    // absent and zero score the same, and every unit in the league carrying an
+    // explicit `def_2pt_ret: 0` would be a row a week for an event that happens
+    // about once a season.
+    for (const [field, statKey] of Object.entries(TANK01_TEAM_STATS_MAP)) {
+      if (team?.[field] === undefined) continue;
+
+      const parsed = parseStatValue(team[field]);
+      if (parsed === null) {
+        warnings.push(
+          `${teamAbv}: ${field} is ${JSON.stringify(team[field])}, which is not a number — ` +
+            `${statKey} was dropped`,
+        );
+        continue;
+      }
+      if (parsed !== 0) accumulate(totals, statKey, parsed);
+    }
+
+    // ---------------------------------------------------------------------
     // Blocked kicks
     // ---------------------------------------------------------------------
     //
@@ -633,12 +763,21 @@ function translateTeamDefense(
     // `play.team` is the team that scored, which for a return is the returning
     // team — the opposite of the blocked-kick case above, where the block is
     // usually noted on the opponent's score. That is why this cannot reuse
-    // `blockingTeamOf`. Gated on `scoreType` so a non-scoring play that merely
-    // mentions a return cannot pay six points.
+    // `blockingTeamOf`.
+    //
+    // **The `scoreType` gate is a deny-list now, not `=== "TD"`.** It was the
+    // latter until 2026-08-17 and Tank01 has a fifth value: `20241208_BUF@LAR`
+    // files Hunter Long's blocked-punt return under `BP`, so the Rams' unit was
+    // paid nothing for a special-teams touchdown — and nothing else made it up,
+    // because `DST.defTD` reads `"0"` for that game too. See
+    // `isTouchdownScoringPlay` for why the question is asked negatively. The
+    // guard against a non-scoring play that merely mentions a return is
+    // `isSpecialTeamsReturnTouchdown`, which names the event, rather than a
+    // vocabulary we have now been wrong about twice.
     const defensiveScorers = defensiveTouchdownScorers(playerStats, teamAbv);
     const specialTeamsTds = scoringPlays.filter(
       (play) =>
-        play.scoreType === "TD" &&
+        isTouchdownScoringPlay(play.scoreType) &&
         play.team === teamAbv &&
         isSpecialTeamsReturnTouchdown(play.score ?? ""),
     );
@@ -679,25 +818,45 @@ function translateTeamDefense(
     // Narrowed rather than dropped, because this is still the only thing that
     // would find a novel wording without a season sweep — and a warning that
     // fires on correct data is how the next real one gets dismissed.
-    const blockedInDefTd = alreadyInDefTd.filter((play) =>
-      isBlockedKickTouchdown(play.score ?? ""),
+    //
+    // **And a `BP` play is in neither counter**, which is the same defect
+    // arriving from the other side. Newly relevant because such a play now
+    // reaches `specialTeamsTds` at all: before the deny-list above it was
+    // excluded from the count *and* from the scoring, so the comparison happened
+    // to balance while both halves were wrong. See
+    // `isUncountedSpecialTeamsScoreType`, which records that this rests on the
+    // single `BP` play in two seasons.
+    const uncountedByType = specialTeamsTds.filter((play) =>
+      isUncountedSpecialTeamsScoreType(play.scoreType),
+    );
+    const blockedInDefTd = alreadyInDefTd.filter(
+      (play) => isBlockedKickTouchdown(play.score ?? "") && !uncountedByType.includes(play),
     ).length;
-    const readFromText = specialTeamsTds.length - blockedInDefTd;
+    const readFromText = specialTeamsTds.length - blockedInDefTd - uncountedByType.length;
 
     const reportedDefStTds = parseStatValue(team?.[TANK01_TEAM_DEF_ST_TD_FIELD]);
     const reportedDefTds = parseStatValue(unit["defTD"]);
     if (reportedDefStTds !== null && reportedDefTds !== null) {
       const expected = reportedDefStTds - reportedDefTds;
       if (expected !== readFromText) {
+        // Every exclusion is named. The check is narrowed in two places now, and
+        // a reader who does not already know about ESPN's stat id 93 or about
+        // `BP` would otherwise read a suppressed play as a play nobody counted.
+        const excluded = [
+          ...(blockedInDefTd > 0
+            ? [`${blockedInDefTd} blocked-kick touchdown(s) ESPN files as defensive`]
+            : []),
+          ...(uncountedByType.length > 0
+            ? [`${uncountedByType.length} scored under a scoreType Tank01 does not total`]
+            : []),
+        ];
+
         warnings.push(
           `${teamAbv}: teamStats implies ${expected} special teams touchdown(s) ` +
             `(${TANK01_TEAM_DEF_ST_TD_FIELD} ${reportedDefStTds} - DST.defTD ` +
             `${reportedDefTds}) but ${readFromText} were read from the ` +
             `scoring text` +
-            (blockedInDefTd > 0
-              ? `, excluding ${blockedInDefTd} blocked-kick touchdown(s) ESPN ` +
-                `files as defensive`
-              : ""),
+            (excluded.length > 0 ? `, excluding ${excluded.join(" and ")}` : ""),
         );
       }
     }
@@ -738,6 +897,44 @@ function translateTeamDefense(
   return result;
 }
 
+/**
+ * Say so when a play carries a `scoreType` this adapter has never seen.
+ *
+ * **The tripwire, and the only reason it is worth its noise.** `"BP"` sat in the
+ * feed for two seasons costing 12 points every time it appeared, and what found
+ * it was somebody sweeping 544 games by hand. Nothing in the pipeline said
+ * anything, because an unrecognised value is *inert* here by design — no
+ * `switch`, no throw, just a set of equality tests that all miss. Inert is the
+ * right behaviour and silent is not.
+ *
+ * Distinct values, once each per game, because the interesting thing is that a
+ * value exists rather than how many plays carry it — and a warning repeated
+ * ninety times is one nobody finishes reading.
+ *
+ * Not fatal, and not a reason to drop the play either: {@link
+ * isTouchdownScoringPlay} deliberately treats an unfamiliar type as eligible, so
+ * the scoring already does the best available thing. This only makes sure
+ * somebody gets to check whether it was right.
+ */
+function reportUnknownScoreTypes(
+  scoringPlays: readonly ScoringPlay[],
+  warnings: string[],
+): void {
+  const unknown = new Set(
+    scoringPlays
+      .map((play) => play.scoreType)
+      .filter((scoreType) => !isKnownScoreType(scoreType))
+      .map((scoreType) => String(scoreType)),
+  );
+
+  for (const scoreType of unknown) {
+    warnings.push(
+      `scoreType ${JSON.stringify(scoreType)} has not been seen before — it was treated ` +
+        `as a possible touchdown, and what it actually is should be checked against ESPN`,
+    );
+  }
+}
+
 /** Translate a raw `getNFLBoxScore` response. */
 export function translateBoxScore(raw: unknown): TranslatedBoxScore {
   const box = raw as Record<string, unknown>;
@@ -747,17 +944,21 @@ export function translateBoxScore(raw: unknown): TranslatedBoxScore {
   const playerStats = (box["playerStats"] ?? {}) as Record<string, RawPlayer>;
   const scoringPlays = (box["scoringPlays"] ?? []) as ScoringPlay[];
 
+  reportUnknownScoreTypes(scoringPlays, warnings);
+
   /*
-    Conversions first, and for the game rather than per player.
+    Conversions and return touchdowns first, and for the game rather than per
+    player.
 
     The credited player is frequently not in the play's `playerIDs` — those name
     the touchdown's participants — and is sometimes a player with no
-    `scoringPlays` and no receiving block of his own at all (issue #155). No
-    amount of looking at one player's own record finds him; the conversion only
-    exists on somebody else's.
+    `scoringPlays` and no category block of his own at all (issue #155, and
+    `20241229_CAR@TB` for the return). No amount of looking at one player's own
+    record finds him; the play exists only on somebody else's.
   */
   const twoPoint = twoPointCreditsByPlayer(scoringPlays, playerStats, warnings);
   crossCheckTwoPoint(playerStats, twoPoint, warnings);
+  const returns = returnTouchdownCredits(scoringPlays, playerStats, warnings);
 
   const players = new Map<string, readonly StatLine[]>();
   for (const player of Object.values(playerStats)) {
@@ -765,6 +966,7 @@ export function translateBoxScore(raw: unknown): TranslatedBoxScore {
       player,
       warnings,
       player.playerID ? (twoPoint.get(player.playerID) ?? 0) : 0,
+      player.playerID ? (returns.get(player.playerID) ?? 0) : 0,
     );
     if (translated) players.set(translated.playerID, translated.lines);
   }
