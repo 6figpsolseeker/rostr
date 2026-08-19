@@ -36,7 +36,7 @@
  */
 
 import type { Tank01Client } from "../tank01/client.js";
-import type { SleeperIdMap, SleeperStats } from "./sleeper.js";
+import type { SleeperIdMap, SleeperStats } from "../sleeper/stats.js";
 
 const SLEEPER_STATS = "https://api.sleeper.app/v1/stats/nfl/regular";
 const SLEEPER_PLAYERS = "https://api.sleeper.app/v1/players/nfl";

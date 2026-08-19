@@ -53,7 +53,7 @@ import { indexScoringRules, NFL_PPR_SCORING, scorePlayer } from "@rostr/core";
 import { classesIn, COVERAGE_CLASSES } from "./classes.js";
 import { buildLedger, serialiseLedger } from "./ledger.js";
 import { manifestProblems } from "./manifest.js";
-import { sleeperPlayerStats, sleeperTeamDefenseStats } from "./sleeper.js";
+import { sleeperPlayerStats, sleeperTeamDefenseStats } from "../sleeper/stats.js";
 import { checkRepublication, normalisePlayText } from "./espn.js";
 import { sleeperTeam } from "./capture.js";
 import {

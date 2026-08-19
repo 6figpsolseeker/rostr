@@ -16,7 +16,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Manifest } from "./manifest.js";
 import type { EspnFixture, SleeperFixture } from "./capture.js";
-import type { SleeperIdMap } from "./sleeper.js";
+import type { SleeperIdMap } from "../sleeper/stats.js";
 import type { Ledger } from "./ledger.js";
 
 /**
