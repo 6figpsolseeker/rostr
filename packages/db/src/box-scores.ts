@@ -326,6 +326,16 @@ export async function unresolvedStatsProblems(
     readonly season: number;
     readonly week: number;
     readonly problem: string;
+    /**
+     * When the game went final, or `null` if it has not.
+     *
+     * Carried because the only useful question about a flagged game is whether
+     * anything can still be done about it: a correction after the window has
+     * closed writes a revision no finalised matchup will ever read. The window
+     * itself is a league rule — 48h normally, 168h for weeks 14 and 17 — so the
+     * instant is reported here and the judgement is left to the caller.
+     */
+    readonly finalAt: Date | null;
   }[];
 }> {
   const ids = await loadSportIds(db, sportKey);
@@ -342,8 +352,9 @@ export async function unresolvedStatsProblems(
     season: number;
     week: number;
     stats_error: string;
+    final_at: Date | null;
   }>(
-    `SELECT external_ref, season, week, stats_error
+    `SELECT external_ref, season, week, stats_error, final_at
        FROM games
       WHERE sport_id = $1 AND stats_error IS NOT NULL
       ORDER BY kickoff_at DESC
@@ -358,6 +369,7 @@ export async function unresolvedStatsProblems(
       season: Number(row.season),
       week: Number(row.week),
       problem: row.stats_error,
+      finalAt: row.final_at === null ? null : new Date(row.final_at),
     })),
   };
 }

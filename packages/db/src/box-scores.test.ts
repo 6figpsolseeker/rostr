@@ -376,8 +376,19 @@ describe("syncBoxScores", () => {
     const outstanding = await unresolvedStatsProblems(fx.client, NFL.key);
 
     expect(outstanding.total).toBe(1);
+    // `finalAt` rides along because the only useful question about a flagged
+    // game is whether anything can still be done about it — a correction after
+    // the window writes a revision no finalised matchup will ever read. The
+    // fixture's game is FINAL, so this is a date rather than null; the operator
+    // view turns it into "still correctable" or "past the window".
     expect(outstanding.games).toEqual([
-      { gameRef: "g1", season: SEASON, week: WEEK, problem: "odd" },
+      {
+        gameRef: "g1",
+        season: SEASON,
+        week: WEEK,
+        problem: "odd",
+        finalAt: expect.any(Date),
+      },
     ]);
   });
 
