@@ -103,10 +103,44 @@ stored, the veto denominator counting managers rather than teams, per-player
 kickoff locks rather than a league-wide deadline — and a screen that restates
 one of them will drift from the code that owns it.
 
+## Do not build drop 6's landing copy — two sentences are retired
+
+**This is the trap in this directory right now.** `screens/Rostr Landing.dc.html`
+still contains the roster-as-NFT claim, in two places, and the app deliberately
+does not. Anyone implementing that hero from the design will paste a false
+sentence back onto the front page, which is precisely how it got there the first
+time.
+
+The design says:
+
+> Drafted players are held in your wallet, not on a platform's server.
+
+and, on a card lower down:
+
+> Drafted players mint as Token-2022 NFTs held in your wallet.
+
+**Both are untrue and were removed from `apps/web` on 2026-08-19.** Rosters are
+rows in Postgres. Nothing has ever minted an NFT, there is no NFT program, and
+the roster-as-NFT design is abandoned rather than pending. `page.tsx` carries a
+comment at each site saying so and asking that no NFT sentence be restored until
+something actually mints one.
+
+What replaced it is a claim that holds and is checkable in the source: no
+commissioner can edit a team, force a trade, or overrule a result, because there
+is no such function to call.
+
+The design files stay verbatim — they are the designer's artifacts and this file
+is where the repo records divergence. **The divergence is in the app, and it is
+deliberate.** If a future drop drops these sentences, this section goes with it.
+
+Note that `CLAUDE.md`'s settled-decisions table still lists "NFTs _are_ the
+roster, not souvenirs" as **Settled**, which is the same stale claim wearing a
+different hat. It is not this file's to fix, but do not read it as current.
+
 ## Changed from the designer's original
 
-**Nothing, as of drop 6.** This directory is verbatim again, and the paragraph
-that used to sit here is worth keeping as a record of how it got that way.
+Beyond the copy above: **nothing in the files.** The paragraph that used to sit
+here is worth keeping as a record of how that came to be true.
 
 Drop 5's `Rostr Create League.dc.html` printed the scoring table this repo used
 until 2026-08-16 — a shutout worth 10, field goals stopping at 50+, no penalty

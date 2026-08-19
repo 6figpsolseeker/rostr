@@ -2891,8 +2891,8 @@ These were discussed at length and decided. Re-proposing them wastes the owner's
 | Full PPR scoring                                 | **Settled** — table in `docs/RULES.md` §1                                         |
 | Schedule luck retained                           | **Settled** — median scoring was proposed and **rejected**                        |
 | Rolling waiver priority                          | **Settled** — FAAB proposed and **rejected** for v1                               |
-| NFTs _are_ the roster, not souvenirs             | **Settled** — Token-2022, transfer hook + permanent delegate                      |
-| NFTs persist as trophies, labelled "Player YYYY" | **Settled**                                                                       |
+| NFTs _are_ the roster, not souvenirs             | **Abandoned** 2026-08-19 (`6d28c5e`) — nothing ever minted one; see below         |
+| NFTs persist as trophies, labelled "Player YYYY" | **Abandoned** with it — a weekly claimable award replaces the idea                |
 | Trades vetoable, never automatic                 | **Settled** — 48h escrow, ⅓ of uninvolved managers                                |
 | Trade deadline set by the commissioner           | **Settled** 2026-08-08 — default 11; binds on the execution week                  |
 | Rules immutable, shown before joining            | **Settled**                                                                       |
@@ -2912,6 +2912,30 @@ These were discussed at length and decided. Re-proposing them wastes the owner's
 | Defense is the **team unit**, never a player     | **Settled** 2026-08-17 — no IDP slot, and per-player defensive stats are unmapped |
 
 ---
+
+### The roster is not an NFT, and the site must not say it is
+
+**Abandoned 2026-08-19 in `6d28c5e`, and this table said "Settled" until
+2026-08-19.** There is no NFT program, no Token-2022 code anywhere in the tree,
+and rosters are rows in Postgres — nothing has ever minted one. The enforcement
+that design needed, a transfer hook and a permanent delegate, existed only to
+stop a roster being sold out from under a league, and the database already
+prevents that.
+
+Two places on the front page promised it and both were replaced with claims that
+hold and are checkable in the source. `page.tsx` carries a comment at each site
+asking that no NFT sentence be restored until something actually mints.
+
+**The design handoff still contains both sentences.** `docs/design/screens/Rostr
+Landing.dc.html` says "Drafted players are held in your wallet" in the hero and
+"mint as Token-2022 NFTs" on a card, so anyone building that screen from the
+design will paste them back. `docs/design/STATUS.md` records this as a
+deliberate divergence; read it before implementing any part of that page.
+
+`docs/DECISIONS.md` § "Roster NFTs are the roster, not souvenirs" is the original
+argument and is **not** current. It is left in place because that file is a
+record of reasoning rather than a statement of what is true today, which is what
+this file is for.
 
 ## Environment
 
