@@ -116,9 +116,23 @@ call per poll, not one per game.
 `gameID` is the same format as `games.external_ref`, so the join needs no name matching
 — the property that makes `sleeperBotID` reliable in the corpus, for the same reason.
 
-**Current season only.** `season=2025` returns the same `"no games returned"` error as a
-bad parameter, not a 404 and not an empty list. So this is a live feed, not an archive:
-it cannot be backfilled, and a missed Sunday is missed permanently.
+**The archive parameter works. The archive is empty.** Corrected the same day it was
+written — the first version of this passage said "current season only", on the strength of
+one failed parameter name, and that was wrong:
+
+```
+season=2025         -> "no games returned, check your parameters for syntax errors"
+archiveSeason=2025  -> OK, 18 weeks, every players[] still []
+```
+
+`archiveSeason` is the same parameter `getNFLProjections` already uses for history, and
+this endpoint accepts it — so the failure above is a wrong parameter name, not a missing
+archive. What the archive does not carry is any inactive **data**: all eighteen weeks of
+2025 come back structurally complete and populated with nothing.
+
+The practical consequence is unchanged and now rests on evidence rather than inference:
+**a missed Sunday cannot be recovered**, because the list is only populated while it is
+current. The job has to capture it as it happens.
 
 **`players[]` is empty until games are played, and its record shape is therefore
 UNVERIFIED.** Every array in the 2026 response is `[]` because the season has not started,
