@@ -77,6 +77,25 @@ export interface ProviderPlayer {
   readonly active: boolean;
   /** Display detail. Null where the provider publishes none. */
   readonly profile: ProviderPlayerProfile | null;
+  /**
+   * This player's id at the **second** stats source, when the provider
+   * publishes one.
+   *
+   * `RULES.md` §7 requires two independent providers to agree before a week's
+   * scores finalise, and agreeing means joining their rows — which needs a key.
+   * Name matching is not that key: "A.J. Brown", "AJ Brown" and "Aj Brown" are
+   * one player and three strings, and two players share a name most seasons.
+   *
+   * Tank01 carries Sleeper's id on its own player list, so the join is published
+   * by the first provider rather than inferred by us. That is the whole reason a
+   * second source is affordable here: no fuzzy matching, no maintenance, and a
+   * player the provider does not map is `null` and simply goes uncompared rather
+   * than being compared to the wrong person.
+   *
+   * Named for the role, not the vendor — a provider that publishes some other
+   * cross-reference fills the same field.
+   */
+  readonly secondSourceRef: string | null;
 }
 
 export interface ProviderGame {

@@ -118,6 +118,7 @@ const player = (
   position: string,
   team = "PHI",
   profile: ProviderPlayer["profile"] = null,
+  secondSourceRef: string | null = null,
 ): ProviderPlayer => ({
   externalRef: ref,
   fullName: name,
@@ -125,6 +126,7 @@ const player = (
   teamRef: team,
   active: true,
   profile,
+  secondSourceRef,
 });
 
 async function fresh(): Promise<PGliteClient> {
@@ -711,5 +713,82 @@ describe("syncProjections", () => {
 
     const result = await syncProjections(client, provider, "nfl", 2026, 3);
     expect(result.unmatched).toEqual(["Nobody"]);
+  });
+});
+
+/**
+ * The key that makes a second stats source joinable.
+ *
+ * `RULES.md` §7 requires two independent providers to agree before a week's
+ * scores finalise. `stat_lines` has carried a `source` column since `0003` and
+ * the current-value view keys on it, so the storage was always ready — what was
+ * missing was any record of who a player *is* at the other provider.
+ *
+ * Tank01 publishes Sleeper's id on its own player list, so the correspondence is
+ * asserted by a provider rather than guessed by us. These pin the two properties
+ * that matter: it is stored, and an absent one stays absent rather than becoming
+ * a value that would join to the wrong person.
+ */
+describe("syncPlayers — the second-source join key", () => {
+  it("stores the id the provider published", async () => {
+    const client = await fresh();
+    await syncPlayers(
+      client,
+      new FakeProvider([player("t1", "A.J. Brown", "WR", "PHI", null, "4035")]),
+      "nfl",
+      2026,
+    );
+
+    const [row] = await client.query<{ second_source_ref: string | null }>(
+      "SELECT second_source_ref FROM players WHERE external_ref = $1",
+      ["t1"],
+    );
+    expect(row?.second_source_ref).toBe("4035");
+  });
+
+  it("leaves a player the provider does not map uncompared, rather than mismapped", async () => {
+    // Null is the safe answer and the informative one: the comparison can report
+    // how many players it could not join, instead of silently covering fewer of
+    // them each week. Roughly 4,222 of Tank01's ~4,300 carry the field.
+    const client = await fresh();
+    await syncPlayers(
+      client,
+      new FakeProvider([player("t2", "Nobody Special", "WR")]),
+      "nfl",
+      2026,
+    );
+
+    const [row] = await client.query<{ second_source_ref: string | null }>(
+      "SELECT second_source_ref FROM players WHERE external_ref = $1",
+      ["t2"],
+    );
+    expect(row?.second_source_ref).toBeNull();
+  });
+
+  it("clears the key when the provider stops publishing it", async () => {
+    // Deliberately not behind the `hasProfile` gate that protects the display
+    // fields. Those are guarded because a response with no profile block would
+    // erase a face we already had. This is one field on the same response, and a
+    // provider that stops asserting the correspondence should stop the
+    // comparison — not leave it joining on a key nobody stands behind.
+    const client = await fresh();
+    await syncPlayers(
+      client,
+      new FakeProvider([player("t3", "Traded Away", "RB", "PHI", null, "1234")]),
+      "nfl",
+      2026,
+    );
+    await syncPlayers(
+      client,
+      new FakeProvider([player("t3", "Traded Away", "RB", "PHI", null, null)]),
+      "nfl",
+      2026,
+    );
+
+    const [row] = await client.query<{ second_source_ref: string | null }>(
+      "SELECT second_source_ref FROM players WHERE external_ref = $1",
+      ["t3"],
+    );
+    expect(row?.second_source_ref).toBeNull();
   });
 });

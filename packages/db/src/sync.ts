@@ -98,9 +98,10 @@ export async function syncPlayers(
          (sport_id, external_ref, full_name, primary_position_id, team_ref, active, updated_at,
           image_url, jersey_number, height_inches, weight_pounds, birth_date, college,
           draft_year, draft_round, draft_pick,
-          injury_designation, injury_description, injury_return_date)
+          injury_designation, injury_description, injury_return_date,
+          second_source_ref)
        VALUES ($1, $2, $3, $4, $5, $6, now(),
-               $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+               $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $20)
        ON CONFLICT (sport_id, external_ref) DO UPDATE
          SET full_name = EXCLUDED.full_name,
              primary_position_id = EXCLUDED.primary_position_id,
@@ -118,7 +119,15 @@ export async function syncPlayers(
              draft_pick         = CASE WHEN $19 THEN EXCLUDED.draft_pick         ELSE players.draft_pick         END,
              injury_designation = CASE WHEN $19 THEN EXCLUDED.injury_designation ELSE players.injury_designation END,
              injury_description = CASE WHEN $19 THEN EXCLUDED.injury_description ELSE players.injury_description END,
-             injury_return_date = CASE WHEN $19 THEN EXCLUDED.injury_return_date ELSE players.injury_return_date END
+             injury_return_date = CASE WHEN $19 THEN EXCLUDED.injury_return_date ELSE players.injury_return_date END,
+             -- Deliberately NOT behind the hasProfile gate the display fields
+             -- sit behind. Those are guarded because a response carrying no
+             -- profile block would erase a face we already had; this is a
+             -- single field on the same response, and a provider that stops
+             -- publishing it should stop the comparison rather than leave it
+             -- joining on a key nobody asserts any more. Overwritten every
+             -- sync, including back to NULL.
+             second_source_ref = EXCLUDED.second_source_ref
        RETURNING (xmax = 0) AS inserted`,
       [
         ids.sportId,
@@ -140,6 +149,7 @@ export async function syncPlayers(
         profile?.injury?.description ?? null,
         profile?.injury?.returnDate ?? null,
         hasProfile,
+        player.secondSourceRef ?? null,
       ],
     );
 
