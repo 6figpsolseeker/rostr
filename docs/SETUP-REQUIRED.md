@@ -63,49 +63,34 @@ calls in one invocation. The **Running cost** table below still has no hosting l
 > `stat_lines` is empty, and every player scores zero until Sep 9. That is a separate
 > check and this is not it.
 
-### 🟨 The migration numbering collided, and the runner has stopped
+### ✅ The migration numbering collided, and was resolved
 
-**Found 2026-08-19.** `pnpm db:migrate` refuses to start:
+**Resolved 2026-08-19, the day it was found.** `pnpm db:migrate` had stopped: version 32
+was `player_profiles` in the hosted database and `the_season_was_declared_started` on
+disk. Two branches numbered independently and **both reached a real database** — the
+collision `packages/db/migrations/README.md` warns about. CI's guard cannot catch this
+one: it compares a branch against `main`, never against what a database has already run.
+
+**Fixed by renumbering on disk to match what production actually ran** —
+`player_profiles` back to `0032`, `the_season_was_declared_started` to `0033`. Editing a
+merged migration's number is normally forbidden; here it resolved a collision rather than
+causing one, and it was safe because the two are independent (`players` versus
+`leagues`, no shared object, no ordering dependency) and because
+`the_season_was_declared_started` had been applied nowhere.
+
+Verified against the schema rather than the runner's own report:
 
 ```
-Migration version 32 is recorded as "player_profiles" but is
-"the_season_was_declared_started" on disk.
+schema_migrations   33=the_season_was_declared_started  32=player_profiles
+leagues             season_started_at, season_start_signature, season_start_cluster
+trigger             leagues_season_start_immutable
 ```
 
-Two branches numbered a migration independently and **both reached a real database**.
-The hosted database recorded `32 = player_profiles` when that branch applied it; `main`
-carries `0032_the_season_was_declared_started.sql`, with `player_profiles` renumbered to
-`0033` during the rebase. This is the exact collision
-`packages/db/migrations/README.md` warns about, and CI's guard cannot catch it because
-the guard compares a branch against `main`, not against what a database has already run.
-
-**Verified against the hosted schema, not inferred from `pnpm db:status`** — which
-compares by version _number_ and therefore reported `0032` as applied and `0033` as
-pending, both misleadingly:
-
-|                                                            |             |
-| ---------------------------------------------------------- | ----------- |
-| `players.image_url`, `jersey_number`, `injury_designation` | **present** |
-| `leagues.season_started_at`                                | **absent**  |
-
-So `player_profiles` is fully applied and `the_season_was_declared_started` has never
-run in production.
-
-**Nothing is broken by it today**, and that is worth stating precisely rather than
-hoping: the only read of `season_started_at` is inside `if (stored.rules.pot)` in
-`drawDraftOrder` (`packages/db/src/draft.ts:451`), pot leagues can no longer be created,
-and the one that exists has already drawn — the draw is write-once. A free league never
-touches the column.
-
-**What it does block:** every future migration, on every database, until it is resolved.
-
-**The fix is a decision, not a command.** The honest option is to renumber on disk to
-match what production actually ran — `player_profiles` back to `0032`,
-`the_season_was_declared_started` to `0033` — since the latter has been applied nowhere
-and every test database is built fresh. That makes disk and production agree and lets
-`0033` apply cleanly. It means editing the number of a merged migration, which is
-normally forbidden; here it resolves a collision rather than causing one. **Do not run
-`db:migrate` until this is settled.**
+**The lesson worth keeping: `pnpm db:status` compares by version _number_.** Through the
+whole collision it reported `0032` applied and `0033` pending — both technically true
+and both misleading, because the _names_ had swapped underneath. Only `db:migrate`
+compares names, and only `information_schema` answers what a database actually has.
+When a migration question matters, read the schema.
 
 ### ⬜ Solana RPC endpoint (`SOLANA_RPC_URL`)
 
