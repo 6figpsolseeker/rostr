@@ -534,7 +534,7 @@ same failure this file names two hundred lines above about "live sync" and about
 `syncBoxScores`, and it is the most expensive kind: **the confident sentence that
 stops anyone looking.**
 
-The rule that would have caught it: a claim about what a *person* has or has not
+The rule that would have caught it: a claim about what a _person_ has or has not
 done cannot be verified from the repository, so it goes stale silently and must
 carry the date it was last confirmed. Everything here that can be checked by
 running something says how to check it. This could not, and did not.
