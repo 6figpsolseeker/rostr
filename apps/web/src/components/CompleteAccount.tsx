@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 // The subpath, not the package root: `@rostr/db` reaches `identity.ts`, which
 // imports `node:crypto`, and webpack cannot bundle that for a browser. The
@@ -185,12 +186,16 @@ export function CompleteAccount({
 
       <section className="border-t border-nocturne-neutral-900 pt-8">
         {done ? (
-          <a
+          // A soft navigation, so the wallet just verified stays connected
+          // through it. An `<a href>` here unmounts the provider and makes the
+          // next page render disconnected — which is exactly the moment somebody
+          // concludes it did not work.
+          <Link
             href={next}
             className="inline-block rounded-[4px] border border-nocturne-accent px-4 py-2 text-[13.5px] text-nocturne-accent-200 transition-colors hover:bg-nocturne-accent/10"
           >
             Continue
-          </a>
+          </Link>
         ) : (
           <p className="text-sm text-nocturne-neutral-600">
             {/*

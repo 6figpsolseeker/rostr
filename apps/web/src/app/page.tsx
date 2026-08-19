@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { HeroThrow } from "@/components/landing/HeroThrow";
+import { LandingAccountLink } from "@/components/landing/LandingAccountLink";
 import { LandingDraftBoard } from "@/components/landing/LandingDraftBoard";
 
 /**
@@ -208,27 +209,20 @@ function SiteHeader() {
           {/*
             **A link, not a wallet button, and that is a deliberate divergence.**
 
-            The design draws this as a `<button>` because connecting is an action.
-            Doing that here would mean mounting the wallet adapter on the
-            marketing page — hundreds of kilobytes of JavaScript on the one page
-            that has to load fast for people who have never heard of us, to open
-            a popup that cannot do anything useful until there is an account
-            behind it.
+            The design draws this as a `<button>` because connecting is an
+            action. Doing that here would mean mounting the wallet adapter on
+            the marketing page to open a popup that can do nothing useful until
+            there is an account behind it. `/welcome` is where connecting
+            actually works — it verifies the wallet by signature, and is also
+            where a username is claimed.
 
-            So it goes where connecting actually works and is actually needed:
-            `/welcome`, which verifies the wallet by signature and is also where
-            a username is claimed. The affordance the design asked for is kept —
-            it reads as an action and sits in the same place.
+            **It also has to know whether you are already signed in.** It said
+            `Connect wallet` unconditionally, so somebody who had just claimed a
+            username and verified a wallet came back to this page and saw the
+            same control as a stranger — which reads as "it forgot me". The
+            wallet was connected throughout; nothing here said so.
           */}
-          <a
-            href="/welcome"
-            className="flex items-center gap-2 text-[13px] text-nocturne-neutral-400 transition-colors hover:text-nocturne-text"
-          >
-            <svg viewBox="0 0 16 16" aria-hidden className="h-[15px] w-[15px] fill-current">
-              <path d="M13 4H3a1 1 0 0 1 0-2h9.5a.5.5 0 0 0 0-1H3a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2Zm-1.5 6a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z" />
-            </svg>
-            Connect wallet
-          </a>
+          <LandingAccountLink />
         </div>
       </nav>
     </header>

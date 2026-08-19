@@ -25,9 +25,19 @@ export default async function WelcomePage({
   const { next } = await searchParams;
   const user = await currentUser();
 
-  // `next` is carried through the sign-in redirect, so it survives the round
-  // trip from here to the code and back.
-  const destination = safeRedirect(next ?? null);
+  /**
+   * Where to go when this is finished.
+   *
+   * `next` is carried through the sign-in redirect, so it survives the round trip
+   * from here to the code and back.
+   *
+   * **The fallback is `/leagues`, not `/`.** `safeRedirect(null)` answers `/`,
+   * which is the marketing page — so somebody who had just claimed a username and
+   * verified a wallet was returned to a page that shows neither, and reasonably
+   * concluded nothing had been saved. Finishing setup should land on the thing
+   * setup was for: leagues you can join, with your invitations beside them.
+   */
+  const destination = next ? safeRedirect(next) : "/leagues";
 
   if (!user) {
     redirect(`/signin?next=${encodeURIComponent(`/welcome?next=${destination}`)}`);
