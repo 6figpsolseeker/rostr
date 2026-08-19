@@ -43,10 +43,22 @@ export default function LandingPage() {
             </>
           }
         >
+          {/*
+            The first sentence used to read "Drafted players are held in your wallet,
+            not on a platform's server." That was never true — rosters are rows in
+            Postgres — and it was the marketing half of the roster-as-NFT design that
+            was abandoned on 2026-08-19.
+
+            The headline above still stands, but it has to be earned by claims that
+            hold. What makes a roster yours here is that nothing can reach into it:
+            no override exists to call. That is checkable in the source, which the
+            wallet claim never was.
+          */}
           <p className="mt-8 max-w-[560px] text-[18.5px] leading-[1.62] text-nocturne-neutral-400">
-            Drafted players are held in your wallet, not on a platform&rsquo;s server. League
-            rules are frozen at creation and hashed on-chain. The champion is derived from the
-            Week 17 result, not declared by an administrator.
+            No commissioner can edit your team, force a trade through, or overrule a result —
+            there is no such function to call. League rules are frozen at creation and hashed
+            on-chain, and you sign that hash to join. The champion is derived from the Week 17
+            result, not declared by an administrator.
           </p>
 
           <div className="mt-9 flex flex-wrap items-center gap-3">
@@ -336,10 +348,23 @@ function Differentiators() {
           from the Week 17 result. There is no sign-off step to corrupt.
         </Card>
 
+        {/*
+          This claimed drafted players mint as Token-2022 NFTs held in your wallet.
+          Nothing has ever minted one — there is no NFT program, and as of
+          2026-08-19 the roster-as-NFT design is abandoned rather than pending:
+          the enforcement it needed (transfer hook, permanent delegate) existed
+          only to stop a roster being sold out from under a league, and that is a
+          problem the database already solves.
+
+          What is left here is the half that was true all along and is shipped:
+          the trade escrow, the veto window, and the absence of any commissioner
+          override. Do not restore an NFT sentence to this card until something
+          actually mints.
+        */}
         <Card index="04" title="Your roster is yours">
-          Drafted players mint as Token-2022 NFTs held in your wallet. Trades move through an
-          escrow with a 48-hour league veto window — they can&rsquo;t be front-run on a
-          marketplace, and they can&rsquo;t be forced through by a commissioner.
+          A trade freezes both sides the moment it is accepted, then waits out a 48-hour window
+          in which a third of the uninvolved managers can veto it. No commissioner can force one
+          through, reverse one, or edit a roster — there is no such function to call.
         </Card>
       </div>
     </section>
