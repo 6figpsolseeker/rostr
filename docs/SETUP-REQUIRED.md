@@ -12,48 +12,100 @@ Status key: ⬜ not started · 🟡 in progress · ✅ done
 
 ## Blocking soon
 
-### ⬜ A deployment, and `CRON_SECRET`
+### ✅ A deployment, and `CRON_SECRET`
 
-**Blocks:** every automated job in `docs/LIVE-SCORING.md`. A draft can be run and a
-lineup can be set against a hand-synced database; a **season** cannot.
-**Needed by:** Sep 9 2026, and realistically a fortnight earlier so a full weekly cycle
-is watched once before it counts.
+**Done, and this entry said otherwise until 2026-08-19.** It was written on 2026-08-17
+when nothing had ever run, and never updated when the deployment happened — so it went
+on reading as the blocker for the whole season. An agent trusted it over the evidence
+and told the owner there was no deployment. **A missing `.vercel` directory is not
+evidence of anything**: a GitHub-integrated project creates no local link.
 
-**Nothing has ever run on a schedule.** `apps/web/vercel.json` schedules six crons, and
-on 2026-08-17 `cron_runs` — the heartbeat table every job stamps, migration `0029` —
-held **zero rows**. Not one job, not once. Every game, player, projection and ranking in
-the deployed database was put there by somebody typing `pnpm db:sync` at a terminal.
+Verified 2026-08-19 by `gh api repos/6figpsolseeker/rostr/deployments` (19 of them,
+Production building on every push to `main`) and by `pnpm cron:status` against the
+hosted database:
 
-Scheduling is not running. Check it with **`pnpm cron:status`**, which reads the job list
-out of `vercel.json` itself and exits non-zero when a job has never run, is stale, or is
-failing. `pnpm db:status` now carries a one-line summary of the same thing, because this
-gap survived for months precisely because nothing was obliged to ask.
+```
+OK         draft-tick    every 1m       last: 0m ago
+OK         stats         every 10m      last: 8m ago
+NEVER_RAN  score-week    every 10m      last: never
+OK         waivers       every 60m      last: 49m ago
+OK         trades        every 60m      last: 47m ago
+FAILING    season-sync   every 1440m    last: 1284m ago — 16 fixtures awaiting a kickoff time
+```
 
-**This entry did not exist until 2026-08-17, and that is why the gap lasted.** This file
-is the list of things only the owner can do, and "there is no host" was on it nowhere.
+Four jobs stamping recent heartbeats settles the two traps this entry used to warn
+about: **Root Directory is `apps/web`** (otherwise no cron would be registered at all)
+and **`CRON_SECRET` is set** (otherwise `cronForbidden` would refuse every one).
 
-**Needed:** a Vercel project whose **Root Directory is `apps/web`**, with `DATABASE_URL`,
-`TANK01_API_KEY`, `SOLANA_RPC_URL`, `SOLANA_CLUSTER`, `NEXT_PUBLIC_SOLANA_RPC_URL`,
-`NEXT_PUBLIC_SOLANA_CLUSTER`, `FEE_RECIPIENT`, `NEXT_PUBLIC_FEE_RECIPIENT` and
-`CRON_SECRET` set.
+**The two unhealthy rows are not deployment problems.** Both are real and neither blocks
+anything:
 
-> **Four traps, in the order they bite.**
->
-> 1. **`vercel.json` lives at `apps/web/`, not the repo root.** If the project's Root
->    Directory is left at the root, the crons are silently not registered — the deploy
->    succeeds, the site works, and nothing ever fires. That failure is indistinguishable
->    from today's state.
-> 2. **Plan tier.** Cron frequency is limited on the free tier; six jobs at minute and
->    ten-minute granularity needs a paid plan. Check current limits — the **Running cost**
->    table below has no hosting line and needs one.
-> 3. **`CRON_SECRET` must be set on the deployment**, or `cronForbidden` refuses every
->    cron route in production: a fully deployed, fully dead scheduler.
-> 4. **Function timeout versus `season-sync`**, which makes eighteen weeks of provider
->    calls in a single invocation.
->
-> **And a green `pnpm cron:status` means the routes ran, not that they did any work.** A
-> run over zero games is a healthy run. `stat_lines` is empty today and every player
-> scores zero; that is a separate check and this is not it.
+- **`score-week` reads `NEVER_RAN` and that is a heartbeat defect, not a dead job.**
+  `route.ts` returns early with `{week: null, leagues: []}` when no NFL game has kicked
+  off yet, and that path never calls `recordCronRun`. So a job firing every ten minutes
+  and correctly doing nothing is **indistinguishable from one that is not scheduled** —
+  which is exactly what the heartbeat exists to tell apart. The `catch` block three lines
+  above stamps and rethrows for precisely this reason, and its comment says so; the early
+  return was missed. It will start reporting on its own once a game kicks off on Sep 9,
+  which means the gap closes by accident rather than being fixed.
+- **`season-sync` reads `FAILING` on fixtures the NFL has deliberately not scheduled.**
+  Production holds 8 such games — 4 in week 16, 4 in week 17 — flagged `kickoff_tbd`,
+  which is the flex-scheduling case #182 was written to keep rather than discard. A
+  permanent and correct condition reported as a failure every day trains people to ignore
+  the row.
+
+**Still genuinely open here:** whether the plan tier sustains six jobs at minute
+granularity, and the `season-sync` function timeout against eighteen weeks of provider
+calls in one invocation. The **Running cost** table below still has no hosting line.
+
+> **A green `pnpm cron:status` means the routes ran, not that they did any work.** A run
+> over zero games is a healthy run. Every game in the database is still `SCHEDULED`,
+> `stat_lines` is empty, and every player scores zero until Sep 9. That is a separate
+> check and this is not it.
+
+### 🟨 The migration numbering collided, and the runner has stopped
+
+**Found 2026-08-19.** `pnpm db:migrate` refuses to start:
+
+```
+Migration version 32 is recorded as "player_profiles" but is
+"the_season_was_declared_started" on disk.
+```
+
+Two branches numbered a migration independently and **both reached a real database**.
+The hosted database recorded `32 = player_profiles` when that branch applied it; `main`
+carries `0032_the_season_was_declared_started.sql`, with `player_profiles` renumbered to
+`0033` during the rebase. This is the exact collision
+`packages/db/migrations/README.md` warns about, and CI's guard cannot catch it because
+the guard compares a branch against `main`, not against what a database has already run.
+
+**Verified against the hosted schema, not inferred from `pnpm db:status`** — which
+compares by version _number_ and therefore reported `0032` as applied and `0033` as
+pending, both misleadingly:
+
+|                                                            |             |
+| ---------------------------------------------------------- | ----------- |
+| `players.image_url`, `jersey_number`, `injury_designation` | **present** |
+| `leagues.season_started_at`                                | **absent**  |
+
+So `player_profiles` is fully applied and `the_season_was_declared_started` has never
+run in production.
+
+**Nothing is broken by it today**, and that is worth stating precisely rather than
+hoping: the only read of `season_started_at` is inside `if (stored.rules.pot)` in
+`drawDraftOrder` (`packages/db/src/draft.ts:451`), pot leagues can no longer be created,
+and the one that exists has already drawn — the draw is write-once. A free league never
+touches the column.
+
+**What it does block:** every future migration, on every database, until it is resolved.
+
+**The fix is a decision, not a command.** The honest option is to renumber on disk to
+match what production actually ran — `player_profiles` back to `0032`,
+`the_season_was_declared_started` to `0033` — since the latter has been applied nowhere
+and every test database is built fresh. That makes disk and production agree and lets
+`0033` apply cleanly. It means editing the number of a merged migration, which is
+normally forbidden; here it resolves a collision rather than causing one. **Do not run
+`db:migrate` until this is settled.**
 
 ### ⬜ Solana RPC endpoint (`SOLANA_RPC_URL`)
 
