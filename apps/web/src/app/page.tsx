@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { HeroThrow } from "@/components/landing/HeroThrow";
+import { LandingDraftBoard } from "@/components/landing/LandingDraftBoard";
 
 /**
  * The marketing page.
@@ -30,7 +31,19 @@ export default function LandingPage() {
     <div className="nocturne min-h-screen">
       <SiteHeader />
 
-      <section className="mx-auto w-full max-w-[1180px] overflow-hidden">
+      {/*
+        Two columns: the claim, and a draft mid-round.
+
+        The board is illustrative and says so — see `LandingDraftBoard`. It sits
+        beside the headline rather than below it because the product's argument
+        is visual: a snake board with a block-drawn order is the thing no other
+        platform can show.
+
+        `overflow-hidden` stays on the section. `HeroThrow` animates a ball
+        across its own box and the board crops twelve columns to three; both
+        would otherwise widen the page on a narrow viewport.
+      */}
+      <section className="mx-auto grid w-full max-w-[1180px] gap-8 overflow-hidden lg:grid-cols-[minmax(0,1fr)_26rem]">
         <HeroThrow
           headline={
             <>
@@ -72,6 +85,10 @@ export default function LandingPage() {
             <li>Built for the Solana Seeker</li>
           </ul>
         </HeroThrow>
+
+        <div className="px-10 pt-24 lg:pl-0">
+          <LandingDraftBoard />
+        </div>
       </section>
 
       <LeaguePanel />
@@ -145,6 +162,19 @@ function SiteHeader() {
           </span>
         </a>
         <div className="flex items-center gap-7">
+          {/*
+            One link, not three — drop 6, at the owner's request.
+
+            `#how` lands on the first of three contiguous sections that answer one
+            question between them: why it is different, how a season runs, and
+            what the format is. Three tabs asked a reader to choose between three
+            answers before knowing what any of them were, and the sections were
+            already adjacent.
+
+            The `#trust` and `#format` ids stay on their sections. Nothing points
+            at them now, but they are what anyone who shared a deep link is
+            holding, and breaking those to tidy a nav costs more than it saves.
+          */}
           <a
             href="#how"
             className="text-[13.5px] text-nocturne-neutral-400 hover:text-nocturne-text"
@@ -152,28 +182,52 @@ function SiteHeader() {
             How it works
           </a>
           <a
-            href="#format"
-            className="text-[13.5px] text-nocturne-neutral-400 hover:text-nocturne-text"
-          >
-            Format
-          </a>
-          <a
-            href="#trust"
-            className="text-[13.5px] text-nocturne-neutral-400 hover:text-nocturne-text"
-          >
-            Why it&rsquo;s different
-          </a>
-          <a
             href="https://github.com/6figpsolseeker/rostr"
-            className="text-[13.5px] text-nocturne-neutral-400 hover:text-nocturne-text"
+            aria-label="rostr on GitHub"
+            className="text-nocturne-neutral-500 transition-colors hover:text-nocturne-text"
           >
-            GitHub
+            <svg viewBox="0 0 16 16" aria-hidden className="h-[17px] w-[17px] fill-current">
+              <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z" />
+            </svg>
+          </a>
+          <a
+            href="https://x.com/rostrfantasy"
+            aria-label="rostr on X"
+            className="text-nocturne-neutral-500 transition-colors hover:text-nocturne-text"
+          >
+            <svg viewBox="0 0 16 16" aria-hidden className="h-[15px] w-[15px] fill-current">
+              <path d="M9.52 6.78 15.48 0h-1.41L8.89 5.89 4.76 0H0l6.25 8.9L0 16h1.41l5.46-6.22L11.24 16H16L9.52 6.78Zm-1.93 2.2-.63-.89L1.92 1.04h2.17l4.06 5.72.63.89 5.28 7.42h-2.17L7.59 8.98Z" />
+            </svg>
           </a>
           <a
             href="/leagues/new"
             className="rounded-[4px] border border-nocturne-accent px-4 py-2 text-[13px] text-nocturne-accent-200 transition-colors hover:bg-nocturne-accent/10"
           >
             Create a league
+          </a>
+          {/*
+            **A link, not a wallet button, and that is a deliberate divergence.**
+
+            The design draws this as a `<button>` because connecting is an action.
+            Doing that here would mean mounting the wallet adapter on the
+            marketing page — hundreds of kilobytes of JavaScript on the one page
+            that has to load fast for people who have never heard of us, to open
+            a popup that cannot do anything useful until there is an account
+            behind it.
+
+            So it goes where connecting actually works and is actually needed:
+            `/welcome`, which verifies the wallet by signature and is also where
+            a username is claimed. The affordance the design asked for is kept —
+            it reads as an action and sits in the same place.
+          */}
+          <a
+            href="/welcome"
+            className="flex items-center gap-2 text-[13px] text-nocturne-neutral-400 transition-colors hover:text-nocturne-text"
+          >
+            <svg viewBox="0 0 16 16" aria-hidden className="h-[15px] w-[15px] fill-current">
+              <path d="M13 4H3a1 1 0 0 1 0-2h9.5a.5.5 0 0 0 0-1H3a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2Zm-1.5 6a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z" />
+            </svg>
+            Connect wallet
           </a>
         </div>
       </nav>
@@ -296,7 +350,9 @@ function LeaguePanel() {
 
 function Differentiators() {
   return (
-    <section id="trust" className={`${CONTAINER} scroll-mt-[60px] py-[84px]`}>
+    <section id="how" className={`${CONTAINER} scroll-mt-[60px] py-[84px]`}>
+      {/* Kept because deep links already point here. */}
+      <span id="trust" className="block scroll-mt-[60px]" />
       <div className="max-w-[640px]">
         <Kicker>Why it&rsquo;s different</Kicker>
         <h2 className="mt-4 text-[40px] font-medium leading-[1.1] tracking-[-0.028em]">
@@ -425,7 +481,7 @@ function HowItWorks() {
   ];
 
   return (
-    <section id="how" className={`${CONTAINER} scroll-mt-[60px] py-[84px]`}>
+    <section id="how-steps" className={`${CONTAINER} scroll-mt-[60px] py-[84px]`}>
       <div className="max-w-[640px]">
         <Kicker>How it works</Kicker>
         <h2 className="mt-4 text-[40px] font-medium leading-[1.1] tracking-[-0.028em]">
