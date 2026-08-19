@@ -41,6 +41,7 @@ export function InvitePanel({ leagueId }: { leagueId: string }) {
   });
 
   const [identifier, setIdentifier] = useState("");
+  const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [sent, setSent] = useState<string | null>(null);
@@ -101,6 +102,46 @@ export function InvitePanel({ leagueId }: { leagueId: string }) {
           By username or wallet address. They will see the invitation waiting for them, read the
           whole rule set, and join by signing it — being invited does not put anyone in the
           league.
+        </p>
+      </div>
+
+      {/*
+        The link, and what it honestly is.
+
+        A private league's page is deliberately ungated — `RULES.md` requires the
+        whole rule set to be readable before anyone joins, and an invitee is by
+        definition not yet a member — so **this URL already is the invitation**,
+        and has been since the league existed. The button surfaces a fact rather
+        than creating a capability.
+
+        Deliberately **not** a token. A tokenised link would look revocable and
+        would not be: the plain league URL still works, because it has to. Making
+        the link the only way in means gating `joinLeague` on an invitation,
+        which is a different feature and a real decision — see `lib/account.ts`
+        on the same question for usernames.
+      */}
+      <div className="space-y-2 rounded border border-nocturne-neutral-900 p-3">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-xs font-medium text-nocturne-neutral-400">Invite link</span>
+          <button
+            type="button"
+            onClick={() => {
+              void navigator.clipboard
+                .writeText(`${window.location.origin}/leagues/${leagueId}`)
+                .then(() => {
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 2000);
+                });
+            }}
+            className="text-xs text-nocturne-accent-300 hover:underline"
+          >
+            {copied ? "Copied" : "Copy link"}
+          </button>
+        </div>
+        <p className="text-[11px] text-nocturne-neutral-600">
+          Anyone holding this link can read the rules and take a seat, so send it to people you
+          mean to play with. Inviting by name below is the same thing with a record of who you
+          asked.
         </p>
       </div>
 

@@ -1,3 +1,4 @@
+import { InvitationsCorner } from "@/components/InvitationsCorner";
 import { LeagueBrowser } from "@/components/LeagueBrowser";
 import { currentUser } from "@/lib/session";
 
@@ -29,7 +30,19 @@ export default async function LeaguesPage() {
         </p>
       </div>
 
-      <LeagueBrowser />
+      {/*
+        The browse list, and anything waiting for you beside it.
+
+        Two columns rather than a banner above the list, because they answer
+        different questions — "what is on offer" and "who asked for me" — and a
+        private league can only ever arrive through the second. The corner
+        renders nothing when there is nothing waiting, so the ordinary visit is
+        a single column.
+      */}
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
+        <LeagueBrowser />
+        <InvitationsCorner />
+      </div>
 
       <section className="space-y-2 border-t border-nocturne-neutral-900 pt-6">
         <h2 className="text-sm font-medium text-nocturne-neutral-400">Been invited to one?</h2>

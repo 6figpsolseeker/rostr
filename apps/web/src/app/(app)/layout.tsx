@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { InvitationBadge } from "@/components/InvitationsCorner";
 import { SessionBar } from "@/components/SessionBar";
 import { currentUser } from "@/lib/session";
 
@@ -52,12 +53,20 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
               holding its URL. Most people arrive wanting to be in a league
               rather than to run one.
             */}
-            <a
-              href="/leagues"
-              className="text-[13.5px] text-nocturne-neutral-400 transition-colors hover:text-nocturne-text"
-            >
-              Join a league
-            </a>
+            <span className="flex items-center gap-2">
+              <a
+                href="/leagues"
+                className="text-[13.5px] text-nocturne-neutral-400 transition-colors hover:text-nocturne-text"
+              >
+                Join a league
+              </a>
+              {/*
+                Rendered only when something is waiting, and only for a signed-in
+                visitor — the route answers an empty list to anyone else, so a
+                logged-out header makes one cheap request and draws nothing.
+              */}
+              {user && <InvitationBadge />}
+            </span>
             <a
               href="/leagues/new"
               className="rounded-[4px] border border-nocturne-accent px-4 py-2 text-[13px] text-nocturne-accent-200 transition-colors hover:bg-nocturne-accent/10"
