@@ -47,7 +47,7 @@ Do not build it in August.
 
 See [`docs/BUILD-PLAN.md`](docs/BUILD-PLAN.md) for the full commit-by-commit plan.
 
-**Done — 1269 tests, CI green:**
+**Done — 1863 tests, CI green:**
 
 - Full specification — rules, data model, live scoring, build plan
 - A1: pnpm monorepo, TS strict, vitest, eslint, prettier, CI
@@ -404,6 +404,57 @@ still needs Rust and a decision before Aug 22:
 - **The browser defaulted to mainnet — FIXED**, see "One declaration of which chain"
   below. Three independent sources of "which chain", no cross-check, and the most
   dangerous default sitting on the one that signs.
+
+### Handoff, 2026-08-18 — read this before picking anything up
+
+`main` is `af82026`, working tree clean, **1863 tests**, and the branch queue is
+empty of anything unmerged. First commands, in this order:
+
+```bash
+git pull && CI=true corepack pnpm install
+pnpm db:status          # expect: applied through 0033
+pnpm test               # expect: 1863 passed, 2 skipped
+```
+
+**`pnpm db:migrate` has not been run since `0033` landed.** The hosted database is a
+migration behind `main` again — the recurring gap this file has been wrong about twice.
+
+**Two strands landed together, and they were rebased rather than merged as they stood.**
+
+The settlement chain (G7, G8, D6): the playoff ladder on-chain, the `Scores` account and
+its payee roster, `settle`, and schemaVersion 8 — which puts `pot.settlementOracle` in
+the signed rules. **`potDepositGate` is open on mainnet now**, because the committed IDL
+carries a settlement instruction; that was the gate's whole design and it fired on the
+commit that shipped the payout, exactly as intended.
+
+And player profiles — a face, a card, and the draft room as a board.
+
+**The rebase is the part worth knowing about.** The settlement branch predated `main`'s
+own season-start work and solved the same problem differently: it injected a live-chain
+oracle into `drawDraftOrder`, while `main` records `leagues.season_started_at` in
+Postgres after a route has read `League.started` back off the account. **`main`'s is
+better** — `@rostr/db` holds no Solana dependency, and an account read inside that
+transaction would hold a row lock across an RPC round trip. `main`'s version was kept
+wholesale and only the genuinely-new escrow half was replayed, so the draw now carries
+**two** independent gates: `SEASON_NOT_STARTED` and `SCORES_MISMATCH`.
+
+**A conflict resolution silently dropped a required rule field and four tests caught it.**
+Taking `main`'s side of a pot fixture in `draft.test.ts` reverted it to before
+schemaVersion 8, so it carried no `settlementOracle`. Typecheck did not care —
+`buildNflPprRules` takes a looser input type than the frozen document — and only the full
+suite failed. **Run the whole suite after a conflicted rebase, not the touched files.**
+
+**`feat/player-profiles` was branched off the settlement branch**, so merging it directly
+would have resurrected the superseded version. Only its own commit was replayed, and its
+migration renumbered `0032` → `0033` against the `0032` `main` already held.
+
+**Not verified locally: `pnpm idl:check`, `anchor test`, and `pnpm test:bankrun`.** All
+three need the Anchor toolchain; CI runs them on `main`. The bankrun suite is a separate
+vitest project on purpose — see the note about a validator losing a blockhash.
+
+**Still open**: the oracle keypair and the Helius key both want rotating, no invite-link
+control exists on the league page, and a wallet holding no pot token gets an unhelpful
+error at the join step.
 
 ### Handoff, 2026-08-16 — read this before picking anything up
 
@@ -2982,7 +3033,7 @@ Expect ~30–60 minutes; compiling AVM from source is the slow part.
 
 ```bash
 pnpm install
-pnpm test        # 1269 tests, all green
+pnpm test        # 1863 tests, all green
 pnpm typecheck
 pnpm lint
 ```
