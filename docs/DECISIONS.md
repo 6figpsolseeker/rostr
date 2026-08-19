@@ -389,6 +389,10 @@ in week one despite not paying out until January.
 
 ### Roster NFTs are the roster, not souvenirs
 
+> **Superseded 2026-08-19 — not the plan any more.** Kept because the reasoning below
+> is still correct _given its premise_, and the premise is the thing that changed. See
+> "A weekly card, claimed by whoever rostered him" at the end of this section.
+
 Drafting a player mints a Token-2022 NFT labelled `Player YYYY` to the manager's wallet.
 Holding it is what puts the player on the roster.
 
@@ -405,6 +409,76 @@ extensions, and without those the transfer restrictions are unenforceable.
 
 At season end the transfer restriction relaxes and the NFT becomes a freely tradeable
 trophy.
+
+### A weekly card, claimed by whoever rostered him
+
+**A possibility, not a decision.** Nothing here is built, nothing is scheduled, and the
+whole thing can be dropped without anything else moving. Recorded on 2026-08-19 so the
+reasoning is not re-derived from scratch, because most of it was arrived at the hard way.
+
+One NFT per league per week, for the player who scored the most PPR points that week.
+You are eligible if you **owned him on your roster** when the week finalised — started
+or benched makes no difference. Seventeen a season instead of a hundred and sixty-eight
+per league.
+
+**What changed the premise.** The design above needs a transfer hook and a permanent
+delegate for one reason: if holding the NFT _is_ what puts a player on your roster, a
+freely sellable NFT lets someone bypass the league. Make the NFT cosmetic and that entire
+problem disappears — nobody bypasses a league by selling a souvenir. The database stays
+the source of truth it already is.
+
+That is also what reopens compressed NFTs, rejected above for not supporting Token-2022
+extensions. Correct, and no longer disqualifying: with nothing to enforce, there is
+nothing those extensions were needed for.
+
+**Why weekly-and-claimed beats mirroring the roster.** A roster is a verb. Players are
+dropped, claimed and traded, so an NFT minted at the draft is wrong by week three, and
+keeping it right means an on-chain side effect on every roster path — which cannot live
+inside the transaction, since a lock must not be held across an RPC round trip. A weekly
+award has no such problem: _Mahomes put up 41.2 in week seven_ is true forever.
+
+**Decided, if it is ever built:**
+
+- **Eligibility is a snapshot at `finalized_at`**, recorded then and never recomputed.
+  Reading the live roster at claim time would take a card off a manager who dropped him
+  in week nine and had already earned it, and hand one to whoever picked him up.
+- **Never decide before the week finalises.** Stat corrections land for up to seven days
+  and can change who led the week; an immutable card naming the wrong player has no
+  remedy. Hangs off the same gate the bracket does.
+- **One card per league**, a 1 of 1 within its own league. Rostered in forty leagues is
+  forty cards, and that is fine — nobody experiences the product globally.
+- **Claims close three weeks after the league ends**, so one deadline covers all
+  seventeen weeks rather than seventeen rolling ones.
+- **No player photograph.** Not a stylistic preference. Fantasy's legal footing is
+  [CBC v. MLBAM](https://www.quimbee.com/cases/c-b-c-distribution-and-marketing-inc-v-major-league-baseball-advanced-media-l-p),
+  which protects **names and statistics** — CBC's product had no images and the ruling
+  addresses none. Photographs carry three separate rights (the photographer's copyright,
+  the player's publicity right through the NFLPA, the team's trademark), and none is
+  cleared by giving the token away: NFLPA v. Leaf is live over exactly this, and
+  DraftKings shut down Reignmakers and settled rather than fight it. Pixelating does not
+  help — that is a derivative work, and _Warhol v. Goldsmith_ (2023) closed the
+  transformative-use argument for a far better artist than us.
+
+  The card is therefore built from name, position, team colours, jersey number and the
+  box score — which is the protected category, and is also the only version that never
+  breaks. Our own headshot URLs are wrong or missing for 361 of 4,202 players.
+
+- **The real reason to care is not the odds of being sued.** They are ~0 at this size.
+  It is that a webpage can be deleted and a minted token cannot. Nothing goes on-chain
+  that we would be unable to withdraw.
+
+**Still open:** ties. Two players on the same milli-point total, one card, and it needs
+a deterministic rule written before the first mint — the same argument that makes
+`computeStandings` throw rather than fall back to row order.
+
+**Rejected: mirroring the roster into the wallet.** Mint on acquire, burn on drop, move
+on trade. Workable via a reconciler diffing `roster_entries` (append-only, so the
+desired state is one query) but it needs a signing key of ours, it makes a stale wallet
+into a false record, and it is six commits against two.
+
+**Rejected: one NFT per team with updating metadata.** Solves the churn problem — one
+token, edited — but it is a dashboard rather than a keepsake, and nobody wants a
+souvenir that changes.
 
 ### Trades escrow, then a veto window
 
