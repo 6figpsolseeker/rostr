@@ -521,13 +521,25 @@ championship anyway. See "A fixture with no kickoff time" below.
 
 #### What is true about Aug 22, said plainly
 
-**The create → join → draft click-through has still never been done.** It was
-deferred repeatedly in favour of UI work, at the owner's explicit direction. The
-draft room is 778 lines that no test can render — `apps/web` has no jsdom, both
-vitest projects are node-environment — so _nobody knows whether a draft works
-end to end_. That is the deadline risk, not the styling.
+**The create → join → draft click-through has been done.** Confirmed by the owner
+on 2026-08-19, and this passage said the opposite until that day.
 
-Doing it needs **two accounts and two Chrome profiles** (not incognito —
+**It said so for weeks, and agents kept repeating it.** The sentence was written
+when it was true, was never revised when the owner actually did the click-through,
+and is worded strongly enough ("_nobody knows whether a draft works end to end_")
+that it reads as a live finding rather than a dated one. So every session that
+read this file inherited it, restated it as the deadline risk, and told the owner
+something they had already corrected — five times, by their count. That is the
+same failure this file names two hundred lines above about "live sync" and about
+`syncBoxScores`, and it is the most expensive kind: **the confident sentence that
+stops anyone looking.**
+
+The rule that would have caught it: a claim about what a *person* has or has not
+done cannot be verified from the repository, so it goes stale silently and must
+carry the date it was last confirmed. Everything here that can be checked by
+running something says how to check it. This could not, and did not.
+
+Doing it again needs **two accounts and two Chrome profiles** (not incognito —
 extensions are disabled there). A league will not draft below `minHumans`, which
 is 2.
 
@@ -718,9 +730,11 @@ partial fix write `Refs #79` and close it by hand when the last part lands.
    minutes. **CI earned that keep on 2026-08-11** — it caught a genuine failure in
    `stake.test.ts` that no TypeScript check could have.
 
-1. **Click through create → anchor → join in a browser.** Everything either side of the
-   wallet popup is covered by an automated test; the popup itself is not, and cannot be
-   from here. This is the one step that needs a human with Phantom.
+1. **Click through create → anchor → join in a browser — done**, confirmed by the
+   owner on 2026-08-19. Everything either side of the wallet popup is covered by an
+   automated test; the popup itself is not and cannot be from here, which is why this
+   needed a human with Phantom. **Do not re-list it as outstanding** without asking
+   first: it was listed as outstanding for weeks after it had been done.
 
 2. **D6–D10** — the rest of the escrow. **Writing Rust needs the main PC** (no toolchain on
    the secondary machine), but _verifying_ it does not: CI builds and tests the program on
