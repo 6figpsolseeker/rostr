@@ -42,7 +42,7 @@ import {
   sleeperPath,
   writeJson,
 } from "./corpus/fixtures.js";
-import type { SleeperIdMap } from "./corpus/sleeper.js";
+import type { SleeperIdMap } from "./sleeper/stats.js";
 
 function apiKey(): string {
   const key = process.env["TANK01_API_KEY"];

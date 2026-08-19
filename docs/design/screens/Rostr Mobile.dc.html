@@ -27,7 +27,7 @@
 
   <sc-if value="{{ showIntro }}" hint-placeholder-val="{{ true }}"><div style="max-width: 900px;">
     <h1 style="font-family: var(--font-heading); font-size: 26px; font-weight: 500; letter-spacing: -0.026em; margin: 0;">Mobile web · 390px</h1>
-    <p style="font-size: 14px; line-height: 1.6; color: var(--color-neutral-400); margin: 10px 0 0; text-wrap: pretty;">Ten screens at the narrowest common phone width, in a mobile browser. Not a reflow of the desktop layouts — the desktop two-column shell has no mobile equivalent, so navigation moves to a bottom bar within thumb reach, tables become stacked rows, and each screen commits to one primary action pinned above the bar. Every tap target is at least 44px.</p>
+    <p style="font-size: 14px; line-height: 1.6; color: var(--color-neutral-400); margin: 10px 0 0; text-wrap: pretty;">Seventeen screens at the narrowest common phone width, in a mobile browser. Not a reflow of the desktop layouts — the desktop two-column shell has no mobile equivalent, so navigation moves to a bottom bar within thumb reach, tables become stacked rows, and each screen commits to one primary action pinned above the bar. Every tap target is at least 44px.</p>
   </div></sc-if>
 
   <div style="display: flex; gap: 26px; margin-top: 32px; align-items: start; flex-wrap: wrap;">
@@ -833,6 +833,513 @@
         </div>
       </div>
     </div>
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <div style="display: flex; align-items: baseline; gap: 10px;">
+        <span style="font-family: ui-monospace, monospace; font-size: 11px; letter-spacing: 0.1em; color: var(--color-accent-500);">11</span>
+        <span style="font-family: var(--font-heading); font-size: 15px; font-weight: 500;">Playoff bracket</span>
+      </div>
+      <span style="font-size: 12px; color: var(--color-neutral-500); max-width: 390px;">The hardest port. A left-to-right ladder cannot fit, so the bracket becomes one round at a time plus a vertical account of how your team got here.</span>
+
+      <div data-screen-label="M &middot; Bracket" style="width: 390px; border: 1px solid var(--color-neutral-800); border-radius: var(--radius-md); overflow: hidden; background: var(--color-bg);">
+        <div style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--color-surface); border-bottom: 1px solid var(--color-neutral-900);">
+          <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--color-neutral-800);"></span>
+          <span style="flex: 1; font-family: ui-monospace, monospace; font-size: 10.5px; color: var(--color-neutral-600); text-align: center;">rostr.gg/l/dropped-passes/playoffs</span>
+        </div>
+
+        <div style="height: 620px; display: flex; flex-direction: column;">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 11px 16px; border-bottom: 1px solid var(--color-neutral-900);">
+            <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+              <span style="font-size: 14px;">Playoffs</span>
+              <span style="font-size: 11px; color: var(--color-neutral-500);">Sun 3 Jan, 4:52 PM ET</span>
+            </div>
+            <span class="tag tag-accent" style="font-size: 9.5px; letter-spacing: 0.08em; text-transform: uppercase; flex: 0 0 auto;">Live</span>
+          </div>
+
+          <div style="display: flex; gap: 5px; padding: 10px 16px; border-bottom: 1px solid var(--color-neutral-900);">
+            <button type="button" class="btn btn-ghost" style="flex: 1; font-size: 11.5px; padding: 7px 4px; min-height: 44px; color: var(--color-neutral-400);">W15</button>
+            <button type="button" class="btn btn-ghost" style="flex: 1; font-size: 11.5px; padding: 7px 4px; min-height: 44px; color: var(--color-neutral-400);">W16</button>
+            <button type="button" class="btn" style="flex: 1.3; font-size: 11.5px; padding: 7px 4px; min-height: 44px; border-color: var(--color-accent); background: color-mix(in srgb, var(--color-accent) 16%, transparent); color: var(--color-accent-200);">W17 &middot; Final</button>
+            <button type="button" class="btn btn-ghost" style="flex: 1.1; font-size: 11.5px; padding: 7px 4px; min-height: 44px; color: var(--color-neutral-500);">Consol.</button>
+          </div>
+
+          <div style="flex: 1; overflow: hidden; position: relative;">
+            <div style="position: absolute; left: 0; right: 0; bottom: 0; height: 40px; background: linear-gradient(to top, var(--color-bg), transparent); pointer-events: none; z-index: 2;"></div>
+            <div style="padding: 14px 16px 0; display: flex; flex-direction: column; gap: 12px;">
+              <div class="card" style="padding: 0; overflow: hidden; background: var(--color-surface); border-left: 2px solid var(--color-accent);">
+                <div style="padding: 7px 13px; border-bottom: 1px solid var(--color-neutral-900); background: color-mix(in srgb, var(--color-accent) 14%, transparent); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--color-accent-200);">Championship &middot; in progress</div>
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 13px; border-bottom: 1px solid var(--color-neutral-900);">
+                  <span style="font-size: 13px; color: var(--color-accent-200); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"><span style="font-family: ui-monospace, monospace; font-size: 10.5px; color: var(--color-accent-400);">3</span> Route 66</span>
+                  <span style="font-size: 17px; color: var(--color-accent-200); font-variant-numeric: tabular-nums; flex: 0 0 auto;">96.4</span>
+                </div>
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 13px;">
+                  <span style="font-size: 13px; color: var(--color-neutral-300); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"><span style="font-family: ui-monospace, monospace; font-size: 10.5px; color: var(--color-neutral-500);">1</span> Pylon Co.</span>
+                  <span style="font-size: 17px; color: var(--color-neutral-400); font-variant-numeric: tabular-nums; flex: 0 0 auto;">91.8</span>
+                </div>
+                <div style="padding: 7px 13px; border-top: 1px solid var(--color-neutral-900); font-size: 10.5px; line-height: 1.45; color: var(--color-neutral-500);">6 of 9 played &middot; proj 129.4 to 126.1. A tie goes to Pylon Co. as higher seed.</div>
+              </div>
+              <div class="card" style="padding: 0; overflow: hidden; background: var(--color-surface); border-left: 2px solid var(--color-neutral-800);">
+                <div style="padding: 7px 13px; border-bottom: 1px solid var(--color-neutral-900); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--color-neutral-500);">Third place &middot; in progress</div>
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 13px; border-bottom: 1px solid var(--color-neutral-900);">
+                  <span style="font-size: 13px;  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"><span style="font-family: ui-monospace, monospace; font-size: 10.5px; color: var(--color-neutral-500);">5</span> Audibles</span>
+                  <span style="font-size: 17px;  font-variant-numeric: tabular-nums; flex: 0 0 auto;">80.1</span>
+                </div>
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 13px;">
+                  <span style="font-size: 13px; color: var(--color-neutral-300); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"><span style="font-family: ui-monospace, monospace; font-size: 10.5px; color: var(--color-neutral-500);">2</span> Cover Two</span>
+                  <span style="font-size: 17px; color: var(--color-neutral-400); font-variant-numeric: tabular-nums; flex: 0 0 auto;">74.2</span>
+                </div>
+                <div style="padding: 7px 13px; border-top: 1px solid var(--color-neutral-900); font-size: 10.5px; line-height: 1.45; color: var(--color-neutral-500);">The two beaten semifinalists. Played, not awarded.</div>
+              </div>
+
+              <div class="card" style="padding: 12px 14px; background: var(--color-surface);">
+                <div style="font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--color-neutral-500);">How Route 66 got here</div>
+                <div style="margin-top: 8px;">
+                <div style="display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 11px; align-items: baseline; padding: 9px 0; border-bottom: 1px solid var(--color-neutral-900);">
+                  <span style="font-family: ui-monospace, monospace; font-size: 10.5px; color: var(--color-neutral-500);">Seed 3</span>
+                  <span style="font-size: 12px; line-height: 1.5; color: var(--color-neutral-400);">9&ndash;5, third of twelve. No bye &mdash; only seeds 1 and 2 get one.</span>
+                </div>
+                <div style="display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 11px; align-items: baseline; padding: 9px 0; border-bottom: 1px solid var(--color-neutral-900);">
+                  <span style="font-family: ui-monospace, monospace; font-size: 10.5px; color: var(--color-neutral-500);">W15</span>
+                  <span style="font-size: 12px; line-height: 1.5; color: var(--color-accent-200);">Beat the 6 seed, Gridiron Heresy, 121.6 to 104.2.</span>
+                </div>
+                <div style="display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 11px; align-items: baseline; padding: 9px 0; border-bottom: 1px solid var(--color-neutral-900);">
+                  <span style="font-family: ui-monospace, monospace; font-size: 10.5px; color: var(--color-neutral-500);">W16</span>
+                  <span style="font-size: 12px; line-height: 1.5; color: var(--color-accent-200);">Drew the 2 seed after the reseed. Beat Cover Two 118.4 to 115.7.</span>
+                </div>
+                <div style="display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 11px; align-items: baseline; padding: 9px 0;">
+                  <span style="font-family: ui-monospace, monospace; font-size: 10.5px; color: var(--color-neutral-500);">W17</span>
+                  <span style="font-size: 12px; line-height: 1.5; color: var(--color-accent-200);">Playing the 1 seed for it.</span>
+                </div>
+                </div>
+              </div>
+
+              <div class="card" style="padding: 12px 14px; background: color-mix(in srgb, var(--color-accent) 8%, transparent); border-color: var(--color-accent-800);">
+                <div style="font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--color-accent-400);">Every round reseeds</div>
+                <p style="font-size: 12px; line-height: 1.55; color: var(--color-neutral-300); margin: 8px 0 0; text-wrap: pretty;">The best surviving seed always draws the worst. Audibles upsetting the 4 seed is what sent Pylon Co. its semifinal opponent &mdash; the top seed absorbs the lowest survivor, so the 1 drew the 5 and Route 66 got the 2.</p>
+                <p style="font-size: 12px; line-height: 1.55; color: var(--color-neutral-400); margin: 8px 0 0; text-wrap: pretty;">Which is why there is no ladder to draw in advance, on a phone or anywhere else.</p>
+              </div>
+
+              <div class="card" style="padding: 12px 14px; background: var(--color-surface);">
+                <div style="font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--color-neutral-500);">Scores are provisional</div>
+                <p style="font-size: 12px; line-height: 1.55; color: var(--color-neutral-400); margin: 8px 0 0; text-wrap: pretty;">Week 17 finalises 48 hours after its last game. This league has no pot, so 48 hours is the whole wait &mdash; a paying week holds seven days.</p>
+              </div>
+            </div>
+          </div>
+
+          <nav style="display: grid; grid-template-columns: repeat(5, 1fr); border-top: 1px solid var(--color-neutral-800); background: var(--color-surface);">
+            <a href="#" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 56px; font-size: 10px; color: var(--color-neutral-500);"><span style="width: 15px; height: 15px; border: 1.5px solid currentColor; border-radius: 3px;"></span>Home</a>
+            <a href="#" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 56px; font-size: 10px; color: var(--color-neutral-500);"><span style="width: 15px; height: 15px; border: 1.5px solid currentColor; border-radius: 3px;"></span>Matchup</a>
+            <a href="#" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 56px; font-size: 10px; color: var(--color-neutral-500);"><span style="width: 15px; height: 15px; border: 1.5px solid currentColor; border-radius: 3px;"></span>Team</a>
+            <a href="#" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 56px; font-size: 10px; color: var(--color-neutral-500);"><span style="width: 15px; height: 15px; border: 1.5px solid currentColor; border-radius: 3px;"></span>Players</a>
+            <a href="#" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 56px; font-size: 10px; color: var(--color-accent-300); box-shadow: inset 0 1px 0 var(--color-accent);"><span style="width: 15px; height: 15px; border: 1.5px solid currentColor; border-radius: 3px;"></span>League</a>
+          </nav>
+        </div>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <div style="display: flex; align-items: baseline; gap: 10px;">
+        <span style="font-family: ui-monospace, monospace; font-size: 11px; letter-spacing: 0.1em; color: var(--color-accent-500);">12</span>
+        <span style="font-family: var(--font-heading); font-size: 15px; font-weight: 500;">Settled</span>
+      </div>
+      <span style="font-size: 12px; color: var(--color-neutral-500); max-width: 390px;">The derivation is the product&rsquo;s argument, so it stays on the phone rather than becoming a link.</span>
+
+      <div data-screen-label="M &middot; Settled" style="width: 390px; border: 1px solid var(--color-neutral-800); border-radius: var(--radius-md); overflow: hidden; background: var(--color-bg);">
+        <div style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--color-surface); border-bottom: 1px solid var(--color-neutral-900);">
+          <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--color-neutral-800);"></span>
+          <span style="flex: 1; font-family: ui-monospace, monospace; font-size: 10.5px; color: var(--color-neutral-600); text-align: center;">rostr.gg/l/dropped-passes/playoffs</span>
+        </div>
+
+        <div style="height: 620px; display: flex; flex-direction: column;">
+          <div style="padding: 16px; background: radial-gradient(140% 180% at 8% 0%, var(--color-section-glow) 0%, var(--color-section) 54%, #1d2048 100%); border-bottom: 1px solid var(--color-accent-700);">
+            <div style="font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-accent-300);">Champion &middot; 2026</div>
+            <h2 style="font-family: var(--font-heading); font-size: 32px; font-weight: 500; letter-spacing: -0.03em; line-height: 1.06; margin: 9px 0 0;">Route 66</h2>
+            <p style="font-size: 12.5px; line-height: 1.5; color: var(--color-accent-200); margin: 9px 0 0; text-wrap: pretty;">Third seed. Beat the 6, the 2 and the 1. Won 132.8 to 128.1.</p>
+          </div>
+
+          <div style="flex: 1; overflow: hidden; position: relative;">
+            <div style="position: absolute; left: 0; right: 0; bottom: 0; height: 40px; background: linear-gradient(to top, var(--color-bg), transparent); pointer-events: none; z-index: 2;"></div>
+            <div style="padding: 14px 16px 0; display: flex; flex-direction: column; gap: 12px;">
+              <div class="card" style="padding: 0; overflow: hidden; background: var(--color-surface);">
+                <div style="padding: 10px 14px; border-bottom: 1px solid var(--color-neutral-900); font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--color-neutral-500);">Nobody declared this</div>
+                <div style="display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 11px; align-items: baseline; padding: 10px 14px; border-bottom: 1px solid var(--color-neutral-900);">
+                  <span style="font-family: ui-monospace, monospace; font-size: 10.5px; color: var(--color-accent-500);">01</span>
+                  <span style="font-size: 12px; line-height: 1.5;">Seed the field from the Week 14 standings.</span>
+                </div>
+                <div style="display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 11px; align-items: baseline; padding: 10px 14px; border-bottom: 1px solid var(--color-neutral-900);">
+                  <span style="font-family: ui-monospace, monospace; font-size: 10.5px; color: var(--color-accent-500);">02</span>
+                  <span style="font-size: 12px; line-height: 1.5;">Walk the ladder from round one, reseeding each time.</span>
+                </div>
+                <div style="display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 11px; align-items: baseline; padding: 10px 14px; border-bottom: 1px solid var(--color-neutral-900);">
+                  <span style="font-family: ui-monospace, monospace; font-size: 10.5px; color: var(--color-accent-500);">03</span>
+                  <span style="font-size: 12px; line-height: 1.5;">Read the finalised Week 17 total. 132.8 to 128.1.</span>
+                </div>
+                <div style="display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 11px; align-items: baseline; padding: 10px 14px; background: color-mix(in srgb, var(--color-accent) 9%, transparent);">
+                  <span style="font-family: ui-monospace, monospace; font-size: 10.5px; color: var(--color-accent-400);">04</span>
+                  <span style="font-size: 12px; line-height: 1.5; color: var(--color-accent-200);">The champion is whoever won it. Recomputed every time.</span>
+                </div>
+              </div>
+
+              <div class="card" style="padding: 0; overflow: hidden; background: var(--color-surface);">
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--color-neutral-900);">
+                  <span style="font-size: 12px; color: var(--color-neutral-500);">Runner-up</span>
+                  <span style="font-size: 12.5px;">Pylon Co.</span>
+                </div>
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--color-neutral-900);">
+                  <span style="font-size: 12px; color: var(--color-neutral-500);">Third place</span>
+                  <span style="font-size: 12.5px;">Cover Two</span>
+                </div>
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--color-neutral-900);">
+                  <span style="font-size: 12px; color: var(--color-neutral-500);">Best record</span>
+                  <span style="font-size: 12.5px;">Pylon Co. &middot; 11&ndash;3</span>
+                </div>
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 14px;">
+                  <span style="font-size: 12px; color: var(--color-neutral-500);">Consolation</span>
+                  <span style="font-size: 12.5px;">Fourth and Long</span>
+                </div>
+              </div>
+
+              <div class="card" style="padding: 12px 14px; background: var(--color-surface);">
+                <div style="font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--color-neutral-500);">Finalised</div>
+                <p style="font-size: 12px; line-height: 1.55; color: var(--color-neutral-400); margin: 8px 0 0; text-wrap: pretty;">Wed 6 Jan, 11:47 PM ET &mdash; 48 hours after the last game, with both providers agreeing. No pot in this league, so nothing waited seven days.</p>
+              </div>
+
+              <div class="card" style="padding: 12px 14px; background: var(--color-surface);">
+                <div style="font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--color-neutral-500);">Your roster, now</div>
+                <p style="font-size: 12px; line-height: 1.55; color: var(--color-neutral-400); margin: 8px 0 0; text-wrap: pretty;">Fourteen tokens, still in your wallet. The transfer restriction relaxed at settlement.</p>
+              </div>
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 8px; padding: 11px 16px; border-top: 1px solid var(--color-neutral-800); background: var(--color-surface);">
+            <button type="button" class="btn btn-secondary" style="flex: 1; font-size: 13.5px; min-height: 44px;">View the season</button>
+            <button type="button" class="btn btn-ghost" style="flex: 1; font-size: 13.5px; min-height: 44px; color: var(--color-neutral-400);">Verify on chain</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <div style="display: flex; align-items: baseline; gap: 10px;">
+        <span style="font-family: ui-monospace, monospace; font-size: 11px; letter-spacing: 0.1em; color: var(--color-accent-500);">13</span>
+        <span style="font-family: var(--font-heading); font-size: 15px; font-weight: 500;">Create a league</span>
+      </div>
+      <span style="font-size: 12px; color: var(--color-neutral-500); max-width: 390px;">Mostly disclosure, not configuration &mdash; only ten values are the commissioner&rsquo;s, so the fixed rules get more room than the settings.</span>
+
+      <div data-screen-label="M &middot; Create league" style="width: 390px; border: 1px solid var(--color-neutral-800); border-radius: var(--radius-md); overflow: hidden; background: var(--color-bg);">
+        <div style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--color-surface); border-bottom: 1px solid var(--color-neutral-900);">
+          <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--color-neutral-800);"></span>
+          <span style="flex: 1; font-family: ui-monospace, monospace; font-size: 10.5px; color: var(--color-neutral-600); text-align: center;">rostr.gg</span>
+        </div>
+        <div style="height: 620px; overflow: hidden; position: relative; display: flex; flex-direction: column;">
+          <div style="display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-bottom: 1px solid var(--color-neutral-900);">
+            <button type="button" class="btn btn-ghost" style="width: 44px; height: 44px; padding: 0; display: flex; align-items: center; justify-content: center; font-size: 17px; color: var(--color-neutral-400);">&lsaquo;</button>
+            <span style="display: flex; flex-direction: column; gap: 1px; min-width: 0;">
+              <span style="font-size: 14.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">New league</span>
+              <span style="font-size: 11px; color: var(--color-neutral-600);">Step 1 of 2</span>
+            </span>
+          </div>
+          <div style="flex: 1; overflow: hidden; padding: 16px 16px 0; position: relative;">
+          <div style="position: absolute; left: 0; right: 0; bottom: 0; height: 40px; background: linear-gradient(to top, var(--color-bg), transparent); pointer-events: none; z-index: 2;"></div>
+            <span style="font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-500);">Yours to set</span>
+            <div style="margin-top: 10px;">
+              <label class="field" style="display: block;">
+                <span style="display: block; font-size: 12px; color: var(--color-neutral-400); margin-bottom: 6px;">League name</span>
+                <input class="input" type="text" value="Dynasty of Dropped Passes" style="width: 100%; min-height: 44px; font-size: 14px;">
+              </label>
+            </div>
+            <div style="display: flex; gap: 8px; margin-top: 14px;">
+              <button type="button" class="btn btn-primary" style="flex: 1; min-height: 44px; font-size: 13px;">Private</button>
+              <button type="button" class="btn btn-ghost" style="flex: 1; min-height: 44px; font-size: 13px; color: var(--color-neutral-400);">Public</button>
+            </div>
+            <div style="display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: baseline; padding: 12px 0; border-bottom: 1px solid var(--color-neutral-900); min-height: 44px;">
+              <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+                <span style="font-size: 13.5px;">Draft date</span>
+                <span style="font-size: 11px; color: var(--color-neutral-500);">Must sit before Week 1</span>
+              </span>
+              <span style="font-size: 13px; color: var(--color-accent-200); font-variant-numeric: tabular-nums; white-space: nowrap;">22 Aug, 8:00 PM</span>
+            </div>
+            <div style="display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: baseline; padding: 12px 0; border-bottom: 1px solid var(--color-neutral-900); min-height: 44px;">
+              <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+                <span style="font-size: 13.5px;">Pace</span>
+                <span style="font-size: 11px; color: var(--color-neutral-500);">90 seconds a pick</span>
+              </span>
+              <span style="font-size: 13px; color: var(--color-accent-200); font-variant-numeric: tabular-nums; white-space: nowrap;">Fast</span>
+            </div>
+            <div style="display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: baseline; padding: 12px 0; border-bottom: 1px solid var(--color-neutral-900); min-height: 44px;">
+              <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+                <span style="font-size: 13.5px;">Bot to fill an odd field</span>
+                <span style="font-size: 11px; color: var(--color-neutral-500);">Refused if a pot is on</span>
+              </span>
+              <span style="font-size: 13px; color: var(--color-accent-200); font-variant-numeric: tabular-nums; white-space: nowrap;">Off</span>
+            </div>
+            <div style="display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: baseline; padding: 12px 0; border-bottom: 1px solid var(--color-neutral-900); min-height: 44px;">
+              <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+                <span style="font-size: 13.5px;">Trade deadline</span>
+                <span style="font-size: 11px; color: var(--color-neutral-500);">Weeks 8&ndash;14 only</span>
+              </span>
+              <span style="font-size: 13px; color: var(--color-accent-200); font-variant-numeric: tabular-nums; white-space: nowrap;">End of Week 11</span>
+            </div>
+            <div style="display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: baseline; padding: 12px 0; border-bottom: 1px solid var(--color-neutral-900); min-height: 44px;">
+              <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+                <span style="font-size: 13.5px;">Autofill ranking</span>
+                <span style="font-size: 11px; color: var(--color-neutral-500);">Used when you miss kickoff</span>
+              </span>
+              <span style="font-size: 13px; color: var(--color-accent-200); font-variant-numeric: tabular-nums; white-space: nowrap;">Projection</span>
+            </div>
+            <div style="display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: baseline; padding: 12px 0; border-bottom: 1px solid var(--color-neutral-900); min-height: 44px;">
+              <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+                <span style="font-size: 13.5px;">Pot</span>
+                <span style="font-size: 11px; color: var(--color-neutral-500);">Escrow program is unwritten</span>
+              </span>
+              <span style="font-size: 13px; color: var(--color-accent-200); font-variant-numeric: tabular-nums; white-space: nowrap;">Unavailable</span>
+            </div>
+            <div style="height: 1px; margin: 20px 0 0; background: linear-gradient(90deg, transparent, var(--color-neutral-800) 8%, var(--color-neutral-800) 92%, transparent);"></div>
+            <span style="display: block; margin-top: 18px; font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-500);">Not yours to set</span>
+            <p style="font-size: 12.5px; line-height: 1.6; color: var(--color-neutral-400); margin: 9px 0 0;">Scoring, roster shape, the season calendar, playoff format, tiebreakers, waivers, the veto threshold and the 1% fee are fixed by rostr. They are shown in full before anyone joins.</p>
+          </div>
+          <div style="padding: 12px 16px 14px; border-top: 1px solid var(--color-neutral-900); background: var(--color-bg);">
+            <button type="button" class="btn btn-primary btn-block" style="min-height: 48px; font-size: 14.5px;">Review the full rule set</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <div style="display: flex; align-items: baseline; gap: 10px;">
+        <span style="font-family: ui-monospace, monospace; font-size: 11px; letter-spacing: 0.1em; color: var(--color-accent-500);">14</span>
+        <span style="font-family: var(--font-heading); font-size: 15px; font-weight: 500;">Freezing it</span>
+      </div>
+      <span style="font-size: 12px; color: var(--color-neutral-500); max-width: 390px;">The rule set fills the screen and the gate sits under it. Scrolling to the checkbox is the point &mdash; consent is deliberate, so the button starts disabled.</span>
+
+      <div data-screen-label="M &middot; Freeze" style="width: 390px; border: 1px solid var(--color-neutral-800); border-radius: var(--radius-md); overflow: hidden; background: var(--color-bg);">
+        <div style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--color-surface); border-bottom: 1px solid var(--color-neutral-900);">
+          <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--color-neutral-800);"></span>
+          <span style="flex: 1; font-family: ui-monospace, monospace; font-size: 10.5px; color: var(--color-neutral-600); text-align: center;">rostr.gg</span>
+        </div>
+        <div style="height: 620px; overflow: hidden; position: relative; display: flex; flex-direction: column;">
+          <div style="display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-bottom: 1px solid var(--color-neutral-900);">
+            <button type="button" class="btn btn-ghost" style="width: 44px; height: 44px; padding: 0; display: flex; align-items: center; justify-content: center; font-size: 17px; color: var(--color-neutral-400);">&lsaquo;</button>
+            <span style="display: flex; flex-direction: column; gap: 1px; min-width: 0;">
+              <span style="font-size: 14.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Freeze and sign</span>
+              <span style="font-size: 11px; color: var(--color-neutral-600);">Step 2 of 2</span>
+            </span>
+          </div>
+          <div style="flex: 1; overflow: hidden; padding: 16px 16px 0; position: relative;">
+          <div style="position: absolute; left: 0; right: 0; bottom: 0; height: 40px; background: linear-gradient(to top, var(--color-bg), transparent); pointer-events: none; z-index: 2;"></div>
+            <p style="font-size: 13px; line-height: 1.6; color: var(--color-neutral-300); margin: 0;">Once frozen, none of this can change &mdash; not by you, not by rostr. Every manager sees the same set before joining, and joining signs against its hash.</p>
+            <div class="card" style="margin-top: 14px; padding: 0; overflow: hidden; background: var(--color-surface);">
+              <div style="padding: 10px 14px; border-bottom: 1px solid var(--color-neutral-900); font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--color-neutral-500);">The rule set</div>
+              <table class="table" style="width: 100%; font-size: 12.5px;">
+                <tbody>
+                  <tr><td style="width: 96px; color: var(--color-neutral-500); vertical-align: top;">Scoring</td><td>Full PPR. 4pt pass TD, 6pt rush and rec TD, &minus;2 per interception.</td></tr>
+                  <tr><td style="color: var(--color-neutral-500); vertical-align: top;">Roster</td><td>9 starters, 5 bench, 2 IR that do not count against the limit.</td></tr>
+                  <tr><td style="color: var(--color-neutral-500); vertical-align: top;">Season</td><td>Weeks 1&ndash;14, playoffs 15&ndash;17, championship Week 17.</td></tr>
+                  <tr><td style="color: var(--color-neutral-500); vertical-align: top;">Waivers</td><td>Rolling priority. Win a claim, go to the back.</td></tr>
+                  <tr><td style="color: var(--color-neutral-500); vertical-align: top;">Veto</td><td>4 of 10 uninvolved managers, inside 48 hours.</td></tr>
+                  <tr><td style="color: var(--color-neutral-500); vertical-align: top;">Draft</td><td>Snake, order drawn from a Solana block at 8:00 PM.</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <label style="display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 11px; align-items: start; margin-top: 16px; min-height: 44px; padding: 8px 0;">
+              <input class="checkbox" type="checkbox" style="width: 18px; height: 18px; margin-top: 2px;">
+              <span style="font-size: 12.5px; line-height: 1.55; color: var(--color-neutral-300);">I have read the full rule set and understand it cannot be changed after this.</span>
+            </label>
+          </div>
+          <div style="padding: 12px 16px 14px; border-top: 1px solid var(--color-neutral-900); background: var(--color-bg);">
+            <button type="button" class="btn btn-primary btn-block" disabled="disabled" style="min-height: 48px; font-size: 14.5px;">Freeze and sign</button>
+            <span style="display: block; margin-top: 8px; font-size: 11.5px; color: var(--color-neutral-500); text-align: center;">Signs the rule hash. No deposit, no spend permission.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <div style="display: flex; align-items: baseline; gap: 10px;">
+        <span style="font-family: ui-monospace, monospace; font-size: 11px; letter-spacing: 0.1em; color: var(--color-accent-500);">15</span>
+        <span style="font-family: var(--font-heading); font-size: 15px; font-weight: 500;">Inviting the league</span>
+      </div>
+      <span style="font-size: 12px; color: var(--color-neutral-500); max-width: 390px;">The share sheet is the primary action on a phone, not a copyable text field. Twelve seats, three row states.</span>
+
+      <div data-screen-label="M &middot; Invite" style="width: 390px; border: 1px solid var(--color-neutral-800); border-radius: var(--radius-md); overflow: hidden; background: var(--color-bg);">
+        <div style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--color-surface); border-bottom: 1px solid var(--color-neutral-900);">
+          <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--color-neutral-800);"></span>
+          <span style="flex: 1; font-family: ui-monospace, monospace; font-size: 10.5px; color: var(--color-neutral-600); text-align: center;">rostr.gg</span>
+        </div>
+        <div style="height: 620px; overflow: hidden; position: relative; display: flex; flex-direction: column;">
+          <div style="display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-bottom: 1px solid var(--color-neutral-900);">
+            <button type="button" class="btn btn-ghost" style="width: 44px; height: 44px; padding: 0; display: flex; align-items: center; justify-content: center; font-size: 17px; color: var(--color-neutral-400);">&lsaquo;</button>
+            <span style="display: flex; flex-direction: column; gap: 1px; min-width: 0;">
+              <span style="font-size: 14.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Invite managers</span>
+              <span style="font-size: 11px; color: var(--color-neutral-600);">4 of 12 seats filled</span>
+            </span>
+          </div>
+          <div style="flex: 1; overflow: hidden; padding: 16px 16px 0; position: relative;">
+          <div style="position: absolute; left: 0; right: 0; bottom: 0; height: 40px; background: linear-gradient(to top, var(--color-bg), transparent); pointer-events: none; z-index: 2;"></div>
+            <div class="card" style="padding: 13px 14px; background: color-mix(in srgb, var(--color-accent) 8%, transparent); border-color: var(--color-accent-800);">
+              <span style="font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--color-accent-400);">Invite link</span>
+              <div style="font-family: ui-monospace, monospace; font-size: 12px; color: var(--color-neutral-300); margin-top: 7px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">rostr.gg/j/7k2p&hellip;q4mv</div>
+              <div style="display: flex; gap: 8px; margin-top: 11px;">
+                <button type="button" class="btn btn-primary" style="flex: 1; min-height: 44px; font-size: 13px;">Share</button>
+                <button type="button" class="btn btn-ghost" style="flex: 1; min-height: 44px; font-size: 13px; color: var(--color-accent-200);">Copy</button>
+              </div>
+            </div>
+            <span style="display: block; margin-top: 18px; font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-500);">Seats</span>
+            <div style="margin-top: 8px;">
+              <div style="display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 11px; align-items: center; padding: 11px 0; border-bottom: 1px solid var(--color-neutral-900); min-height: 44px;">
+                <span style="font-family: ui-monospace, monospace; font-size: 11px; color: var(--color-neutral-600);">1</span>
+                <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+                  <span style="font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Route 66 <span style="color: var(--color-neutral-500);">&middot; you</span></span>
+                  <span style="font-family: ui-monospace, monospace; font-size: 10.5px; color: var(--color-neutral-600);">7xKq&hellip;4vNb</span>
+                </span>
+                <span class="tag tag-accent" style="font-size: 9.5px; padding: 2px 7px;">Joined</span>
+              </div>
+              <div style="display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 11px; align-items: center; padding: 11px 0; border-bottom: 1px solid var(--color-neutral-900); min-height: 44px;">
+                <span style="font-family: ui-monospace, monospace; font-size: 11px; color: var(--color-neutral-600);">2</span>
+                <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+                  <span style="font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Backfield Ballers</span>
+                  <span style="font-family: ui-monospace, monospace; font-size: 10.5px; color: var(--color-neutral-600);">3nRt&hellip;8wPz</span>
+                </span>
+                <span class="tag tag-accent" style="font-size: 9.5px; padding: 2px 7px;">Joined</span>
+              </div>
+              <div style="display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 11px; align-items: center; padding: 11px 0; border-bottom: 1px solid var(--color-neutral-900); min-height: 44px;">
+                <span style="font-family: ui-monospace, monospace; font-size: 11px; color: var(--color-neutral-600);">5</span>
+                <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+                  <span style="font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">dana@&hellip;mail.com</span>
+                  <span style="font-size: 10.5px; color: var(--color-neutral-500);">Invited 2 days ago</span>
+                </span>
+                <button type="button" class="btn btn-ghost" style="min-height: 44px; padding: 0 12px; font-size: 12px; color: var(--color-neutral-400);">Resend</button>
+              </div>
+              <div style="display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 11px; align-items: center; padding: 11px 0; border-bottom: 1px solid var(--color-neutral-900); min-height: 44px;">
+                <span style="font-family: ui-monospace, monospace; font-size: 11px; color: var(--color-neutral-600);">6</span>
+                <span style="font-size: 13.5px; color: var(--color-neutral-500);">Open</span>
+                <button type="button" class="btn btn-ghost" style="min-height: 44px; padding: 0 12px; font-size: 12px; color: var(--color-neutral-400);">Invite</button>
+              </div>
+            </div>
+            <p style="font-size: 12px; line-height: 1.55; color: var(--color-neutral-500); margin: 14px 0 0;">The draft runs with whoever is in at 8:00 PM on 22 Aug, minimum two managers.</p>
+          </div>
+          <div style="padding: 12px 16px 14px; border-top: 1px solid var(--color-neutral-900); background: var(--color-bg);">
+            <button type="button" class="btn btn-ghost btn-block" style="min-height: 48px; font-size: 14.5px; color: var(--color-neutral-300);">Invite by email</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <div style="display: flex; align-items: baseline; gap: 10px;">
+        <span style="font-family: ui-monospace, monospace; font-size: 11px; letter-spacing: 0.1em; color: var(--color-accent-500);">16</span>
+        <span style="font-family: var(--font-heading); font-size: 15px; font-weight: 500;">Draft lobby, before the draw</span>
+      </div>
+      <span style="font-size: 12px; color: var(--color-neutral-500); max-width: 390px;">The countdown owns the screen and the verification recipe sits under it &mdash; on a phone nobody recomputes a blockhash, so it is stated rather than laid out as a table.</span>
+
+      <div data-screen-label="M &middot; Draft lobby" style="width: 390px; border: 1px solid var(--color-neutral-800); border-radius: var(--radius-md); overflow: hidden; background: var(--color-bg);">
+        <div style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--color-surface); border-bottom: 1px solid var(--color-neutral-900);">
+          <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--color-neutral-800);"></span>
+          <span style="flex: 1; font-family: ui-monospace, monospace; font-size: 10.5px; color: var(--color-neutral-600); text-align: center;">rostr.gg</span>
+        </div>
+        <div style="height: 620px; overflow: hidden; position: relative; display: flex; flex-direction: column;">
+          <div style="display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-bottom: 1px solid var(--color-neutral-900);">
+            <button type="button" class="btn btn-ghost" style="width: 44px; height: 44px; padding: 0; display: flex; align-items: center; justify-content: center; font-size: 17px; color: var(--color-neutral-400);">&lsaquo;</button>
+            <span style="display: flex; flex-direction: column; gap: 1px; min-width: 0;">
+              <span style="font-size: 14.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Draft lobby</span>
+              <span style="font-size: 11px; color: var(--color-neutral-600);">12 of 12 in</span>
+            </span>
+          </div>
+          <div style="flex: 1; overflow: hidden; padding: 22px 16px 0; position: relative; text-align: center;">
+          <div style="position: absolute; left: 0; right: 0; bottom: 0; height: 40px; background: linear-gradient(to top, var(--color-bg), transparent); pointer-events: none; z-index: 2;"></div>
+            <span style="font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-accent-400);">Order is drawn in</span>
+            <div style="font-family: var(--font-heading); font-size: 62px; font-weight: 500; letter-spacing: -0.04em; color: var(--color-accent-200); font-variant-numeric: tabular-nums; margin-top: 6px;">04:11</div>
+            <div style="font-size: 12.5px; color: var(--color-neutral-500);">Sat 22 Aug, 8:00 PM ET</div>
+            <div class="card" style="margin-top: 22px; padding: 14px; background: var(--color-surface); text-align: left;">
+              <div style="font-size: 13.5px;">Nobody knows the order yet, including you.</div>
+              <p style="font-size: 12.5px; line-height: 1.6; color: var(--color-neutral-400); margin: 8px 0 0; text-wrap: pretty;">It comes from the first Solana block produced after 8:00 PM. That block does not exist yet, so there is nothing to leak and nothing to re-roll.</p>
+              <p style="font-size: 12px; line-height: 1.55; color: var(--color-neutral-500); margin: 10px 0 0; text-wrap: pretty;">If the seed were fixed in advance, a commissioner could add a bot, compute the order, remove it, and try again in private until it suited them.</p>
+            </div>
+            <div class="card" style="margin-top: 12px; padding: 13px 14px; background: var(--color-surface); text-align: left;">
+              <span style="font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--color-neutral-500);">You will be able to check</span>
+              <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 9px; font-size: 12.5px; color: var(--color-neutral-400);">
+                <span>Block slot and its hash</span>
+                <span>Block time, and the previous block&rsquo;s time</span>
+                <span>The seed recipe, so anyone can re-run it</span>
+              </div>
+            </div>
+          </div>
+          <div style="padding: 12px 16px 14px; border-top: 1px solid var(--color-neutral-900); background: var(--color-bg);">
+            <button type="button" class="btn btn-ghost btn-block" style="min-height: 48px; font-size: 14.5px; color: var(--color-neutral-300);">Set my pre-draft queue</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <div style="display: flex; align-items: baseline; gap: 10px;">
+        <span style="font-family: ui-monospace, monospace; font-size: 11px; letter-spacing: 0.1em; color: var(--color-accent-500);">17</span>
+        <span style="font-family: var(--font-heading); font-size: 15px; font-weight: 500;">Amend, and its signature list</span>
+      </div>
+      <span style="font-size: 12px; color: var(--color-neutral-500); max-width: 390px;">Twelve rows is just a list at this width. The count leads, because unanimity is the whole mechanism &mdash; one holdout ends it and everyone can see who.</span>
+
+      <div data-screen-label="M &middot; Amend" style="width: 390px; border: 1px solid var(--color-neutral-800); border-radius: var(--radius-md); overflow: hidden; background: var(--color-bg);">
+        <div style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--color-surface); border-bottom: 1px solid var(--color-neutral-900);">
+          <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--color-neutral-800);"></span>
+          <span style="flex: 1; font-family: ui-monospace, monospace; font-size: 10.5px; color: var(--color-neutral-600); text-align: center;">rostr.gg</span>
+        </div>
+        <div style="height: 620px; overflow: hidden; position: relative; display: flex; flex-direction: column;">
+          <div style="display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-bottom: 1px solid var(--color-neutral-900);">
+            <button type="button" class="btn btn-ghost" style="width: 44px; height: 44px; padding: 0; display: flex; align-items: center; justify-content: center; font-size: 17px; color: var(--color-neutral-400);">&lsaquo;</button>
+            <span style="display: flex; flex-direction: column; gap: 1px; min-width: 0;">
+              <span style="font-size: 14.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Proposed amendment</span>
+              <span style="font-size: 11px; color: var(--color-neutral-600);">Trade deadline &rarr; Week 13</span>
+            </span>
+          </div>
+          <div style="flex: 1; overflow: hidden; padding: 16px 16px 0; position: relative;">
+          <div style="position: absolute; left: 0; right: 0; bottom: 0; height: 40px; background: linear-gradient(to top, var(--color-bg), transparent); pointer-events: none; z-index: 2;"></div>
+            <div class="card" style="padding: 14px; background: color-mix(in srgb, var(--color-accent) 8%, transparent); border-color: var(--color-accent-800);">
+              <div style="display: flex; align-items: baseline; gap: 9px;">
+                <span style="font-family: var(--font-heading); font-size: 30px; font-weight: 500; letter-spacing: -0.03em; color: var(--color-accent-200); font-variant-numeric: tabular-nums;">9</span>
+                <span style="font-size: 12.5px; color: var(--color-neutral-300);">of 12 have signed</span>
+              </div>
+              <p style="font-size: 12px; line-height: 1.55; color: var(--color-neutral-400); margin: 9px 0 0; text-wrap: pretty;">All twelve must sign. There is no deadline and no majority &mdash; the amendment either becomes unanimous or it does not happen.</p>
+            </div>
+            <div class="card" style="margin-top: 14px; padding: 13px 14px; background: var(--color-surface);">
+              <span style="font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--color-neutral-500);">The change</span>
+              <div style="display: flex; align-items: baseline; gap: 10px; margin-top: 9px; font-size: 13.5px;">
+                <span style="color: var(--color-neutral-400); text-decoration: line-through;">End of Week 11</span>
+                <span style="color: var(--color-neutral-600);">&rarr;</span>
+                <span style="color: var(--color-accent-200);">End of Week 13</span>
+              </div>
+              <p style="font-size: 12px; line-height: 1.55; color: var(--color-neutral-500); margin: 9px 0 0;">Nothing else in the rule set moves. Signing produces a new hash; the old one stays on chain.</p>
+            </div>
+            <span style="display: block; margin-top: 18px; font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-500);">Signatures</span>
+            <div style="margin-top: 8px;">
+              <div style="display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 11px 0; border-bottom: 1px solid var(--color-neutral-900); min-height: 44px;">
+                <span style="font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Route 66 <span style="color: var(--color-neutral-500);">&middot; you</span></span>
+                <span style="font-size: 12px; color: var(--color-accent-300);">Signed</span>
+              </div>
+              <div style="display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 11px 0; border-bottom: 1px solid var(--color-neutral-900); min-height: 44px;">
+                <span style="font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Tuesday Night Regrets</span>
+                <span style="font-size: 12px; color: var(--color-accent-300);">Signed</span>
+              </div>
+              <div style="display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 11px 0; border-bottom: 1px solid var(--color-neutral-900); min-height: 44px;">
+                <span style="font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Cover Two</span>
+                <span style="font-size: 12px; color: var(--color-neutral-500);">Not yet</span>
+              </div>
+              <div style="display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 11px 0; border-bottom: 1px solid var(--color-neutral-900); min-height: 44px;">
+                <span style="font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Gridiron Heresy</span>
+                <span style="font-size: 12px; color: var(--color-neutral-500);">Not yet</span>
+              </div>
+              <div style="display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 11px 0; border-bottom: 1px solid var(--color-neutral-900); min-height: 44px;">
+                <span style="font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Play Action Only</span>
+                <span style="font-size: 12px; color: var(--color-neutral-500);">Not yet</span>
+              </div>
+            </div>
+            <p style="font-size: 12px; line-height: 1.55; color: var(--color-neutral-500); margin: 14px 0 0;">Dissolving works the same way: twelve signatures, and a league that never fills auto-dissolves with refunds.</p>
+          </div>
+          <div style="padding: 12px 16px 14px; border-top: 1px solid var(--color-neutral-900); background: var(--color-bg);">
+            <span style="display: block; font-size: 11.5px; color: var(--color-neutral-500); text-align: center;">You signed this on 14 Oct. Nothing further is needed from you.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
   </div>
 
   <sc-if value="{{ showRationale }}" hint-placeholder-val="{{ true }}">
@@ -866,7 +1373,7 @@
         <p style="font-size: 13px; line-height: 1.6; color: var(--color-neutral-400); margin: 7px 0 0; text-wrap: pretty;">Every name cell is <span style="font-family: ui-monospace, monospace; font-size: 12px;">minmax(0, 1fr)</span> with ellipsis. "Tuesday Night Regrets" is 21 characters and the field allows more — a wrapping name must never push a score off the row.</p>
       </div>
     </div>
-    <p style="font-size: 13px; line-height: 1.6; color: var(--color-neutral-500); margin: 22px 0 0; max-width: 660px; text-wrap: pretty;">Not yet designed for mobile: create league, the commissioner’s invite side, the draft lobby, amend and dissolve, and the playoff bracket. The bracket is the one that needs real thought — three reseeded rounds will not sit side by side at this width.</p>
+    <p style="font-size: 13px; line-height: 1.6; color: var(--color-neutral-500); margin: 22px 0 0; max-width: 660px; text-wrap: pretty;">Every desktop screen now has a mobile design. What is still missing on both: player detail, and full standings.</p>
   </div>
   </sc-if>
 </div>

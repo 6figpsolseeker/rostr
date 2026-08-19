@@ -25,7 +25,7 @@ import {
   SLEEPER_UNMAPPED_PLAYER_FIELDS,
   sleeperPlayerStats,
   sleeperTeamDefenseStats,
-} from "./sleeper.js";
+} from "../sleeper/stats.js";
 
 // ---------------------------------------------------------------------------
 // manifest.ts

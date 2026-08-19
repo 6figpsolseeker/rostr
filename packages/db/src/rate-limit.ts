@@ -202,3 +202,48 @@ export const WALLET_CHALLENGE_PER_IP: RateLimitRule = {
   limit: 60,
   windowMs: HOUR,
 };
+
+/**
+ * Username changes, per account.
+ *
+ * Not about abuse of the name itself — a username is meant to be public and
+ * typed at. It bounds **squatting through churn**: without a limit, one account
+ * could cycle through thousands of names an hour, holding each just long enough
+ * that nobody else can take it, and every attempt writes to `users`.
+ *
+ * Twelve an hour is far more than a person deciding what to call themselves and
+ * far less than a script working through a dictionary.
+ */
+export const USERNAME_SET_PER_USER: RateLimitRule = {
+  bucket: "account:username:user",
+  limit: 12,
+  windowMs: HOUR,
+};
+
+/**
+ * Availability checks, per address.
+ *
+ * The form asks on every pause in typing, so this is generous — it exists so a
+ * script cannot enumerate the whole namespace cheaply, not to interrupt anyone
+ * choosing a name. Per address rather than per account because the check is
+ * available to anyone signed in, and the machine is what needs bounding.
+ */
+export const USERNAME_CHECK_PER_IP: RateLimitRule = {
+  bucket: "account:username:ip",
+  limit: 240,
+  windowMs: HOUR,
+};
+
+/**
+ * Invitations sent, per commissioner.
+ *
+ * An invitation is a message addressed to somebody else, which is the shape of
+ * thing that gets used to harass people. A league has at most a few dozen seats
+ * across every league one person runs, so sixty an hour is unreachable by
+ * ordinary use and low enough that this cannot be a broadcast channel.
+ */
+export const INVITE_PER_USER: RateLimitRule = {
+  bucket: "league:invite:user",
+  limit: 60,
+  windowMs: HOUR,
+};

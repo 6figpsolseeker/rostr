@@ -20,7 +20,9 @@ export class IdentityError extends Error {
       | "INVALID_WALLET"
       | "WALLET_TAKEN"
       | "TOKEN_INVALID"
-      | "TOKEN_EXPIRED",
+      | "TOKEN_EXPIRED"
+      | "INVALID_USERNAME"
+      | "USERNAME_TAKEN",
   ) {
     super(message);
     this.name = "IdentityError";
@@ -32,6 +34,19 @@ export interface User {
   readonly email: string;
   readonly displayName: string;
   readonly emailVerified: boolean;
+  /**
+   * The name other people can type — see `usernames.ts`.
+   *
+   * **Nullable, and that is not the same as optional.** An account is not usable
+   * until it has one: it is what a commissioner types to invite you, and
+   * `accountGaps` in the web app refuses to let an incomplete account create,
+   * join or invite. What it cannot be is a precondition of *signing in*, because
+   * every account created before this column existed has none, and because
+   * demanding it during sign-in would mean the flow behaves differently for a
+   * new email than for a known one — which is exactly the tell
+   * `beginEmailSignIn` goes to some trouble not to give.
+   */
+  readonly username: string | null;
 }
 
 interface UserRow {
@@ -39,6 +54,7 @@ interface UserRow {
   email: string;
   display_name: string;
   email_verified_at: string | null;
+  username: string | null;
 }
 
 function toUser(row: UserRow): User {
@@ -47,6 +63,7 @@ function toUser(row: UserRow): User {
     email: row.email,
     displayName: row.display_name,
     emailVerified: row.email_verified_at !== null,
+    username: row.username,
   };
 }
 
@@ -56,7 +73,7 @@ export async function createUser(
   displayName: string,
 ): Promise<User> {
   const existing = await db.query<UserRow>(
-    "SELECT id, email, display_name, email_verified_at FROM users WHERE lower(email) = lower($1)",
+    "SELECT id, email, display_name, email_verified_at, username FROM users WHERE lower(email) = lower($1)",
     [email],
   );
   if (existing.length > 0) {
@@ -66,7 +83,7 @@ export async function createUser(
   const [row] = await db.query<UserRow>(
     `INSERT INTO users (email, display_name)
      VALUES ($1, $2)
-     RETURNING id, email, display_name, email_verified_at`,
+     RETURNING id, email, display_name, email_verified_at, username`,
     [email, displayName],
   );
   return toUser(row!);
@@ -74,7 +91,7 @@ export async function createUser(
 
 export async function getUser(db: SqlClient, userId: string): Promise<User | null> {
   const [row] = await db.query<UserRow>(
-    "SELECT id, email, display_name, email_verified_at FROM users WHERE id = $1",
+    "SELECT id, email, display_name, email_verified_at, username FROM users WHERE id = $1",
     [userId],
   );
   return row ? toUser(row) : null;
@@ -82,7 +99,7 @@ export async function getUser(db: SqlClient, userId: string): Promise<User | nul
 
 export async function findUserByEmail(db: SqlClient, email: string): Promise<User | null> {
   const [row] = await db.query<UserRow>(
-    "SELECT id, email, display_name, email_verified_at FROM users WHERE lower(email) = lower($1)",
+    "SELECT id, email, display_name, email_verified_at, username FROM users WHERE lower(email) = lower($1)",
     [email],
   );
   return row ? toUser(row) : null;
@@ -353,6 +370,33 @@ export async function linkWallet(
   }
 
   return { id: row!.id, address: row!.address, isPrimary: row!.is_primary };
+}
+
+/**
+ * Find the account holding a wallet address, if any.
+ *
+ * The second way to address an invitation: a commissioner who knows a friend's
+ * address but not their username can still reach them. Exact match rather than
+ * case-insensitive — base58 is case-sensitive, and two addresses differing only
+ * in case are two different keys, so lowercasing here would be a way to invite
+ * the wrong person.
+ *
+ * **Only a verified wallet counts.** `wallets.verified_at` is set by
+ * `linkWalletWithSignature` and by nothing else, so an unverified row cannot
+ * exist through any path the app offers — but reading it explicitly is what
+ * stops a future path that writes one from silently making addresses claimable.
+ * Inviting somebody is a small thing; being *reachable* at an address you never
+ * proved you hold is the part worth being strict about.
+ */
+export async function findUserByWallet(db: SqlClient, address: string): Promise<User | null> {
+  const [row] = await db.query<UserRow>(
+    `SELECT u.id, u.email, u.display_name, u.email_verified_at, u.username
+       FROM wallets w
+       JOIN users u ON u.id = w.user_id
+      WHERE w.address = $1 AND w.verified_at IS NOT NULL`,
+    [address.trim()],
+  );
+  return row ? toUser(row) : null;
 }
 
 export async function getWallets(db: SqlClient, userId: string): Promise<Wallet[]> {

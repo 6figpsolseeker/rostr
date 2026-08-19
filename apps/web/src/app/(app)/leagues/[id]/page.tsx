@@ -13,6 +13,7 @@ import { JoinPanel } from "@/components/JoinPanel";
 import { AnchorPanel } from "@/components/AnchorPanel";
 import { DepositPanel } from "@/components/DepositPanel";
 import { CommissionerSetup } from "@/components/CommissionerSetup";
+import { InvitePanel } from "@/components/InvitePanel";
 import { db } from "@/lib/db";
 import { currentUser } from "@/lib/session";
 import { depositsOpen } from "@/lib/pot";
@@ -131,6 +132,23 @@ export default async function LeaguePage({ params }: { params: Promise<{ id: str
           fieldLocksAt={new Date(stored.rules.draft.scheduledAt * 1000)}
         />
       ) : null}
+
+      {/*
+        The invite box, for whoever runs this league.
+
+        Rendered on `isCommissioner` rather than fetched-and-hidden, so a member
+        is not making a request that 403s on every league page they open. The
+        route checks again regardless — this decides what is drawn, not who may
+        invite.
+
+        **Only while the league can still take anyone.** After the draft time
+        migration `0028` refuses every `teams` INSERT, so an invitation sent then
+        is an invitation to a door that has shut — the same reason
+        `inviteToLeague` refuses one. A box that kept accepting names would be
+        the screen contradicting the server, which is the failure the
+        commissioner's checklist was rebuilt to avoid.
+      */}
+      {isCommissioner && league.state === "FORMING" ? <InvitePanel leagueId={id} /> : null}
 
       {/*
         The draft and the bracket are not tabs.

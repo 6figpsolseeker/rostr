@@ -100,4 +100,14 @@ describe("the design handoff's scoring table matches the rule set", () => {
     }
     expect(design).toContain(show(linear("pass_int")));
   });
+
+  it("prints the extra point, which drop 6 added to the table", () => {
+    // The rule set has always paid for one; the design's table simply had no row
+    // for it until drop 6, which now prints it beside the two-point conversion
+    // as "2 · 1". A value the design states is a value that can go stale, so it
+    // joins the guard the moment it appears rather than the next time somebody
+    // notices — that lag is what let the whole table drift for a day.
+    expect(design).toContain(`${show(linear("two_pt"))} · ${show(linear("xp_made"))}`);
+    expect(design?.includes("extra point")).toBe(true);
+  });
 });

@@ -84,6 +84,8 @@ interface RawDraftInfo {
 
 interface RawPlayer {
   playerID?: string;
+  /** Sleeper's own id for this player, published by Tank01. The two-source join key. */
+  sleeperBotID?: string;
   longName?: string;
   pos?: string;
   team?: string;
@@ -350,6 +352,11 @@ export class Tank01Provider implements StatsProvider {
         teamRef: player.team && player.team !== "FA" ? player.team : null,
         active: player.isFreeAgent !== "True",
         profile: profileOf(player),
+        // Published by Tank01 on its own player list, so the two-source join
+        // needs no name matching. Empty string is treated as absent: the field
+        // is present-but-blank for players Sleeper does not carry, and storing
+        // "" would make a player look mapped to nothing rather than unmapped.
+        secondSourceRef: player.sleeperBotID ? player.sleeperBotID : null,
       });
     }
 
@@ -365,6 +372,9 @@ export class Tank01Provider implements StatsProvider {
         // same field, so every screen renders one image and never branches on
         // whether a roster row happens to be eleven people.
         profile: { ...EMPTY_PROFILE, imageUrl: imageUrl(team.espnLogo1) },
+        // Sleeper identifies a team unit by its abbreviation rather than by a
+        // numeric id, so the join key for a defence is the team ref itself.
+        secondSourceRef: team.teamAbv,
       });
     }
 

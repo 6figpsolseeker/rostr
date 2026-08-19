@@ -27,6 +27,21 @@ import { currentUser } from "@/lib/session";
  */
 const MAX_DRAFT_LEAD_MS = 300 * 24 * 60 * 60 * 1000;
 
+/**
+ * Public leagues you could join.
+ *
+ * The list behind **Join a league**. Only PUBLIC and only FORMING, which is
+ * not a filter so much as the definition: a private league is reachable by
+ * invitation or by its link and must never appear in a directory, and a league
+ * that has drafted cannot take anyone new — migration `0028` locks the field
+ * at the draft time, so offering one would be offering a door that is already
+ * shut.
+ *
+ * **Ungated, deliberately.** `CLAUDE.md`: "PUBLIC leagues are not gated at
+ * all — being findable is what public means." This route already published
+ * their ids; what is added here is the handful of facts somebody needs to
+ * choose between them, all of which are on the league page anyway.
+ */
 export async function GET(): Promise<NextResponse> {
   const rows = await db().query<{
     id: string;
@@ -34,10 +49,22 @@ export async function GET(): Promise<NextResponse> {
     season: number;
     state: string;
     team_count: number;
+    max_teams: number | null;
+    /** Unix **seconds**, as `DraftRules.scheduledAt` stores it. */
+    scheduled_at: string | number | null;
+    buy_in: string | null;
   }>(
     `SELECT l.id, l.name, l.season, l.state,
-            (SELECT count(*)::int FROM teams t WHERE t.league_id = l.id) AS team_count
+            (SELECT count(*)::int FROM teams t WHERE t.league_id = l.id) AS team_count,
+            -- Size, draft time and buy-in come from the frozen rule document
+            -- rather than from a column, because that document is what a member
+            -- signs. A denormalised copy that drifted would advertise a league
+            -- on terms nobody agreed to.
+            (r.rule_json -> 'league' ->> 'maxTeams')::int AS max_teams,
+            (r.rule_json -> 'draft' ->> 'scheduledAt')::bigint AS scheduled_at,
+            (r.rule_json -> 'pot' ->> 'buyInBaseUnits') AS buy_in
        FROM leagues l
+       LEFT JOIN league_rules r ON r.league_id = l.id
       WHERE l.visibility = 'PUBLIC' AND l.state = 'FORMING'
       ORDER BY l.created_at DESC
       LIMIT 50`,
@@ -50,10 +77,25 @@ export async function GET(): Promise<NextResponse> {
       season: r.season,
       state: r.state,
       teamCount: Number(r.team_count),
+      maxTeams: r.max_teams === null ? null : Number(r.max_teams),
+      /**
+       * Unix seconds, passed through as the rules store them.
+       *
+       * Not converted to an ISO string here: the screen renders it against the
+       * reader's own clock, and a server-rendered date would show the server's
+       * timezone to somebody in a different one.
+       */
+      scheduledAt: r.scheduled_at === null ? null : Number(r.scheduled_at),
+      /**
+       * Base units as a decimal string, or null for a free league.
+       *
+       * A string all the way to the screen — invariant 2. Parsing it into a
+       * number here would be the one place a buy-in could round.
+       */
+      buyIn: r.buy_in,
     })),
   );
 }
-
 interface CreateBody {
   name?: string;
   visibility?: "PRIVATE" | "PUBLIC";

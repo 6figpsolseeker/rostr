@@ -5,6 +5,28 @@ export type { SqlClient } from "./client.js";
 // app entry point breaks the build. It lives at `@rostr/db/migrate`, for CLI and
 // setup code only.
 
+export {
+  InvitationError,
+  invitationsForLeague,
+  invitationsForUser,
+  inviteToLeague,
+  withdrawInvitation,
+  type AddressedAs,
+  type Invitation,
+} from "./invitations.js";
+
+export {
+  findUserByUsername,
+  setUsername,
+  usernameAvailable,
+  usernameProblem,
+  usernameProblemMessage,
+  USERNAME_MAX,
+  USERNAME_MIN,
+  USERNAME_PATTERN,
+  type UsernameProblem,
+} from "./usernames.js";
+
 export { withTransaction } from "./transaction.js";
 
 export { loadSportIds, seedSport, SportNotSeededError, type SportIds } from "./sports.js";
@@ -117,6 +139,9 @@ export {
   SIGN_IN_PER_IP,
   WALLET_CHALLENGE_PER_IP,
   WALLET_CHALLENGE_PER_USER,
+  USERNAME_SET_PER_USER,
+  USERNAME_CHECK_PER_IP,
+  INVITE_PER_USER,
   type RateLimitResult,
   type RateLimitRule,
 } from "./rate-limit.js";
@@ -140,6 +165,7 @@ export {
   beginEmailSignIn,
   createUser,
   findUserByEmail,
+  findUserByWallet,
   getUser,
   getWallets,
   IdentityError,
