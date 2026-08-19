@@ -2,7 +2,7 @@
   "gameRef": "20251109_ARI@SEA",
   "playersTranslated": 96,
   "warnings": [
-    "SEA: teamStats implies -2 special teams touchdown(s) (defensiveOrSpecialTeamsTds 2 - DST.defTD 4) but 0 were read from the scoring text"
+    "SEA: DST.defTD is 4 but teamStats counts only 2 defensive or special teams touchdown(s) in the whole game, which cannot both be true — def_td was scored as 4"
   ],
   "fatal": [],
   "players": [

@@ -1438,3 +1438,138 @@ describe("the newly captured games reconcile", () => {
     }
   });
 });
+
+/**
+ * Rushing yards against the average reported for them.
+ *
+ * The two fields are one fact stated twice, so either checks the other. Refs
+ * #157. Nothing here changes a score — the tests assert the wrong value is still
+ * scored, which is the point: correcting it needs a second source, and the
+ * tempting "helpful" fix is the one these exist to catch.
+ */
+describe("rushing yards are cross-checked against their own average", () => {
+  const rusher = (rushing: Record<string, string>) => ({
+    gameID: "g",
+    playerStats: {
+      p1: { playerID: "p1", longName: "Test Rusher", team: "CHI", Rushing: rushing },
+    },
+    DST: {},
+    scoringPlays: [],
+  });
+
+  it("catches the Caleb Williams line verbatim", () => {
+    // 4 carries at -0.5 is -2, not 3. ESPN's play-by-play reconstructs to -2 and
+    // Sleeper agrees on every field.
+    const t = translateBoxScore(rusher({ carries: "4", rushYds: "3", rushAvg: "-0.5" }));
+    const warning = t.warnings.find((w) => w.includes("Test Rusher"));
+
+    expect(warning).toBeDefined();
+    expect(warning).toContain("-2.0");
+    // **Detection only.** A test that let this become -2 would be the one that
+    // failed to catch a well-meant clamp.
+    expect(playerOf(t, "p1").get("rush_yd")).toBe(3);
+  });
+
+  it("stays silent on a line sitting exactly on the rounding bound", () => {
+    // James Conner, 20250907_ARI@NO: 39 on 12 is 3.25, reported "3.3".
+    // 12 x 33 - 10 x 39 = 6, and 2 x 6 = 12 = carries. Passes only because the
+    // comparison is `<=` — flipping it to `<` fails here and nowhere else.
+    const t = translateBoxScore(rusher({ carries: "12", rushYds: "39", rushAvg: "3.3" }));
+    expect(t.warnings.filter((w) => w.includes("Test Rusher"))).toEqual([]);
+  });
+
+  it("is not slack either", () => {
+    // One yard further out than the bound allows. Widening the tolerance to
+    // `carries` rather than half of it fails here.
+    const t = translateBoxScore(rusher({ carries: "12", rushYds: "38", rushAvg: "3.3" }));
+    expect(t.warnings.some((w) => w.includes("Test Rusher"))).toBe(true);
+  });
+
+  it("says so when the shape cannot be read, rather than skipping quietly", () => {
+    // A silent skip would switch the check off while everything stayed green —
+    // the exact condition rush_yd was already in when #157 was filed.
+    const t = translateBoxScore(rusher({ carries: "4", rushYds: "3", rushAvg: "0-0" }));
+    expect(t.warnings.some((w) => w.includes("was not cross-checked"))).toBe(true);
+  });
+
+  it("says nothing about a block with no carries", () => {
+    const t = translateBoxScore(rusher({ carries: "0", rushYds: "0", rushAvg: "0.0" }));
+    expect(t.warnings.filter((w) => w.includes("Test Rusher"))).toEqual([]);
+  });
+
+  it("does not double-report an unreadable rushYds", () => {
+    // The category loop already names that field. Two warnings for one fault
+    // would read as two faults.
+    const t = translateBoxScore(rusher({ carries: "4", rushYds: "x", rushAvg: "-0.5" }));
+    expect(t.warnings.filter((w) => w.includes("Test Rusher"))).toHaveLength(1);
+  });
+
+  it("never turns a discrepancy into a fatal", () => {
+    // The line-73 rule: a game with a rushing mismatch still ingests.
+    const t = translateBoxScore(rusher({ carries: "4", rushYds: "3", rushAvg: "-0.5" }));
+    expect(t.fatal).toEqual([]);
+    expect(t.players.get("p1")).toBeDefined();
+  });
+});
+
+/**
+ * A defensive touchdown count that cannot be true.
+ *
+ * `DST.defTD` is the sum of the players' own `Defense.defTD`; `defensiveOrSpecialTeamsTds`
+ * counts defensive *and* special-teams scores. The first is a subset of the
+ * second and cannot exceed it. Refs #157.
+ */
+describe("a defensive touchdown count that cannot be true", () => {
+  const unit = (defTD: string, defOrSt: string) => ({
+    gameID: "g",
+    playerStats: {},
+    DST: { home: { teamAbv: "MIN", defTD, teamID: "16" } },
+    teamStats: { home: { teamAbv: "MIN", defensiveOrSpecialTeamsTds: defOrSt } },
+    scoringPlays: [],
+  });
+
+  it("reports 3 against a game total of 2", () => {
+    const t = translateBoxScore(unit("3", "2"));
+    // Matched on the message, not on the team: a deliberately minimal DST block
+    // also raises the ordinary "carries no ptsAllowed" warnings, and those are
+    // the fixture being small rather than anything under test here.
+    const warning = t.warnings.find((w) => w.includes("cannot both be true"));
+    expect(warning).toContain("DST.defTD is 3");
+    expect(warning).toContain("only 2");
+  });
+
+  it("still scores the wrong value", () => {
+    // The strongest assertion here. It pins that this is a warning and not a
+    // clamp — which is the change somebody will be tempted to make next, and
+    // which would be a scoring decision taken on two games' evidence.
+    const t = translateBoxScore(unit("3", "2"));
+    const lines = t.teamDefense.get("MIN") ?? [];
+    expect(lines.find((l) => l.statKey === "def_td")?.value).toBe(3);
+  });
+
+  it("suppresses the special-teams comparison it would otherwise poison", () => {
+    // `expected` is negative there, so it reports "implies -2 special teams
+    // touchdown(s)" — arithmetic on a number just established to be wrong. The
+    // checked-in ledger for 20251109_ARI@SEA carried exactly that string.
+    const t = translateBoxScore(unit("4", "2"));
+    expect(t.warnings.filter((w) => w.includes("cannot both be true"))).toHaveLength(1);
+    // Matched on "implies", which is the suppressed message`s own word and not a
+    // substring of the new one — the new message legitimately contains
+    // "defensive or special teams touchdown(s)", which an earlier draft of this
+    // assertion matched against itself and passed for the wrong reason.
+    expect(t.warnings.some((w) => w.includes("implies"))).toBe(false);
+  });
+
+  it("says nothing when the counts are merely unequal the legal way", () => {
+    // The Marcus Jones shape: a punt return by a defensive player is filed in
+    // both, so defOrSt legitimately exceeds defTD. Documented as double-counting
+    // and not a fault to report here.
+    const t = translateBoxScore(unit("1", "2"));
+    expect(t.warnings.some((w) => w.includes("cannot both be true"))).toBe(false);
+  });
+
+  it("says nothing when they agree", () => {
+    const t = translateBoxScore(unit("1", "1"));
+    expect(t.warnings.some((w) => w.includes("cannot both be true"))).toBe(false);
+  });
+});

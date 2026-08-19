@@ -27,6 +27,7 @@ import {
   isBlockedKickTouchdown,
   isKnownScoreType,
   isSpecialTeamsReturnTouchdown,
+  parseDecimalStat,
   isSuccessfulTwoPointConversion,
   isTouchdownScoringPlay,
   isUncountedSpecialTeamsScoreType,
@@ -385,6 +386,104 @@ function crossCheckTwoPoint(
   }
 }
 
+/**
+ * Render a scaled integer back as the decimal it came from.
+ *
+ * Warning text only. Dividing would put a float in a file that has none, and the
+ * rendered figure is the actionable half of the message — `-2.0` is the number
+ * that turned out to be right in the one case anybody has checked.
+ */
+function formatScaled(scaled: number, scale: number): string {
+  const unit = 10 ** scale;
+  const sign = scaled < 0 ? "-" : "";
+  const magnitude = Math.abs(scaled);
+  if (scale === 0) return `${sign}${magnitude}`;
+  return `${sign}${Math.trunc(magnitude / unit)}.${String(magnitude % unit).padStart(scale, "0")}`;
+}
+
+/**
+ * Cross-check rushing yards against the average reported for them.
+ *
+ * `rushAvg` is `rushYds / carries` rounded to a tenth, so the two fields are one
+ * fact stated twice and either checks the other. In `20251013_CHI@WSH` they
+ * disagree: Caleb Williams reads `carries 4, rushYds 3, rushAvg -0.5`, and four
+ * carries at -0.5 is **-2**. ESPN's own play-by-play reconstructs to -2
+ * (+1, +4, -5, -2) and Sleeper agrees on every field, so the yards are wrong and
+ * the average is right — Tank01 inherits ESPN's row verbatim, error included.
+ * Refs #157.
+ *
+ * **A check, never a source**, the same relationship {@link crossCheckTwoPoint}
+ * has with `passingTwoPointConversion`. `rushAvg` stays unmapped and nothing
+ * here changes a score: the average carries one decimal place, so deriving yards
+ * from it would replace a wrong number with a vague one — over four carries
+ * "-0.5" narrows the truth only to somewhere between -2.2 and -1.8. `RULES.md`
+ * §7 corrects a figure with a second source, not with better arithmetic on the
+ * same one.
+ *
+ * **Verified against every other endpoint before settling for detection.**
+ * `getNFLGamesForPlayer` returns the identical wrong row, `getNFLPlayerInfo`
+ * carries season totals only, `getNFLScoresOnly` has leaders and Williams is not
+ * one, and Tank01 publishes no play-by-play at any price. The correct -2 exists
+ * nowhere in the provider, which is why this warns rather than repairs.
+ *
+ * ## The tolerance is the exact rounding bound, and it is tight
+ *
+ * `carries * rushAvg` is not `rushYds` even when both are right, because the
+ * average is rounded: James Conner's 39 yards on 12 carries reports `"3.3"`, and
+ * 12 x 3.3 is 39.6. Rounding to one place moves the average by at most half of
+ * that place, so the product moves by at most `carries / 2` of it. Doubling both
+ * sides clears the half and leaves the comparison entirely in integers of the
+ * average's own final decimal place.
+ *
+ * **Conner sits exactly on the bound, in a corpus game**, so the comparison must
+ * be `<=`; a strict `<` warns on correct data on the first run. Measured over all
+ * 117 rushing lines in the thirteen corpus games: every one reproduces
+ * `round(rushYds / carries, 1)` exactly and the widest gap is Conner's, at the
+ * bound. Caleb Williams misses it by a factor of 25.
+ */
+function crossCheckRushing(player: RawPlayer, warnings: string[]): void {
+  const rushing = player["Rushing"] as Record<string, unknown> | undefined;
+  if (!rushing) return;
+
+  const yards = parseStatValue(rushing["rushYds"]);
+  // Nothing was scored from this block, and an unreadable `rushYds` is already
+  // reported by the category loop — the same field and the same fault. Two
+  // warnings for one would read as two problems.
+  if (yards === null) return;
+
+  const who = player.longName ?? player.playerID ?? "an unnamed player";
+  const carries = parseStatValue(rushing["carries"]);
+  const average = parseDecimalStat(rushing["rushAvg"]);
+
+  if (carries === null || average === null) {
+    // Not a silent skip. The average is the only second opinion on rushing yards
+    // arriving inside the same response, so a shape this cannot read switches the
+    // check off while everything stays green — which is exactly the condition
+    // `rush_yd` was already in when #157 was filed.
+    warnings.push(
+      `${who}: rush_yd was not cross-checked against the average — Rushing.carries is ` +
+        `${JSON.stringify(rushing["carries"])} and Rushing.rushAvg is ` +
+        `${JSON.stringify(rushing["rushAvg"])}`,
+    );
+    return;
+  }
+
+  // An average over no carries states no fact about the yards, so there is
+  // nothing here to contradict. Tank01 files it as "0.0" rather than omitting it.
+  if (carries === 0) return;
+
+  const impliedScaled = carries * average.scaled;
+  const reportedScaled = yards * 10 ** average.scale;
+  if (2 * Math.abs(impliedScaled - reportedScaled) <= carries) return;
+
+  warnings.push(
+    `${who}: Rushing.rushYds is ${yards} but ${carries} carries at ` +
+      `${formatScaled(average.scaled, average.scale)} a carry implies ` +
+      `${formatScaled(impliedScaled, average.scale)} — they disagree by more than ` +
+      `rounding, and which is right needs a second source`,
+  );
+}
+
 function translatePlayerWithConversions(
   player: RawPlayer,
   warnings: string[],
@@ -416,6 +515,9 @@ function translatePlayerWithConversions(
       if (parsed !== 0) accumulate(totals, statKey, parsed);
     }
   }
+
+  // 1b. Rushing yards against the average reported for them. See below.
+  crossCheckRushing(player, warnings);
 
   // 2. Field goals, whose distances exist only in this player's own play text.
   //
@@ -838,7 +940,62 @@ function translateTeamDefense(
     const reportedDefTds = parseStatValue(unit["defTD"]);
     if (reportedDefStTds !== null && reportedDefTds !== null) {
       const expected = reportedDefStTds - reportedDefTds;
-      if (expected !== readFromText) {
+
+      /*
+        A negative `expected` is the provider contradicting itself, not a gap in
+        our pattern matching, and until this branch existed it was reported as
+        the latter.
+
+        `DST.defTD` is the sum of the players' own `Defense.defTD`, and
+        `defensiveOrSpecialTeamsTds` counts defensive *and* special-teams scores
+        — so the first is a subset of the second and cannot exceed it. When it
+        does, `DST.defTD` is the field that is wrong, and `TANK01_DST_MAP` pays
+        `def_td` straight off it.
+
+        Twice in 2025, both confirmed against Sleeper and the scoring text:
+        `20250921_CIN@MIN` reads 3 against 2 for Isaiah Rodgers' two returns
+        (6 phantom points), and `20251109_ARI@SEA` reads 4 against 2 for
+        DeMarcus Lawrence's two fumble recoveries (12). It does not stop at that
+        unit either — ESPN derives points allowed by subtracting 6 per defensive
+        touchdown from the opponent's score, using the same wrong count, and
+        `def_pts_allowed` is tiered, so the *other* team's unit can move a tier
+        on a touchdown nobody scored. Refs #157.
+
+        **Reported, never corrected.** `defensiveOrSpecialTeamsTds` agrees with
+        the scoring text and with Sleeper in both games, which makes preferring
+        it tempting — and it is documented next door as double-counting a return
+        by a defensive player, so it is not a field to score from. Picking a
+        winner between two provider counters on the evidence of two games is a
+        scoring change made by us rather than by a second source, which is what
+        `RULES.md` §7 exists to forbid.
+      */
+      const impossible = expected < 0;
+      if (impossible) {
+        warnings.push(
+          `${teamAbv}: DST.defTD is ${reportedDefTds} but teamStats counts only ` +
+            `${reportedDefStTds} defensive or special teams touchdown(s) in the whole ` +
+            `game, which cannot both be true — def_td was scored as ` +
+            `${totals.get("def_td") ?? 0}`,
+        );
+      }
+
+      /*
+        The special-teams comparison is meaningful only while `defTD` is within
+        `defOrSt`. Below that its own input is incoherent and it has no opinion:
+        `expected` is negative, so it reports "implies -2 special teams
+        touchdown(s)", which is not an implication but arithmetic on a number
+        just established to be wrong. The checked-in ledger for
+        `20251109_ARI@SEA` carried exactly that string.
+
+        Written as an explicit precondition rather than as `else if` on the
+        branch above. The two conditions are complements today and an `else`
+        would make that a fact about statement order — this file has twice been
+        bitten by a guard that held only by virtue of what sat in front of it
+        (`SPECIAL_TEAMS_RETURN` behind `DEFENSIVE_RETURN`, and
+        `isTouchdownScoringPlay`). Same output, one fewer way for a later edit
+        to restore the nonsense.
+      */
+      if (!impossible && expected !== readFromText) {
         // Every exclusion is named. The check is narrowed in two places now, and
         // a reader who does not already know about ESPN's stat id 93 or about
         // `BP` would otherwise read a suppressed play as a play nobody counted.

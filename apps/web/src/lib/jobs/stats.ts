@@ -114,16 +114,36 @@ export async function runStatsJob(
   // **Every reason, joined — not the first one.** This was a chain of ternaries,
   // so a run with a broken season announced only that and said nothing about the
   // twelve games that also failed. A heartbeat is read once and acted on once.
+  /*
+    Only a **failure** reaches `last_outcome`, because that field is a state
+    rather than a message: `cronJobState` returns `FAILING` for any non-null
+    value, ahead of the staleness check. Anything written here is an alarm
+    whatever the words say.
+
+    Warnings used to be folded in, and #157 is about to make them common — a
+    provider that contradicts itself on a finalised game contradicts itself
+    forever, so the first such game would have turned `pnpm cron:status` red for
+    the rest of the season. That command is this deployment's only heartbeat and
+    CLAUDE.md tells every arriving session to run it first.
+
+    `outstanding.total` is dropped for a sharper version of the same reason:
+    `unresolvedStatsProblems` is deliberately unbounded by season or correction
+    window — its docstring says so, and that is right for a *report* — so a game
+    past its window can never be re-read, its `stats_error` is permanent by
+    construction, and the count only ever grows. A permanently-true health signal
+    is a broken one.
+
+    This is #182's fix applied to the sibling job that did not get it:
+    `season-sync` reported FAILING daily for the four week-16 and four week-17
+    fixtures the NFL deliberately leaves undated. Same table, same shape.
+
+    Nothing is lost. Both counts are in the response body below, `games.stats_error`
+    still holds the text per game, and `/ops/stats` renders it.
+  */
   const problem =
     [
       brokenSeasons > 0 ? `${brokenSeasons} of ${seasons.length} seasons failed` : null,
       gameFailures > 0 ? `${gameFailures} game(s) failed to ingest` : null,
-      gameWarnings > 0 ? `${gameWarnings} warning(s) from games that did ingest` : null,
-      // Only when this run raised none of its own, or the two counts read as
-      // separate incidents when the second is a superset of the first.
-      gameWarnings === 0 && gameFailures === 0 && outstanding.total > 0
-        ? `${outstanding.total} game(s) still carry an unresolved problem`
-        : null,
     ]
       .filter((part) => part !== null)
       .join("; ") || null;
@@ -133,6 +153,9 @@ export async function runStatsJob(
   return NextResponse.json({
     at: now.toISOString(),
     seasons: seasons.length,
+    // Surfaced here rather than in `last_outcome`, which is a state and not a
+    // message. See the note above the `problem` string.
+    gameWarnings,
     runs,
     outstanding,
   });

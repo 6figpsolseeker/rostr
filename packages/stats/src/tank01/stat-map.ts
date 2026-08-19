@@ -643,3 +643,49 @@ export function parseStatValue(raw: unknown): number | null {
   const value = Number.parseFloat(trimmed);
   return Number.isFinite(value) ? Math.round(value) : null;
 }
+
+/**
+ * A Tank01 decimal as an exact integer and the power of ten it is scaled by.
+ *
+ * `"-0.5"` becomes `{ scaled: -5, scale: 1 }`.
+ *
+ * {@link parseStatValue} cannot serve here and the reason is the whole point of
+ * a separate function: it ends in `Math.round`, so `"13.3"` comes back as `13`
+ * and `"-0.5"` as `-0` or `-1` depending on the tie rule. A cross-check built on
+ * it would be comparing against numbers the provider never sent — measured, that
+ * mistake fires on **178 of 344** average-bearing rows in the conformance
+ * corpus. It is the natural mistake to make, because every other read in
+ * `box-score.ts` goes through `parseStatValue`.
+ *
+ * **Scaled integers because invariant 2 does not stop at the scoring engine.**
+ * `4 * 13.3` is `53.20000000000000284` in IEEE754, and a tolerance sized to
+ * absorb that is a tolerance sized to hide arithmetic error rather than to
+ * describe the provider's rounding — two different quantities wearing one
+ * number, which is how a threshold stops meaning anything. James Conner's
+ * 39 yards on 12 carries false-fires on the float route, in a corpus game,
+ * today.
+ *
+ * `null` for anything that is not a plain decimal: a ratio like `"3-16"`, an
+ * empty string, an absent field, a non-string. More than three decimal places is
+ * refused too, so `10 ** scale` stays far inside the safe-integer range for
+ * every product built on this. Nothing Tank01 has been observed to send carries
+ * more than one — all 345 rushing, receiving and passing averages in the corpus
+ * are a single decimal place.
+ */
+export function parseDecimalStat(raw: unknown): { scaled: number; scale: number } | null {
+  if (typeof raw === "number") {
+    return Number.isSafeInteger(raw) ? { scaled: raw, scale: 0 } : null;
+  }
+  if (typeof raw !== "string") return null;
+
+  const match = /^(-?)(\d+)(?:\.(\d{1,3}))?$/.exec(raw.trim());
+  if (!match) return null;
+
+  const [, sign, whole, fraction = ""] = match;
+  // The digits are joined and the sign applied afterwards, so `"-0.5"` is -5
+  // rather than a negative zero followed by a positive 5.
+  const digits = Number.parseInt(`${whole}${fraction}`, 10);
+  if (!Number.isSafeInteger(digits)) return null;
+
+  return { scaled: sign === "-" ? -digits : digits, scale: fraction.length };
+}

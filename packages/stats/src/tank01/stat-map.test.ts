@@ -13,6 +13,7 @@ import {
   isUncountedSpecialTeamsScoreType,
   KNOWN_SCORE_TYPES,
   parseFieldGoalYards,
+  parseDecimalStat,
   parseStatValue,
   TANK01_DST_MAP,
   TANK01_STAT_MAP,
@@ -622,5 +623,53 @@ describe("isUncountedSpecialTeamsScoreType", () => {
     // The two questions are independent, and conflating them would have been the
     // easy mistake: a `BP` play is a touchdown that pays six twice over.
     expect(isTouchdownScoringPlay("BP")).toBe(true);
+  });
+});
+
+/**
+ * The exact decimal parser.
+ *
+ * It exists because {@link parseStatValue} rounds, and a cross-check built on a
+ * rounded copy of the thing it is checking compares a number against itself.
+ * Measured: reusing `parseStatValue` fires on 178 of 344 average-bearing rows in
+ * the conformance corpus. Refs #157.
+ */
+describe("parseDecimalStat", () => {
+  it("keeps a negative fraction whose whole part is zero", () => {
+    // The case a naive parse-then-negate gets wrong, and the exact shape of the
+    // defect this was written for: Caleb Williams' "-0.5".
+    expect(parseDecimalStat("-0.5")).toEqual({ scaled: -5, scale: 1 });
+  });
+
+  it("scales an ordinary average", () => {
+    expect(parseDecimalStat("3.3")).toEqual({ scaled: 33, scale: 1 });
+    expect(parseDecimalStat("13.3")).toEqual({ scaled: 133, scale: 1 });
+  });
+
+  it("handles a whole number as scale zero", () => {
+    expect(parseDecimalStat("12")).toEqual({ scaled: 12, scale: 0 });
+  });
+
+  it("refuses everything that is not a plain decimal", () => {
+    // `"3-16"` is Tank01's sacked field; `"0-0"` appears on empty blocks. Both
+    // parse as numbers under a looser regex and would be silently wrong.
+    for (const raw of ["0-0", "3-16", "", "  ", "abc", undefined, null, {}, []]) {
+      expect(parseDecimalStat(raw)).toBeNull();
+    }
+  });
+
+  it("refuses more precision than it can hold exactly", () => {
+    // The cap is what keeps `10 ** scale` and every product built on it inside
+    // the safe-integer range.
+    expect(parseDecimalStat("1.2345")).toBeNull();
+  });
+
+  it("agrees with the float route it exists to replace", () => {
+    // Pins the parser against the arithmetic it is avoiding, without depending
+    // on it. If these ever disagree the scaling is wrong, not the rounding.
+    for (let tenths = -999; tenths <= 999; tenths += 7) {
+      const text = (tenths / 10).toFixed(1);
+      expect(parseDecimalStat(text)?.scaled).toBe(Math.round(Number(text) * 10));
+    }
   });
 });

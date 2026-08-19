@@ -237,17 +237,30 @@ describe("the stats cron", () => {
 
     const response = await runStatsJob(db, provider, NOW);
     const body = (await response.json()) as {
+      gameWarnings: number;
       runs: { failures: unknown[]; warnings: { warning: string }[] }[];
     };
 
     expect(body.runs[0]?.failures).toEqual([]);
     expect(body.runs[0]?.warnings?.[0]?.warning).toContain("XPR");
-    expect(await lastOutcome()).toBe("1 warning(s) from games that did ingest");
+    // **Reversed 2026-08-19, deliberately.** This asserted the warning reached
+    // `last_outcome`, and that is exactly what made the field useless:
+    // `cronJobState` reads any non-null value as FAILING, ahead of staleness, so
+    // one self-contradicting game turned `pnpm cron:status` red for the rest of
+    // the season. #157 makes such games common enough to matter.
+    //
+    // The warning is not lost — it is in the response body, in
+    // `games.stats_error`, and on /ops/stats. What it no longer does is raise an
+    // alarm on the deployment's only heartbeat.
+    expect(await lastOutcome()).toBeNull();
+    expect(body.gameWarnings).toBe(1);
   });
 
-  it("says both when a run has failures and warnings", async () => {
-    // This was a chain of ternaries, so the first true branch won and the rest
-    // went unsaid. A heartbeat is read once and acted on once.
+  it("reports the failure and keeps the warning out of the heartbeat", async () => {
+    // Renamed. It used to assert both reached `last_outcome`, on the reasoning
+    // that a heartbeat is read once so it should say everything. True of
+    // failures, wrong for warnings: any non-null value is FAILING, so including
+    // them made a self-contradicting game indistinguishable from a dead cron.
     db = await createTestDatabase();
     await seedSport(db, NFL);
     await league(2026);
@@ -261,11 +274,13 @@ describe("the stats cron", () => {
         : healthy(gameRef, ["something did not add up"]),
     );
 
-    await runStatsJob(db, provider, NOW);
+    const response = await runStatsJob(db, provider, NOW);
+    const body = (await response.json()) as { gameWarnings: number };
 
-    expect(await lastOutcome()).toBe(
-      "1 game(s) failed to ingest; 1 warning(s) from games that did ingest",
-    );
+    // The failure still reaches the heartbeat — the narrowing must not have
+    // traded a false alarm for a silent one — and the warning no longer does.
+    expect(await lastOutcome()).toBe("1 game(s) failed to ingest");
+    expect(body.gameWarnings).toBe(1);
   });
 
   /**
@@ -291,10 +306,19 @@ describe("the stats cron", () => {
     // Nothing is due now — the game was just read and its retry is paced — so
     // this run does no work at all and would once have recorded itself clean.
     const quiet = fakeProvider(() => new Error("must not be called"));
-    await runStatsJob(db, quiet.provider, NOW);
+    const quietResponse = await runStatsJob(db, quiet.provider, NOW);
+    const quietBody = (await quietResponse.json()) as {
+      outstanding: { total: number };
+    };
 
     expect(quiet.calls).toEqual([]);
-    expect(await lastOutcome()).toBe("1 game(s) still carry an unresolved problem");
+    // Also reversed. `unresolvedStatsProblems` is unbounded by season and by
+    // correction window on purpose, so a game past its window can never be
+    // re-read, its `stats_error` is permanent by construction, and this count
+    // only ever grows. A health signal that can never return to green is not a
+    // health signal. The backlog is still in the response and on /ops/stats.
+    expect(await lastOutcome()).toBeNull();
+    expect(quietBody.outstanding.total).toBe(1);
   });
 
   /**
