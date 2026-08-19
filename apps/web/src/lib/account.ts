@@ -10,8 +10,29 @@
  * some trouble to answer identically whether or not the address has an account,
  * and a sign-up form that asked for a username up front would tell anyone who
  * asked which emails are registered. So the other two are collected immediately
- * *after* the code is accepted, at `/welcome`, and everything that needs an
- * identity refuses until they are there.
+ * *after* the code is accepted, at `/welcome`.
+ *
+ * ## What this does and does not enforce
+ *
+ * **Nothing here refuses anything.** Every caller below *reports* — the sign-in
+ * redirect, the header's "finish setting up", the empty-invitations notice. An
+ * earlier draft of this comment claimed the opposite, and a comment asserting a
+ * guarantee the code does not provide is the defect class `CLAUDE.md` names by
+ * hand, so it is worth being exact about which half is real:
+ *
+ * - **The wallet half is enforced, structurally and elsewhere.** `joinLeague`
+ *   needs a wallet to sign the rules hash with, and there is no path that fakes
+ *   one. An account with no wallet cannot join anything, whatever this file
+ *   says.
+ * - **The username half is enforced nowhere.** Somebody who navigates away from
+ *   `/welcome` can still create a league and still join one. What they cannot do
+ *   is be *found*: a commissioner invites by username or by a verified address,
+ *   so an account with neither is unreachable — which is a real consequence, and
+ *   not the same thing as a refusal.
+ *
+ * Making the username a precondition of creating or joining is a product
+ * decision rather than an oversight, and it belongs to the owner: it would put a
+ * new failure mode on the join path, which is the one path 22 August depends on.
  *
  * The rule lives here rather than in a component because `apps/web` cannot
  * render a component in a test — both vitest projects are node-environment with
