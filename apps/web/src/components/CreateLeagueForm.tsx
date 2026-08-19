@@ -15,7 +15,13 @@ import {
   NFL_WINNER_TAKE_ALL_PAYOUT,
 } from "@rostr/core";
 import type { LeagueRules, PotRules } from "@rostr/core";
-import { parseCluster, potMintFor } from "@rostr/escrow";
+import {
+  POT_LEAGUES_COMING_SOON,
+  POT_LEAGUES_OPEN,
+  parseCluster,
+  potLeagueGate,
+  potMintFor,
+} from "@rostr/escrow";
 import { RulesView } from "@/components/RulesView";
 
 /**
@@ -241,6 +247,12 @@ export function CreateLeagueForm() {
   }
 
   const pot: PotRules | null = useMemo(() => {
+    // The gate again, at the point the terms are actually built rather than only
+    // on the control that offers them. Closing the route and closing the outcome
+    // are different jobs — the same argument `ASSET_GONE` makes for trades — and
+    // here it is cheap: a stale `withPot` cannot survive into a previewed hash,
+    // and the preview is what the creator is asked to trust.
+    if (!POT_LEAGUES_OPEN) return null;
     if (!withPot || !POT_MINT) return null;
 
     const amount = Number.parseFloat(buyIn);
@@ -383,7 +395,19 @@ export function CreateLeagueForm() {
    * buy-in and payout — when the cluster has no pot token, which is the honest
    * reading of a control that is disabled rather than merely untouched.
    */
-  const potAvailable = POT_MINT !== null;
+  /*
+    Two separate reasons a pot cannot be offered, and they are not
+    interchangeable. `potLeagueGate` is the season's product decision — pot
+    leagues are coming, not broken — and it is checked first because it is the
+    true one today and the only one worth explaining to a creator. The mint is a
+    configuration fact about this build, and stays because the gate is going to
+    reopen and that check has to still be here when it does.
+
+    The server refuses in the same order, so the screen and the 503 cannot
+    disagree about why.
+  */
+  const potGate = potLeagueGate();
+  const potAvailable = potGate.open && POT_MINT !== null;
   const choicesSet =
     (name.trim() ? 1 : 0) + 6 + (withPot ? 2 : 0) + (potAvailable && !withPot ? 1 : 0);
 
@@ -644,7 +668,11 @@ export function CreateLeagueForm() {
             </Field>
           </Group>
 
-          <Group index="05" title="The pot" note={potAvailable ? "Optional" : "Not live yet"}>
+          <Group
+            index="05"
+            title="The pot"
+            note={potAvailable ? "Optional" : potGate.open ? "Not live yet" : "Coming soon"}
+          >
             <Choices
               options={[
                 { value: "no", label: "No pot" },
@@ -655,7 +683,11 @@ export function CreateLeagueForm() {
               disabled={!potAvailable}
             />
 
-            {!potAvailable ? (
+            {!potGate.open ? (
+              <p className="mt-3 text-[13.5px] leading-[1.62] text-nocturne-neutral-500">
+                {POT_LEAGUES_COMING_SOON}
+              </p>
+            ) : !potAvailable ? (
               <p className="mt-3 text-[13.5px] leading-[1.62] text-nocturne-neutral-500">
                 This build has no pot token configured, so a pot league cannot be previewed here
                 — and the deposit button stays shut on mainnet until the program can pay a pot

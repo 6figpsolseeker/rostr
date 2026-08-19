@@ -309,13 +309,26 @@ function Differentiators() {
           checkbox.
         </Card>
 
+        {/*
+          The escrow is built, tested and deployed — join, stake, settle and the
+          unconditional timelock refund all work against a real validator. What
+          is not happening is the 2026 season running on it, which is a decision
+          rather than a gap, so this card describes it in the future tense and
+          says so plainly rather than quietly dropping the claim.
+
+          Do not restore the present tense here without also opening
+          `POT_LEAGUES_OPEN`. A landing page promising an escrowed pot above a
+          create form that offers only free leagues is the site contradicting
+          itself on the one subject where trust is the product.
+        */}
         <Card
           index="02"
           title="The pot is escrowed"
-          closing="Deposits are refused until the program can pay a pot back out — the gate is the code, not a promise."
+          closing="Coming soon. Every league this season is free to play, and everything else on this page is live today."
         >
-          Optional per league. Everyone deposits the same amount of the same token; funds unlock
-          only when the season resolves.
+          Built and tested: everyone deposits the same amount of the same token, funds sit in a
+          vault no person holds the keys to, and an unconditional refund opens if a season never
+          settles. Pot leagues are not part of the 2026 season.
         </Card>
 
         <Card index="03" title="Nobody declares a winner">

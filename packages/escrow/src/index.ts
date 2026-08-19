@@ -56,6 +56,12 @@ export {
   type IdlShape,
 } from "./settlement.js";
 export {
+  POT_LEAGUES_COMING_SOON,
+  POT_LEAGUES_OPEN,
+  potLeagueGate,
+  type PotLeagueGate,
+} from "./pot-leagues.js";
+export {
   PRIZE_ORDER,
   depositIx,
   escrowProgram,

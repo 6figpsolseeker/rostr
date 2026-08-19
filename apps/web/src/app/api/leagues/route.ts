@@ -11,7 +11,7 @@ import {
 } from "@rostr/core";
 import type { PotRules } from "@rostr/core";
 import { createDraftRecord, createLeague, LeagueValidationError, seedSport } from "@rostr/db";
-import { potMintFor } from "@rostr/escrow";
+import { POT_LEAGUES_COMING_SOON, potLeagueGate, potMintFor } from "@rostr/escrow";
 import { db } from "@/lib/db";
 import { declaredCluster } from "@/lib/cluster";
 import { currentUser } from "@/lib/session";
@@ -139,6 +139,30 @@ export async function POST(request: Request): Promise<NextResponse> {
   // silently giving away the fee on every league ever created — the rules are
   // frozen, so it could never be corrected afterwards. Same reasoning as the
   // sign-in link: fail loudly rather than pretend.
+  /*
+    Pot leagues are closed for the season — see `potLeagueGate`.
+
+    First, and ahead of the three configuration guards below, because it is not
+    one: those say "this deployment cannot safely create a pot league yet" and
+    invite the operator to fix their environment. This says the product does not
+    offer one. Reporting a missing FEE_RECIPIENT to somebody who is never going
+    to be allowed a pot either way sends them to configure something irrelevant.
+
+    Enforced here and not only in the form, for the reason `league-read.test.ts`
+    is named after: a control that is merely absent from a screen is enforced by
+    nothing, and this route is reachable with curl.
+
+    It is deliberately *not* in `validateLeagueRules`. That function is a pure
+    function of the frozen document, and a rule set that was valid when it was
+    signed must stay valid forever — otherwise the pot leagues already drafted
+    on devnet would stop verifying. The door closes in front of creation and
+    touches nothing already stored.
+  */
+  const potGate = potLeagueGate();
+  if (body.pot && !potGate.open) {
+    return NextResponse.json({ error: POT_LEAGUES_COMING_SOON }, { status: 503 });
+  }
+
   const feeRecipient = process.env.FEE_RECIPIENT ?? "";
   if (body.pot && !feeRecipient && process.env.NODE_ENV === "production") {
     return NextResponse.json(
