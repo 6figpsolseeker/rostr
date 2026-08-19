@@ -37,7 +37,9 @@
  */
 
 /** Emails permitted to see the operator view. Empty when unset — see above. */
-export function operatorEmails(raw: string | undefined = process.env["OPERATOR_EMAILS"]): readonly string[] {
+export function operatorEmails(
+  raw: string | undefined = process.env["OPERATOR_EMAILS"],
+): readonly string[] {
   return (raw ?? "")
     .split(",")
     .map((entry) => entry.trim().toLowerCase())

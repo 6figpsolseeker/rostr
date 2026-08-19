@@ -74,15 +74,10 @@ function ProblemList({ rows }: { rows: readonly ProblemRow[] }) {
   return (
     <ul className="mt-4 space-y-3">
       {rows.map((row) => (
-        <li
-          key={row.gameRef}
-          className="rounded-[4px] border border-nocturne-neutral-800 p-4"
-        >
+        <li key={row.gameRef} className="rounded-[4px] border border-nocturne-neutral-800 p-4">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
-              <p className="font-mono text-[13px] text-nocturne-neutral-300">
-                {row.gameRef}
-              </p>
+              <p className="font-mono text-[13px] text-nocturne-neutral-300">{row.gameRef}</p>
               <p className="mt-1 text-[12px] text-nocturne-neutral-500">
                 {row.season} · week {row.week}
               </p>
@@ -119,9 +114,9 @@ export default async function OpsStatsPage() {
         Stats problems
       </h1>
       <p className="mt-4 max-w-[62ch] text-[14.5px] leading-[1.62] text-nocturne-neutral-400">
-        Games where the provider&rsquo;s own numbers disagreed with each other. The stat
-        lines were still ingested &mdash; these are discrepancies, not failures &mdash; so
-        every one of these games has been scored, possibly wrongly.
+        Games where the provider&rsquo;s own numbers disagreed with each other. The stat lines
+        were still ingested &mdash; these are discrepancies, not failures &mdash; so every one
+        of these games has been scored, possibly wrongly.
       </p>
 
       <p className="mt-6 font-mono text-[12px] text-nocturne-neutral-500">
@@ -132,9 +127,9 @@ export default async function OpsStatsPage() {
 
       {view.total === 0 ? (
         <p className="mt-8 rounded-[4px] border border-nocturne-neutral-800 p-5 text-[13.5px] leading-[1.6] text-nocturne-neutral-500">
-          Nothing flagged. Worth knowing what that does and does not mean: it says no game
-          has tripped one of the translator&rsquo;s checks, not that every score is right.
-          A defect in a category nothing cross-checks looks exactly like this.
+          Nothing flagged. Worth knowing what that does and does not mean: it says no game has
+          tripped one of the translator&rsquo;s checks, not that every score is right. A defect
+          in a category nothing cross-checks looks exactly like this.
         </p>
       ) : null}
 
@@ -142,8 +137,8 @@ export default async function OpsStatsPage() {
         <section className="mt-10">
           <h2 className="text-[15px] font-medium">Still correctable</h2>
           <p className="mt-1 max-w-[62ch] text-[13px] leading-[1.6] text-nocturne-neutral-500">
-            Inside the correction window, or not yet final. A fix applied to these still
-            reaches the scores.
+            Inside the correction window, or not yet final. A fix applied to these still reaches
+            the scores.
           </p>
           <ProblemList rows={view.actionable} />
         </section>
@@ -151,9 +146,7 @@ export default async function OpsStatsPage() {
 
       {view.expired.length > 0 ? (
         <section className="mt-12">
-          <h2 className="text-[15px] font-medium text-nocturne-neutral-400">
-            Past the window
-          </h2>
+          <h2 className="text-[15px] font-medium text-nocturne-neutral-400">Past the window</h2>
           <p className="mt-1 max-w-[62ch] text-[13px] leading-[1.6] text-nocturne-neutral-500">
             {/*
               Kept on screen rather than dropped. A game nobody can fix is still
