@@ -80,6 +80,75 @@ after the fantasy championship in week 17.
 
 ---
 
+## `getNFLInactiveList` — the season is one call, and only the current one
+
+Probed 2026-08-19. The table above already names this endpoint; what follows is what
+calling it actually returns, because the difference decided whether the T-90 inactives
+job could be built that day. It could not.
+
+**One call is the whole season.** There is no `week` parameter — passing one is not
+merely ignored, it fails:
+
+```
+getNFLInactiveList?season=2026&seasonType=reg          -> OK
+getNFLInactiveList?season=2025&seasonType=reg&week=1   -> "no games returned, check your
+                                                          parameters for syntax errors"
+```
+
+That matters for the polling design: a Sunday job watching every kickoff costs **one**
+call per poll, not one per game.
+
+```
+{
+  "seasonType": "reg",
+  "season": "2026",
+  "weekList": [
+    { "gameWeek": "1",
+      "inactives": [
+        { "gameID": "20260909_NE@SEA",
+          "away": { "teamAbv": "NE",  "players": [], "teamID": "22" },
+          "home": { "teamAbv": "SEA", "players": [], "teamID": "29" } }
+      ] }
+  ]
+}
+```
+
+`gameID` is the same format as `games.external_ref`, so the join needs no name matching
+— the property that makes `sleeperBotID` reliable in the corpus, for the same reason.
+
+**Current season only.** `season=2025` returns the same `"no games returned"` error as a
+bad parameter, not a 404 and not an empty list. So this is a live feed, not an archive:
+it cannot be backfilled, and a missed Sunday is missed permanently.
+
+**`players[]` is empty until games are played, and its record shape is therefore
+UNVERIFIED.** Every array in the 2026 response is `[]` because the season has not started,
+and 2025 cannot be fetched to see a populated one. The depth-chart endpoint uses
+`{playerID, longName}` and it is _plausible_ this matches — **that is a guess and no code
+should be written against it.** Confirm against a real populated response before mapping
+the record.
+
+What this means for the job `docs/LIVE-SCORING.md` argues matters most: the fetch, the
+envelope walk down to `players[]`, and the storage are all verifiable today. The last
+inch — what a player record contains — needs a real inactive list, which means preseason
+at the earliest.
+
+### Names that 404, so nobody probes them again
+
+`getNFLInactives`, `getNFLGameInactives`, `getNFLInactivePlayers`,
+`getNFLWeeklyInactives`. The RapidAPI listing shows a _display_ name ("Get Inactive
+Players by Game Week") that does not follow from the path. Four metered calls were spent
+guessing it; the path is visible in the code snippet on the listing page, and reading it
+there costs nothing.
+
+### There is no play-by-play endpoint
+
+Checked against the full listing on 2026-08-19. `scoringPlays` in a box score is a
+scoring summary — plays that scored — and nothing exposes ordinary downs. This is why
+#157's rushing-yards contradiction can only be **detected** and not recomputed: the
+individual carries that would sum to the true figure are not available at any price.
+
+---
+
 ## `gameStatus` — three endpoints, two vocabularies
 
 Captured live on 2026-08-15, verbatim. `mapGameStatus` was written from
