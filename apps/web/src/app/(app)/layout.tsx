@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import Link from "next/link";
 import { InvitationBadge } from "@/components/InvitationsCorner";
 import { SessionBar } from "@/components/SessionBar";
 import { currentUser } from "@/lib/session";
@@ -32,20 +33,20 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     <div className="nocturne flex min-h-screen flex-col">
       <header className="border-b border-nocturne-neutral-900">
         <nav className="mx-auto flex w-full max-w-[1180px] items-center justify-between px-10 py-[14px]">
-          <a href="/" className="flex items-baseline gap-[10px]">
+          <Link href="/" className="flex items-baseline gap-[10px]">
             <span className="text-[19px] font-semibold tracking-[-0.02em]">rostr</span>
             <span className="text-[11px] uppercase tracking-[0.14em] text-nocturne-neutral-600">
               fantasy football
             </span>
-          </a>
+          </Link>
 
           <div className="flex items-center gap-6">
-            <a
+            <Link
               href="/scoring"
               className="text-[13.5px] text-nocturne-neutral-400 transition-colors hover:text-nocturne-text"
             >
               How scoring works
-            </a>
+            </Link>
             {/*
               Joining and creating sit side by side, and joining is first.
               Creating a league has had a front door since A10; joining one has
@@ -54,12 +55,12 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
               rather than to run one.
             */}
             <span className="flex items-center gap-2">
-              <a
+              <Link
                 href="/leagues"
                 className="text-[13.5px] text-nocturne-neutral-400 transition-colors hover:text-nocturne-text"
               >
                 Join a league
-              </a>
+              </Link>
               {/*
                 Rendered only when something is waiting, and only for a signed-in
                 visitor — the route answers an empty list to anyone else, so a
@@ -67,12 +68,12 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
               */}
               {user && <InvitationBadge />}
             </span>
-            <a
+            <Link
               href="/leagues/new"
               className="rounded-[4px] border border-nocturne-accent px-4 py-2 text-[13px] text-nocturne-accent-200 transition-colors hover:bg-nocturne-accent/10"
             >
               Create a league
-            </a>
+            </Link>
             <SessionBar email={user?.email ?? null} username={user?.username ?? null} />
           </div>
         </nav>
