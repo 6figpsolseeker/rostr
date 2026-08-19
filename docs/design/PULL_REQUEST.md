@@ -2,90 +2,89 @@ Branch: `design/screens`
 
 ---
 
-## Add the design reference for the whole product
+## Design drop 6 — landing hero rebuilt from the shipped draft board
 
-Twelve files, thirty-seven states, covering rostr end to end: the public landing page,
+Twelve screen files plus an index, covering rostr end to end: the public landing page,
 creating and freezing a league, inviting and joining it, the draft lobby and the order draw,
-the draft room and its failure branches, the weekly in-season loop including the full trade flow, the playoffs and
-settlement, amending and dissolving a league, and ten screens designed for mobile web.
+the draft room and its failure branches, the weekly in-season loop including the full trade
+flow, the playoffs and settlement, amend and dissolve, and eight screens designed for mobile
+web.
 
 Nothing here is wired into `apps/web`. `design_handoff/` is the reference to build against.
 
-### What's here
+### What changed since drop 5
 
-| File | States |
-| --- | --- |
-| `Rostr Landing.dc.html` | 2 hero animation variants — pick one |
-| `Rostr Create League.dc.html` | Settings, then the freeze |
-| `Rostr Invite and Join.dc.html` | Commissioner's side, invited manager's side |
-| `Rostr Draft Lobby.dc.html` | Before the draw, and the draw |
-| `Rostr Draft Room.dc.html` | On the clock, waiting, signing, autopicked, disconnected, pick rejected, complete |
-| `Rostr League Home.dc.html` | League home, full matchup |
-| `Rostr Lineup.dc.html` | Setting it, partially locked |
-| `Rostr Waivers.dc.html` | Filing claims, the Wednesday run |
-| `Rostr Trade Veto.dc.html` | Propose, accept, veto window, settled |
-| `Rostr Playoffs.dc.html` | Bracket live, settled |
-| `Rostr Amend and Dissolve.dc.html` | Propose, stuck at 9/12, dissolve, auto-dissolve |
-| `Rostr Mobile.dc.html` | 10 screens at 390px |
+**The landing hero has a right column now — a condensed live draft board — and it is built
+from `DraftRoom.tsx` rather than invented.** The first attempt was a monochrome grid of
+position abbreviations; it was rejected, correctly, for not being the product. The rebuild
+reproduces the shipped component exactly:
 
-All copy is grounded in `README.md` and `docs/RULES.md` — the differentiators, the format
-table, the multi-sport paragraph and the rule-set documents are the repo's own words.
+- Cells filled **by position** from `POSITION_COLOURS` in `lib/player.ts` — QB rose, RB
+  emerald, WR sky, TE amber, at 0.15 alpha with 0.3 rings.
+- Team names head the columns, with the `you` / `bot` tag beneath.
+- Each row carries a **direction arrow**, because the snake reversal is the one thing people
+  get wrong when planning two picks ahead.
+- Columns hold the real `min-w-[7.5rem]` floor. **Three of twelve teams at full width, not
+  twelve squeezed** — below 120px `shortName`'s surnames truncate, which defeats the reason
+  the given name is initialled at all.
+- The on-clock card's portrait is a 96px slot, the size `PlayerAvatar` documents for a card
+  portrait.
+
+Two implementation notes worth carrying over. The crop fade is a **fixed-length** gradient,
+not a percentage — the aside doubles in width when the layout stacks, and a percentage fade
+eats a whole visible column at the wider size. And real headshots come from the provider's
+`imageUrl` through `sizedImage`; the design shows initialled discs because no photo assets
+exist here, but in production the disc is the one-in-ten fallback, not the normal case.
+
+**Nav consolidated to four items** at the user's request: How it works, a GitHub icon and an
+X icon, Create a league, Connect wallet. The separate Format and Why it's different tabs are
+gone — `#how` now covers all three sections contiguously, with the sub-sections demoted to
+h3 and their cards to h4.
+
+**Connect wallet is a `<button>`, not an anchor.** Connecting is an action, not a
+destination, and it needs a real affordance — which makes it a **fourth surface requiring
+the wallet signing round-trip**, alongside freezing a league, voting, and pot actions.
+
+**The scoring table on the create-league freeze screen now matches `NFL_PPR_SCORING`.**
+Whoever wrote `design-scoring.test.ts` was right — the design had a 10-point shutout against
+the rule set's 5, field goals stopping at 50+, no miss penalty and no yards-allowed ladder.
+All of it is now pulled from the rule set, plus the extra point, which was missing from the
+table but present in the code.
 
 ### Read the README's second section first
 
 Most defects found while designing these were not visual. They were the same league
-described inconsistently across two files: a 6-team lobby feeding a 12-team draft room, a
-roster limit of 15 on one screen and 14 on the next, a 48-hour veto window whose timestamps
-spanned 77 hours, standings ordered against their own stated tiebreaker, one player
-simultaneously rostered on one screen and undrafted on another, and the Week 1 kickoff date
-authored three different ways across three screens.
+described inconsistently in two places — including, this round, twice within a single file:
+the new hero board initially gave Route 66 a roster that contradicted the League home panel
+800px below it, because it was keyed off the page's older name set on the assumption that
+set was still current.
 
 The README lists the eleven facts that must be **derived from one source and never
-restated** — roster limit, standings order, veto threshold, veto deadline, draft order,
-autofill target, positional need, lock state, season dates, snake-pick arithmetic, bracket
-shape. That table is the most useful thing in the bundle.
+restated**. That table is the most useful thing in the bundle.
 
-### Four findings worth surfacing
+### Still open, and needing you rather than a developer
 
-**Only ten values are the commissioner's.** Scoring is set by the project, the pot token by
-the service. So the create-league page is mostly disclosure, not configuration — which is
-what it was designed as.
-
-**Autopick has to sign a transaction the manager wasn't present for**, and the same
-round-trip creates a state where a manager loses the player they chose: a wallet prompt can
-outlive the blockhash it signed against, so a pick can fail *and* the clock expire during
-the automatic retry. Draft room state 6 designs that state; pre-signing or a session key
-would remove it. Architectural, and worth settling before the escrow program is written.
-The notice strip reads "signed 0x7f3a…c19d" without claiming a mechanism — don't ship that
-line until the mechanism is real.
-
-**The draft clock cannot pause on disconnect.** Closing a laptop would buy unlimited
-thinking time and no commissioner can adjudicate whose outage was real. State 5 therefore
-names exactly which player autopick will take instead of showing an error, and labels the
-countdown as an estimate.
-
-**The draft lobby is the best demo of the product's argument.** The order doesn't exist
-until the block is produced, and the verification panel gives slot, blockhash, both block
-times and the seed recipe so anyone can recompute it.
-
-### Two mechanical notes
-
-`disabled="disabled"`, not a bare `disabled` — the latter compiles to `disabled=""`, which
-React drops, so every acknowledgement gate in this set renders as a live button next to an
-unchecked box. It happened once here and it is invisible until someone taps it.
-
-Mobile tap targets are ≥44px throughout. Ten elements were under it on first write, mostly
-at 40px, which looks fine and misses under a thumb.
+- **How autopick signs a transaction the manager was not present for.** Session key,
+  pre-authorization at draft start, or a delegated signer. This also creates draft room
+  state 6, where a manager loses the player they chose because a wallet prompt outlived its
+  blockhash. Settle it before the escrow program is written; the notice strip reads "signed
+  0x7f3a…c19d" without claiming a mechanism, and should not ship until one is real.
+- **Which hero animation ships, A or B.** Both are in the file behind a switcher. One is
+  dead weight a developer has to delete.
+- **Kickoff is 9 September in `README.md` and 10 September across all twelve designs.**
+  9 Sept 2026 is a Wednesday and NFL Week 1 opens Thursday, so I believe the README is
+  wrong — but it is your call and it is now stated in two places.
+- **When a week label flips.** The trade and amend screens label Tuesday 17 Nov as Week 10,
+  after Week 10's games are finished and before Week 11's start. Most platforms would call
+  that Week 11. No arithmetic in the designs depends on it; the developer needs one rule.
+- **Whether escrow release can move a player whose game is already in progress.** A trade
+  accepted late Tuesday has its 48-hour window close Thursday evening, which is kickoff.
+  The designs dodge the collision by timestamp rather than by rule.
 
 ### Not done
 
-- **Five desktop screens have no mobile design** — create league, the commissioner's invite
-  side, draft lobby, amend and dissolve — and neither does the playoff bracket, which
-  is the hard one: three reseeded rounds will not sit side by side at 390px.
+- Five desktop screens have no mobile design — create league, the commissioner's invite
+  side, draft lobby, trades, amend and dissolve — and neither does the playoff bracket,
+  which is the hard one: three reseeded rounds will not sit side by side at 390px.
 - Player detail, full standings.
-- **One convention undecided:** when a week label flips. These screens call Tuesday 17 Nov
-  "Week 10" though Week 10 finished Monday and Week 11 starts Thursday. No arithmetic depends
-  on it, but the waiver run and the trade deadline both read "current week" from it.
-- The wallet signing round-trip is designed three times and needed in three more places:
-  freezing a league, voting, and any pot action.
 - Every player name is invented. Swap for Tank01 before showing this to anyone.

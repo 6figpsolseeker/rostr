@@ -1,6 +1,6 @@
 # rostr — design handoff
 
-Twelve files, thirty-seven states, covering the whole product as it exists today: the public
+Twelve files, thirty-seven states, the public
 landing page, creating and freezing a league, inviting and joining it, the draft lobby and
 the order draw, the draft room, the weekly in-season loop, the playoffs and settlement, amending and dissolving a league,
 and ten screens designed for mobile web.
@@ -189,6 +189,31 @@ reasserts the literal attributes on every render.
 **Production behaviour not in the prototype:** run the throw **once per visitor**, gated on
 `localStorage`, and skip to the settled state on repeat visits. It replays every load here
 because it is a review artifact.
+
+**The hero's right column is a condensed live draft**, and it is built from the shipped
+component rather than invented — read `DraftRoom.tsx`'s `BoardSquare` and `lib/player.ts`
+before touching it. It reproduces four things exactly: cells are filled **by position** from
+`POSITION_COLOURS` (QB rose, RB emerald, WR sky, TE amber, K violet, DEF teal, each at 0.15
+alpha with a 0.3 ring), team names head the columns with a `you`/`bot` tag under them, each
+row carries a **direction arrow** because the snake reversal is the one thing people get
+wrong planning two picks ahead, and columns hold `min-w-[7.5rem]` — 120px. Three of twelve
+teams are shown at full width rather than twelve squeezed: below 120px `shortName`'s
+surnames truncate, which defeats the reason the given name is initialled in the first place.
+
+Two things about it to keep. The crop fade is a **fixed-length** gradient
+(`calc(100% - 88px)`), not a percentage — the aside doubles in width when the layout stacks,
+and a percentage fade eats a whole visible column at the wider size. And the on-clock card's
+portrait is a 96px `<image-slot>`, matching the size `PlayerAvatar` documents for a card
+portrait; at 52px the component's own empty state overflows its host. Real headshots come
+from the provider's `imageUrl` through `sizedImage`, so in production most cells carry a
+face and the initialled disc is the one-in-ten fallback — the design shows discs because no
+photo assets exist here.
+
+**The nav is four items:** How it works, a GitHub and an X icon, Create a league, and
+Connect wallet. The three separate How it works / Format / Why it's different tabs were
+consolidated into one anchor at the user's request, so `#how` now covers all three sections
+contiguously. Connect wallet is a `<button>`, not an anchor — connecting is an action, and
+it is a **fourth surface needing the wallet signing round-trip** (see the list at the end).
 
 ### 2. `Rostr Create League.dc.html` — 2 states
 **The finding that shaped this screen: only ten values are the commissioner's.** Scoring
@@ -443,8 +468,8 @@ player. Derive the demo league once and render both layouts from it.
 with refunds if the league never fills. `RULES.md` defines them; nothing is drawn.
 
 **Everywhere:** the wallet signing round-trip has three designs (draft room state 3, its
-failure branch in state 6, and the mobile sheet) and three other places that need it —
-freezing a league, voting, and any pot action.
+failure branch in state 6, and the mobile sheet) and **four** other places that need it —
+freezing a league, voting, any pot action, and the landing page's Connect wallet button.
 
 ## Files
 

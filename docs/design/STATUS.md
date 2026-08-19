@@ -6,8 +6,8 @@ built, and the one rule that matters when using them.
 
 ## Provenance
 
-Added 2026-08-16 from the fifth and latest handoff drop. Four earlier drops
-existed and are **superseded entirely** — they were revisions of the same
+Drop 5 landed 2026-08-16; **drop 6 landed 2026-08-19** and is what is here now.
+Earlier drops are **superseded entirely** — they were revisions of the same
 screens, not different content:
 
 | Drop | Contents |
@@ -15,17 +15,55 @@ screens, not different content:
 | 1 | draft room only, early (44 KB) |
 | 2, 3 | draft room revised (186 KB) |
 | 4 | ten screens, plus mobile and playoffs |
-| **5** | **all twelve, plus amend-and-dissolve** |
+| 5 | all twelve, plus amend-and-dissolve |
+| **6** | **landing hero rebuilt, nav consolidated, mobile expanded, plus a screens index** |
 
-If an older drop resurfaces, it is not a source of anything. Nothing in 1–4 is
+If an older drop resurfaces, it is not a source of anything. Nothing in 1–5 is
 absent from this directory.
+
+### What drop 6 changed
+
+Four files, and only one of them is a redesign:
+
+- **`Rostr Landing.dc.html`** — the hero gained a right column: a condensed live
+  draft board. It is **built from the shipped component rather than invented**,
+  which is worth knowing before touching it. The designer read `DraftRoom.tsx`'s
+  `BoardSquare` and `lib/player.ts` and reproduced `POSITION_COLOURS` at their
+  real alpha, the `you`/`bot` column tags, the per-row direction arrow, and the
+  `min-w-[7.5rem]` column floor — showing three of twelve teams at full width
+  rather than twelve squeezed, because below 120px `shortName`'s surnames
+  truncate and the initialled given name stops buying anything. The README
+  records both traps: the crop fade is a fixed length rather than a percentage,
+  and the on-clock portrait is 96px because that is the size `PlayerAvatar`
+  documents for a card.
+- **`Rostr Mobile.dc.html`** — 89 KB to 143 KB, now seventeen frames at 390px.
+  Still not started, and still a different design rather than a reflow.
+- **`Rostr Create League.dc.html`** — one row. See the section below; this is the
+  divergence closing rather than a new one opening.
+- **New: `Rostr Screens.dc.html`** (an index of every screen and its states) and
+  **`screens/image-slot.js`** (a second prototyping runtime, for the photo
+  placeholders in the new hero). `image-slot.js` falls under the same rule as
+  `support.js` below — **neither ever ships**.
+
+**The nav is now four items** — How it works, GitHub, X, Create a league, Connect
+wallet — with the three separate How-it-works tabs consolidated into one anchor
+at the owner's request. **Connect wallet is a `<button>`, not a link**, which
+makes it a fourth surface needing the wallet signing round-trip alongside
+freezing a league, voting, and pot actions.
+
+One line inside `Rostr Screens.dc.html` still reads "drop 5 at docs/design/". It
+is wrong as of this drop and is left alone: these files are the designer's
+artifacts, kept verbatim, and this file is where the repo states provenance.
 
 ## The rule
 
-**`screens/support.js` must never ship.** It is a prototyping runtime the
-`.dc.html` files need to render in a browser, and nothing in `apps/web` may
-import it. It lives under `docs/` rather than anywhere Next can reach, which is
-what keeps that true structurally rather than by memory.
+**`screens/support.js` and `screens/image-slot.js` must never ship.** They are
+prototyping runtimes the `.dc.html` files need to render in a browser, and
+nothing in `apps/web` may import either. They live under `docs/` rather than
+anywhere Next can reach, which is what keeps that true structurally rather than
+by memory. `image-slot.js` arrived with drop 6 and is the larger of the two — it
+draws the photo placeholders in the new hero, and the real app draws those from
+the provider's `imageUrl` through `sizedImage`.
 
 The `.dc.html` files are a **reference for look, layout and copy** — not code to
 lift. Recreate them with the patterns `apps/web` already uses. Take the exact
@@ -67,23 +105,27 @@ one of them will drift from the code that owns it.
 
 ## Changed from the designer's original
 
-One deliberate divergence, recorded here because everything else in this
-directory is verbatim.
+**Nothing, as of drop 6.** This directory is verbatim again, and the paragraph
+that used to sit here is worth keeping as a record of how it got that way.
 
-**`screens/Rostr Create League.dc.html` — the scoring table on the freeze
-screen.** The design was drawn before the ESPN alignment of 2026-08-16 and
-printed the table this repo used until that day: a shutout worth 10, field goals
-stopping at 50+, no penalty for a miss, no yards-allowed ladder. Those numbers
-were already wrong when the handoff arrived, and the freeze screen is precisely
-where a member reads the rules before signing them.
+Drop 5's `Rostr Create League.dc.html` printed the scoring table this repo used
+until 2026-08-16 — a shutout worth 10, field goals stopping at 50+, no penalty
+for a miss, no yards-allowed ladder — because it was drawn before the ESPN
+alignment. Those numbers were already wrong when the handoff arrived, and the
+freeze screen is precisely where a member reads the rules before signing them, so
+the values were corrected here and `design-scoring.test.ts` was written to pin
+the two together.
 
-The values were updated to match `NFL_PPR_SCORING`. Nothing else in the file
-changed — not layout, not copy, not the other ten sections.
+**Drop 6 fixes it at the source**, crediting that test by name, and goes one
+further: the table now also prints the extra point, which the rule set has always
+paid and the design had no row for. The guard gained a case for it in the same
+commit that installed the drop — a value the design states is a value that can go
+stale, and the lag between "the design started saying it" and "the test started
+checking it" is exactly what let the whole table drift for a day.
 
-`packages/core/src/rules/design-scoring.test.ts` now pins the two together, so
-the next divergence fails a test rather than reaching a member's screen. If a
-new drop lands carrying the old table, that test will fail: fix the file and
-tell the designer, because the drop was authored against stale values.
+The test still earns its keep for the next drop rather than this one: if a future
+drop lands carrying an old table, it fails, and the fix is to correct the file
+and tell the designer, because the drop was authored against stale values.
 
 **This does not make the screen safe to build from.** When the freeze screen is
 implemented it must render from the rule set, the way `/scoring` already does.
