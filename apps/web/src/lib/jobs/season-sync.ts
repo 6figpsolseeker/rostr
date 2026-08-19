@@ -123,23 +123,39 @@ export async function runSeasonSyncJob(
     }
   }
 
-  // Both facts reach `cron_runs`, which migration 0029 describes as the answer
-  // to "is the scheduler running, and is it succeeding" without dashboard
-  // access. Undated fixtures are not a failure and must not read as one — the
-  // job did exactly what it should — but they are the thing somebody wants to
-  // know about before week 16, so a clean run says so rather than saying
-  // nothing.
+  /*
+    Only a failure goes in `last_outcome`, because that field is not a message —
+    it is a state. `cronJobState` returns `FAILING` for *any* non-null value,
+    ahead of the staleness check, so anything written here is an alarm whatever
+    the words say.
+
+    The comment that used to sit here said undated fixtures "are not a failure
+    and must not read as one" and then wrote them into this field anyway. It was
+    right about the rule and wrong about the code, which is the worse half: from
+    2026-08-18 this job reported `FAILING` every day for the four week-16 and
+    four week-17 games the NFL deliberately holds back for flex scheduling — a
+    permanent, correct condition, raising a daily alarm. #182 exists to *keep*
+    those fixtures rather than discard them; reporting their presence as a fault
+    undoes the point of keeping them.
+
+    The count still matters before week 16 and is still returned in the response,
+    where it informs without alarming. A row that cries wolf every day is a row
+    people stop reading, and this is the same table that has to be believed when
+    scoring breaks in October.
+  */
   const failed = runs.filter((entry) => entry.error).length;
   const undated = runs.reduce((total, entry) => total + (entry.undatedGames ?? 0), 0);
 
-  const outcome = [
+  await recordCronRun(
+    client,
+    "season-sync",
     failed > 0 ? `${failed} of ${seasons.length} seasons failed` : null,
-    undated > 0 ? `${undated} fixtures awaiting a kickoff time` : null,
-  ]
-    .filter((part): part is string => part !== null)
-    .join("; ");
+  );
 
-  await recordCronRun(client, "season-sync", outcome === "" ? null : outcome);
-
-  return NextResponse.json({ at: now.toISOString(), seasons: seasons.length, runs });
+  return NextResponse.json({
+    at: now.toISOString(),
+    seasons: seasons.length,
+    undatedGames: undated,
+    runs,
+  });
 }

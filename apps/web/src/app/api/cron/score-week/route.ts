@@ -73,6 +73,30 @@ async function run(client: SqlClient, now: Date, request: Request): Promise<Next
 
   const week = Number.isFinite(requestedWeek) ? requestedWeek : Number(current?.week ?? 0);
   if (!week) {
+    /*
+      Stamped, because a run over no weeks is a healthy run.
+
+      This path is taken every ten minutes from now until the first kickoff of
+      the season, and it used to return without touching `cron_runs` — so
+      `pnpm cron:status` read `NEVER_RAN` for a job that was firing correctly
+      the whole time, and could not distinguish it from one the deployment had
+      never registered. That is the single thing the heartbeat exists to tell
+      apart, and this was the one route that defeated it.
+
+      The `catch` above stamps and rethrows for exactly this reason. Its comment
+      says a route that throws on every invocation is worse than one that never
+      fires, "and without this both read as a stale row" — the same argument, and
+      the early return was simply missed.
+
+      The outcome is `null`, and it has to be: `cronJobState` reads *any*
+      non-null `last_outcome` as `FAILING`, before it even checks staleness.
+      Writing a helpful sentence here would trade `NEVER_RAN` for `FAILING`
+      every ten minutes until September, which is not an improvement — it is the
+      same false alarm wearing a different label.
+
+      A run over no weeks is a healthy run, so it records as one.
+    */
+    await recordCronRun(client, "score-week", null);
     return NextResponse.json({ at: now.toISOString(), week: null, leagues: [] });
   }
 
