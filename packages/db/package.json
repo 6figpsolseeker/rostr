@@ -16,6 +16,10 @@
     "./migrate": {
       "types": "./dist/migrate.d.ts",
       "default": "./dist/migrate.js"
+    },
+    "./username-rules": {
+      "types": "./dist/username-rules.d.ts",
+      "default": "./dist/username-rules.js"
     }
   },
   "main": "./dist/index.js",

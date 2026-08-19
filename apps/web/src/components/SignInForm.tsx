@@ -31,10 +31,14 @@ export function SignInForm({ next }: { next: string }) {
    * — "Unexpected end of JSON input" — was once shown to users as though it
    * explained something. The status is the fact; the body is a courtesy.
    */
-  async function readBody(response: Response): Promise<{ error?: string; devCode?: string }> {
+  async function readBody(
+    response: Response,
+  ): Promise<{ error?: string; devCode?: string; gaps?: string[] }> {
     return ((await response.json().catch(() => null)) ?? {}) as {
       error?: string;
       devCode?: string;
+      /** What the account still needs — see `lib/account.ts`. Absent on the request step. */
+      gaps?: string[];
     };
   }
 
@@ -83,9 +87,16 @@ export function SignInForm({ next }: { next: string }) {
         throw new Error(body.error ?? `That did not work (error ${response.status}).`);
       }
 
+      // An account is an email, a username and a wallet. Sign-in collects the
+      // first; if the other two are missing this is the moment to ask, with
+      // `next` carried through so the person still arrives where they meant to.
+      const destination =
+        (body.gaps ?? []).length > 0 ? `/welcome?next=${encodeURIComponent(next)}` : next;
+
       // A full navigation rather than a router push: the session cookie was set
-      // on this response, and the destination is server-rendered against it.
-      window.location.href = next;
+      // by the response we just read, and a client-side transition would render
+      // the next page against a stale server component cache.
+      window.location.href = destination;
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setBusy(false);

@@ -45,13 +45,26 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
             >
               How scoring works
             </a>
+            {/*
+              Joining and creating sit side by side, and joining is first.
+              Creating a league has had a front door since A10; joining one has
+              never had anywhere to start, so a league was reachable only by
+              holding its URL. Most people arrive wanting to be in a league
+              rather than to run one.
+            */}
+            <a
+              href="/leagues"
+              className="text-[13.5px] text-nocturne-neutral-400 transition-colors hover:text-nocturne-text"
+            >
+              Join a league
+            </a>
             <a
               href="/leagues/new"
               className="rounded-[4px] border border-nocturne-accent px-4 py-2 text-[13px] text-nocturne-accent-200 transition-colors hover:bg-nocturne-accent/10"
             >
               Create a league
             </a>
-            <SessionBar email={user?.email ?? null} />
+            <SessionBar email={user?.email ?? null} username={user?.username ?? null} />
           </div>
         </nav>
       </header>

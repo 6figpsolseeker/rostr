@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { IdentityError, createSession, verifySignInCode } from "@rostr/db";
+import { IdentityError, createSession, getWallets, verifySignInCode } from "@rostr/db";
+import { accountGaps } from "@/lib/account";
 import { db } from "@/lib/db";
 import { byIp, enforceRateLimit } from "@/lib/rate-limit";
 import { SIGN_IN_ATTEMPT_PER_IP } from "@rostr/db";
@@ -49,7 +50,18 @@ export async function POST(request: Request): Promise<NextResponse> {
     // 200 with the cookie, not a redirect. The browser stays where it is and
     // the client decides where to go — a redirect here would reintroduce the
     // open-redirect surface `safeRedirect` existed to guard on the link route.
-    const response = NextResponse.json({ signedIn: true });
+    //
+    // `gaps` rides along so the form knows whether to land on `/welcome` or on
+    // wherever the person was going. Sent from here rather than fetched after,
+    // because a second request would let the destination flicker: an account
+    // needing a username would briefly land on a page that immediately bounces
+    // it, which reads as a bug rather than as a step.
+    const gaps = accountGaps({
+      username: user.username,
+      verifiedWallets: (await getWallets(db(), user.id)).length,
+    });
+
+    const response = NextResponse.json({ signedIn: true, gaps });
     setSessionCookie(response, session.token);
     return response;
   } catch (error) {
