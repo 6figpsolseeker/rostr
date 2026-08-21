@@ -62,6 +62,29 @@ export async function POST(
     return NextResponse.json({ error: "Sign in to join a league" }, { status: 401 });
   }
 
+  /**
+   * A username is required, decided by the owner on 2026-08-21.
+   *
+   * It is what a commissioner types to invite you, so an account without one
+   * cannot be reached by either of the two ways of asking — and joining a
+   * league without being reachable is how somebody ends up alone in one.
+   *
+   * **This is the enforcement `lib/account.ts` said did not exist.** The gate
+   * reported and refused nothing; it now refuses here, at the two points where
+   * being unreachable actually costs something. `422` rather than `403`: the
+   * request is well-formed and the account is simply unfinished, and the code
+   * tells the client where to send them.
+   */
+  if (user.username === null || user.username.trim() === "") {
+    return NextResponse.json(
+      {
+        error: "Pick a username first — it is how people invite you.",
+        code: "USERNAME_REQUIRED",
+      },
+      { status: 422 },
+    );
+  }
+
   const body = (await request.json()) as {
     walletAddress?: string;
     signature?: string;

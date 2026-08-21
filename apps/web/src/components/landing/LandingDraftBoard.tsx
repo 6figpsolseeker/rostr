@@ -1,3 +1,4 @@
+import { PlayerAvatar } from "@/components/PlayerAvatar";
 import { positionColour, shortName } from "@/lib/player";
 
 /**
@@ -35,7 +36,38 @@ interface Cell {
   readonly team: string;
 }
 
-/** Three columns of a twelve-team board, rounds one to three. */
+/**
+ * The player on the clock, and his headshot.
+ *
+ * **Real, and checked rather than typed from memory.** The provider stores him
+ * as `James Cook III` — the suffix is why an exact-name lookup for "James
+ * Cook" finds nobody — and this is the `image_url` his row carries, verified
+ * against the live database and confirmed to resolve on 2026-08-21.
+ *
+ * A URL hard-coded here is a marketing asset rather than a data path, and the
+ * distinction matters: everywhere in the *app*, an image comes from
+ * `players.image_url` and nothing composes one. This page is static and reads
+ * no database, so the alternative to a constant is rendering the landing page
+ * per request for one picture. `PlayerAvatar` still falls back to initials if
+ * it ever 404s.
+ */
+const ON_THE_CLOCK = {
+  name: "James Cook III",
+  position: "RB",
+  team: "BUF",
+  imageUrl: "https://a.espncdn.com/i/headshots/nfl/players/full/4379399.png",
+} as const;
+
+/**
+ * Three columns of a twelve-team board, rounds one to three.
+ *
+ * Drop 7 replaced the invented names with real ones, and its own note says the
+ * ADP ordering is **a designer's guess rather than data**. Reconciled against
+ * the live draft board on 2026-08-21: every player here is on it, and the
+ * arrangement is kept as the design drew it rather than re-sorted, because the
+ * board is an illustration of a draft in progress and not a ranking anybody
+ * should read as one.
+ */
 const ROUNDS: readonly {
   readonly round: number;
   readonly direction: "FORWARD" | "REVERSE";
@@ -45,32 +77,31 @@ const ROUNDS: readonly {
     round: 1,
     direction: "FORWARD",
     cells: [
-      { label: "1.03", name: "Bela Kowalczyk", position: "WR", team: "HOU" },
-      { label: "1.04", name: "Luca Marchetti", position: "RB", team: "MIN" },
-      { label: "1.05", name: "Rene Delacroix", position: "RB", team: "PHI" },
+      { label: "1.03", name: "Justin Jefferson", position: "WR", team: "MIN" },
+      { label: "1.04", name: "Bijan Robinson", position: "RB", team: "ATL" },
+      { label: "1.05", name: "Saquon Barkley", position: "RB", team: "PHI" },
     ],
   },
   {
     round: 2,
     direction: "REVERSE",
     cells: [
-      { label: "2.10", name: "Femi Amadi", position: "TE", team: "DET" },
-      { label: "2.09", name: "Kwame Osei-Bonsu", position: "WR", team: "LV" },
-      { label: "2.08", name: "Gideon Achebe", position: "TE", team: "NYJ" },
+      { label: "2.10", name: "Brock Bowers", position: "TE", team: "LV" },
+      { label: "2.09", name: "Nico Collins", position: "WR", team: "HOU" },
+      { label: "2.08", name: "Trey McBride", position: "TE", team: "ARI" },
     ],
   },
   {
     round: 3,
     direction: "FORWARD",
     cells: [
-      { label: "3.03", name: "Viggo Sorensen", position: "QB", team: "LAR" },
+      { label: "3.03", name: "Josh Allen", position: "QB", team: "BUF" },
       // The pick on the clock, and the seat it belongs to.
       null,
       { label: "3.05", name: "", position: "", team: "" },
     ],
   },
 ];
-
 const COLUMNS = [
   { name: "Pylon Co.", tag: "" },
   { name: "Route 66", tag: "you" },
@@ -90,29 +121,47 @@ export function LandingDraftBoard() {
       {/* The card for the pick on the clock, above the board — the one thing a
           manager looks at when it is their turn. */}
       <div className="flex items-center gap-4 rounded-lg border border-nocturne-accent/40 bg-nocturne-accent/10 p-4">
-        <span
-          className="grid shrink-0 place-items-center rounded-full bg-nocturne-neutral-900 text-[10px] text-nocturne-neutral-600 ring-1 ring-nocturne-neutral-800"
-          style={{ width: 72, height: 72 }}
-          aria-hidden
-        >
-          {/* Where `PlayerAvatar` draws a headshot in the app. Initials here,
-              because the marketing page ships no photo assets — and in
-              production the initialled disc is the one-in-ten fallback, not the
-              normal case. */}
-          AV
-        </span>
+        {/*
+          96px, the size `PlayerAvatar` documents for a card portrait and the
+          size drop 6's README asks for — at 52px the component's own empty
+          state overflows its host.
+        */}
+        <PlayerAvatar
+          name={ON_THE_CLOCK.name}
+          positions={[ON_THE_CLOCK.position]}
+          imageUrl={ON_THE_CLOCK.imageUrl}
+          size={96}
+        />
         <span className="min-w-0">
           <span className="block text-[10px] tracking-[0.14em] text-nocturne-accent-300 uppercase">
             Your pick, 3.04
           </span>
-          <span className="mt-1 block truncate text-[19px] font-medium">A. Villanueva</span>
+          <span className="mt-1 block truncate text-[19px] font-medium">
+            {ON_THE_CLOCK.name}
+          </span>
           <span className="mt-1 flex items-center gap-2 text-[11px] text-nocturne-neutral-500">
-            <span className={`rounded px-1 py-px font-medium ring-1 ${positionColour("RB")}`}>
-              RB · TEN
+            <span
+              className={`rounded px-1 py-px font-medium ring-1 ${positionColour(ON_THE_CLOCK.position)}`}
+            >
+              {ON_THE_CLOCK.position} · {ON_THE_CLOCK.team}
             </span>
           </span>
+          {/*
+            His real season projection, not a number chosen to look plausible.
+
+            250.1 is what `scorePlayer` returns for his stored projection under
+            the default PPR rules — computed against the live database on
+            2026-08-21, the same arithmetic the draft board runs. The design
+            printed 13.6, which is a *weekly* shape; our board shows projected
+            **season** points, so a weekly figure here would have quietly
+            described a different product from the one behind the link.
+
+            It will drift as projections are re-synced. That is acceptable for an
+            illustration and would not be for a live screen — which is the whole
+            reason the caption below says this is a sample.
+          */}
           <span className="mt-1 block text-[11px] text-nocturne-neutral-600">
-            13.6 proj · top of your queue
+            250.1 proj · top of your queue
           </span>
         </span>
       </div>

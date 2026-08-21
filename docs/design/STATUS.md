@@ -6,7 +6,8 @@ built, and the one rule that matters when using them.
 
 ## Provenance
 
-Drop 5 landed 2026-08-16; **drop 6 landed 2026-08-19** and is what is here now.
+Drop 5 landed 2026-08-16, drop 6 on 2026-08-19; **drop 7 landed 2026-08-21** and
+is what is here now.
 Earlier drops are **superseded entirely** — they were revisions of the same
 screens, not different content:
 
@@ -16,10 +17,101 @@ screens, not different content:
 | 2, 3 | draft room revised (186 KB) |
 | 4 | ten screens, plus mobile and playoffs |
 | 5 | all twelve, plus amend-and-dissolve |
-| **6** | **landing hero rebuilt, nav consolidated, mobile expanded, plus a screens index** |
+| 6 | landing hero rebuilt, nav consolidated, mobile expanded, plus a screens index |
+| **7** | **the landing becomes a section explorer; real NFL names; a brand kit; a logo sheet** |
 
-If an older drop resurfaces, it is not a source of anything. Nothing in 1–5 is
+If an older drop resurfaces, it is not a source of anything. Nothing in 1–6 is
 absent from this directory.
+
+### What drop 7 changed
+
+**The landing page is redesigned again, and it supersedes what was built from
+drop 6 on 2026-08-19.** Five scrolling bands — How it works, Why it's different,
+Format, Multi-sport — become **seven panels behind a left rail** in one band
+below the hero, and the hero goes back to **full-width text**. So the hero draft
+board that `LandingDraftBoard.tsx` renders beside the headline is, in drop 7, a
+panel inside the explorer instead.
+
+The rail is ordered as a season rather than as a menu: why it's different, how it
+works, format, the draft, inside a league, playoffs and payout, beyond football.
+The designer records why a rail beat a carousel — all seven labels stay visible,
+where a carousel would put the four differentiators behind two clicks — and why
+the explorer sits below the hero rather than inside its right column, which is
+470×420 and cannot hold a nine-row table.
+
+**What is already built and still correct:** the consolidated nav (one How it
+works link, GitHub and X as icons, Create a league, Connect wallet) is unchanged
+by drop 7, as is the board's own construction.
+
+**Real NFL names, with two caveats the designer states plainly.** The landing
+board now names actual players in ADP order. The ordering is *a designer's guess
+at 2026 ADP, not data*, and Route 66's five starters in panel 05 were rewritten
+to match what the board drafts — **those two places have to move together or the
+demo contradicts itself.** The other eleven screens still carry invented names.
+
+**A bot rule was corrected.** `Rostr Amend and Dissolve.dc.html` said "Bots fill
+any empty seat"; it now says one bot, only to square an odd field, never in a
+league with a pot — which is what `addBot` enforces.
+
+**New: `brand/`** — 22 logo, header and X-header assets, PNG and SVG, with their
+own README, and `screens/Rostr Logo.dc.html`. The designer's rule: **social and
+print only; the product UI keeps its own header.** Nothing in `apps/web` should
+import from here.
+
+#### Three defects the designer caught, worth reading before building the landing
+
+Each shipped in a revision of that screen and was found by review rather than by
+writing it. All three are the same shape as defects this repo has had:
+
+- **`minmax(0, 1fr)` is not a floor.** The board collapsed to 56px columns
+  between roughly 981px and 1105px of viewport, clipping every player name — in a
+  window a laptop actually sits in. The shipped component pins `min-w-[7.5rem]`,
+  which is what `LandingDraftBoard` already uses; the design now writes
+  `minmax(120px, 1fr)` and stacks its inner grid at 1240px.
+- **A caption claimed a rule the markup did not follow** — it said colour tracked
+  positional need while the cells were strict position identity. Need-colouring
+  belongs to the draft room, where it is recomputed after each of your picks.
+  This is exactly the "comment asserting a guarantee the code does not provide"
+  class `CLAUDE.md` names.
+- **Reseeding arithmetic goes backwards easily**, and this panel has now been
+  wrong on first write twice. The canonical bracket lives in
+  `Rostr Playoffs.dc.html`.
+
+#### Three of drop 7's open questions are now answered
+
+The designer lists five things "needing you rather than a developer". Three
+have answers as of 2026-08-21 and should go back in the next reply:
+
+- **How autopick signs a transaction the manager was not present for** —
+  it does not. A pick is a database write; nothing on that path signs
+  anything. The question came from the roster-as-NFT design, which is
+  abandoned. **Draft room state 6 is designed for a failure that cannot
+  happen** — a wallet prompt outliving its blockhash during a pick — and can
+  be dropped. See CLAUDE.md, "Drafting signs nothing".
+- **Which hero animation ships** — **A**.
+- **Kickoff** — the 9th. See below.
+
+Still open and genuinely for the owner: when a week label flips, and whether
+escrow release can move a player whose game is in progress.
+
+#### The kickoff question is settled, and the designer's guess is wrong
+
+Drop 7 asks whether kickoff is 9 or 10 September, notes that all twelve designs
+say the 10th while `README.md` says the 9th, and concludes the README is wrong
+because "9 Sept 2026 is a Wednesday and NFL Week 1 opens Thursday".
+
+**Checked against the synced 2026 schedule on 2026-08-21. The README is right.**
+The first Week 1 game in the database is `20260909_NE@SEA`, kicking off
+**Wednesday 9 September 2026, 8:20 PM ET**. The 10th is also a Week 1 date —
+`20260910_SF@LAR`, Thursday 8:35 PM — so the designs are not absurd, they are
+naming the second game.
+
+The reasoning was a general rule about the NFL calendar applied to a season that
+does not follow it. **Confirmed by the owner on 2026-08-21: it is the 9th.** **Do not "fix" the README to match the designs**, and tell
+the designer before the next drop propagates the 10th any further. Verified with
+one provider, which is the same provider `docs/TANK01.md` warns is an ESPN
+re-serialisation — but the game id encodes the date independently of the kickoff
+timestamp, and both say the 9th.
 
 ### What drop 6 changed
 
@@ -105,9 +197,9 @@ one of them will drift from the code that owns it.
 
 ## Do not build drop 6's landing copy — two sentences are retired
 
-**This is the trap in this directory right now.** `screens/Rostr Landing.dc.html`
-still contains the roster-as-NFT claim, in two places, and the app deliberately
-does not. Anyone implementing that hero from the design will paste a false
+**This is the trap in this directory right now, and drop 7 did not fix it —
+checked on 2026-08-21.** `screens/Rostr Landing.dc.html` still contains the
+roster-as-NFT claim, in two places, and the app deliberately does not. Anyone implementing that hero from the design will paste a false
 sentence back onto the front page, which is precisely how it got there the first
 time.
 

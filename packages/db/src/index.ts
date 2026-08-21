@@ -304,6 +304,7 @@ export {
   recordOnChainJoin,
   recordOnChainRefund,
   removeBot,
+  removeMember,
   teamForUser,
   type JoinedLeague,
   type JoinLeagueInput,
