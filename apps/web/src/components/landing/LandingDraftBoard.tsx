@@ -110,7 +110,11 @@ const COLUMNS = [
 
 export function LandingDraftBoard() {
   return (
-    <aside className="relative hidden lg:block" aria-label="A draft in progress, as an example">
+    // Shown at every width. It was `hidden lg:block` while it sat beside the
+    // hero, where a narrow screen had no room for it. In drop 7 it is the body
+    // of a panel somebody chose to open, and hiding it would leave that panel
+    // as a headline and a caption about a board they cannot see.
+    <div className="relative" aria-label="A draft in progress, as an example">
       <div className="flex items-baseline justify-between px-1 pb-3">
         <span className="text-[11px] tracking-[0.14em] text-nocturne-neutral-600 uppercase">
           Live draft · Round 3
@@ -265,12 +269,10 @@ export function LandingDraftBoard() {
           Says it is a sample, and points at the claim that is not. The draw is
           the checkable half and it is the reason this illustration is here.
         */}
-        A sample board. Three of twelve teams. In a real league the order is drawn from a Solana
-        block nobody could pick in advance.{" "}
-        <a href="#how" className="text-nocturne-accent-300 hover:underline">
-          How the draw works
-        </a>
+        A sample board. Three of twelve teams. Cell colour is the player&rsquo;s position; the
+        draft room colours by positional need instead, recomputed after each of your own picks.
+        In a real league the order is drawn from a Solana block nobody could pick in advance.
       </p>
-    </aside>
+    </div>
   );
 }

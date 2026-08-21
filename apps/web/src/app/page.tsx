@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { HeroThrow } from "@/components/landing/HeroThrow";
 import { LandingAccountLink } from "@/components/landing/LandingAccountLink";
-import { LandingDraftBoard } from "@/components/landing/LandingDraftBoard";
+import { SectionExplorer } from "@/components/landing/SectionExplorer";
 
 /**
  * The marketing page.
@@ -33,18 +33,13 @@ export default function LandingPage() {
       <SiteHeader />
 
       {/*
-        Two columns: the claim, and a draft mid-round.
+        Full-width text again — drop 7.
 
-        The board is illustrative and says so — see `LandingDraftBoard`. It sits
-        beside the headline rather than below it because the product's argument
-        is visual: a snake board with a block-drawn order is the thing no other
-        platform can show.
-
-        `overflow-hidden` stays on the section. `HeroThrow` animates a ball
-        across its own box and the board crops twelve columns to three; both
-        would otherwise widen the page on a narrow viewport.
+        Drop 6 put a condensed draft board beside the headline; drop 7 moves it
+        into the section explorer below, where it gets the width a twelve-column
+        board actually needs. The hero goes back to carrying one claim.
       */}
-      <section className="mx-auto grid w-full max-w-[1180px] gap-8 overflow-hidden lg:grid-cols-[minmax(0,1fr)_26rem]">
+      <section className="mx-auto w-full max-w-[1180px] overflow-hidden">
         <HeroThrow
           headline={
             <>
@@ -86,17 +81,21 @@ export default function LandingPage() {
             <li>Built for the Solana Seeker</li>
           </ul>
         </HeroThrow>
-
-        <div className="px-10 pt-24 lg:pl-0">
-          <LandingDraftBoard />
-        </div>
       </section>
 
       <LeaguePanel />
-      <Differentiators />
-      <HowItWorks />
-      <Format />
-      <MultiSport />
+
+      {/*
+        Seven panels behind a rail, in one band — drop 7.
+
+        `Differentiators`, `HowItWorks`, `Format` and `MultiSport` were four
+        separate scrolling sections and are now four of the seven panels, with
+        the draft board, a league week and the playoff bracket joining them. Their
+        copy moved into `SectionExplorer` rather than being wrapped, because the
+        design rewrote most of it — including demoting every heading a level now
+        that the band owns the h2.
+      */}
+      <SectionExplorer />
       <ClosingBand />
       <SiteFooter />
     </div>
@@ -336,248 +335,6 @@ function LeaguePanel() {
           </div>
         </div>
       </div>
-    </section>
-  );
-}
-
-/* -------------------------------------------------------------------- 4 */
-
-function Differentiators() {
-  return (
-    <section id="how" className={`${CONTAINER} scroll-mt-[60px] py-[84px]`}>
-      {/* Kept because deep links already point here. */}
-      <span id="trust" className="block scroll-mt-[60px]" />
-      <div className="max-w-[640px]">
-        <Kicker>Why it&rsquo;s different</Kicker>
-        <h2 className="mt-4 text-[40px] font-medium leading-[1.1] tracking-[-0.028em]">
-          Every other platform asks you to trust an administrator.
-        </h2>
-        <p className="mt-5 text-[16px] leading-[1.65] text-nocturne-neutral-400">
-          This one doesn&rsquo;t. Four things are true of a rostr league that are not true
-          anywhere else.
-        </p>
-      </div>
-
-      <div className="mt-12 grid gap-5 sm:grid-cols-2">
-        <Card
-          index="01"
-          title="Rules are immutable"
-          closing="No commissioner can rewrite scoring in Week 10 because their team is losing."
-          closingAccent
-        >
-          A league&rsquo;s scoring, roster, payout split, and deadlines are frozen at creation
-          and shown in full before anyone joins. The rule set is hashed on-chain and joining is
-          a signed transaction referencing that hash — so consent is cryptographic, not a
-          checkbox.
-        </Card>
-
-        {/*
-          The escrow is built, tested and deployed — join, stake, settle and the
-          unconditional timelock refund all work against a real validator. What
-          is not happening is the 2026 season running on it, which is a decision
-          rather than a gap, so this card describes it in the future tense and
-          says so plainly rather than quietly dropping the claim.
-
-          Do not restore the present tense here without also opening
-          `POT_LEAGUES_OPEN`. A landing page promising an escrowed pot above a
-          create form that offers only free leagues is the site contradicting
-          itself on the one subject where trust is the product.
-        */}
-        <Card
-          index="02"
-          title="The pot is escrowed"
-          closing="Coming soon. Every league this season is free to play, and everything else on this page is live today."
-        >
-          Built and tested: everyone deposits the same amount of the same token, funds sit in a
-          vault no person holds the keys to, and an unconditional refund opens if a season never
-          settles. Pot leagues are not part of the 2026 season.
-        </Card>
-
-        <Card index="03" title="Nobody declares a winner">
-          The contract holds the bracket, the scores, and the rules, and derives the champion
-          from the Week 17 result. There is no sign-off step to corrupt.
-        </Card>
-
-        {/*
-          This claimed drafted players mint as Token-2022 NFTs held in your wallet.
-          Nothing has ever minted one — there is no NFT program, and as of
-          2026-08-19 the roster-as-NFT design is abandoned rather than pending:
-          the enforcement it needed (transfer hook, permanent delegate) existed
-          only to stop a roster being sold out from under a league, and that is a
-          problem the database already solves.
-
-          What is left here is the half that was true all along and is shipped:
-          the trade escrow, the veto window, and the absence of any commissioner
-          override. Do not restore an NFT sentence to this card until something
-          actually mints.
-        */}
-        <Card index="04" title="Your roster is yours">
-          A trade freezes both sides the moment it is accepted, then waits out a 48-hour window
-          in which a third of the uninvolved managers can veto it. No commissioner can force one
-          through, reverse one, or edit a roster — there is no such function to call.
-        </Card>
-      </div>
-    </section>
-  );
-}
-
-function Card({
-  index,
-  title,
-  children,
-  closing,
-  closingAccent,
-}: {
-  index: string;
-  title: string;
-  children: ReactNode;
-  closing?: string;
-  closingAccent?: boolean;
-}) {
-  return (
-    <div className="rounded-lg bg-nocturne-surface p-[26px] shadow-[0_0_0_1px_#292b31]">
-      <p className="font-mono text-[11.5px] text-nocturne-accent-600">{index}</p>
-      <h3 className="mt-4 text-[21px] font-medium tracking-[-0.018em]">{title}</h3>
-      <p className="mt-3 text-[14.5px] leading-[1.6] text-nocturne-neutral-400">{children}</p>
-      {closing ? (
-        <p
-          className={`mt-4 text-[14.5px] leading-[1.6] ${
-            closingAccent ? "text-nocturne-accent-300" : "text-nocturne-neutral-600"
-          }`}
-        >
-          {closing}
-        </p>
-      ) : null}
-    </div>
-  );
-}
-
-/* -------------------------------------------------------------------- 5 */
-
-function HowItWorks() {
-  const steps: readonly [string, string][] = [
-    [
-      "Create and freeze",
-      "Pick a format or take the default. The rule set is hashed and written on-chain before anyone joins.",
-    ],
-    [
-      "Draw the order",
-      "The draft order comes from a Solana block produced after the field locks — nobody can grind it, and anyone can recompute it.",
-    ],
-    [
-      "Draft and play",
-      "A snake draft, then head-to-head weeks. Each pick is a signed transaction against the frozen rules.",
-    ],
-    [
-      "Settle",
-      "The champion derives from the Week 17 result. Nothing is signed off, because there is nothing to sign off.",
-    ],
-  ];
-
-  return (
-    <section id="how-steps" className={`${CONTAINER} scroll-mt-[60px] py-[84px]`}>
-      <div className="max-w-[640px]">
-        <Kicker>How it works</Kicker>
-        <h2 className="mt-4 text-[40px] font-medium leading-[1.1] tracking-[-0.028em]">
-          A season, end to end.
-        </h2>
-      </div>
-
-      {/*
-        Fixed 4-up rather than `auto-fit`, which orphans step 4 onto its own row
-        at intermediate widths. 2×2 below the large breakpoint, 1-up on small.
-      */}
-      <ol className="mt-12 grid gap-[30px] sm:grid-cols-2 lg:grid-cols-4">
-        {steps.map(([title, body], i) => (
-          <li key={title}>
-            <div className="h-px w-full bg-gradient-to-r from-nocturne-accent to-nocturne-accent-800" />
-            <p className="mt-4 font-mono text-[11.5px] text-nocturne-neutral-500">
-              Step {i + 1}
-            </p>
-            <h3 className="mt-3 text-[19px] font-medium">{title}</h3>
-            <p className="mt-3 text-[14.5px] leading-[1.6] text-nocturne-neutral-400">{body}</p>
-          </li>
-        ))}
-      </ol>
-    </section>
-  );
-}
-
-/* -------------------------------------------------------------------- 6 */
-
-function Format() {
-  const rows: readonly [string, ReactNode][] = [
-    [
-      "Scoring",
-      "Full PPR. 4pt passing TD, 6pt rushing/receiving TD, 1pt per 25 passing yards, 1pt per 10 rushing/receiving yards, −2 per interception and lost fumble.",
-    ],
-    ["Teams", "12 teams, minimum 2 humans, bots fill the rest."],
-    ["Draft", "Snake draft, fast (90s minimum) or slow (up to 24h per pick)."],
-    [
-      "Season",
-      "Weeks 1–14 regular season, 15–17 playoffs, championship Week 17. Week 18 is excluded — NFL starters rest once seeding is settled.",
-    ],
-    ["Matchups", "Head-to-head weekly. Schedule luck is retained deliberately."],
-    ["Waivers", "Rolling priority. Win a claim, go to the back of the order."],
-    [
-      "Consolation",
-      "The consolation bracket is played, so eliminated teams still have something to play for. This is the anti-abandonment mechanism — punishment doesn't work on someone already guaranteed nothing.",
-    ],
-  ];
-
-  return (
-    <section id="format" className={`${CONTAINER} scroll-mt-[60px] py-[84px]`}>
-      <div className="grid gap-14 lg:grid-cols-[minmax(0,0.6fr)_minmax(0,1fr)]">
-        <div>
-          <Kicker>Format</Kicker>
-          <h2 className="mt-4 text-[34px] font-medium leading-[1.14] tracking-[-0.025em]">
-            The default league, in full.
-          </h2>
-          <p className="mt-5 text-[15px] leading-[1.65] text-nocturne-neutral-400">
-            Every value below is frozen when a league is created. The complete rule set lives in{" "}
-            <a
-              href="https://github.com/6figpsolseeker/rostr/blob/main/docs/RULES.md"
-              className="text-nocturne-accent-300 underline underline-offset-4"
-            >
-              docs/RULES.md
-            </a>
-            .
-          </p>
-        </div>
-
-        <table className="w-full text-[14.5px]">
-          <tbody>
-            {rows.map(([label, value]) => (
-              <tr key={label} className="border-t border-nocturne-neutral-900 first:border-t-0">
-                <th className="w-[150px] py-4 pr-6 text-left align-top font-normal text-nocturne-neutral-500">
-                  {label}
-                </th>
-                <td className="py-4 align-top leading-[1.6] text-nocturne-neutral-400">
-                  {value}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </section>
-  );
-}
-
-/* -------------------------------------------------------------------- 7 */
-
-function MultiSport() {
-  return (
-    <section className={`${CONTAINER} py-[84px]`}>
-      <Kicker>Multi-sport</Kicker>
-      <p className="mt-6 max-w-[860px] text-[clamp(24px,3.1vw,36px)] font-medium leading-[1.26] tracking-[-0.024em]">
-        Football ships first, but the schema does not know what football is. Sports are data — a
-        registry of stat keys, positions, and lineup slots — never structure or code branches.
-      </p>
-      <p className="mt-6 max-w-[560px] text-[15px] leading-[1.65] text-nocturne-neutral-400">
-        Adding a sport should insert rows and write one provider adapter, with no migration and
-        no change to scoring, drafting, trading, or settlement.
-      </p>
     </section>
   );
 }

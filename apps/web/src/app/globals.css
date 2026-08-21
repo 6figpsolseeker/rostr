@@ -109,3 +109,34 @@ body {
  * animating, because there is no keyframe or transition for a media query to
  * switch off — the flight is driven frame by frame from JavaScript.
  */
+
+/**
+ * The panel fade in the landing page's section explorer.
+ *
+ * Defined here because `animate-[rostrFade_…]` names a keyframe rather than
+ * providing one — without this the class is generated, applied, and animates
+ * nothing. It came from the design handoff, where the keyframe lives in the
+ * prototype's own `<style>` block and does not travel with the markup.
+ *
+ * Switched off under `prefers-reduced-motion`, which a JavaScript-driven
+ * animation has to handle itself but a CSS one can simply decline. `HeroThrow`
+ * reads the same preference in its own way, for the opposite reason: its flight
+ * is driven frame by frame, so there is no declaration for a media query to
+ * override.
+ */
+@keyframes rostrFade {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-\[rostrFade_260ms_ease-out\] {
+    animation: none;
+  }
+}
