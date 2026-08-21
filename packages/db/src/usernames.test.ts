@@ -1,5 +1,14 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { createUser, findUserByWallet, IdentityError, linkWallet } from "./identity.js";
+import {
+  beginEmailSignIn,
+  createUser,
+  findUserByEmail,
+  findUserByWallet,
+  getUser,
+  IdentityError,
+  linkWallet,
+  verifySignInCode,
+} from "./identity.js";
 import {
   findUserByUsername,
   setUsername,
@@ -146,6 +155,52 @@ describe("setUsername", () => {
     await setUsername(client, first.id, "route67");
 
     expect(await setUsername(client, second.id, "route66")).toBe("route66");
+  });
+});
+
+describe("every path that returns a User carries the username", () => {
+  /**
+   * The regression that took sign-in down on 2026-08-21.
+   *
+   * `username` was added to every `SELECT` that builds a `User` and missed on
+   * one `RETURNING` clause — the one inside `verifySignInCode`. The field is
+   * typed `string | null`, so nothing complained; the row simply omitted the
+   * column and the value came back `undefined`.
+   *
+   * In production that reached `accountGaps`, which did `state.username.trim()`
+   * after a `=== null` check, and threw. **Only on the success path**: a wrong
+   * code answered 401 correctly, and every accepted code 500'd.
+   *
+   * So this asserts the shape rather than the value — `null`, never `undefined`
+   * — across every function that hands back a `User`. A `toBeNull` here fails
+   * on `undefined`, which is exactly the distinction that was missed.
+   */
+  it("verifySignInCode does, which is where it was missing", async () => {
+    const client = await fresh();
+    const { token } = await beginEmailSignIn(client, "code@example.test");
+    const user = await verifySignInCode(client, "code@example.test", token.token);
+
+    expect(user.username).toBeNull();
+  });
+
+  it("createUser, getUser and findUserByEmail do", async () => {
+    const client = await fresh();
+    const created = await createUser(client, "shape@example.test", "Shape");
+    expect(created.username).toBeNull();
+
+    expect((await getUser(client, created.id))?.username).toBeNull();
+    expect((await findUserByEmail(client, "shape@example.test"))?.username).toBeNull();
+  });
+
+  it("and they carry a claimed one back", async () => {
+    const client = await fresh();
+    const created = await createUser(client, "named@example.test", "Named");
+    await setUsername(client, created.id, "route66");
+
+    const { token } = await beginEmailSignIn(client, "named@example.test");
+    const signedIn = await verifySignInCode(client, "named@example.test", token.token);
+    expect(signedIn.username).toBe("route66");
+    expect((await getUser(client, created.id))?.username).toBe("route66");
   });
 });
 

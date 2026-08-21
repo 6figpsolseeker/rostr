@@ -140,7 +140,9 @@ export async function POST(request: Request): Promise<NextResponse> {
    * request is well-formed and the account is simply unfinished, and the code
    * tells the client where to send them.
    */
-  if (user.username === null || user.username.trim() === "") {
+  // Total, for the reason `accountGaps` records: an omitted column reads as
+  // `undefined` and would throw here rather than refuse.
+  if (typeof user.username !== "string" || user.username.trim() === "") {
     return NextResponse.json(
       {
         error: "Pick a username first — it is how people invite you.",
