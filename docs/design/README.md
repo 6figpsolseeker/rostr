@@ -1,7 +1,7 @@
 # rostr — design handoff
 
-Twelve files, thirty-seven states, the public
-landing page, creating and freezing a league, inviting and joining it, the draft lobby and
+Twelve screen files plus an index and a logo sheet, covering the whole product as it exists
+today: the public landing page, creating and freezing a league, inviting and joining it, the draft lobby and
 the order draw, the draft room, the weekly in-season loop, the playoffs and settlement, amending and dissolving a league,
 and ten screens designed for mobile web.
 
@@ -164,9 +164,30 @@ Each file stacks its states vertically. Open it in a browser; the file is the sp
 pixel detail, and what follows is the intent and the decisions worth preserving.
 
 ### 1. `Rostr Landing.dc.html` — marketing landing, 2 hero variants
-Nine bands: sticky header, hero, a league-home panel, four differentiators, a four-step
-season walkthrough, the full default rule set, the multi-sport statement, a closing CTA on
-the one saturated ground, footer. Copy is lifted verbatim from the repo README.
+Five bands: sticky header, a full-width hero, the **section explorer**, a closing CTA on the
+one saturated ground, footer. Copy is lifted verbatim from the repo README.
+
+**The page was restructured at the user's request: five scrolling sections became one
+explorer.** Inside a league, How it works, Why it's different, Format and Multi-sport used to
+be five bands the visitor scrolled past; they are now seven panels behind a left rail, in one
+band below the hero. The rail is a vertical list of labels with the active one carrying an
+accent left border and a 10% tint; only the active panel is in the DOM (`sc-if` per panel),
+and a `min-height: 620px` on the panel column keeps the page from jumping as you switch.
+
+Three decisions inside that worth keeping:
+
+**It went below the hero, not inside it.** The original ask was to put the explorer in the
+hero's right column. That column is about 470×420px — the Format table alone is nine rows, so
+each panel would have collapsed to a headline or the hero would have grown until the H1 left
+the screen. The band below has room for the table at full size and the rail keeps all seven
+labels visible at once, which a carousel does not.
+
+**The rail is ordered as a season, not as a menu.** Why it's different, How it works, Format,
+The draft, Inside a league, Playoffs and payout, Beyond football. The argument comes first
+because it is the reason to keep reading; then the mechanics run in the order a manager meets
+them, so the draft sits fourth rather than last.
+
+**Nothing auto-advances.** Panels change only on click.
 
 **The hero throw.** A football crosses the hero and its flight path resolves into the
 accent rule under the headline. The visible path is the **partial Bézier up to the ball's
@@ -190,7 +211,7 @@ reasserts the literal attributes on every render.
 `localStorage`, and skip to the settled state on repeat visits. It replays every load here
 because it is a review artifact.
 
-**The hero's right column is a condensed live draft**, and it is built from the shipped
+**Panel 04 carries a condensed live draft board**, and it is built from the shipped
 component rather than invented — read `DraftRoom.tsx`'s `BoardSquare` and `lib/player.ts`
 before touching it. It reproduces four things exactly: cells are filled **by position** from
 `POSITION_COLOURS` (QB rose, RB emerald, WR sky, TE amber, K violet, DEF teal, each at 0.15
@@ -200,20 +221,42 @@ wrong planning two picks ahead, and columns hold `min-w-[7.5rem]` — 120px. Thr
 teams are shown at full width rather than twelve squeezed: below 120px `shortName`'s
 surnames truncate, which defeats the reason the given name is initialled in the first place.
 
-Two things about it to keep. The crop fade is a **fixed-length** gradient
-(`calc(100% - 88px)`), not a percentage — the aside doubles in width when the layout stacks,
-and a percentage fade eats a whole visible column at the wider size. And the on-clock card's
+Three things about it to keep. The crop fade is a **fixed-length** gradient
+(`calc(100% - 88px)`), not a percentage — the panel doubles in width when the layout stacks,
+and a percentage fade eats a whole visible column at the wider size. The on-clock card's
 portrait is a 96px `<image-slot>`, matching the size `PlayerAvatar` documents for a card
 portrait; at 52px the component's own empty state overflows its host. Real headshots come
 from the provider's `imageUrl` through `sizedImage`, so in production most cells carry a
-face and the initialled disc is the one-in-ten fallback — the design shows discs because no
-photo assets exist here.
+face and the initialled disc is the one-in-ten fallback — the design shows a placeholder
+because no photo assets exist here.
+
+And the **120px column floor has to be enforced in CSS, not assumed.** Written as
+`minmax(0, 1fr)` the three columns collapsed to 56px between roughly 981px and 1105px of
+viewport, clipping all seven player names to 15px of a 42–68px string — every name in the
+board unreadable, in a window a laptop actually sits in. It is now `minmax(120px, 1fr)`, and
+the panel's inner grid stacks at 1240px so the floor never has to fight a 300px aside.
+
+**Cell colour on this board is position identity, not positional need.** The caption said
+need for one revision and the cells never behaved that way — need-colouring belongs to
+`Rostr Draft Room.dc.html`, where it is recomputed after each of your own picks. On a
+three-column marketing board there is no room to explain a colour that means something else.
 
 **The nav is four items:** How it works, a GitHub and an X icon, Create a league, and
-Connect wallet. The three separate How it works / Format / Why it's different tabs were
-consolidated into one anchor at the user's request, so `#how` now covers all three sections
-contiguously. Connect wallet is a `<button>`, not an anchor — connecting is an action, and
-it is a **fourth surface needing the wallet signing round-trip** (see the list at the end).
+Connect wallet. `#explore` is the one content anchor, since the explorer absorbed the three
+tabs that used to point at separate sections. The X icon points at
+`https://x.com/rostr_app`. Connect wallet is a `<button>`, not an anchor — connecting is an
+action, and it is a **fourth surface needing the wallet signing round-trip** (see the list at
+the end).
+
+**This screen's player names are real; the other eleven screens' are not.** The landing
+board and its league-home panel now name actual NFL players in ADP order — J. Jefferson,
+B. Robinson and S. Barkley at 1.03–1.05, B. Bowers, N. Collins and T. McBride in round 2,
+J. Allen at 3.03, and James Cook as the queue leader at 3.04. Board cells keep `shortName`'s
+initialled form so they hold the 120px floor; the on-clock card has room for the full name.
+Two caveats: **the ordering is a designer's guess at 2026 ADP, not data** — reconcile it
+against the live Tank01 board, which the repo has no fixture for — and Route 66's five
+starters in panel 05 were rewritten to match what the board shows them drafting, so those two
+places have to move together.
 
 ### 2. `Rostr Create League.dc.html` — 2 states
 **The finding that shaped this screen: only ten values are the commissioner's.** Scoring
@@ -473,7 +516,11 @@ freezing a league, voting, any pot action, and the landing page's Connect wallet
 
 ## Files
 
-- `screens/*.dc.html` — the twelve designs. Open directly in a browser.
+- `screens/*.dc.html` — the twelve designs, plus `Rostr Screens.dc.html` (an index of them
+  all with per-screen notes and the open questions) and `Rostr Logo.dc.html` (the logo
+  exploration sheet). Open any directly in a browser.
+- `brand/` — the finished logo, headers and X headers as PNG and SVG, with their own
+  `README.md`. Social and print only; the product UI keeps its own header.
 - `screens/support.js` — prototyping runtime. **Not for production.**
 - `nocturne/styles.css` — token sheet and component layer (`.btn`, `.card`, `.tag`,
   `.table`, `.input`, `.field`, `.seg`, `.radio`, `.dialog`).
