@@ -77,6 +77,23 @@ writing it. All three are the same shape as defects this repo has had:
   wrong on first write twice. The canonical bracket lives in
   `Rostr Playoffs.dc.html`.
 
+#### Three of drop 7's open questions are now answered
+
+The designer lists five things "needing you rather than a developer". Three
+have answers as of 2026-08-21 and should go back in the next reply:
+
+- **How autopick signs a transaction the manager was not present for** —
+  it does not. A pick is a database write; nothing on that path signs
+  anything. The question came from the roster-as-NFT design, which is
+  abandoned. **Draft room state 6 is designed for a failure that cannot
+  happen** — a wallet prompt outliving its blockhash during a pick — and can
+  be dropped. See CLAUDE.md, "Drafting signs nothing".
+- **Which hero animation ships** — **A**.
+- **Kickoff** — the 9th. See below.
+
+Still open and genuinely for the owner: when a week label flips, and whether
+escrow release can move a player whose game is in progress.
+
 #### The kickoff question is settled, and the designer's guess is wrong
 
 Drop 7 asks whether kickoff is 9 or 10 September, notes that all twelve designs
@@ -90,7 +107,7 @@ The first Week 1 game in the database is `20260909_NE@SEA`, kicking off
 naming the second game.
 
 The reasoning was a general rule about the NFL calendar applied to a season that
-does not follow it. **Do not "fix" the README to match the designs**, and tell
+does not follow it. **Confirmed by the owner on 2026-08-21: it is the 9th.** **Do not "fix" the README to match the designs**, and tell
 the designer before the next drop propagates the 10th any further. Verified with
 one provider, which is the same provider `docs/TANK01.md` warns is an ESPN
 re-serialisation — but the game id encodes the date independently of the kickoff

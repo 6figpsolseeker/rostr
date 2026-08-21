@@ -24,15 +24,17 @@
  *   needs a wallet to sign the rules hash with, and there is no path that fakes
  *   one. An account with no wallet cannot join anything, whatever this file
  *   says.
- * - **The username half is enforced nowhere.** Somebody who navigates away from
- *   `/welcome` can still create a league and still join one. What they cannot do
- *   is be *found*: a commissioner invites by username or by a verified address,
- *   so an account with neither is unreachable — which is a real consequence, and
- *   not the same thing as a refusal.
+ * - **The username half is enforced too, as of 2026-08-21.** It was not, and this
+ *   comment said so. The owner decided a username is required, so
+ *   `POST /api/leagues` and `POST /api/leagues/[id]/join` both refuse an account
+ *   without one — `422` with `USERNAME_REQUIRED`, because the request is
+ *   well-formed and the account is simply unfinished.
  *
- * Making the username a precondition of creating or joining is a product
- * decision rather than an oversight, and it belongs to the owner: it would put a
- * new failure mode on the join path, which is the one path 22 August depends on.
+ * Those two are the points where being unreachable costs something: a username
+ * is what a commissioner types to invite you, so creating or joining a league
+ * without one is how somebody ends up alone in a league nobody can ask them
+ * about. Everything else still reports rather than refuses — the header's
+ * "finish setting up" and the empty-invitations notice are prompts, not gates.
  *
  * The rule lives here rather than in a component because `apps/web` cannot
  * render a component in a test — both vitest projects are node-environment with

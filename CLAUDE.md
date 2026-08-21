@@ -2910,8 +2910,35 @@ These were discussed at length and decided. Re-proposing them wastes the owner's
 | Autofill ranks on weekly projections             | **Settled** 2026-08-08 — a decision, not a fact; see DECISIONS                    |
 | `def_pts_allowed` follows ESPN, not Sleeper      | **Settled** 2026-08-17 — a defensive TD is deducted from points allowed           |
 | Defense is the **team unit**, never a player     | **Settled** 2026-08-17 — no IDP slot, and per-player defensive stats are unmapped |
+| Drafting needs **no transaction**                | **Settled** 2026-08-21 — a pick is a database write; nothing signs                |
+| A username is **required** to create or join     | **Settled** 2026-08-21 — 422 `USERNAME_REQUIRED`; it is how you are invited       |
+| A commissioner may **remove a member**           | **Settled** 2026-08-21 — free leagues, before the draw, never a pot league        |
+| Kickoff is **9 September 2026**                  | **Settled** 2026-08-21 — confirmed against the synced schedule and the owner      |
+| Landing hero animation **A**                     | **Settled** 2026-08-21 — the design ships both behind a switcher                  |
 
 ---
+
+### Drafting signs nothing, and that retires the designer's blocking question
+
+**Settled 2026-08-21.** Drop 7 lists "how autopick signs a transaction the
+manager was not present for" as needing a decision before the escrow program
+is written, and derives draft room state 6 from it — a manager losing the
+player they chose because a wallet prompt outlived its blockhash.
+
+**Neither exists.** A pick is `recordPick`: a Postgres transaction that writes
+`draft_picks`, `roster_entries` and the queue cleanup. The pick route takes no
+signature, touches no wallet, and builds no instruction. Checked rather than
+recalled — there is no `signMessage`, `Transaction` or wallet reference
+anywhere on that path.
+
+The question came from the roster-as-NFT design, where each pick would mint.
+That design is abandoned (see below), so the question goes with it, and so
+does the failure mode: a wallet prompt cannot outlive a blockhash during a
+pick, because there is no prompt.
+
+**What does sign:** joining (the rules hash), `deposit`, `refund_stake`,
+`initialize_league`, and `start_season`. Five moments, all of them money or
+consent, none of them a pick.
 
 ### The roster is not an NFT, and the site must not say it is
 

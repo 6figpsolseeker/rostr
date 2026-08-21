@@ -39,9 +39,37 @@ export async function GET(
       return NextResponse.json({ error: "Not your league" }, { status: 403 });
     }
 
-    const invitations = await invitationsForLeague(db(), id);
+    const client = db();
+    const invitations = await invitationsForLeague(client, id);
+
+    // The seated field, alongside who was asked. Commissioner-only already, and
+    // the two belong together: "who is in" and "who was invited" are one
+    // question when you are filling a league.
+    const members = await client.query<{
+      team_id: string;
+      team_name: string;
+      username: string | null;
+      is_bot: boolean;
+      is_commissioner: boolean;
+    }>(
+      `SELECT t.id AS team_id, t.name AS team_name, u.username, t.is_bot,
+              (t.owner_id = l.commissioner_id) AS is_commissioner
+         FROM teams t
+         JOIN leagues l ON l.id = t.league_id
+         LEFT JOIN users u ON u.id = t.owner_id
+        WHERE t.league_id = $1
+        ORDER BY t.slot`,
+      [id],
+    );
 
     return NextResponse.json({
+      members: members.map((row) => ({
+        teamId: row.team_id,
+        teamName: row.team_name,
+        username: row.username,
+        isBot: row.is_bot,
+        isCommissioner: row.is_commissioner,
+      })),
       invitations: invitations.map((invitation) => ({
         id: invitation.id,
         username: invitation.invitedUsername,

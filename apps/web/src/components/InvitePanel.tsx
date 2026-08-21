@@ -17,6 +17,14 @@ import useSWR from "swr";
  * says so, because a control called "invite" in most products means "add".
  */
 
+interface Member {
+  teamId: string;
+  teamName: string;
+  username: string | null;
+  isBot: boolean;
+  isCommissioner: boolean;
+}
+
 interface Invitation {
   id: string;
   username: string | null;
@@ -26,13 +34,15 @@ interface Invitation {
   accepted: boolean;
 }
 
-const fetcher = async (url: string): Promise<{ invitations: Invitation[] }> => {
+const fetcher = async (
+  url: string,
+): Promise<{ members: Member[]; invitations: Invitation[] }> => {
   const response = await fetch(url);
   if (!response.ok) {
     const body = (await response.json().catch(() => ({}))) as { error?: string };
     throw new Error(body.error ?? `Request failed: ${response.status}`);
   }
-  return response.json() as Promise<{ invitations: Invitation[] }>;
+  return response.json() as Promise<{ members: Member[]; invitations: Invitation[] }>;
 };
 
 export function InvitePanel({ leagueId }: { leagueId: string }) {
@@ -71,6 +81,40 @@ export function InvitePanel({ leagueId }: { leagueId: string }) {
     }
   }
 
+  /**
+   * Remove somebody who is already seated.
+   *
+   * Confirmed first, because it is the one control here that destroys something
+   * — an invitation can be re-sent, a seat cannot be un-removed once the field
+   * locks. The server refuses after the draw or the scheduled time regardless;
+   * this is the courtesy, and `removeMember` is the rule.
+   */
+  async function remove(member: Member): Promise<void> {
+    const who = member.username ?? member.teamName;
+    if (
+      !window.confirm(`Remove ${who} from the league? They would have to be invited again.`)
+    ) {
+      return;
+    }
+
+    setBusy(true);
+    setProblem(null);
+    try {
+      const response = await fetch(`/api/leagues/${leagueId}/members`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ teamId: member.teamId }),
+      });
+      const body = (await response.json()) as { error?: string };
+      if (!response.ok) throw new Error(body.error ?? "Could not remove them");
+      await mutate();
+    } catch (e) {
+      setProblem(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function withdraw(invitationId: string): Promise<void> {
     setBusy(true);
     setProblem(null);
@@ -91,6 +135,7 @@ export function InvitePanel({ leagueId }: { leagueId: string }) {
   // an error. Anything else is worth showing.
   if (error) return null;
 
+  const members = data?.members ?? [];
   const invitations = data?.invitations ?? [];
   const outstanding = invitations.filter((i) => !i.withdrawn && !i.accepted);
 
@@ -168,6 +213,51 @@ export function InvitePanel({ leagueId }: { leagueId: string }) {
         <p className="text-sm text-nocturne-accent-300">
           Invited {sent}. They will see it under Invitations.
         </p>
+      )}
+
+      {members.length > 0 && (
+        <div className="space-y-2 border-t border-nocturne-neutral-900 pt-4">
+          <h3 className="text-xs font-medium tracking-wide text-nocturne-neutral-500 uppercase">
+            In the league
+            <span className="ml-2 font-normal normal-case">{members.length}</span>
+          </h3>
+          <ul className="space-y-1 text-sm">
+            {members.map((member) => (
+              <li key={member.teamId} className="flex items-center gap-3">
+                <span className="min-w-0 flex-1 truncate">
+                  {member.teamName}
+                  {member.username && (
+                    <span className="ml-2 text-xs text-nocturne-neutral-600">
+                      {member.username}
+                    </span>
+                  )}
+                </span>
+                {member.isCommissioner ? (
+                  <span className="shrink-0 text-xs text-nocturne-neutral-600">you</span>
+                ) : member.isBot ? (
+                  <span className="shrink-0 text-xs text-nocturne-neutral-600">bot</span>
+                ) : (
+                  <button
+                    onClick={() => void remove(member)}
+                    disabled={busy}
+                    className="shrink-0 text-xs text-nocturne-neutral-600 hover:text-red-400 disabled:opacity-40"
+                  >
+                    Remove
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+          <p className="text-[11px] text-nocturne-neutral-600">
+            {/*
+              Says when this stops working, before somebody discovers it. The
+              field locks at the draft time and the trigger in `0028` refuses
+              every removal after it — removing a team changes the field exactly
+              as adding one does.
+            */}
+            Only until the draft order is drawn — after that the field is locked for everyone.
+          </p>
+        </div>
       )}
 
       {invitations.length > 0 && (

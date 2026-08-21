@@ -56,7 +56,12 @@ export class JoinError extends Error {
       | "EVEN_WITHOUT_BOT"
       | "BOT_NOT_FOUND"
       | "DRAFT_ALREADY_DRAWN"
-      | "FIELD_LOCKED",
+      | "FIELD_LOCKED"
+      | "NOT_COMMISSIONER"
+      | "TEAM_NOT_IN_LEAGUE"
+      | "CANNOT_REMOVE_COMMISSIONER"
+      | "IS_A_BOT"
+      | "POT_LEAGUE",
   ) {
     super(message);
     this.name = "JoinError";
@@ -397,6 +402,116 @@ export async function teamForUser(
  * guarded INSERT only — so this check was the only thing standing in its way, in
  * a function with no production caller.
  */
+/**
+ * Remove a member from a league, before it drafts.
+ *
+ * A commissioner filling a league by invitation needs a way to undo one — an
+ * invitation accepted by the wrong person, or somebody who changed their mind
+ * and left a seat that cannot be given away. Until now the only remedy was to
+ * abandon the league and make another, because nothing removes a team.
+ *
+ * ## What makes this safe, and why it is *only* safe here
+ *
+ * **Before the draft, a team owns nothing.** No roster, no picks, no lineups, no
+ * matchups, no trades — those rows do not exist yet. `ON DELETE RESTRICT` on all
+ * of them is what makes that a fact rather than an assumption: if any did exist,
+ * this fails loudly instead of orphaning a season. The same argument `removeBot`
+ * already relies on.
+ *
+ * **And after the draft it is impossible, at the database.** Migration `0028`
+ * refuses every `teams` DELETE once the order is drawn or the scheduled time has
+ * passed, because removing a team changes the field exactly as adding one does
+ * and delete-then-add is an unbounded re-roll of the draft order. The checks
+ * below produce a usable error; the trigger is what makes it true.
+ *
+ * **Never from a pot league.** A member who staked has money in the vault, and
+ * deleting their row returns none of it — `refund_stake` needs their own
+ * signature and the timelock. Removing them would leave a stake with no member
+ * behind it and a settlement that cannot account for it. Free leagues have no
+ * such problem, which is what makes this shippable now.
+ *
+ * **The on-chain `Membership` is left alone**, deliberately. Nothing closes one,
+ * and it should not: it records that a wallet accepted a rules hash on a date,
+ * which stays true whether or not they are still in the league. What it never
+ * meant is "is a member" — that has always been a Postgres fact.
+ */
+export async function removeMember(
+  db: SqlClient,
+  input: {
+    readonly leagueId: string;
+    readonly teamId: string;
+    /** The caller. Compared against the league's commissioner, never trusted. */
+    readonly actingUserId: string;
+  },
+): Promise<{ removed: string }> {
+  return withTransaction(db, async (tx) => {
+    const [league] = await tx.query<{ commissioner_id: string; state: string }>(
+      "SELECT commissioner_id, state FROM leagues WHERE id = $1",
+      [input.leagueId],
+    );
+    if (!league) throw new JoinError("League not found", "LEAGUE_NOT_FOUND");
+
+    if (league.commissioner_id !== input.actingUserId) {
+      throw new JoinError("Only the commissioner can remove a member", "NOT_COMMISSIONER");
+    }
+
+    // Ahead of the field check, so a league that has already drawn says the more
+    // specific thing rather than "the field is locked".
+    const [draft] = await tx.query<{ order_drawn_at: string | null }>(
+      "SELECT order_drawn_at FROM drafts WHERE league_id = $1",
+      [input.leagueId],
+    );
+    if (draft?.order_drawn_at) {
+      throw new JoinError(
+        "The draft order is already drawn, so the field is locked.",
+        "DRAFT_ALREADY_DRAWN",
+      );
+    }
+
+    await requireOpenField(tx, input.leagueId);
+
+    // The pot lives in the frozen rules, which are the thing members signed —
+    // not in a column that could disagree with them.
+    const stored = await getLeagueRules(tx, input.leagueId);
+    if (!stored) throw new JoinError("League has no rules", "RULES_MISSING");
+    if (stored.rules.pot) {
+      throw new JoinError(
+        "Members of a league with a pot cannot be removed — their stake is on-chain.",
+        "POT_LEAGUE",
+      );
+    }
+
+    const [team] = await tx.query<{ id: string; is_bot: boolean; owner_id: string | null }>(
+      "SELECT id, is_bot, owner_id FROM teams WHERE id = $1 AND league_id = $2",
+      [input.teamId, input.leagueId],
+    );
+    // Scoped by league as well as by id, so a commissioner of one league cannot
+    // reach into another by guessing a UUID.
+    if (!team) throw new JoinError("No such team in this league", "TEAM_NOT_IN_LEAGUE");
+
+    if (team.is_bot) {
+      throw new JoinError("Use removeBot for a bot seat", "IS_A_BOT");
+    }
+
+    if (team.owner_id === league.commissioner_id) {
+      // The league would be left with no commissioner and no way to appoint one.
+      throw new JoinError(
+        "A commissioner cannot remove themselves",
+        "CANNOT_REMOVE_COMMISSIONER",
+      );
+    }
+
+    // Consent first, then the seat. `league_memberships.team_id` is a plain
+    // reference with no cascade, so the other order fails on the constraint.
+    await tx.query("DELETE FROM league_memberships WHERE league_id = $1 AND team_id = $2", [
+      input.leagueId,
+      input.teamId,
+    ]);
+    await tx.query("DELETE FROM teams WHERE id = $1", [input.teamId]);
+
+    return { removed: input.teamId };
+  });
+}
 export async function removeBot(db: SqlClient, leagueId: string): Promise<{ removed: string }> {
   return withTransaction(db, async (tx) => {
     // Kept ahead of the field check so a league whose order is already drawn
