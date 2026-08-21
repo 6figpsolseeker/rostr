@@ -65,7 +65,21 @@ export interface AccountState {
  */
 export function accountGaps(state: AccountState): readonly AccountGap[] {
   const gaps: AccountGap[] = [];
-  if (state.username === null || state.username.trim() === "") gaps.push("USERNAME");
+  // `typeof`, not `=== null`, and that is a fix rather than a style.
+  //
+  // `username` is typed `string | null`, so `state.username.trim()` looked total.
+  // It is not: a query that omits the column yields `undefined`, which passes the
+  // null check and then throws on `.trim()`. That happened —
+  // `verifySignInCode`'s `RETURNING` clause was missed when the column was added,
+  // so **every successful sign-in 500'd** while a wrong code answered correctly,
+  // because this line only runs once a code is accepted.
+  //
+  // The query is fixed. This stays total anyway: a row that cannot say whether
+  // somebody has a username has not established that they do, and reading that
+  // as "no username" sends them to `/welcome` instead of taking the site down.
+  if (typeof state.username !== "string" || state.username.trim() === "") {
+    gaps.push("USERNAME");
+  }
   if (state.verifiedWallets < 1) gaps.push("WALLET");
   return gaps;
 }

@@ -269,7 +269,7 @@ export async function verifySignInCode(
     // runs on every login. Overwriting would keep resetting "verified since" to
     // the most recent sign-in.
     `UPDATE users SET email_verified_at = COALESCE(email_verified_at, $2) WHERE id = $1
-     RETURNING id, email, display_name, email_verified_at`,
+     RETURNING id, email, display_name, email_verified_at, username`,
     [row.user_id, now.toISOString()],
   );
   return toUser(updated!);
