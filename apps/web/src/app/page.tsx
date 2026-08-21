@@ -83,8 +83,6 @@ export default function LandingPage() {
         </HeroThrow>
       </section>
 
-      <LeaguePanel />
-
       {/*
         Seven panels behind a rail, in one band — drop 7.
 
@@ -138,14 +136,6 @@ function GhostButton({ href, children }: { href: string; children: ReactNode }) 
     >
       {children}
     </a>
-  );
-}
-
-function Kicker({ children }: { children: ReactNode }) {
-  return (
-    <p className="text-[11px] uppercase tracking-[0.14em] text-nocturne-accent-500">
-      {children}
-    </p>
   );
 }
 
@@ -225,117 +215,6 @@ function SiteHeader() {
         </div>
       </nav>
     </header>
-  );
-}
-
-/* -------------------------------------------------------------------- 3 */
-
-/**
- * A league's week, as it actually reads.
- *
- * The numbers are illustrative and the players invented. This wants real data
- * once the stats pipeline has a producer — `stat_lines` is empty today, so there
- * is nothing truthful to render here yet.
- */
-function LeaguePanel() {
-  const lineup: readonly [string, string, string, string, boolean][] = [
-    ["QB", "J. Barrow", "18.4", "21.2", false],
-    ["RB", "A. Villanueva", "14.1", "16.8", false],
-    ["RB", "D. Okonkwo", "11.7", "9.3", false],
-    ["WR", "T. Mackey", "13.2", "17.5", false],
-    ["FLEX", "R. Silva", "10.9", "—", true],
-  ];
-
-  return (
-    <section className={`${CONTAINER} py-[84px]`}>
-      <div className="grid gap-14 lg:grid-cols-[minmax(0,0.72fr)_minmax(0,1fr)] lg:items-start">
-        <div>
-          <Kicker>Inside a league</Kicker>
-          <h2 className="mt-4 text-[34px] font-medium leading-[1.14] tracking-[-0.025em]">
-            The week you already know how to read.
-          </h2>
-          <p className="mt-5 max-w-[440px] text-[16px] leading-[1.65] text-nocturne-neutral-400">
-            Head-to-head matchups, a waiver wire, a trade deadline, a playoff bracket. The
-            format is the one every manager already has in muscle memory — what changes is who
-            can alter it afterwards.
-          </p>
-          <ul className="mt-7 space-y-3 text-[15px] text-nocturne-neutral-400">
-            {[
-              "Weeks 1–14 head-to-head, 15–17 playoffs",
-              "Rolling waiver priority — win a claim, go to the back",
-              "Consolation bracket is played, so nobody is left with nothing",
-            ].map((line) => (
-              <li key={line} className="flex gap-3">
-                <span className="text-nocturne-accent-500">&mdash;</span>
-                <span>{line}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        <div className="overflow-hidden rounded-lg bg-nocturne-surface shadow-[0_0_0_1px_#595d6c,0_6px_18px_rgba(0,0,0,0.55)]">
-          <div className="flex items-center justify-between border-b border-nocturne-neutral-900 px-[18px] py-[14px]">
-            <span className="text-[14.5px] font-medium">Route 66</span>
-            <div className="flex items-center gap-3">
-              <span className="text-[11.5px] text-nocturne-neutral-600">Week 3</span>
-              <Tag accent>Rules locked</Tag>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 border-b border-nocturne-neutral-900 px-[18px] py-5">
-            <div>
-              <p className="text-[14px]">Route 66</p>
-              <p className="text-[11.5px] text-nocturne-neutral-600">2-0 · proj 118.4</p>
-            </div>
-            <div className="flex items-center gap-3 tabular-nums">
-              <span className="text-[27px] text-nocturne-accent-300">68.4</span>
-              <span className="text-[12px] text-nocturne-neutral-600">vs</span>
-              <span className="text-[27px] text-nocturne-neutral-400">61.9</span>
-            </div>
-            <div className="text-right">
-              <p className="text-[14px]">Fourth &amp; Long</p>
-              <p className="text-[11.5px] text-nocturne-neutral-600">1-1 · proj 112.0</p>
-            </div>
-          </div>
-
-          <table className="w-full border-b border-nocturne-neutral-900 text-[13px]">
-            <thead>
-              <tr className="text-nocturne-neutral-600">
-                <th className="px-[18px] py-2 text-left font-normal">Slot</th>
-                <th className="py-2 text-left font-normal">Starter</th>
-                <th className="py-2 text-right font-normal">Proj</th>
-                <th className="px-[18px] py-2 text-right font-normal">Pts</th>
-              </tr>
-            </thead>
-            <tbody className="tabular-nums">
-              {lineup.map(([slot, player, proj, pts, flex]) => (
-                <tr key={`${slot}-${player}`} className="border-t border-nocturne-neutral-900">
-                  <td className="px-[18px] py-[9px]">
-                    <span
-                      className={`rounded-[4px] border px-[7px] py-[2px] text-[10px] ${
-                        flex
-                          ? "border-nocturne-accent/40 text-nocturne-accent-300"
-                          : "border-nocturne-neutral-800 text-nocturne-neutral-500"
-                      }`}
-                    >
-                      {slot}
-                    </span>
-                  </td>
-                  <td className="py-[9px]">{player}</td>
-                  <td className="py-[9px] text-right text-nocturne-neutral-400">{proj}</td>
-                  <td className="px-[18px] py-[9px] text-right">{pts}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          <div className="flex items-center justify-between px-[18px] py-[13px] text-[11.5px] text-nocturne-neutral-600">
-            <span>Autolineup on · waiver priority 7 of 12</span>
-            <span className="font-mono">0x7f3a…c19d</span>
-          </div>
-        </div>
-      </div>
-    </section>
   );
 }
 
