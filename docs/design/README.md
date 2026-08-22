@@ -1,7 +1,7 @@
 # rostr — design handoff
 
-Twelve screen files plus an index and a logo sheet, covering the whole product as it exists
-today: the public landing page, creating and freezing a league, inviting and joining it, the draft lobby and
+Thirteen screen files plus an index and a logo sheet, covering the whole product as it exists
+today: the public landing page, the Leagues hub, creating and freezing a league, inviting and joining it, the draft lobby and
 the order draw, the draft room, the weekly in-season loop, the playoffs and settlement, amending and dissolving a league,
 and ten screens designed for mobile web.
 
@@ -258,7 +258,68 @@ against the live Tank01 board, which the repo has no fixture for — and Route 6
 starters in panel 05 were rewritten to match what the board shows them drafting, so those two
 places have to move together.
 
-### 2. `Rostr Create League.dc.html` — 2 states
+### 2. `Rostr Leagues.dc.html` — 4 states
+**The signed-in front door, consolidating three shipped surfaces into one.** The app shell
+carried "Join a league", a "Create a league" button and an `InvitationBadge` side by side;
+`/leagues` browsed public leagues with an `InvitationsCorner` aside; `/invitations` was a
+third page. This is one **Leagues** nav item leading to a page ordered your leagues →
+invitations → public leagues, with create given equal weight as a card in the page head.
+
+**Recreate the header from `(app)/layout.tsx`, not from this file's pixels** — that layout is
+the source and this design only changes it in named ways. What it keeps verbatim: the
+wordmark (19px/600/−0.02em) with its `FANTASY FOOTBALL` descriptor (11px/0.14em/neutral-600),
+`max-w-[1180px] px-10 py-[14px]`, "How scoring works", the accent invitation badge
+(`min-w-[1.25rem]`, 11px/600, accent on `--color-bg`), and the footer on every signed-in
+page: *Pre-alpha. Not audited. Do not use with funds you cannot lose.* Every band sits in that
+same 1180px container, including the urgent strip — the strip is full-bleed for its tint and
+border edge, but its row is contained like the rest.
+
+**What this design proposes, i.e. what has no backing route yet.** Only the invitation count
+is grounded (`INVITATIONS_KEY` = `/api/invitations`, deduplicated with `InvitationBadge` so
+the count and the list cannot disagree, and rendering nothing at zero rather than a `0`).
+Everything else in the header is new:
+
+- **The urgent strip** under the header, for anything on a clock: on the clock, draft starting
+  within the hour, veto window closing, lineup unset near kickoff, waivers running tonight, a
+  trade awaiting your answer. One item at a time, the most pressing. It exists because a
+  90-second draft clock cannot live behind a click — if a manager has to open a dropdown to
+  learn their pick is live, the dropdown failed. The strip is empty almost always, which is
+  what makes it mean something when it is not.
+- **The bell**, holding everything including whatever is currently in the strip, so nothing
+  lives only in a place that disappears. Grouped *Needs you* / *Earlier*.
+- **A wallet mark on anything needing a signature** — submitting a pick, voting on a trade —
+  so "this will ask for your wallet" is visible before the click.
+- **The account menu**, which absorbs what `SessionBar` rendered inline. State 4 exists
+  specifically because collapsing that component into a chevron silently deletes two shipped
+  affordances: the **Sign out** button, and the `username === null` branch that renders
+  **Finish setting up** linking to `/welcome`, because an account with no username cannot be
+  invited to anything. Both must survive.
+
+**Two rules this screen must not break.** Neither a browse card nor an invitation card offers
+a join control — both lead to the league page, where the whole rule set renders above the join
+button. `RULES.md` requires the full document before anyone joins, and a join button in a
+directory is a way to agree to a rule set nobody read. And **private leagues never appear in
+the public list**; they arrive only as an invitation or a link.
+
+**Every public league shows Free.** The escrow program is unwritten, so no league can take a
+deposit. The buy-in filter is drawn for when that changes and the page says so; showing dollar
+amounts would be designing a feature that does not exist.
+
+The nav names only routes that exist. There is no global `/players` or `/activity` — both are
+league-scoped — so the bell's footer links to `/invitations`. If you add a global activity
+feed, that is a new route, not an implied one.
+
+Invitation rows say **"addressed to your username"**, because `/api/invitations` returns
+`addressedAs: "USERNAME" | "WALLET"` — how you were reached — and not who sent it.
+
+Two containment notes, both of which shipped broken here first. The overlay frames (states 2
+and 4) hold an absolutely-positioned panel, so their footer flowed after only the short dimmed
+paragraph and landed 400px above the panel's bottom; they are now flex columns with the footer
+on `margin-top: auto`. That fix then collapsed those columns, because **auto side margins on
+a flex item suppress `align-self: stretch` and trigger shrink-to-fit** — hence the explicit
+`width: 100%` beside every `max-width: 1180px; margin: 0 auto`.
+
+### 3. `Rostr Create League.dc.html` — 2 states
 **The finding that shaped this screen: only ten values are the commissioner's.** Scoring
 is set by the project owner, the pot token is set by the service per network, and roster,
 season, playoffs, tiebreakers, waivers, veto threshold and the 1% fee are all fixed. So
@@ -279,7 +340,7 @@ validation the rules require and this screen only partly shows: **pot + bot is r
 outright**, a draft time outside the creation window is refused, and a deadline outside
 Weeks 8–14 is refused.
 
-### 3. `Rostr Invite and Join.dc.html` — 2 states
+### 4. `Rostr Invite and Join.dc.html` — 2 states
 The commissioner's side (invite link, email invites, the twelve-seat field with three row
 states — joined, invitation out, open) and the invited manager's side, which is the more
 important half: the full rule set, an itemised "what you are signing", the wallets already
@@ -288,7 +349,7 @@ in, and an unchecked acknowledgement gating "Sign and join".
 Invitation rows carry real `<button>` actions (Resend, Withdraw) in their own column —
 never a styled span, and never sharing a column with wallet hashes.
 
-### 4. `Rostr Draft Lobby.dc.html` — 2 states
+### 5. `Rostr Draft Lobby.dc.html` — 2 states
 **The best screen in the set for demonstrating the product's argument.** Before the draw:
 a 76px countdown and the plain statement that the order does not exist yet, with the
 reason spelled out — if the seed were fixed in advance a commissioner could add a bot,
@@ -298,7 +359,7 @@ After: the drawn order, and a verification panel giving slot, blockhash, block t
 previous block's time (which is what makes it *the only block the league could have used*)
 and the seed recipe, so anyone can recompute it on an explorer.
 
-### 5. `Rostr Draft Room.dc.html` — 7 states
+### 6. `Rostr Draft Room.dc.html` — 7 states
 Order train, clock, player pool, queue/roster rail, full board. Built on ESPN's
 conventions deliberately — managers arrive with them in muscle memory. Three departures:
 
@@ -347,7 +408,7 @@ present for. Session key, pre-authorization at draft start, or a delegated signe
 this before the escrow program is written. The notice strip reads "signed 0x7f3a…c19d"
 without claiming a mechanism; **do not ship that line until the mechanism is real.**
 
-### 6. `Rostr League Home.dc.html` — 2 states
+### 7. `Rostr League Home.dc.html` — 2 states
 League home (your matchup, your starters, the league scoreboard, activity, standings,
 waiver priority) and the full matchup, slot against slot with both benches.
 
@@ -358,7 +419,7 @@ wait the full seven.
 Standings must be **computed**, and a team mid-game carries a shorter record than a team
 whose week is final. Getting this wrong here inverted the playoff cut line.
 
-### 7. `Rostr Lineup.dc.html` — 2 states
+### 8. `Rostr Lineup.dc.html` — 2 states
 Setting the lineup with a player picked up — three slots lit (both WR and FLEX), the rest
 labelled not eligible — and the lineup partially locked, where seven slots are gone, one
 is empty, and autofill **names who it will start and when**, with the reason the
@@ -368,7 +429,7 @@ The teaching point the copy carries: nobody forfeits anything for not showing up
 abandonment rule, no strikes, no forfeiture — an empty slot simply gets filled, and turning
 autofill off is the only way to score nothing there.
 
-### 8. `Rostr Waivers.dc.html` — 2 states
+### 9. `Rostr Waivers.dc.html` — 2 states
 Filing blind claims Tuesday night, and the Wednesday 3am run. The two player states are
 visually distinct: **on waivers** (accent, "Claim") versus **free agent** (neutral, "Add
 now"), and only players on waivers appear in the run.
@@ -379,7 +440,7 @@ decides which of *your* claims gets your last roster spot. Claims 1 and 3 both n
 same roster spot, claim 1 loses to priority 3, and claim 3 therefore wins — file the
 player you want most first. Winning two claims in one run moves priority **once**.
 
-### 9. `Rostr Trade Veto.dc.html` — 4 states
+### 10. `Rostr Trade Veto.dc.html` — 4 states
 The screen no other fantasy platform has. A one-for-two trade in escrow, its 48-hour
 window, and the ten uninvolved managers' votes — two against, four needed. Then the
 settled state: the threshold was not met, so the contract executed, with a full on-chain
@@ -403,7 +464,7 @@ trade executes, not the week it was proposed.** With a Week 11 deadline ending M
 last moment anything can be proposed is Sat 21 Nov, 11:30 PM. A trade accepted later
 `EXPIRED`s untouched rather than executing.
 
-### 10. `Rostr Playoffs.dc.html` — 2 states
+### 11. `Rostr Playoffs.dc.html` — 2 states
 Championship Sunday with the last two games live, then settled. The ladder is three columns
 — Week 15 quarterfinals with seeds 1–2 on a bye, Week 16 semifinals, Week 17 championship
 and third place — plus the six-team consolation bracket, which needs three rounds and so
@@ -422,7 +483,7 @@ rules to derived champion. The `potLeague` prop adds the 70/20/10 payout and the
 Route 66 wins as the 3 seed, 132.8–128.1, and the Week 17 starter total adds to exactly
 that.
 
-### 11. `Rostr Mobile.dc.html` — 10 screens at 390px
+### 12. `Rostr Mobile.dc.html` — 10 screens at 390px
 Landing, league home, lineup, draft room, join, the wallet signing sheet, waivers, the
 Wednesday waiver run, an incoming trade, and the veto vote — each in a browser frame with a
 620px viewport.
@@ -447,7 +508,7 @@ links were under it on first write. And the acknowledgement gate needs
 `disabled="disabled"` — a bare `disabled` attribute compiles to `disabled=""`, which React
 drops, so the gate rendered as a live full-opacity button next to an unchecked box.
 
-### 12. `Rostr Amend and Dissolve.dc.html` — 4 states
+### 13. `Rostr Amend and Dissolve.dc.html` — 4 states
 The last thing `RULES.md` defines and the only post-creation change permitted. Both amend
 and dissolve need **unanimous signed consent of every stake-holding manager**; a bot seat
 neither signs nor blocks.
@@ -514,9 +575,12 @@ with refunds if the league never fills. `RULES.md` defines them; nothing is draw
 failure branch in state 6, and the mobile sheet) and **four** other places that need it —
 freezing a league, voting, any pot action, and the landing page's Connect wallet button.
 
+**The Leagues hub:** a mobile design, and the notification model's real sources. The urgent
+strip and the bell have no route behind them; only the invitation count does.
+
 ## Files
 
-- `screens/*.dc.html` — the twelve designs, plus `Rostr Screens.dc.html` (an index of them
+- `screens/*.dc.html` — the thirteen designs, plus `Rostr Screens.dc.html` (an index of them
   all with per-screen notes and the open questions) and `Rostr Logo.dc.html` (the logo
   exploration sheet). Open any directly in a browser.
 - `brand/` — the finished logo, headers and X headers as PNG and SVG, with their own
