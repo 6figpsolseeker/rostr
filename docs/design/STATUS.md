@@ -83,7 +83,17 @@ flex item suppress `align-self: stretch` and trigger shrink-to-fit**, which
 collapsed two 1180px columns to content width. In Tailwind terms: `mx-auto` on a
 flex child needs `w-full` beside it.
 
-#### Three of the "still open" questions are already answered
+#### All five "still open" questions are answered — see `ANSWERS.md`
+
+`ANSWERS.md` in this directory is the reply, written to be pasted into the design
+session rather than read as correspondence. It settles all five, each with the
+source that decides it: drafting signs nothing (so draft room **state 6 can be
+deleted**), hero animation **A**, kickoff the **9th**, the week label flips at the
+Tuesday lock for rules and at the last kickoff for results, and a trade **can**
+execute mid-game because the lineup lock — not the trade path — is what makes
+that safe.
+
+#### Three of them were listed as open in drop 8 as well
 
 Drop 8 repeats them, so the answers have not reached the designer. They should
 go back in the next reply:
