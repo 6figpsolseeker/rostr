@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="_ds/nocturne-2cbfcdf4-7e1c-4bfa-8626-a61405078160/styles.css">
+<script src="_ds/nocturne-2cbfcdf4-7e1c-4bfa-8626-a61405078160/_ds_bundle.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
+<style>
+  html, body { margin: 0; padding: 0; background: var(--color-bg); }
+  body { font-family: var(--font-body); color: var(--color-text); -webkit-font-smoothing: antialiased; }
+  * { box-sizing: border-box; }
+  a { color: var(--color-accent); text-decoration: none; }
+  a:hover { color: var(--color-accent-400); }
+  a:focus-visible, button:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+</style>
+</helmet>
+
+<div style="background: var(--color-bg); min-width: 1280px;">
+
+  <div style="display: flex; align-items: baseline; gap: 14px; padding: 30px 28px 14px;">
+    <span style="font-family: ui-monospace, monospace; font-size: 11px; letter-spacing: 0.1em; color: var(--color-accent-500);">STATE 1</span>
+    <span style="font-family: var(--font-heading); font-size: 17px; font-weight: 500; letter-spacing: -0.02em;">A returning manager</span>
+    <span style="font-size: 13px; color: var(--color-neutral-500);">Two leagues, one invitation, and a draft clock running</span>
+  </div>
+
+  <div data-screen-label="Leagues" style="background: var(--color-bg); min-height: 100vh; padding-bottom: 56px;">
+
+    <header style="border-bottom: 1px solid var(--color-neutral-900);">
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 24px; max-width: 1180px; margin: 0 auto; padding: 14px 40px;">
+        <a href="#" style="display: flex; align-items: baseline; gap: 10px; color: inherit;">
+          <span style="font-family: var(--font-heading); font-size: 19px; font-weight: 600; letter-spacing: -0.02em;">rostr</span>
+          <span style="font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-600);">fantasy football</span>
+        </a>
+        <div style="display: flex; align-items: center; gap: 22px;">
+          <a href="#" style="font-size: 13.5px; color: var(--color-neutral-400);" style-hover="color: var(--color-text);">How scoring works</a>
+          <span style="display: flex; align-items: center; gap: 8px;">
+            <a href="#" style="font-size: 13.5px; color: var(--color-text); box-shadow: inset 0 -1px 0 var(--color-accent); padding-bottom: 3px;">Leagues</a>
+            <a href="#" aria-label="1 invitation" title="1 league has invited you" style="display: inline-flex; align-items: center; justify-content: center; min-width: 20px; padding: 1px 6px; border-radius: 999px; background: var(--color-accent); color: var(--color-bg); font-size: 11px; font-weight: 600;">1</a>
+          </span>
+          <span style="display: flex; align-items: center; gap: 8px;">
+          <button type="button" aria-label="Notifications, 4 unread" style="position: relative; display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--color-neutral-400); cursor: pointer;" style-hover="background: color-mix(in srgb, var(--color-accent) 10%, transparent); color: var(--color-text);">
+            <svg width="18" height="18" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M221.8 175.94c-5.55-9.56-13.8-36.61-13.8-71.94a80 80 0 1 0-160 0c0 35.34-8.26 62.38-13.81 71.94A16 16 0 0 0 48 200h40.81a40 40 0 0 0 78.38 0H208a16 16 0 0 0 13.8-24.06ZM128 216a24 24 0 0 1-22.62-16h45.24A24 24 0 0 1 128 216Z"></path></svg>
+            <span style="position: absolute; top: 4px; right: 3px; display: inline-flex; align-items: center; justify-content: center; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px; background: var(--color-accent); color: #14162a; font-family: ui-monospace, monospace; font-size: 10px; font-weight: 600;">4</span>
+          </button>
+          <button type="button" style="display: inline-flex; align-items: center; gap: 9px; padding: 6px 10px 6px 7px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--color-neutral-300); font-family: inherit; font-size: 13.5px; cursor: pointer;" style-hover="background: color-mix(in srgb, var(--color-accent) 10%, transparent); color: var(--color-text);">
+            <span style="display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%; background: color-mix(in srgb, var(--color-accent) 22%, transparent); box-shadow: inset 0 0 0 1px var(--color-accent-700); font-size: 10px; font-weight: 600; color: var(--color-accent-100);">R6</span>
+            <span>route66</span>
+            <svg width="11" height="11" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="m213.66 101.66-80 80a8 8 0 0 1-11.32 0l-80-80A8 8 0 0 1 48 88h160a8 8 0 0 1 5.66 13.66Z"></path></svg>
+          </button>
+          </span>
+        </div>
+      </div>
+    </header>
+
+    <sc-if value="{{ urgent }}" hint-placeholder-val="{{ true }}">
+    <div style="background: color-mix(in srgb, var(--color-accent) 14%, transparent); border-bottom: 1px solid var(--color-accent-800);">
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 20px; width: 100%; max-width: 1180px; margin: 0 auto; padding: 9px 40px;">
+      <div style="display: flex; align-items: center; gap: 12px; min-width: 0;">
+        <span style="display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; flex: 0 0 auto; color: var(--color-accent-300);">
+          <svg width="15" height="15" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M128 40a96 96 0 1 0 96 96 96.11 96.11 0 0 0-96-96Zm8 96a8 8 0 0 1-8 8H88a8 8 0 0 1 0-16h32V80a8 8 0 0 1 16 0Z"></path></svg>
+        </span>
+        <span style="font-size: 13.5px; color: var(--color-accent-100);">You are on the clock in <span style="font-weight: 500;">Sunday Scaries</span></span>
+        <span style="font-family: ui-monospace, monospace; font-size: 13.5px; color: var(--color-accent-200); font-variant-numeric: tabular-nums;">1:12</span>
+        <span style="font-size: 12.5px; color: var(--color-accent-300);">Pick 5.09 &middot; autopick takes T. Higgins if it expires</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px; flex: 0 0 auto;">
+        <a class="btn btn-primary" href="#" style="font-size: 13px; padding: 6px 14px; border-color: var(--color-accent-300); color: var(--color-accent-100);">Go to the draft</a>
+      </div>
+      </div>
+    </div>
+    </sc-if>
+
+    <div style="width: 100%; max-width: 1180px; margin: 0 auto; padding: 48px 40px 0;">
+
+      <div style="display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 40px; align-items: start;">
+        <div style="min-width: 0;">
+          <h1 style="font-family: var(--font-heading); font-size: 30px; font-weight: 500; letter-spacing: -0.026em; margin: 0;">Leagues</h1>
+          <p style="font-size: 14.5px; line-height: 1.6; color: var(--color-neutral-400); margin: 11px 0 0; max-width: 620px; text-wrap: pretty;">Your leagues, anything waiting on you, and every public league still taking managers. Each one shows its whole rule set before you agree to anything, and those rules are frozen and hashed at creation, so what you read is what the season runs on.</p>
+        </div>
+        <div class="card" style="padding: 20px 22px; background: var(--color-surface);">
+          <h2 style="font-family: var(--font-heading); font-size: 18px; font-weight: 500; letter-spacing: -0.018em; margin: 0;">Start your own</h2>
+          <p style="font-size: 13.5px; line-height: 1.6; color: var(--color-neutral-400); margin: 9px 0 0;">Set the name, the draft time and the pace. Everything else is fixed, and you will see all of it before it freezes.</p>
+          <a class="btn btn-primary btn-block" href="#" style="margin-top: 16px; font-size: 14px; min-height: 42px;">Create a league</a>
+          <p style="font-size: 12px; line-height: 1.55; color: var(--color-neutral-500); margin: 11px 0 0;">Free. Two humans is enough to start &mdash; one bot squares an odd field.</p>
+        </div>
+      </div>
+
+      <section style="margin-top: 44px;">
+        <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 20px; margin-bottom: 16px;">
+          <h2 style="font-family: var(--font-heading); font-size: 19px; font-weight: 500; letter-spacing: -0.018em; margin: 0;">Your leagues</h2>
+          <span style="font-size: 12.5px; color: var(--color-neutral-500);">2 active</span>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px;">
+
+          <a href="#" class="card" style="display: block; padding: 0; overflow: hidden; background: var(--color-surface); border-left: 2px solid var(--color-accent); color: inherit;" style-hover="background: color-mix(in srgb, var(--color-accent) 7%, var(--color-surface));">
+            <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 14px; padding: 15px 18px 0;">
+              <span style="font-family: var(--font-heading); font-size: 16.5px; font-weight: 500; letter-spacing: -0.018em;">Sunday Scaries</span>
+              <span class="tag tag-accent" style="font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;">Drafting</span>
+            </div>
+            <div style="display: flex; align-items: baseline; gap: 16px; padding: 9px 18px 0; font-size: 12.5px; color: var(--color-neutral-500);">
+              <span>12 teams</span>
+              <span>Round 5 of 16</span>
+              <span>Fast &middot; 90s</span>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 14px; margin: 14px 18px 16px; padding: 10px 13px; border-radius: var(--radius-sm); background: color-mix(in srgb, var(--color-accent) 14%, transparent);">
+              <span style="font-size: 13px; color: var(--color-accent-100);">You are on the clock</span>
+              <span style="font-family: ui-monospace, monospace; font-size: 13px; color: var(--color-accent-200); font-variant-numeric: tabular-nums;">1:12</span>
+            </div>
+          </a>
+
+          <a href="#" class="card" style="display: block; padding: 0; overflow: hidden; background: var(--color-surface); border-left: 2px solid var(--color-neutral-800); color: inherit;" style-hover="background: color-mix(in srgb, var(--color-accent) 7%, var(--color-surface));">
+            <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 14px; padding: 15px 18px 0;">
+              <span style="font-family: var(--font-heading); font-size: 16.5px; font-weight: 500; letter-spacing: -0.018em;">Dynasty of Dropped Passes</span>
+              <span class="tag tag-neutral" style="font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;">Week 3</span>
+            </div>
+            <div style="display: flex; align-items: baseline; gap: 16px; padding: 9px 18px 0; font-size: 12.5px; color: var(--color-neutral-500);">
+              <span>12 teams</span>
+              <span style="color: var(--color-neutral-400);">2&ndash;0</span>
+              <span>4th of 12</span>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 14px; margin: 14px 18px 16px; padding: 10px 13px; border-radius: var(--radius-sm); background: color-mix(in srgb, var(--color-surface) 55%, transparent);">
+              <span style="font-size: 13px; color: var(--color-neutral-300);">Lineup not set &middot; 1 slot empty</span>
+              <span style="font-size: 12.5px; color: var(--color-neutral-500);">Locks Sun 1:00 PM</span>
+            </div>
+          </a>
+
+        </div>
+      </section>
+
+      <section style="margin-top: 40px;">
+        <div style="display: flex; align-items: baseline; gap: 12px; margin-bottom: 16px;">
+          <h2 style="font-family: var(--font-heading); font-size: 19px; font-weight: 500; letter-spacing: -0.018em; margin: 0;">Invitations</h2>
+          <span class="tag tag-accent" style="font-size: 10px;">1</span>
+        </div>
+        <div class="card" style="display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 24px; align-items: center; padding: 18px 20px; background: var(--color-surface); border-color: var(--color-accent-800);">
+          <div style="min-width: 0;">
+            <div style="display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;">
+              <span style="font-family: var(--font-heading); font-size: 16.5px; font-weight: 500; letter-spacing: -0.018em;">Bye Week Blues</span>
+              <span style="font-size: 12.5px; color: var(--color-neutral-500);">Private &middot; addressed to <span style="color: var(--color-neutral-400);">your username</span></span>
+            </div>
+            <div style="display: flex; align-items: baseline; gap: 18px; margin-top: 8px; font-size: 12.5px; color: var(--color-neutral-500);">
+              <span>9 of 12 seats</span>
+              <span>Drafts Sat 23 Aug, 8:00 PM</span>
+              <span>Fast &middot; 90s</span>
+              <span>Free</span>
+            </div>
+            <p style="font-size: 12.5px; line-height: 1.55; color: var(--color-neutral-500); margin: 9px 0 0;">Nothing is signed until you have read the rule set in full.</p>
+          </div>
+          <div style="display: flex; align-items: center; gap: 10px; flex: 0 0 auto;">
+            <button type="button" class="btn btn-ghost" style="font-size: 13.5px; padding: 9px 14px; min-height: 40px; color: var(--color-neutral-400); font-family: inherit; cursor: pointer;">Decline</button>
+            <a class="btn btn-primary" href="#" style="font-size: 13.5px; padding: 9px 16px; min-height: 40px;">Read the rules</a>
+          </div>
+        </div>
+      </section>
+
+      <section style="margin-top: 40px;">
+        <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 20px;">
+          <h2 style="font-family: var(--font-heading); font-size: 19px; font-weight: 500; letter-spacing: -0.018em; margin: 0;">Public leagues</h2>
+          <span style="font-size: 12.5px; color: var(--color-neutral-500);">6 open &middot; still forming</span>
+        </div>
+
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap; margin-top: 14px; padding-bottom: 16px; border-bottom: 1px solid var(--color-neutral-900);">
+          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+            <button type="button" style="padding: 7px 13px; border: 1px solid var(--color-accent); border-radius: 999px; background: color-mix(in srgb, var(--color-accent) 16%, transparent); color: var(--color-accent-200); font-family: inherit; font-size: 12.5px; cursor: pointer;">Drafting soonest</button>
+            <button type="button" style="padding: 7px 13px; border: 1px solid var(--color-neutral-800); border-radius: 999px; background: transparent; color: var(--color-neutral-400); font-family: inherit; font-size: 12.5px; cursor: pointer;" style-hover="border-color: var(--color-accent-700); color: var(--color-accent-300);">Almost full</button>
+            <button type="button" style="padding: 7px 13px; border: 1px solid var(--color-neutral-800); border-radius: 999px; background: transparent; color: var(--color-neutral-400); font-family: inherit; font-size: 12.5px; cursor: pointer;" style-hover="border-color: var(--color-accent-700); color: var(--color-accent-300);">Free only</button>
+            <button type="button" style="padding: 7px 13px; border: 1px solid var(--color-neutral-800); border-radius: 999px; background: transparent; color: var(--color-neutral-400); font-family: inherit; font-size: 12.5px; cursor: pointer;" style-hover="border-color: var(--color-accent-700); color: var(--color-accent-300);">Newest</button>
+          </div>
+          <div class="field" style="margin: 0;">
+            <input class="input" id="league-search" placeholder="Search by name" style="width: 240px; font-size: 13px;">
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 18px;">
+
+          <a href="#" class="card" style="display: flex; flex-direction: column; gap: 14px; padding: 18px; background: var(--color-surface); color: inherit;" style-hover="background: color-mix(in srgb, var(--color-accent) 7%, var(--color-surface));">
+            <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px;">
+              <span style="font-family: var(--font-heading); font-size: 16px; font-weight: 500; letter-spacing: -0.018em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Open Field 12</span>
+              <span style="font-size: 12px; color: var(--color-neutral-400); flex: 0 0 auto;">Free</span>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; font-size: 12.5px;">
+              <span style="display: flex; flex-direction: column; gap: 3px;"><span style="color: var(--color-neutral-500);">Seats</span><span style="color: var(--color-accent-300);">11 of 12 &middot; nearly full</span></span>
+              <span style="display: flex; flex-direction: column; gap: 3px;"><span style="color: var(--color-neutral-500);">Draft</span><span>Fri 22 Aug, 19:00</span></span>
+              <span style="display: flex; flex-direction: column; gap: 3px;"><span style="color: var(--color-neutral-500);">Pace</span><span>Fast &middot; 90s</span></span>
+              <span style="display: flex; flex-direction: column; gap: 3px;"><span style="color: var(--color-neutral-500);">Scoring</span><span>Full PPR</span></span>
+            </div>
+            <span style="font-size: 12.5px; color: var(--color-accent-400);">Read the rules and join &rarr;</span>
+          </a>
+
+          <a href="#" class="card" style="display: flex; flex-direction: column; gap: 14px; padding: 18px; background: var(--color-surface); color: inherit;" style-hover="background: color-mix(in srgb, var(--color-accent) 7%, var(--color-surface));">
+            <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px;">
+              <span style="font-family: var(--font-heading); font-size: 16px; font-weight: 500; letter-spacing: -0.018em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Zero RB Society</span>
+              <span style="font-size: 12px; color: var(--color-neutral-400); flex: 0 0 auto;">Free</span>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; font-size: 12.5px;">
+              <span style="display: flex; flex-direction: column; gap: 3px;"><span style="color: var(--color-neutral-500);">Seats</span><span>7 of 12</span></span>
+              <span style="display: flex; flex-direction: column; gap: 3px;"><span style="color: var(--color-neutral-500);">Draft</span><span>Sat 23 Aug, 14:00</span></span>
+              <span style="display: flex; flex-direction: column; gap: 3px;"><span style="color: var(--color-neutral-500);">Pace</span><span>Slow &middot; 8h</span></span>
+              <span style="display: flex; flex-direction: column; gap: 3px;"><span style="color: var(--color-neutral-500);">Scoring</span><span>Full PPR</span></span>
+            </div>
+            <span style="font-size: 12.5px; color: var(--color-accent-400);">Read the rules and join &rarr;</span>
+          </a>
+
+          <a href="#" class="card" style="display: flex; flex-direction: column; gap: 14px; padding: 18px; background: var(--color-surface); color: inherit;" style-hover="background: color-mix(in srgb, var(--color-accent) 7%, var(--color-surface));">
+            <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px;">
+              <span style="font-family: var(--font-heading); font-size: 16px; font-weight: 500; letter-spacing: -0.018em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Chalk Eaters</span>
+              <span style="font-size: 12px; color: var(--color-neutral-400); flex: 0 0 auto;">Free</span>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; font-size: 12.5px;">
+              <span style="display: flex; flex-direction: column; gap: 3px;"><span style="color: var(--color-neutral-500);">Seats</span><span>4 of 12</span></span>
+              <span style="display: flex; flex-direction: column; gap: 3px;"><span style="color: var(--color-neutral-500);">Draft</span><span>Sat 23 Aug, 20:00</span></span>
+              <span style="display: flex; flex-direction: column; gap: 3px;"><span style="color: var(--color-neutral-500);">Pace</span><span>Fast &middot; 120s</span></span>
+              <span style="display: flex; flex-direction: column; gap: 3px;"><span style="color: var(--color-neutral-500);">Scoring</span><span>Full PPR</span></span>
+            </div>
+            <span style="font-size: 12.5px; color: var(--color-accent-400);">Read the rules and join &rarr;</span>
+          </a>
+
+          <a href="#" class="card" style="display: flex; flex-direction: column; gap: 14px; padding: 18px; background: var(--color-surface); color: inherit;" style-hover="background: color-mix(in srgb, var(--color-accent) 7%, var(--color-surface));">
+            <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px;">
+              <span style="font-family: var(--font-heading); font-size: 16px; font-weight: 500; letter-spacing: -0.018em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">First Down Club</span>
+              <span style="font-size: 12px; color: var(--color-neutral-400); flex: 0 0 auto;">Free</span>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; font-size: 12.5px;">
+              <span style="display: flex; flex-direction: column; gap: 3px;"><span style="color: var(--color-neutral-500);">Seats</span><span>10 of 12</span></span>
+              <span style="display: flex; flex-direction: column; gap: 3px;"><span style="color: var(--color-neutral-500);">Draft</span><span>Sun 24 Aug, 18:30</span></span>
+              <span style="display: flex; flex-direction: column; gap: 3px;"><span style="color: var(--color-neutral-500);">Pace</span><span>Fast &middot; 90s</span></span>
+              <span style="display: flex; flex-direction: column; gap: 3px;"><span style="color: var(--color-neutral-500);">Scoring</span><span>Full PPR</span></span>
+            </div>
+            <span style="font-size: 12.5px; color: var(--color-accent-400);">Read the rules and join &rarr;</span>
+          </a>
+
+          <a href="#" class="card" style="display: flex; flex-direction: column; gap: 14px; padding: 18px; background: var(--color-surface); color: inherit;" style-hover="background: color-mix(in srgb, var(--color-accent) 7%, var(--color-surface));">
+            <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px;">
+              <span style="font-family: var(--font-heading); font-size: 16px; font-weight: 500; letter-spacing: -0.018em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">The Waiver Wire</span>
+              <span style="font-size: 12px; color: var(--color-neutral-400); flex: 0 0 auto;">Free</span>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; font-size: 12.5px;">
+              <span style="display: flex; flex-direction: column; gap: 3px;"><span style="color: var(--color-neutral-500);">Seats</span><span>3 of 12</span></span>
+              <span style="display: flex; flex-direction: column; gap: 3px;"><span style="color: var(--color-neutral-500);">Draft</span><span>Mon 25 Aug, 20:00</span></span>
+              <span style="display: flex; flex-direction: column; gap: 3px;"><span style="color: var(--color-neutral-500);">Pace</span><span>Slow &middot; 24h</span></span>
+              <span style="display: flex; flex-direction: column; gap: 3px;"><span style="color: var(--color-neutral-500);">Scoring</span><span>Full PPR</span></span>
+            </div>
+            <span style="font-size: 12.5px; color: var(--color-accent-400);">Read the rules and join &rarr;</span>
+          </a>
+
+          <a href="#" class="card" style="display: flex; flex-direction: column; gap: 14px; padding: 18px; background: var(--color-surface); color: inherit;" style-hover="background: color-mix(in srgb, var(--color-accent) 7%, var(--color-surface));">
+            <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px;">
+              <span style="font-family: var(--font-heading); font-size: 16px; font-weight: 500; letter-spacing: -0.018em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Autodraft Anonymous</span>
+              <span style="font-size: 12px; color: var(--color-neutral-400); flex: 0 0 auto;">Free</span>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; font-size: 12.5px;">
+              <span style="display: flex; flex-direction: column; gap: 3px;"><span style="color: var(--color-neutral-500);">Seats</span><span>2 of 12</span></span>
+              <span style="display: flex; flex-direction: column; gap: 3px;"><span style="color: var(--color-neutral-500);">Draft</span><span>Tue 26 Aug, 19:00</span></span>
+              <span style="display: flex; flex-direction: column; gap: 3px;"><span style="color: var(--color-neutral-500);">Pace</span><span>Slow &middot; 24h</span></span>
+              <span style="display: flex; flex-direction: column; gap: 3px;"><span style="color: var(--color-neutral-500);">Scoring</span><span>Full PPR</span></span>
+            </div>
+            <span style="font-size: 12.5px; color: var(--color-accent-400);">Read the rules and join &rarr;</span>
+          </a>
+
+        </div>
+
+        <p style="font-size: 12.5px; line-height: 1.6; color: var(--color-neutral-500); margin: 18px 0 0; max-width: 760px; text-wrap: pretty;">Every league here is free. The escrow program is unwritten, so no league can take a deposit yet &mdash; the buy-in filter is here for when they can. Private leagues never appear in this list; they arrive as an invitation or a link.</p>
+      </section>
+    </div>
+    <footer style="max-width: 1180px; margin: 0 auto; padding: 32px 40px; font-size: 12.5px; color: var(--color-neutral-600);">Pre-alpha. Not audited. Do not use with funds you cannot lose.</footer>
+  </div>
+
+  <div style="height: 1px; margin: 46px 28px 0; background: linear-gradient(90deg, transparent, var(--color-neutral-800) 12%, var(--color-neutral-800) 88%, transparent);"></div>
+
+  <div style="display: flex; align-items: baseline; gap: 14px; padding: 30px 28px 14px;">
+    <span style="font-family: ui-monospace, monospace; font-size: 11px; letter-spacing: 0.1em; color: var(--color-accent-500);">STATE 2</span>
+    <span style="font-family: var(--font-heading); font-size: 17px; font-weight: 500; letter-spacing: -0.02em;">Notifications open</span>
+    <span style="font-size: 13px; color: var(--color-neutral-500);">The bell holds everything; the strip holds only what is on a clock</span>
+  </div>
+
+  <div data-screen-label="Notifications" style="position: relative; display: flex; flex-direction: column; background: var(--color-bg); min-height: 840px; padding-bottom: 56px;">
+
+    <header style="border-bottom: 1px solid var(--color-neutral-900);">
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 24px; max-width: 1180px; margin: 0 auto; padding: 14px 40px;">
+        <a href="#" style="display: flex; align-items: baseline; gap: 10px; color: inherit;">
+          <span style="font-family: var(--font-heading); font-size: 19px; font-weight: 600; letter-spacing: -0.02em;">rostr</span>
+          <span style="font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-600);">fantasy football</span>
+        </a>
+        <div style="display: flex; align-items: center; gap: 22px;">
+          <a href="#" style="font-size: 13.5px; color: var(--color-neutral-400);" style-hover="color: var(--color-text);">How scoring works</a>
+          <span style="display: flex; align-items: center; gap: 8px;">
+            <a href="#" style="font-size: 13.5px; color: var(--color-text); box-shadow: inset 0 -1px 0 var(--color-accent); padding-bottom: 3px;">Leagues</a>
+            <a href="#" aria-label="1 invitation" title="1 league has invited you" style="display: inline-flex; align-items: center; justify-content: center; min-width: 20px; padding: 1px 6px; border-radius: 999px; background: var(--color-accent); color: var(--color-bg); font-size: 11px; font-weight: 600;">1</a>
+          </span>
+          <span style="display: flex; align-items: center; gap: 8px;">
+          <button type="button" aria-label="Notifications, 4 unread" aria-expanded="true" style="position: relative; display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border: 0; border-radius: var(--radius-sm); background: color-mix(in srgb, var(--color-accent) 16%, transparent); color: var(--color-accent-200); cursor: pointer;">
+            <svg width="18" height="18" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M221.8 175.94c-5.55-9.56-13.8-36.61-13.8-71.94a80 80 0 1 0-160 0c0 35.34-8.26 62.38-13.81 71.94A16 16 0 0 0 48 200h40.81a40 40 0 0 0 78.38 0H208a16 16 0 0 0 13.8-24.06ZM128 216a24 24 0 0 1-22.62-16h45.24A24 24 0 0 1 128 216Z"></path></svg>
+            <span style="position: absolute; top: 4px; right: 3px; display: inline-flex; align-items: center; justify-content: center; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px; background: var(--color-accent); color: #14162a; font-family: ui-monospace, monospace; font-size: 10px; font-weight: 600;">4</span>
+          </button>
+          <button type="button" style="display: inline-flex; align-items: center; gap: 9px; padding: 6px 10px 6px 7px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--color-neutral-300); font-family: inherit; font-size: 13.5px; cursor: pointer;" style-hover="background: color-mix(in srgb, var(--color-accent) 10%, transparent); color: var(--color-text);">
+            <span style="display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%; background: color-mix(in srgb, var(--color-accent) 22%, transparent); box-shadow: inset 0 0 0 1px var(--color-accent-700); font-size: 10px; font-weight: 600; color: var(--color-accent-100);">R6</span>
+            <span>route66</span>
+            <svg width="11" height="11" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="m213.66 101.66-80 80a8 8 0 0 1-11.32 0l-80-80A8 8 0 0 1 48 88h160a8 8 0 0 1 5.66 13.66Z"></path></svg>
+          </button>
+          </span>
+        </div>
+      </div>
+    </header>
+
+    <div style="position: absolute; right: 90px; top: 64px; z-index: 20; width: 392px;">
+      <div class="card elev-lg" style="padding: 0; overflow: hidden; background: var(--color-surface);">
+
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--color-neutral-900);">
+          <span style="font-family: var(--font-heading); font-size: 14.5px; font-weight: 500;">Notifications</span>
+          <button type="button" style="border: 0; background: transparent; color: var(--color-neutral-500); font-family: inherit; font-size: 12px; cursor: pointer; padding: 4px 2px;" style-hover="color: var(--color-accent-300);">Mark all read</button>
+        </div>
+
+        <div style="padding: 10px 16px 6px; font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-accent-400);">Needs you</div>
+
+        <a href="#" style="display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 11px; padding: 11px 16px; border-bottom: 1px solid var(--color-neutral-900); background: color-mix(in srgb, var(--color-accent) 9%, transparent); color: inherit;" style-hover="background: color-mix(in srgb, var(--color-accent) 15%, transparent);">
+          <span style="display: inline-flex; align-items: center; justify-content: center; color: var(--color-accent-300); padding-top: 1px;">
+            <svg width="14" height="14" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M216 64H56a8 8 0 0 1 0-16h136a8 8 0 0 0 0-16H56a24 24 0 0 0-24 24v128a24 24 0 0 0 24 24h160a16 16 0 0 0 16-16V80a16 16 0 0 0-16-16Zm-36 84a12 12 0 1 1 12-12 12 12 0 0 1-12 12Z"></path></svg>
+          </span>
+          <span style="display: flex; flex-direction: column; gap: 3px; min-width: 0;">
+            <span style="font-size: 13.5px; color: var(--color-accent-100);">You are on the clock &middot; pick 5.09</span>
+            <span style="font-size: 12px; color: var(--color-neutral-400);">Sunday Scaries &middot; autopick takes T. Higgins in 72 seconds</span>
+          </span>
+        </a>
+
+        <a href="#" style="display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 11px; padding: 11px 16px; border-bottom: 1px solid var(--color-neutral-900); background: color-mix(in srgb, var(--color-accent) 9%, transparent); color: inherit;" style-hover="background: color-mix(in srgb, var(--color-accent) 15%, transparent);">
+          <span style="display: inline-flex; align-items: center; justify-content: center; color: var(--color-accent-300); padding-top: 1px;">
+            <svg width="14" height="14" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M216 64H56a8 8 0 0 1 0-16h136a8 8 0 0 0 0-16H56a24 24 0 0 0-24 24v128a24 24 0 0 0 24 24h160a16 16 0 0 0 16-16V80a16 16 0 0 0-16-16Zm-36 84a12 12 0 1 1 12-12 12 12 0 0 1-12 12Z"></path></svg>
+          </span>
+          <span style="display: flex; flex-direction: column; gap: 3px; min-width: 0;">
+            <span style="font-size: 13.5px; color: var(--color-accent-100);">A trade is in its veto window</span>
+            <span style="font-size: 12px; color: var(--color-neutral-400);">Dynasty of Dropped Passes &middot; closes Thu 19 Nov, 8:16 PM &middot; not voting allows it</span>
+          </span>
+        </a>
+
+        <a href="#" style="display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 11px; padding: 11px 16px; border-bottom: 1px solid var(--color-neutral-900); color: inherit;" style-hover="background: color-mix(in srgb, var(--color-accent) 10%, transparent);">
+          <span style="display: inline-flex; align-items: center; justify-content: center; color: var(--color-neutral-500); padding-top: 1px;">
+            <svg width="14" height="14" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M232 128a104 104 0 1 1-104-104 104.11 104.11 0 0 1 104 104Zm-40-8h-56V64a8 8 0 0 0-16 0v64a8 8 0 0 0 8 8h64a8 8 0 0 0 0-16Z"></path></svg>
+          </span>
+          <span style="display: flex; flex-direction: column; gap: 3px; min-width: 0;">
+            <span style="font-size: 13.5px;">Lineup not set for Week 3</span>
+            <span style="font-size: 12px; color: var(--color-neutral-400);">One slot empty &middot; autofill starts T. Kraft at 1:00 PM Sunday</span>
+          </span>
+        </a>
+
+        <a href="#" style="display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 11px; padding: 11px 16px; border-bottom: 1px solid var(--color-neutral-900); color: inherit;" style-hover="background: color-mix(in srgb, var(--color-accent) 10%, transparent);">
+          <span style="display: inline-flex; align-items: center; justify-content: center; color: var(--color-neutral-500); padding-top: 1px;">
+            <svg width="14" height="14" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M224 48H32a8 8 0 0 0-8 8v136a16 16 0 0 0 16 16h176a16 16 0 0 0 16-16V56a8 8 0 0 0-8-8Zm-96 85.15L52.57 64h150.86Z"></path></svg>
+          </span>
+          <span style="display: flex; flex-direction: column; gap: 3px; min-width: 0;">
+            <span style="font-size: 13.5px;">Bye Week Blues invited you</span>
+            <span style="font-size: 12px; color: var(--color-neutral-400);">Private league &middot; drafts Sat 23 Aug, 8:00 PM</span>
+          </span>
+        </a>
+
+        <div style="padding: 12px 16px 6px; font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-500);">Earlier</div>
+
+        <a href="#" style="display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 11px; padding: 11px 16px; border-bottom: 1px solid var(--color-neutral-900); color: inherit;" style-hover="background: color-mix(in srgb, var(--color-accent) 10%, transparent);">
+          <span style="display: inline-flex; align-items: center; justify-content: center; color: var(--color-neutral-600); padding-top: 1px;">
+            <svg width="14" height="14" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M229.66 77.66l-128 128a8 8 0 0 1-11.32 0l-56-56a8 8 0 0 1 11.32-11.32L96 188.69 218.34 66.34a8 8 0 0 1 11.32 11.32Z"></path></svg>
+          </span>
+          <span style="display: flex; flex-direction: column; gap: 3px; min-width: 0;">
+            <span style="font-size: 13.5px; color: var(--color-neutral-300);">Waivers ran &middot; you won D. Achane</span>
+            <span style="font-size: 12px; color: var(--color-neutral-500);">Dynasty of Dropped Passes &middot; priority moved to 12 of 12</span>
+          </span>
+        </a>
+
+        <a href="#" style="display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 11px; padding: 11px 16px; color: inherit;" style-hover="background: color-mix(in srgb, var(--color-accent) 10%, transparent);">
+          <span style="display: inline-flex; align-items: center; justify-content: center; color: var(--color-neutral-600); padding-top: 1px;">
+            <svg width="14" height="14" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M229.66 77.66l-128 128a8 8 0 0 1-11.32 0l-56-56a8 8 0 0 1 11.32-11.32L96 188.69 218.34 66.34a8 8 0 0 1 11.32 11.32Z"></path></svg>
+          </span>
+          <span style="display: flex; flex-direction: column; gap: 3px; min-width: 0;">
+            <span style="font-size: 13.5px; color: var(--color-neutral-300);">Week 2 finalised &middot; you won 86.2 to 71.9</span>
+            <span style="font-size: 12px; color: var(--color-neutral-500);">Dynasty of Dropped Passes &middot; 2&ndash;0, fourth of twelve</span>
+          </span>
+        </a>
+
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 16px; border-top: 1px solid var(--color-neutral-900); background: color-mix(in srgb, var(--color-surface) 50%, transparent);">
+          <span style="font-size: 11.5px; color: var(--color-neutral-500);">A wallet mark means it needs a signature.</span>
+          <a href="#" style="font-size: 12px;">All invitations</a>
+        </div>
+      </div>
+    </div>
+
+    <div style="width: 100%; max-width: 1180px; margin: 0 auto; padding: 48px 40px 0; opacity: 0.5;">
+      <h1 style="font-family: var(--font-heading); font-size: 30px; font-weight: 500; letter-spacing: -0.026em; margin: 0;">Leagues</h1>
+      <p style="font-size: 14.5px; line-height: 1.6; color: var(--color-neutral-400); margin: 11px 0 0; max-width: 620px;">The page behind the panel, dimmed here only so the panel reads. Nothing about it changes when notifications open.</p>
+    </div>
+    <footer style="width: 100%; max-width: 1180px; margin: auto auto 0; padding: 32px 40px; font-size: 12.5px; color: var(--color-neutral-600);">Pre-alpha. Not audited. Do not use with funds you cannot lose.</footer>
+  </div>
+
+  <div style="height: 1px; margin: 46px 28px 0; background: linear-gradient(90deg, transparent, var(--color-neutral-800) 12%, var(--color-neutral-800) 88%, transparent);"></div>
+
+  <div style="display: flex; align-items: baseline; gap: 14px; padding: 30px 28px 14px;">
+    <span style="font-family: ui-monospace, monospace; font-size: 11px; letter-spacing: 0.1em; color: var(--color-accent-500);">STATE 3</span>
+    <span style="font-family: var(--font-heading); font-size: 17px; font-weight: 500; letter-spacing: -0.02em;">A brand-new account</span>
+    <span style="font-size: 13px; color: var(--color-neutral-500);">No leagues, no invitations, no strip &mdash; the two ways in carry the page</span>
+  </div>
+
+  <div data-screen-label="Leagues empty" style="background: var(--color-bg); min-height: 100vh; padding-bottom: 56px;">
+
+    <header style="border-bottom: 1px solid var(--color-neutral-900);">
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 24px; max-width: 1180px; margin: 0 auto; padding: 14px 40px;">
+        <a href="#" style="display: flex; align-items: baseline; gap: 10px; color: inherit;">
+          <span style="font-family: var(--font-heading); font-size: 19px; font-weight: 600; letter-spacing: -0.02em;">rostr</span>
+          <span style="font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-600);">fantasy football</span>
+        </a>
+        <div style="display: flex; align-items: center; gap: 22px;">
+          <a href="#" style="font-size: 13.5px; color: var(--color-neutral-400);" style-hover="color: var(--color-text);">How scoring works</a>
+          <span style="display: flex; align-items: center; gap: 8px;">
+            <a href="#" style="font-size: 13.5px; color: var(--color-text); box-shadow: inset 0 -1px 0 var(--color-accent); padding-bottom: 3px;">Leagues</a>
+          </span>
+          <span style="display: flex; align-items: center; gap: 8px;">
+          <button type="button" aria-label="Notifications, none unread" style="display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--color-neutral-500); cursor: pointer;" style-hover="background: color-mix(in srgb, var(--color-accent) 10%, transparent); color: var(--color-text);">
+            <svg width="18" height="18" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M221.8 175.94c-5.55-9.56-13.8-36.61-13.8-71.94a80 80 0 1 0-160 0c0 35.34-8.26 62.38-13.81 71.94A16 16 0 0 0 48 200h40.81a40 40 0 0 0 78.38 0H208a16 16 0 0 0 13.8-24.06ZM128 216a24 24 0 0 1-22.62-16h45.24A24 24 0 0 1 128 216Z"></path></svg>
+          </button>
+          <button type="button" style="display: inline-flex; align-items: center; gap: 9px; padding: 6px 10px 6px 7px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--color-neutral-300); font-family: inherit; font-size: 13.5px; cursor: pointer;" style-hover="background: color-mix(in srgb, var(--color-accent) 10%, transparent); color: var(--color-text);">
+            <span style="display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%; background: color-mix(in srgb, var(--color-neutral-700) 60%, transparent); box-shadow: inset 0 0 0 1px var(--color-neutral-800); font-size: 10px; font-weight: 600; color: var(--color-neutral-300);">DK</span>
+            <span>dkerrigan</span>
+            <svg width="11" height="11" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="m213.66 101.66-80 80a8 8 0 0 1-11.32 0l-80-80A8 8 0 0 1 48 88h160a8 8 0 0 1 5.66 13.66Z"></path></svg>
+          </button>
+          </span>
+        </div>
+      </div>
+    </header>
+
+    <div style="width: 100%; max-width: 1180px; margin: 0 auto; padding: 48px 40px 0;">
+      <h1 style="font-family: var(--font-heading); font-size: 30px; font-weight: 500; letter-spacing: -0.026em; margin: 0;">Leagues</h1>
+      <p style="font-size: 14.5px; line-height: 1.6; color: var(--color-neutral-400); margin: 11px 0 0; max-width: 640px; text-wrap: pretty;">You are not in a league yet. Start one and invite people, or join one of the public leagues below &mdash; each shows its whole rule set before you agree to anything.</p>
+
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin-top: 26px;">
+        <div class="card" style="padding: 22px 24px; background: var(--color-surface); border-color: var(--color-accent-800);">
+          <h2 style="font-family: var(--font-heading); font-size: 19px; font-weight: 500; letter-spacing: -0.018em; margin: 0;">Create a league</h2>
+          <p style="font-size: 13.5px; line-height: 1.62; color: var(--color-neutral-400); margin: 10px 0 0;">You set the name, the draft time and the pace. Scoring, roster and payout are fixed, so there is no negotiating them mid-season &mdash; and you see all of it before it freezes.</p>
+          <a class="btn btn-primary" href="#" style="display: inline-flex; margin-top: 18px; font-size: 14px; padding: 11px 20px;">Create a league</a>
+          <p style="font-size: 12px; line-height: 1.55; color: var(--color-neutral-500); margin: 12px 0 0;">Free. Two humans is enough to start.</p>
+        </div>
+        <div class="card" style="padding: 22px 24px; background: var(--color-surface);">
+          <h2 style="font-family: var(--font-heading); font-size: 19px; font-weight: 500; letter-spacing: -0.018em; margin: 0;">Been invited to one?</h2>
+          <p style="font-size: 13.5px; line-height: 1.62; color: var(--color-neutral-400); margin: 10px 0 0;">Most leagues are private, so most are joined by invitation. Anything addressed to your username or your wallet appears here automatically &mdash; private leagues never show up in the public list.</p>
+          <p style="font-size: 13px; line-height: 1.6; color: var(--color-neutral-500); margin: 14px 0 0;">Nothing is waiting for you right now. If somebody sent you a link, opening it works too.</p>
+        </div>
+      </div>
+
+      <section style="margin-top: 44px;">
+        <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 20px;">
+          <h2 style="font-family: var(--font-heading); font-size: 19px; font-weight: 500; letter-spacing: -0.018em; margin: 0;">Public leagues</h2>
+          <span style="font-size: 12.5px; color: var(--color-neutral-500);">6 open &middot; still forming</span>
+        </div>
+
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap; margin-top: 14px; padding-bottom: 16px; border-bottom: 1px solid var(--color-neutral-900);">
+          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+            <button type="button" style="padding: 7px 13px; border: 1px solid var(--color-accent); border-radius: 999px; background: color-mix(in srgb, var(--color-accent) 16%, transparent); color: var(--color-accent-200); font-family: inherit; font-size: 12.5px; cursor: pointer;">Drafting soonest</button>
+            <button type="button" style="padding: 7px 13px; border: 1px solid var(--color-neutral-800); border-radius: 999px; background: transparent; color: var(--color-neutral-400); font-family: inherit; font-size: 12.5px; cursor: pointer;" style-hover="border-color: var(--color-accent-700); color: var(--color-accent-300);">Almost full</button>
+            <button type="button" style="padding: 7px 13px; border: 1px solid var(--color-neutral-800); border-radius: 999px; background: transparent; color: var(--color-neutral-400); font-family: inherit; font-size: 12.5px; cursor: pointer;" style-hover="border-color: var(--color-accent-700); color: var(--color-accent-300);">Free only</button>
+            <button type="button" style="padding: 7px 13px; border: 1px solid var(--color-neutral-800); border-radius: 999px; background: transparent; color: var(--color-neutral-400); font-family: inherit; font-size: 12.5px; cursor: pointer;" style-hover="border-color: var(--color-accent-700); color: var(--color-accent-300);">Newest</button>
+          </div>
+          <div class="field" style="margin: 0;">
+            <input class="input" id="league-search-empty" placeholder="Search by name" style="width: 240px; font-size: 13px;">
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 18px;">
+          <a href="#" class="card" style="display: flex; flex-direction: column; gap: 14px; padding: 18px; background: var(--color-surface); color: inherit;" style-hover="background: color-mix(in srgb, var(--color-accent) 7%, var(--color-surface));">
+            <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px;">
+              <span style="font-family: var(--font-heading); font-size: 16px; font-weight: 500; letter-spacing: -0.018em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Open Field 12</span>
+              <span style="font-size: 12px; color: var(--color-neutral-400); flex: 0 0 auto;">Free</span>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; font-size: 12.5px;">
+              <span style="display: flex; flex-direction: column; gap: 3px;"><span style="color: var(--color-neutral-500);">Seats</span><span style="color: var(--color-accent-300);">11 of 12 &middot; nearly full</span></span>
+              <span style="display: flex; flex-direction: column; gap: 3px;"><span style="color: var(--color-neutral-500);">Draft</span><span>Fri 22 Aug, 19:00</span></span>
+              <span style="display: flex; flex-direction: column; gap: 3px;"><span style="color: var(--color-neutral-500);">Pace</span><span>Fast &middot; 90s</span></span>
+              <span style="display: flex; flex-direction: column; gap: 3px;"><span style="color: var(--color-neutral-500);">Scoring</span><span>Full PPR</span></span>
+            </div>
+            <span style="font-size: 12.5px; color: var(--color-accent-400);">Read the rules and join &rarr;</span>
+          </a>
+          <a href="#" class="card" style="display: flex; flex-direction: column; gap: 14px; padding: 18px; background: var(--color-surface); color: inherit;" style-hover="background: color-mix(in srgb, var(--color-accent) 7%, var(--color-surface));">
+            <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px;">
+              <span style="font-family: var(--font-heading); font-size: 16px; font-weight: 500; letter-spacing: -0.018em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Zero RB Society</span>
+              <span style="font-size: 12px; color: var(--color-neutral-400); flex: 0 0 auto;">Free</span>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; font-size: 12.5px;">
+              <span style="display: flex; flex-direction: column; gap: 3px;"><span style="color: var(--color-neutral-500);">Seats</span><span>7 of 12</span></span>
+              <span style="display: flex; flex-direction: column; gap: 3px;"><span style="color: var(--color-neutral-500);">Draft</span><span>Sat 23 Aug, 14:00</span></span>
+              <span style="display: flex; flex-direction: column; gap: 3px;"><span style="color: var(--color-neutral-500);">Pace</span><span>Slow &middot; 8h</span></span>
+              <span style="display: flex; flex-direction: column; gap: 3px;"><span style="color: var(--color-neutral-500);">Scoring</span><span>Full PPR</span></span>
+            </div>
+            <span style="font-size: 12.5px; color: var(--color-accent-400);">Read the rules and join &rarr;</span>
+          </a>
+          <a href="#" class="card" style="display: flex; flex-direction: column; gap: 14px; padding: 18px; background: var(--color-surface); color: inherit;" style-hover="background: color-mix(in srgb, var(--color-accent) 7%, var(--color-surface));">
+            <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px;">
+              <span style="font-family: var(--font-heading); font-size: 16px; font-weight: 500; letter-spacing: -0.018em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Chalk Eaters</span>
+              <span style="font-size: 12px; color: var(--color-neutral-400); flex: 0 0 auto;">Free</span>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; font-size: 12.5px;">
+              <span style="display: flex; flex-direction: column; gap: 3px;"><span style="color: var(--color-neutral-500);">Seats</span><span>4 of 12</span></span>
+              <span style="display: flex; flex-direction: column; gap: 3px;"><span style="color: var(--color-neutral-500);">Draft</span><span>Sat 23 Aug, 20:00</span></span>
+              <span style="display: flex; flex-direction: column; gap: 3px;"><span style="color: var(--color-neutral-500);">Pace</span><span>Fast &middot; 120s</span></span>
+              <span style="display: flex; flex-direction: column; gap: 3px;"><span style="color: var(--color-neutral-500);">Scoring</span><span>Full PPR</span></span>
+            </div>
+            <span style="font-size: 12.5px; color: var(--color-accent-400);">Read the rules and join &rarr;</span>
+          </a>
+        </div>
+
+        <p style="font-size: 12.5px; line-height: 1.6; color: var(--color-neutral-500); margin: 18px 0 0; max-width: 760px; text-wrap: pretty;">Signing in is not required to look. The join control on a league page is where an account becomes necessary, and it says so there.</p>
+      </section>
+    </div>
+    <footer style="max-width: 1180px; margin: 0 auto; padding: 32px 40px; font-size: 12.5px; color: var(--color-neutral-600);">Pre-alpha. Not audited. Do not use with funds you cannot lose.</footer>
+  </div>
+
+</div>
+
+<div style="background: var(--color-bg); min-width: 1280px;">
+  <div style="height: 1px; margin: 46px 28px 0; background: linear-gradient(90deg, transparent, var(--color-neutral-800) 12%, var(--color-neutral-800) 88%, transparent);"></div>
+
+  <div style="display: flex; align-items: baseline; gap: 14px; padding: 30px 28px 14px;">
+    <span style="font-family: ui-monospace, monospace; font-size: 11px; letter-spacing: 0.1em; color: var(--color-accent-500);">STATE 4</span>
+    <span style="font-family: var(--font-heading); font-size: 17px; font-weight: 500; letter-spacing: -0.02em;">The account menu</span>
+    <span style="font-size: 13px; color: var(--color-neutral-500);">Where <span style="font-family: ui-monospace, monospace; font-size: 12px;">SessionBar</span>&rsquo;s sign-out and unclaimed-username branch go</span>
+  </div>
+
+  <div data-screen-label="Account menu" style="position: relative; display: flex; flex-direction: column; background: var(--color-bg); min-height: 760px; padding-bottom: 56px;">
+    <header style="border-bottom: 1px solid var(--color-neutral-900);">
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 24px; max-width: 1180px; margin: 0 auto; padding: 14px 40px;">
+        <a href="#" style="display: flex; align-items: baseline; gap: 10px; color: inherit;">
+          <span style="font-family: var(--font-heading); font-size: 19px; font-weight: 600; letter-spacing: -0.02em;">rostr</span>
+          <span style="font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-600);">fantasy football</span>
+        </a>
+        <div style="display: flex; align-items: center; gap: 22px;">
+          <a href="#" style="font-size: 13.5px; color: var(--color-neutral-400);" style-hover="color: var(--color-text);">How scoring works</a>
+          <span style="display: flex; align-items: center; gap: 8px;">
+            <a href="#" style="font-size: 13.5px; color: var(--color-text); box-shadow: inset 0 -1px 0 var(--color-accent); padding-bottom: 3px;">Leagues</a>
+            <a href="#" aria-label="1 invitation" title="1 league has invited you" style="display: inline-flex; align-items: center; justify-content: center; min-width: 20px; padding: 1px 6px; border-radius: 999px; background: var(--color-accent); color: var(--color-bg); font-size: 11px; font-weight: 600;">1</a>
+          </span>
+          <span style="display: flex; align-items: center; gap: 8px;">
+            <button type="button" aria-label="Notifications, 4 unread" style="position: relative; display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--color-neutral-400); cursor: pointer;" style-hover="background: color-mix(in srgb, var(--color-accent) 10%, transparent); color: var(--color-text);">
+              <svg width="18" height="18" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M221.8 175.94c-5.55-9.56-13.8-36.61-13.8-71.94a80 80 0 1 0-160 0c0 35.34-8.26 62.38-13.81 71.94A16 16 0 0 0 48 200h40.81a40 40 0 0 0 78.38 0H208a16 16 0 0 0 13.8-24.06ZM128 216a24 24 0 0 1-22.62-16h45.24A24 24 0 0 1 128 216Z"></path></svg>
+              <span style="position: absolute; top: 4px; right: 3px; display: inline-flex; align-items: center; justify-content: center; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px; background: var(--color-accent); color: #14162a; font-family: ui-monospace, monospace; font-size: 10px; font-weight: 600;">4</span>
+            </button>
+            <button type="button" aria-expanded="true" style="display: inline-flex; align-items: center; gap: 9px; padding: 6px 10px 6px 7px; border: 0; border-radius: var(--radius-sm); background: color-mix(in srgb, var(--color-accent) 16%, transparent); color: var(--color-text); font-family: inherit; font-size: 13.5px; cursor: pointer;">
+              <span style="display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%; background: color-mix(in srgb, var(--color-accent) 22%, transparent); box-shadow: inset 0 0 0 1px var(--color-accent-700); font-size: 10px; font-weight: 600; color: var(--color-accent-100);">R6</span>
+              <span>route66</span>
+              <svg width="11" height="11" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="m213.66 101.66-80 80a8 8 0 0 1-11.32 0l-80-80A8 8 0 0 1 48 88h160a8 8 0 0 1 5.66 13.66Z"></path></svg>
+            </button>
+          </span>
+        </div>
+      </div>
+    </header>
+
+    <div style="position: absolute; right: 90px; top: 64px; z-index: 20; width: 268px;">
+      <div class="card elev-lg" style="padding: 0; overflow: hidden; background: var(--color-surface);">
+        <div style="display: flex; flex-direction: column; gap: 3px; padding: 13px 16px; border-bottom: 1px solid var(--color-neutral-900);">
+          <span style="font-size: 13.5px;">route66</span>
+          <span style="font-size: 11.5px; color: var(--color-neutral-500);">dana@example.com</span>
+        </div>
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 16px; border-bottom: 1px solid var(--color-neutral-900);">
+          <span style="display: flex; align-items: center; gap: 9px; min-width: 0;">
+            <span style="display: inline-flex; align-items: center; justify-content: center; color: var(--color-accent-400); flex: 0 0 auto;">
+              <svg width="14" height="14" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M216 64H56a8 8 0 0 1 0-16h136a8 8 0 0 0 0-16H56a24 24 0 0 0-24 24v128a24 24 0 0 0 24 24h160a16 16 0 0 0 16-16V80a16 16 0 0 0-16-16Zm-36 84a12 12 0 1 1 12-12 12 12 0 0 1-12 12Z"></path></svg>
+            </span>
+            <span style="font-family: ui-monospace, monospace; font-size: 12px; color: var(--color-neutral-300);">7xKq&hellip;4vNb</span>
+          </span>
+          <span style="font-size: 11px; color: var(--color-neutral-500);">Linked</span>
+        </div>
+        <a href="#" style="display: flex; align-items: baseline; justify-content: space-between; gap: 14px; padding: 10px 16px; color: inherit;" style-hover="background: color-mix(in srgb, var(--color-accent) 10%, transparent);">
+          <span style="font-size: 13.5px;">Invitations</span>
+          <span style="font-size: 11.5px; color: var(--color-neutral-500);">1 waiting</span>
+        </a>
+        <a href="#" style="display: flex; align-items: baseline; justify-content: space-between; gap: 14px; padding: 10px 16px; color: inherit;" style-hover="background: color-mix(in srgb, var(--color-accent) 10%, transparent);">
+          <span style="font-size: 13.5px;">Your teams</span>
+          <span style="font-size: 11.5px; color: var(--color-neutral-500);">2 leagues</span>
+        </a>
+        <a href="#" style="display: flex; align-items: baseline; justify-content: space-between; gap: 14px; padding: 10px 16px; color: inherit;" style-hover="background: color-mix(in srgb, var(--color-accent) 10%, transparent);">
+          <span style="font-size: 13.5px;">Settings</span>
+          <span style="font-size: 11.5px; color: var(--color-neutral-500);"></span>
+        </a>
+        <div style="border-top: 1px solid var(--color-neutral-900);">
+          <button type="button" style="display: block; width: 100%; text-align: left; padding: 11px 16px; border: 0; background: transparent; color: var(--color-neutral-300); font-family: inherit; font-size: 13.5px; cursor: pointer;" style-hover="background: color-mix(in srgb, var(--color-accent) 10%, transparent); color: var(--color-text);">Sign out</button>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top: 18px; padding: 0; overflow: hidden; background: var(--color-surface); border-color: var(--color-accent-800);">
+        <div style="padding: 10px 16px; border-bottom: 1px solid var(--color-neutral-900); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-accent-400);">Variant &middot; no username yet</div>
+        <div style="display: flex; flex-direction: column; gap: 3px; padding: 13px 16px; border-bottom: 1px solid var(--color-neutral-900);">
+          <a href="#" style="font-size: 13.5px; color: var(--color-accent-300);">Finish setting up</a>
+          <span style="font-size: 11.5px; color: var(--color-neutral-500);">dana@example.com</span>
+        </div>
+        <p style="font-size: 12px; line-height: 1.55; color: var(--color-neutral-400); margin: 0; padding: 12px 16px;">An account with no username cannot be invited to anything, so the menu leads with the fix rather than quietly showing an email.</p>
+      </div>
+    </div>
+
+    <div style="width: 100%; max-width: 1180px; margin: 0 auto; padding: 48px 40px 0;">
+      <h1 style="font-family: var(--font-heading); font-size: 30px; font-weight: 500; letter-spacing: -0.026em; margin: 0; opacity: 0.5;">Leagues</h1>
+      <p style="font-size: 14.5px; line-height: 1.6; color: var(--color-neutral-400); margin: 11px 0 0; max-width: 500px; text-wrap: pretty;">The menu absorbs what the shipped header showed inline &mdash; the username link and a bare Sign out button &mdash; and gives the linked wallet somewhere to live.</p>
+    </div>
+
+    <footer style="width: 100%; max-width: 1180px; margin: auto auto 0; padding: 32px 40px; font-size: 12.5px; color: var(--color-neutral-600);">Pre-alpha. Not audited. Do not use with funds you cannot lose.</footer>
+  </div>
+</div></x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;urgentStrip&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Header&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    return { urgent: this.props.urgentStrip !== false };
+  }
+}
+</script>
+</body>
+</html>

@@ -6,8 +6,8 @@ built, and the one rule that matters when using them.
 
 ## Provenance
 
-Drop 5 landed 2026-08-16, drop 6 on 2026-08-19; **drop 7 landed 2026-08-21** and
-is what is here now.
+Drop 5 landed 2026-08-16, drop 6 on 2026-08-19, drop 7 earlier on 2026-08-21;
+**drop 8 landed 2026-08-21** and is what is here now.
 Earlier drops are **superseded entirely** — they were revisions of the same
 screens, not different content:
 
@@ -18,10 +18,95 @@ screens, not different content:
 | 4 | ten screens, plus mobile and playoffs |
 | 5 | all twelve, plus amend-and-dissolve |
 | 6 | landing hero rebuilt, nav consolidated, mobile expanded, plus a screens index |
-| **7** | **the landing becomes a section explorer; real NFL names; a brand kit; a logo sheet** |
+| 7 | the landing becomes a section explorer; real NFL names; a brand kit; a logo sheet |
+| **8** | **the Leagues hub — one screen for your leagues, invitations and browsing** |
 
-If an older drop resurfaces, it is not a source of anything. Nothing in 1–6 is
+If an older drop resurfaces, it is not a source of anything. Nothing in 1–7 is
 absent from this directory.
+
+### What drop 8 changed
+
+**One file: `screens/Rostr Leagues.dc.html`.** Every other screen and the whole
+brand kit are byte-identical to drop 7.
+
+It proposes replacing **three shipped surfaces with one**. Today the shell
+carries "Join a league", a "Create a league" button and `InvitationBadge` side
+by side; `/leagues` browses public leagues with `InvitationsCorner` beside it;
+and `/invitations` is a third page. The design is a single `Leagues` nav item
+ordered **your leagues → invitations → public leagues**, with create as a card in
+the page head.
+
+The gap it names is real and ours: **nothing on `/leagues` lists the leagues you
+are already in**, which is the first thing a returning manager wants. This repo
+has known that since the commissioner's checklist landed — "there is no 'my
+leagues' list to find it in again".
+
+**The designer read the shipped code**, which is worth knowing when reconciling:
+`InvitationBadge` and `INVITATIONS_KEY`, the deduplicated count that renders
+nothing at zero, `LeagueBrowser`'s PUBLIC-and-FORMING filter, seats against
+`maxTeams`, the buy-in computed by string surgery rather than floating point.
+Those parts are described as **grounded — recreate from source, not from these
+pixels.**
+
+**What is a proposal with no backing route:** the urgent strip, the bell, the
+account menu, and the `Your leagues` section. Only the invitation count has a
+real source today. Do not read the screen as a description of what exists.
+
+#### State 4 exists to stop a regression, and it is right
+
+Collapsing `SessionBar` into an avatar and a chevron would silently delete two
+shipped affordances: the **Sign out** button, and the `username === null` branch
+that renders **Finish setting up** linking to `/welcome`. The second matters more
+than it looks — an account with no username cannot be invited to anything, and
+since 2026-08-21 it cannot create or join a league either. Both are drawn into
+the account menu. If that header is ever rebuilt, this is the thing to check.
+
+#### Three rules the screen states, all of which the repo already enforces
+
+- **No join control in a list.** Both card types lead to the league page, where
+  the whole rule set renders above the join button. `RULES.md` requires the full
+  document before anyone joins.
+- **Private leagues never appear in the public list.** They arrive as an
+  invitation or a link.
+- **Every public league shows Free**, because no league can take a deposit until
+  settlement is written. Dollar amounts would be designing a feature that does
+  not exist.
+
+Verified on install: the file contains no roster-as-NFT claim, no
+"held in your wallet", and no join button in a list.
+
+#### Two CSS traps recorded, and one applies to any Tailwind rebuild
+
+An absolutely-positioned panel does not push a footer — the frame needs to be a
+flex column with the footer on `margin-top: auto`. And **auto side margins on a
+flex item suppress `align-self: stretch` and trigger shrink-to-fit**, which
+collapsed two 1180px columns to content width. In Tailwind terms: `mx-auto` on a
+flex child needs `w-full` beside it.
+
+#### All five "still open" questions are answered — see `ANSWERS.md`
+
+`ANSWERS.md` in this directory is the reply, written to be pasted into the design
+session rather than read as correspondence. It settles all five, each with the
+source that decides it: drafting signs nothing (so draft room **state 6 can be
+deleted**), hero animation **A**, kickoff the **9th**, the week label flips at the
+Tuesday lock for rules and at the last kickoff for results, and a trade **can**
+execute mid-game because the lineup lock — not the trade path — is what makes
+that safe.
+
+#### Three of them were listed as open in drop 8 as well
+
+Drop 8 repeats them, so the answers have not reached the designer. They should
+go back in the next reply:
+
+- **How autopick signs a transaction** — it does not. A pick is a database write
+  and nothing on that path signs anything; see CLAUDE.md, "Drafting signs
+  nothing". Draft room state 6 is designed for a failure that cannot happen.
+- **Which hero animation** — **A**, decided 2026-08-21.
+- **Kickoff** — the **9th**, confirmed against the synced schedule and by the
+  owner. The designs still say the 10th.
+
+Still genuinely open: when a week label flips, and whether escrow release can
+move a player whose game is in progress.
 
 ### What drop 7 changed
 
@@ -197,8 +282,8 @@ one of them will drift from the code that owns it.
 
 ## Do not build drop 6's landing copy — two sentences are retired
 
-**This is the trap in this directory right now, and drop 7 did not fix it —
-checked on 2026-08-21.** `screens/Rostr Landing.dc.html` still contains the
+**This is the trap in this directory right now. Drop 7 did not fix it and drop 8
+did not touch the file — both checked on 2026-08-21.** `screens/Rostr Landing.dc.html` still contains the
 roster-as-NFT claim, in two places, and the app deliberately does not. Anyone implementing that hero from the design will paste a false
 sentence back onto the front page, which is precisely how it got there the first
 time.
