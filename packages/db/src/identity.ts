@@ -324,6 +324,17 @@ export async function linkWallet(
   db: SqlClient,
   userId: string,
   address: string,
+  options: {
+    /**
+     * Whether the caller has proved the holder controls this key.
+     *
+     * **Only `linkWalletWithSignature` may pass true**, and it is the only
+     * caller that has checked a signature. Everything reading
+     * `wallets.verified_at` — `findUserByWallet`, and through it invite-by-
+     * address and wallet sign-in — is asking exactly that question.
+     */
+    readonly verified?: boolean;
+  } = {},
 ): Promise<Wallet> {
   if (!isValidWalletAddress(address)) {
     throw new IdentityError("Not a valid Solana public key", "INVALID_WALLET");
@@ -335,6 +346,17 @@ export async function linkWallet(
   );
   if (claimed) {
     if (claimed.user_id === userId) {
+      // Re-linking upgrades an unproven row rather than leaving it. Somebody who
+      // linked before verification existed, or whose first attempt failed after
+      // the insert, gets the same outcome as anyone else — and `COALESCE` keeps
+      // the original moment rather than restamping it on every re-link.
+      if (options.verified === true) {
+        await db.query(
+          "UPDATE wallets SET verified_at = COALESCE(verified_at, now()) WHERE address = $1",
+          [address],
+        );
+      }
+
       const [existing] = await db.query<{ id: string; address: string; is_primary: boolean }>(
         "SELECT id, address, is_primary FROM wallets WHERE address = $1",
         [address],
@@ -357,10 +379,10 @@ export async function linkWallet(
   let row: { id: string; address: string; is_primary: boolean } | undefined;
   try {
     [row] = await db.query<{ id: string; address: string; is_primary: boolean }>(
-      `INSERT INTO wallets (user_id, address, is_primary)
-       VALUES ($1, $2, $3)
+      `INSERT INTO wallets (user_id, address, is_primary, verified_at)
+       VALUES ($1, $2, $3, CASE WHEN $4 THEN now() ELSE NULL END)
        RETURNING id, address, is_primary`,
-      [userId, address, isFirst],
+      [userId, address, isFirst, options.verified === true],
     );
   } catch (error) {
     if (isUniqueViolation(error)) {
@@ -382,9 +404,18 @@ export async function linkWallet(
  * the wrong person.
  *
  * **Only a verified wallet counts.** `wallets.verified_at` is set by
- * `linkWalletWithSignature` and by nothing else, so an unverified row cannot
- * exist through any path the app offers — but reading it explicitly is what
- * stops a future path that writes one from silently making addresses claimable.
+ * `linkWalletWithSignature` and by nothing else.
+ *
+ * **That sentence was false until 2026-08-23, and this function never returned
+ * anybody.** `linkWalletWithSignature` ended by calling `linkWallet`, which
+ * did not write the column — so no wallet in the database had ever been marked
+ * verified, and the check below excluded every row. Inviting somebody by wallet
+ * address, the feature this exists for, answered "no such user" for every
+ * address including correct ones. Nothing failed loudly; it simply never found
+ * anyone.
+ *
+ * Reading it explicitly is still what stops a future path that writes an
+ * unverified row from silently making addresses claimable.
  * Inviting somebody is a small thing; being *reachable* at an address you never
  * proved you hold is the part worth being strict about.
  */

@@ -75,9 +75,12 @@ export {
 export {
   buildJoinMessage,
   buildWalletLinkMessage,
+  buildWalletSignInMessage,
   isValidWalletAddress,
   verifyJoinSignature,
   verifyWalletLinkSignature,
+  verifyWalletSignInSignature,
+  type WalletSignInMessageInput,
   type JoinMessageInput,
   type WalletLinkMessageInput,
 } from "./signing.js";

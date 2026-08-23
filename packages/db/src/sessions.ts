@@ -40,7 +40,17 @@ export class SessionError extends Error {
       | "CHALLENGE_NOT_FOUND"
       | "CHALLENGE_EXPIRED"
       | "BAD_SIGNATURE"
-      | "INVALID_WALLET",
+      | "INVALID_WALLET"
+      /**
+       * Wallet sign-in only: nobody has linked this address.
+       *
+       * Distinguishable on purpose. The owner's chosen flow sends that person
+       * to email sign-in once, and a screen cannot say so unless it is told
+       * which refusal this is.
+       */
+      | "WALLET_NOT_LINKED"
+      /** A challenge that was already spent. Separate from expiry, which is a clock. */
+      | "CHALLENGE_USED",
   ) {
     super(message);
     this.name = "SessionError";
@@ -244,5 +254,20 @@ export async function linkWalletWithSignature(
     throw new SessionError("Signature does not match this wallet", "BAD_SIGNATURE");
   }
 
-  return linkWallet(db, userId, address);
+  /*
+    `verified: true`, and this argument is the whole point of the function.
+
+    It read `linkWallet(db, userId, address)` — which never wrote
+    `wallets.verified_at` — so **no wallet in the database has ever been
+    marked verified**, by any path. `findUserByWallet` requires it and could
+    therefore never return anybody, which silently disabled the one feature it
+    was written for: inviting somebody by wallet address. It answered "no such
+    user" for every address, including correct ones.
+
+    `findUserByWallet`'s own docstring asserted that this function set the
+    column "and nothing else" — a comment describing a guarantee the code did
+    not provide, which this repo treats as a defect in its own right. Found on
+    2026-08-23 while building wallet sign-in on top of it.
+  */
+  return linkWallet(db, userId, address, { verified: true });
 }

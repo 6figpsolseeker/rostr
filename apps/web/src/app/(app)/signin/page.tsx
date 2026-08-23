@@ -1,4 +1,5 @@
 import { SignInForm } from "@/components/SignInForm";
+import { WalletSignIn } from "@/components/WalletSignIn";
 import { currentUser } from "@/lib/session";
 
 const MESSAGES: Record<string, string> = {
@@ -34,7 +35,8 @@ export default async function SignInPage({
       <div className="space-y-2">
         <h1 className="text-2xl font-semibold tracking-tight">Sign in</h1>
         <p className="text-sm text-nocturne-neutral-400">
-          Enter your email and we will send a link. No password to forget or leak.
+          Two ways in, and no password to forget or leak. If you have linked a wallet before,
+          that is the quick one.
         </p>
       </div>
 
@@ -43,6 +45,23 @@ export default async function SignInPage({
           {MESSAGES[error]}
         </p>
       )}
+
+      {/*
+        Wallet first in the reading order, email second, neither buried.
+
+        A returning member takes the top path and never opens their mail; anyone
+        on a new browser, a phone, or a wallet extension that will not load
+        takes the bottom one. Hiding email behind a link would put the recovery
+        route out of sight at exactly the moment it is needed — the same reason
+        the cluster banner warns rather than blocks.
+      */}
+      <WalletSignIn next={next ?? "/"} />
+
+      <div className="flex items-center gap-3" aria-hidden>
+        <span className="h-px flex-1 bg-nocturne-neutral-900" />
+        <span className="text-[11px] text-nocturne-neutral-600">or</span>
+        <span className="h-px flex-1 bg-nocturne-neutral-900" />
+      </div>
 
       <SignInForm next={next ?? "/"} />
 
