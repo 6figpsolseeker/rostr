@@ -27,6 +27,7 @@ export {
   invitationsForLeague,
   invitationsForUser,
   inviteToLeague,
+  declineInvitation,
   withdrawInvitation,
   type AddressedAs,
   type Invitation,

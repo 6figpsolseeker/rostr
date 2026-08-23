@@ -3,6 +3,7 @@ import { buildNflPprRules, NFL } from "@rostr/core";
 import type { DraftRules, LeagueRules } from "@rostr/core";
 import { createUser, linkWallet } from "./identity.js";
 import {
+  declineInvitation,
   invitationsForLeague,
   invitationsForUser,
   inviteToLeague,
@@ -293,5 +294,112 @@ describe("invitationsForUser", () => {
     await fx.client.query("UPDATE leagues SET state = 'DRAFTING' WHERE id = $1", [fx.leagueId]);
 
     expect(await invitationsForUser(fx.client, fx.invitee)).toHaveLength(0);
+  });
+});
+
+describe("declineInvitation", () => {
+  it("takes the invitation out of the invitee's list", async () => {
+    const fx = await setup();
+    const invitation = await inviteToLeague(fx.client, {
+      leagueId: fx.leagueId,
+      invitedBy: fx.commissioner,
+      identifier: "route66",
+    });
+
+    expect(await invitationsForUser(fx.client, fx.invitee)).toHaveLength(1);
+
+    await declineInvitation(fx.client, invitation.id, fx.invitee);
+
+    // The list is a to-do. A declined invitation left on it would make the
+    // button look broken rather than recorded.
+    expect(await invitationsForUser(fx.client, fx.invitee)).toHaveLength(0);
+  });
+
+  it("still shows the commissioner that they were refused", async () => {
+    const fx = await setup();
+    const invitation = await inviteToLeague(fx.client, {
+      leagueId: fx.leagueId,
+      invitedBy: fx.commissioner,
+      identifier: "route66",
+    });
+    await declineInvitation(fx.client, invitation.id, fx.invitee);
+
+    // The fact that tells a commissioner to ask somebody else. Dropping it from
+    // both lists would make a decline indistinguishable from silence.
+    const [row] = await invitationsForLeague(fx.client, fx.leagueId);
+    expect(row?.declinedAt).toBeInstanceOf(Date);
+    expect(row?.withdrawnAt).toBeNull();
+  });
+
+  it("refuses to decline somebody else's invitation", async () => {
+    const fx = await setup();
+    const stranger = await createUser(fx.client, "stranger@example.test", "Stranger");
+    const invitation = await inviteToLeague(fx.client, {
+      leagueId: fx.leagueId,
+      invitedBy: fx.commissioner,
+      identifier: "route66",
+    });
+
+    // Scoped by the invitee, not the league. A caller with no way to name
+    // another person has no way to act as them.
+    expect(await declineInvitation(fx.client, invitation.id, stranger.id)).toEqual({
+      declined: false,
+    });
+    expect(await invitationsForUser(fx.client, fx.invitee)).toHaveLength(1);
+  });
+
+  it("is idempotent", async () => {
+    const fx = await setup();
+    const invitation = await inviteToLeague(fx.client, {
+      leagueId: fx.leagueId,
+      invitedBy: fx.commissioner,
+      identifier: "route66",
+    });
+
+    expect(await declineInvitation(fx.client, invitation.id, fx.invitee)).toEqual({
+      declined: true,
+    });
+    // Pressing twice is not a failure — saying so would suggest they are still
+    // invited.
+    expect(await declineInvitation(fx.client, invitation.id, fx.invitee)).toEqual({
+      declined: false,
+    });
+  });
+
+  it("will not decline an invitation the commissioner already withdrew", async () => {
+    const fx = await setup();
+    const invitation = await inviteToLeague(fx.client, {
+      leagueId: fx.leagueId,
+      invitedBy: fx.commissioner,
+      identifier: "route66",
+    });
+    await withdrawInvitation(fx.client, fx.leagueId, invitation.id);
+
+    // There is nothing left to decline, and writing both would violate `0037`'s
+    // check constraint.
+    expect(await declineInvitation(fx.client, invitation.id, fx.invitee)).toEqual({
+      declined: false,
+    });
+  });
+
+  it("comes back when the commissioner asks again", async () => {
+    const fx = await setup();
+    const invitation = await inviteToLeague(fx.client, {
+      leagueId: fx.leagueId,
+      invitedBy: fx.commissioner,
+      identifier: "route66",
+    });
+    await declineInvitation(fx.client, invitation.id, fx.invitee);
+
+    // "We spoke and they changed their mind" is the ordinary reason to re-send.
+    // A decline removes the invitation and reports the refusal; it does not bar
+    // the person, and this test is what says so out loud.
+    await inviteToLeague(fx.client, {
+      leagueId: fx.leagueId,
+      invitedBy: fx.commissioner,
+      identifier: "route66",
+    });
+
+    expect(await invitationsForUser(fx.client, fx.invitee)).toHaveLength(1);
   });
 });

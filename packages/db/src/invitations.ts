@@ -46,6 +46,15 @@ export interface Invitation {
   readonly createdAt: Date;
   readonly withdrawnAt: Date | null;
   /**
+   * When the invitee refused, if they did.
+   *
+   * Distinct from `withdrawnAt` because the commissioner's next move differs:
+   * an invitation they withdrew is one they may want to re-send, and one that
+   * was declined is one they probably should not. A shared "cancelled" would
+   * leave the panel unable to say which happened, and nothing else records it.
+   */
+  readonly declinedAt: Date | null;
+  /**
    * Whether the invitee has since joined.
    *
    * **Derived from `league_memberships`, never stored.** A member is a member
@@ -142,7 +151,20 @@ export async function inviteToLeague(
            -- Re-inviting revives a withdrawn invitation. The alternative is a
            -- commissioner who changed their mind being permanently unable to
            -- change it back, with nothing on screen explaining why.
-           withdrawn_at = NULL
+           withdrawn_at = NULL,
+           -- And a declined one, deliberately, though it is the less obvious
+           -- half. "We spoke and they changed their mind" is the ordinary
+           -- reason a commissioner re-sends after a decline, and a permanent
+           -- block would have no way to express it.
+           --
+           -- The cost is that a decline can be overridden by asking again, so
+           -- it does not *bar* anyone. What it does is remove the invitation
+           -- from the invitee's list and tell the commissioner they were
+           -- refused — and each fresh decline is recorded in turn. Barring
+           -- would need a separate opt-out belonging to the invitee rather
+           -- than to one invitation; nothing here is that, and this comment is
+           -- not claiming it is.
+           declined_at = NULL
      RETURNING id, created_at, addressed_as`,
     [input.leagueId, invitee.id, input.invitedBy, addressedAs],
   );
@@ -155,6 +177,7 @@ export async function inviteToLeague(
     addressedAs: row!.addressed_as as AddressedAs,
     createdAt: new Date(row!.created_at),
     withdrawnAt: null,
+    declinedAt: null,
     accepted: false,
   };
 }
@@ -176,6 +199,44 @@ export async function withdrawInvitation(
   );
 }
 
+/**
+ * Refuse an invitation.
+ *
+ * **Scoped by the invitee, never by the league**, which is the mirror image of
+ * `withdrawInvitation` and the reason the two cannot share an implementation.
+ * A commissioner acts on invitations belonging to their league; an invitee acts
+ * on invitations belonging to *them*. Taking a league id here would let a
+ * caller decline on somebody else's behalf by naming a league they happen to
+ * run, and taking neither would let anyone decline anything with a UUID.
+ *
+ * The wallet-derivation rule elsewhere in this repo is the same idea: a caller
+ * with no way to *name* another person has no way to act as them.
+ *
+ * Idempotent. A second decline matches no row and is not an error — the invitee
+ * pressed a button twice, and telling them it failed would suggest they are
+ * still invited.
+ *
+ * `withdrawn_at IS NULL` is not merely tidiness. Declining an invitation the
+ * commissioner already took back would write a state the `0037` check
+ * constraint refuses, and the honest answer is that there is nothing left to
+ * decline.
+ */
+export async function declineInvitation(
+  db: SqlClient,
+  invitationId: string,
+  invitedUserId: string,
+): Promise<{ declined: boolean }> {
+  const rows = await db.query<{ id: string }>(
+    `UPDATE league_invitations SET declined_at = now()
+      WHERE id = $1 AND invited_user_id = $2
+        AND declined_at IS NULL AND withdrawn_at IS NULL
+      RETURNING id`,
+    [invitationId, invitedUserId],
+  );
+
+  return { declined: rows.length > 0 };
+}
+
 /** Everyone this league has asked, newest first. */
 export async function invitationsForLeague(
   db: SqlClient,
@@ -190,10 +251,12 @@ export async function invitationsForLeague(
     addressed_as: string;
     created_at: string;
     withdrawn_at: string | null;
+    declined_at: string | null;
     accepted: boolean;
   }>(
     `SELECT i.id, i.league_id, l.name AS league_name, i.invited_user_id,
             u.username AS invited_username, i.addressed_as, i.created_at, i.withdrawn_at,
+            i.declined_at,
             EXISTS (
               SELECT 1 FROM league_memberships m
                WHERE m.league_id = i.league_id AND m.user_id = i.invited_user_id
@@ -242,6 +305,10 @@ export async function invitationsForUser(
        JOIN leagues l ON l.id = i.league_id
       WHERE i.invited_user_id = $1
         AND i.withdrawn_at IS NULL
+        -- Declined is an answer, and this list is a to-do. Leaving it here would
+        -- make the button do nothing visible, which reads as a broken control
+        -- rather than a recorded decision.
+        AND i.declined_at IS NULL
         AND l.state = 'FORMING'
         AND NOT EXISTS (
           SELECT 1 FROM league_memberships m
@@ -262,6 +329,7 @@ function toInvitation(row: {
   addressed_as: string;
   created_at: string;
   withdrawn_at: string | null;
+  declined_at?: string | null;
   accepted: boolean;
 }): Invitation {
   return {
@@ -272,6 +340,7 @@ function toInvitation(row: {
     addressedAs: row.addressed_as as AddressedAs,
     createdAt: new Date(row.created_at),
     withdrawnAt: row.withdrawn_at ? new Date(row.withdrawn_at) : null,
+    declinedAt: row.declined_at ? new Date(row.declined_at) : null,
     accepted: row.accepted,
   };
 }

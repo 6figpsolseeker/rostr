@@ -3,6 +3,7 @@ import { getWallets, invitationsForUser } from "@rostr/db";
 import { db } from "@/lib/db";
 import { accountGaps } from "@/lib/account";
 import { currentUser } from "@/lib/session";
+import { DeclineInvitation } from "@/components/DeclineInvitation";
 
 /**
  * Leagues you have been asked to join.
@@ -77,22 +78,27 @@ export default async function InvitationsPage() {
         <ul className="space-y-3">
           {invitations.map((invitation) => (
             <li key={invitation.id}>
-              <a
-                href={`/leagues/${invitation.leagueId}`}
-                className="block space-y-2 rounded-lg border border-nocturne-neutral-900 p-5 transition-colors hover:border-nocturne-neutral-800 hover:bg-nocturne-surface/30"
-              >
-                <div className="flex items-baseline justify-between gap-3">
-                  <h2 className="truncate text-base font-medium">{invitation.leagueName}</h2>
-                  <span className="shrink-0 text-xs text-nocturne-neutral-600">
-                    {invitation.addressedAs === "WALLET"
-                      ? "addressed to your wallet address"
-                      : "addressed to your username"}
-                  </span>
-                </div>
-                <p className="text-xs text-nocturne-neutral-600">
-                  Read the rules and join &rarr;
-                </p>
-              </a>
+              <div className="space-y-2 rounded-lg border border-nocturne-neutral-900 p-5 transition-colors hover:border-nocturne-neutral-800">
+                <a href={`/leagues/${invitation.leagueId}`} className="block space-y-2">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <h2 className="truncate text-base font-medium">{invitation.leagueName}</h2>
+                    <span className="shrink-0 text-xs text-nocturne-neutral-600">
+                      {invitation.addressedAs === "WALLET"
+                        ? "addressed to your wallet address"
+                        : "addressed to your username"}
+                    </span>
+                  </div>
+                  <p className="text-xs text-nocturne-neutral-600">
+                    Read the rules and join &rarr;
+                  </p>
+                </a>
+                {/*
+                  Outside the anchor. An action nested inside a navigation target
+                  is how declining becomes an accidental click on the way to
+                  reading the rules.
+                */}
+                <DeclineInvitation invitationId={invitation.id} />
+              </div>
             </li>
           ))}
         </ul>
