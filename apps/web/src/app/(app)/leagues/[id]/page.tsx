@@ -148,7 +148,9 @@ export default async function LeaguePage({ params }: { params: Promise<{ id: str
         the screen contradicting the server, which is the failure the
         commissioner's checklist was rebuilt to avoid.
       */}
-      {isCommissioner && league.state === "FORMING" ? <InvitePanel leagueId={id} /> : null}
+      {isCommissioner && league.state === "FORMING" ? (
+        <InvitePanel leagueId={id} maxBots={stored.rules.league.maxBots} />
+      ) : null}
 
       {/*
         The draft and the bracket are not tabs.

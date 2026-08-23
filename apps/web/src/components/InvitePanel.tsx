@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import useSWR from "swr";
+import { fieldVerdict } from "@/lib/field";
 
 /**
  * The commissioner's invite box.
@@ -45,7 +46,18 @@ const fetcher = async (
   return response.json() as Promise<{ members: Member[]; invitations: Invitation[] }>;
 };
 
-export function InvitePanel({ leagueId }: { leagueId: string }) {
+export function InvitePanel({
+  leagueId,
+  maxBots,
+}: {
+  leagueId: string;
+  /**
+   * From the league's frozen rules, so the control cannot offer a seat the
+   * program's own terms refuse. Zero in any league with a pot — a bot has no
+   * wallet, so a bot champion would leave the largest share with no recipient.
+   */
+  maxBots: number;
+}) {
   const { data, error, mutate } = useSWR(`/api/leagues/${leagueId}/invites`, fetcher, {
     revalidateOnFocus: true,
   });
@@ -115,6 +127,35 @@ export function InvitePanel({ leagueId }: { leagueId: string }) {
     }
   }
 
+  /**
+   * Add or remove the bot seat.
+   *
+   * **This is what the draft was waiting on.** `drawDraftOrder` refuses an odd
+   * field, and both the create form and the draft lobby told the commissioner to
+   * add a bot "from the league page" — where no such control existed and no
+   * route stood behind one. Five friends were told to do something the product
+   * could not do.
+   *
+   * Removal is not confirmed, unlike removing a member: a bot consents to
+   * nothing, holds nothing, and can be added straight back while the field is
+   * open. Guarding it would train people to click through the dialog that does
+   * matter.
+   */
+  async function botSeat(method: "POST" | "DELETE"): Promise<void> {
+    setBusy(true);
+    setProblem(null);
+    try {
+      const response = await fetch(`/api/leagues/${leagueId}/bots`, { method });
+      const body = (await response.json()) as { error?: string };
+      if (!response.ok) throw new Error(body.error ?? "Could not change the bot seat");
+      await mutate();
+    } catch (e) {
+      setProblem(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function withdraw(invitationId: string): Promise<void> {
     setBusy(true);
     setProblem(null);
@@ -137,6 +178,16 @@ export function InvitePanel({ leagueId }: { leagueId: string }) {
 
   const members = data?.members ?? [];
   const invitations = data?.invitations ?? [];
+
+  // Humans, not rows — the same count `drawDraftOrder` refuses on. A bot in the
+  // total would make an odd field look even and hide the very problem this
+  // reports.
+  const verdict = fieldVerdict({
+    // Humans, not rows — the same count `drawDraftOrder` refuses on.
+    humans: members.filter((member) => !member.isBot).length,
+    hasBot: members.some((member) => member.isBot),
+    maxBots,
+  });
   const outstanding = invitations.filter((i) => !i.withdrawn && !i.accepted);
 
   return (
@@ -235,7 +286,13 @@ export function InvitePanel({ leagueId }: { leagueId: string }) {
                 {member.isCommissioner ? (
                   <span className="shrink-0 text-xs text-nocturne-neutral-600">you</span>
                 ) : member.isBot ? (
-                  <span className="shrink-0 text-xs text-nocturne-neutral-600">bot</span>
+                  <button
+                    onClick={() => void botSeat("DELETE")}
+                    disabled={busy}
+                    className="shrink-0 text-xs text-nocturne-neutral-600 hover:text-red-400 disabled:opacity-40"
+                  >
+                    Remove bot
+                  </button>
                 ) : (
                   <button
                     onClick={() => void remove(member)}
@@ -257,6 +314,62 @@ export function InvitePanel({ leagueId }: { leagueId: string }) {
             */}
             Only until the draft order is drawn — after that the field is locked for everyone.
           </p>
+
+          {/*
+            The odd-field warning, and the one control that resolves it.
+
+            `drawDraftOrder` refuses an odd field outright, so this is not
+            advice — it is the difference between a league that drafts and one
+            that cannot. It says the count, because "odd" is a property somebody
+            has to check by counting, and it offers the bot only when the rules
+            actually permit one.
+          */}
+          {verdict.kind !== "SQUARE" && (
+            <div className="mt-3 rounded-[4px] border border-nocturne-accent/40 bg-nocturne-accent/5 p-3">
+              <p className="text-[13px] text-nocturne-accent-100">
+                {verdict.humans} managers is an odd field, and the draw refuses one — somebody
+                would get a bye every week, which is a free result.
+              </p>
+
+              {verdict.kind === "ODD_ADD_BOT" && (
+                <>
+                  <button
+                    onClick={() => void botSeat("POST")}
+                    disabled={busy}
+                    className="mt-2 rounded-[4px] border border-nocturne-accent px-3 py-1.5 text-[13px] text-nocturne-accent-200 transition-colors hover:bg-nocturne-accent/10 disabled:opacity-40"
+                  >
+                    {busy ? "Adding…" : "Add a bot to square it"}
+                  </button>
+                  <p className="mt-2 text-[11px] text-nocturne-neutral-600">
+                    It drafts from the rankings and sets a lineup. It never trades and never
+                    votes on a veto. Removable until the order is drawn.
+                  </p>
+                </>
+              )}
+
+              {verdict.kind === "ODD_REMOVE_BOT" && (
+                <>
+                  <button
+                    onClick={() => void botSeat("DELETE")}
+                    disabled={busy}
+                    className="mt-2 rounded-[4px] border border-nocturne-accent px-3 py-1.5 text-[13px] text-nocturne-accent-200 transition-colors hover:bg-nocturne-accent/10 disabled:opacity-40"
+                  >
+                    {busy ? "Removing…" : "Remove the bot to square it"}
+                  </button>
+                  <p className="mt-2 text-[11px] text-nocturne-neutral-600">
+                    Somebody joined after the bot did, so the bot is now the odd one out.
+                  </p>
+                </>
+              )}
+
+              {verdict.kind === "ODD_NEEDS_HUMAN" && (
+                <p className="mt-2 text-[11px] text-nocturne-neutral-600">
+                  This league plays for a pot, so it cannot hold a bot — a bot has no wallet and
+                  could not be paid. One more manager is the only way to square it.
+                </p>
+              )}
+            </div>
+          )}
         </div>
       )}
 
