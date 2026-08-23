@@ -48,32 +48,27 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
               How scoring works
             </Link>
             {/*
-              Joining and creating sit side by side, and joining is first.
-              Creating a league has had a front door since A10; joining one has
-              never had anywhere to start, so a league was reachable only by
-              holding its URL. Most people arrive wanting to be in a league
-              rather than to run one.
+              One `Leagues` item, not three — drop 8.
+
+              The shell carried "Join a league", a "Create a league" button and
+              the invitation badge side by side, and none of them led to the
+              leagues you are already in. `/leagues` is now the hub — your
+              leagues, your invitations, the public list — and create is a card
+              in its head with equal weight rather than a button competing with
+              the nav.
+
+              The badge stays beside the link. It renders nothing at zero, so
+              this is a bare word until something is actually waiting.
             */}
             <span className="flex items-center gap-2">
               <Link
                 href="/leagues"
                 className="text-[13.5px] text-nocturne-neutral-400 transition-colors hover:text-nocturne-text"
               >
-                Join a league
+                Leagues
               </Link>
-              {/*
-                Rendered only when something is waiting, and only for a signed-in
-                visitor — the route answers an empty list to anyone else, so a
-                logged-out header makes one cheap request and draws nothing.
-              */}
               {user && <InvitationBadge />}
             </span>
-            <Link
-              href="/leagues/new"
-              className="rounded-[4px] border border-nocturne-accent px-4 py-2 text-[13px] text-nocturne-accent-200 transition-colors hover:bg-nocturne-accent/10"
-            >
-              Create a league
-            </Link>
             <SessionBar email={user?.email ?? null} username={user?.username ?? null} />
           </div>
         </nav>

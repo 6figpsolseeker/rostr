@@ -41,8 +41,12 @@ export function InvitationsCorner() {
   if (invitations.length === 0) return null;
 
   return (
-    <aside
-      className="space-y-3 rounded-lg border border-nocturne-accent/30 bg-nocturne-accent/5 p-4 lg:sticky lg:top-6"
+    // Full width in the hub, where it is a section between your leagues and the
+    // public list rather than a sidebar beside one. It was `lg:sticky lg:top-6`
+    // when it sat in a column; sticky on a full-width band does nothing but
+    // promise something the layout no longer has.
+    <section
+      className="space-y-3 rounded-lg border border-nocturne-accent/30 bg-nocturne-accent/5 p-4"
       aria-label="Invitations waiting for you"
     >
       <header className="flex items-baseline justify-between gap-2">
@@ -64,7 +68,7 @@ export function InvitationsCorner() {
         Private leagues never appear in the list — this is where they reach you.
       </p>
 
-      <ul className="space-y-2">
+      <ul className="grid gap-2 sm:grid-cols-2">
         {invitations.slice(0, 4).map((invitation) => (
           <li key={invitation.id}>
             <a
@@ -88,7 +92,7 @@ export function InvitationsCorner() {
           and {invitations.length - 4} more
         </a>
       )}
-    </aside>
+    </section>
   );
 }
 
