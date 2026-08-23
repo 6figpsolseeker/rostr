@@ -43,6 +43,17 @@ import type {
  * provider is behind it, which is what keeps swapping providers a one-file
  * change. Naming the concrete class here would put that back.
  */
+/**
+ * Cap a recorded outcome, keeping the front.
+ *
+ * The useful half of a provider error is its first sentence; the rest is a
+ * stack or a body echo. An ellipsis rather than a hard cut, so a reader can
+ * tell truncation from a message that simply ended.
+ */
+function truncate(text: string, max: number): string {
+  return text.length <= max ? text : `${text.slice(0, max - 1)}…`;
+}
+
 export async function runSeasonSyncJob(
   client: SqlClient,
   provider: AdpCapableProvider & ByeCapableProvider & ProjectionCapableProvider,
@@ -146,10 +157,33 @@ export async function runSeasonSyncJob(
   const failed = runs.filter((entry) => entry.error).length;
   const undated = runs.reduce((total, entry) => total + (entry.undatedGames ?? 0), 0);
 
+  /*
+    The message goes in, not just the count.
+
+    This recorded "1 of 1 seasons failed" and nothing else. The error was caught
+    per season, put in `runs[].error` and returned in the JSON — which nobody
+    reads, because a cron runs unattended and its response goes to a scheduler.
+    So the one durable record of a failure said that one had happened and
+    refused to say what it was, and `pnpm cron:status` could only repeat it.
+
+    A job that cannot say why it failed is a job nobody can fix. It cost a
+    session an hour of guessing at quotas.
+
+    Truncated, because a provider error can carry a stack and this column is
+    read by a status command that prints one line per job. The season is named
+    because a multi-season failure otherwise reads as one problem.
+  */
+  const problems = runs
+    .filter((entry) => entry.error)
+    .map((entry) => `${entry.season}: ${entry.error}`)
+    .join("; ");
+
   await recordCronRun(
     client,
     "season-sync",
-    failed > 0 ? `${failed} of ${seasons.length} seasons failed` : null,
+    failed > 0
+      ? truncate(`${failed} of ${seasons.length} seasons failed — ${problems}`, 400)
+      : null,
   );
 
   return NextResponse.json({

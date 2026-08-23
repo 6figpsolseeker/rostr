@@ -244,9 +244,24 @@ resolve, or the on-chain hash anchors nothing.
 **Done 2026-08-05.** Key is in `.env` as `TANK01_API_KEY`. Verify any time with
 `pnpm stats:check`, and inspect live response shapes with `pnpm stats:probe`.
 
-**Still to do: upgrade to Pro ($10/month) before Week 1.** Basic allows 1,000 calls a
-month and the estimate for a live season is ~700 — too close to the ceiling once real
-leagues are running, and exceeding it stops scoring mid-week.
+**The key is no longer on the free tier** — confirmed by the owner on 2026-08-22.
+This entry said an upgrade was still to do, and repeating that sent a session
+diagnosing a failed sync straight to the wrong conclusion.
+
+**Read the plan from the response, never from here.** Every Tank01 reply carries
+`X-RateLimit-Requests-Limit`, `-Remaining` and `-Reset`, and those are the only
+current statement of what the key may do:
+
+```
+curl -s -o /dev/null -D - "https://$TANK01_HOST/getNFLTeams" \
+  -H "X-RapidAPI-Key: $TANK01_API_KEY" -H "X-RapidAPI-Host: $TANK01_HOST" |
+  grep -i ratelimit
+```
+
+On 2026-08-22 that answered 998 of 1000 remaining with the window resetting in
+about fifteen hours — a **daily** allowance rather than the monthly one this file
+used to describe. Which plan that corresponds to is on the RapidAPI dashboard;
+it is not inferable from the headers and should not be guessed at here again.
 
 Both gaps flagged on first mapping are now **resolved** — two-point conversions and
 blocked kicks are both obtainable, from the play-by-play. See
