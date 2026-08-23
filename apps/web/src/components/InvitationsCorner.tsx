@@ -36,9 +36,41 @@ export const invitationsFetcher = async (url: string): Promise<PendingInvitation
 };
 
 export function InvitationsCorner() {
-  const { data } = useSWR<PendingInvitation[]>(INVITATIONS_KEY, invitationsFetcher, {
+  const { data, mutate } = useSWR<PendingInvitation[]>(INVITATIONS_KEY, invitationsFetcher, {
     revalidateOnFocus: true,
   });
+
+  /**
+   * Refuse it.
+   *
+   * **The list is optimistic and revalidates**, because the alternative reads
+   * as a dead button: the row is the only feedback there is, and waiting a
+   * round trip to remove it invites a second click on an invitation that is
+   * already gone.
+   *
+   * Not confirmed. A decline removes the invitation and tells the commissioner;
+   * it does not bar anybody, and they can ask again — so a dialog here would be
+   * guarding something reversible and would train people to click through the
+   * ones that are not.
+   */
+  async function decline(invitationId: string): Promise<void> {
+    await mutate(
+      async (current) => {
+        await fetch("/api/invitations", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ invitationId }),
+        });
+        return (current ?? []).filter((invitation) => invitation.id !== invitationId);
+      },
+      {
+        optimisticData: (current: PendingInvitation[] | undefined) =>
+          (current ?? []).filter((invitation) => invitation.id !== invitationId),
+        rollbackOnError: true,
+        revalidate: true,
+      },
+    );
+  }
 
   const invitations = data ?? [];
   if (invitations.length === 0) return null;
@@ -74,16 +106,26 @@ export function InvitationsCorner() {
       <ul className="grid gap-2 sm:grid-cols-2">
         {invitations.slice(0, 4).map((invitation) => (
           <li key={invitation.id}>
-            <a
-              href={`/leagues/${invitation.leagueId}`}
-              className="block rounded border border-nocturne-neutral-900 bg-nocturne-bg/40 px-3 py-2 transition-colors hover:border-nocturne-neutral-800"
-            >
-              <span className="block truncate text-sm">{invitation.leagueName}</span>
-              <span className="block text-[11px] text-nocturne-neutral-600">
-                addressed to your{" "}
-                {invitation.addressedAs === "WALLET" ? "wallet address" : "username"}
-              </span>
-            </a>
+            <div className="rounded border border-nocturne-neutral-900 bg-nocturne-bg/40 px-3 py-2 transition-colors hover:border-nocturne-neutral-800">
+              <a href={`/leagues/${invitation.leagueId}`} className="block">
+                <span className="block truncate text-sm">{invitation.leagueName}</span>
+                <span className="block text-[11px] text-nocturne-neutral-600">
+                  addressed to your{" "}
+                  {invitation.addressedAs === "WALLET" ? "wallet address" : "username"}
+                </span>
+              </a>
+              {/*
+                A button, not a link, and outside the anchor — nesting an action
+                inside a navigation target is how a decline becomes an accidental
+                click on the way to reading the rules.
+              */}
+              <button
+                onClick={() => void decline(invitation.id)}
+                className="mt-1.5 text-[11px] text-nocturne-neutral-600 transition-colors hover:text-red-400"
+              >
+                Decline
+              </button>
+            </div>
           </li>
         ))}
       </ul>
