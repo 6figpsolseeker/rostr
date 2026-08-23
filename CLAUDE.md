@@ -47,7 +47,7 @@ Do not build it in August.
 
 See [`docs/BUILD-PLAN.md`](docs/BUILD-PLAN.md) for the full commit-by-commit plan.
 
-**Done — 1863 tests, CI green:**
+**Done — 2105 tests, CI green:**
 
 - Full specification — rules, data model, live scoring, build plan
 - A1: pnpm monorepo, TS strict, vitest, eslint, prettier, CI
@@ -165,15 +165,38 @@ rankings, projections. Two jobs, two cadences: a box score changes during a game
 schedule changes overnight. Anyone debugging a stale schedule by reading the ten-minute
 job would have found `syncGames` absent and concluded the wiring was broken.
 
-**And none of it has ever fired.** `cron_runs` (migration `0029`) is the heartbeat every
-job stamps at the end of every run, and on 2026-08-17 it was **empty** — no rows, for any
-job, ever. `apps/web/vercel.json` schedules six crons; scheduling is not running. Every
-game, player, ranking and projection in the deployed database was put there by somebody
-typing `pnpm db:sync` at a terminal.
+**All six crons now fire, and this passage said none of them ever had. Corrected
+2026-08-23.** It read "**And none of it has ever fired**… every sentence in this file of
+the form 'the cron does X' describes code that is correct and has never executed outside a
+test." That was true when written, on 2026-08-17, and stopped being true when somebody
+deployed. Nothing revisited it, so it went on telling every session to discount every cron
+claim in the file — the confident sentence that stops anyone looking, which is the exact
+failure this document names three times elsewhere.
 
-So **every sentence in this file of the form "the cron does X" describes code that is
-correct and has never executed outside a test.** Check before believing any of them —
-including this paragraph, which is only true until somebody deploys:
+`pnpm cron:status` on 2026-08-23:
+
+| Job           | Cadence | State |
+| ------------- | ------- | ----- |
+| `draft-tick`  | 1m      | OK    |
+| `stats`       | 10m     | OK    |
+| `score-week`  | 10m     | OK    |
+| `waivers`     | 60m     | OK    |
+| `trades`      | 60m     | OK    |
+| `season-sync` | 1440m   | OK    |
+
+**And `season-sync` was failing until that morning, which is how this was found.** It had
+recorded `1 of 1 seasons failed` and nothing else — the failure that #419f994 exists to
+prevent, from a run that predated the fix, so its cause is unrecoverable. The next run
+succeeded clean. **A transient failure with no diagnosis is not the same as a fixed one**;
+if it recurs the outcome will now name it.
+
+That run did real work rather than being a healthy no-op: **256 games, weeks 1–17, zero
+undated**, 1,585 players, 2,617 projections, week 1's first kickoff at
+`2026-09-10T00:20:00Z` — Thursday 8:20pm ET on 9 September. The schedule being complete is
+the precondition `setLineup` needs; without it every lineup is refused `SCHEDULE_MISSING`.
+
+**What has not changed is the habit this paragraph was right about.** Check rather than
+believe, including this table, which is only true until something breaks:
 
 ```bash
 pnpm cron:status        # per job: never ran / stale / failing. Exits non-zero.
@@ -189,9 +212,14 @@ should have been all along.
 `stat_lines` is empty in the deployed database for a duller reason as well: **every game is
 `SCHEDULED` and none is `FINAL`, because the 2026 season has not started.** There is
 nothing to ingest until 9 September. The pipeline has never had a finished game to run on,
-which is a different problem from not existing — and the honest description of the Sep 9
-risk is **"the producer has never been exercised against a real box score, and nothing has
-ever run it on a schedule"**.
+which is a different problem from not existing.
+
+**Half of that sentence is now spent.** It read: "the producer has never been exercised
+against a real box score, and nothing has ever run it on a schedule". The second half is
+false — `/api/cron/stats` runs every ten minutes and `cron_runs` proves it. The first
+half stands, and is the whole of the remaining Sep 9 risk: the box-score producer has
+still never run against a game that finished while it was watching. The corpus checks the
+translator offline; nothing checks the ingest.
 
 **All four of #81's defects are now closed**, the last two by #175 (two-point attribution,
 with #155). Its defects were filed as latent "only because nothing calls `getBoxScore`" —
@@ -404,6 +432,45 @@ still needs Rust and a decision before Aug 22:
 - **The browser defaulted to mainnet — FIXED**, see "One declaration of which chain"
   below. Three independent sources of "which chain", no cross-check, and the most
   dangerous default sitting on the one that signs.
+
+### Handoff, 2026-08-23 — the design audit, and the crons are real
+
+Seven PRs landed (#207–#213), all from a three-agent audit of `docs/design/` against what
+was actually deployed. **2105 tests.** Each closed a gap where something existed and was
+not connected, or a rule was signed and did nothing:
+
+| PR   | What it closed                                                                                                                                                                        |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| #207 | **An odd league could not draft.** `drawDraftOrder` refuses `ODD_FIELD`; two UI strings said "add a bot from the league page"; `addBot` existed and **no route or control called it** |
+| #208 | Every new account got the returning-manager page                                                                                                                                      |
+| #209 | The league nav rendered on 2 of 8 league screens; `/lobby` had **no inbound link from anywhere** — ~900 lines reachable only by typing the URL                                        |
+| #210 | The autofill named nothing it was about to do                                                                                                                                         |
+| #211 | An invitation could not be refused                                                                                                                                                    |
+| #212 | **Injured reserve.** `roster.irSlots` has been in the signed rules since the schema was written and was read by nothing — the `botsAllowed` defect, implemented rather than deleted   |
+| #213 | A waiver run told nobody what it decided                                                                                                                                              |
+
+**Three things worth not re-deriving:**
+
+**`vitest.config.ts` had no `testTimeout`**, so hundreds of tests that each build a fresh
+PGlite database ran on vitest's 5-second default while every other project config sets 60s.
+The suite had been passing on the margin and losing a little with every test added; it
+failed as `settlementPlan` timing out at 5001ms in a run made slower by ten new tests
+elsewhere. Now 60s. Suspect this before suspecting a test that fails only in a full run.
+
+**Migrate before merging, not after.** #211 shipped code querying `declined_at` before
+`0039`… before `0038` was applied, leaving a window where deployed code read a column that
+did not exist. Nothing broke because nobody but the owner uses it. CI does not run
+migrations against Supabase and never will — see the database section.
+
+**IR enforcement is continuous, and nothing is forced off.** The owner's rule is that a
+player on IR must actually be injured. The safe shape is a **conditional exemption**: a
+recovered player is not moved or dropped, he stops being exempt and counts against the
+roster again. Forcing him off would make a display-only column drop somebody's roster spot
+and would need a new rule for the over-full team. Activation is never refused for capacity,
+because the team is already over it and activation is the fix.
+
+**Not verified in a browser.** None of the seven. The suite and the production build pass,
+which is not the same thing — the empty state and the IR panel are the two nobody has seen.
 
 ### Handoff, 2026-08-18 — read this before picking anything up
 
@@ -3098,7 +3165,7 @@ Expect ~30–60 minutes; compiling AVM from source is the slow part.
 
 ```bash
 pnpm install
-pnpm test        # 1863 tests, all green
+pnpm test        # 2105 tests, all green
 pnpm typecheck
 pnpm lint
 ```
