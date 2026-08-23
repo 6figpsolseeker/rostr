@@ -2,13 +2,23 @@ import { describe, expect, it, vi } from "vitest";
 import { ProviderError } from "../provider.js";
 import { Tank01Client } from "./client.js";
 
-function mockFetch(response: Partial<Response> & { json?: () => Promise<unknown> }) {
+function mockFetch(
+  response: Omit<Partial<Response>, "headers"> & {
+    json?: () => Promise<unknown>;
+    /** Plain object for convenience; the client reads it through `.get`. */
+    headers?: Record<string, string>;
+  } = {},
+) {
+  const { headers, ...rest } = response;
   return vi.fn().mockResolvedValue({
     ok: true,
     status: 200,
     text: () => Promise.resolve(""),
     json: () => Promise.resolve({ statusCode: 200, body: [] }),
-    ...response,
+    ...rest,
+    // A real `Headers`, because the client calls `.get` on it. A plain object
+    // would pass typing here and throw at the one line under test.
+    headers: new Headers(headers ?? {}),
   } as Response);
 }
 
@@ -58,11 +68,31 @@ describe("Tank01Client", () => {
     await expect(client.get("getNFLTeams")).rejects.toThrow(/own subscription/);
   });
 
-  it("names the free-tier ceiling when rate limited", async () => {
+  it("reports the rate-limit headers rather than a guess at the plan", async () => {
+    // It used to assert "the Basic tier allows 1,000 calls/month" on every 429,
+    // which sent somebody to check a monthly quota on an upgraded account when
+    // the real cause was a burst limit. The headers say which.
+    const fetchImpl = mockFetch({
+      ok: false,
+      status: 429,
+      headers: {
+        "x-ratelimit-requests-limit": "1000",
+        "x-ratelimit-requests-remaining": "0",
+        "x-ratelimit-requests-reset": "54213",
+      },
+    });
+    const client = new Tank01Client({ apiKey: "k", fetchImpl });
+
+    await expect(client.get("getNFLTeams")).rejects.toThrow(/0 of 1000 requests left/);
+  });
+
+  it("says so when a 429 carries no headers, because that is a different problem", async () => {
+    // No headers is the shape of a per-second burst limit, which needs a wait of
+    // a second rather than a wait for the quota window.
     const fetchImpl = mockFetch({ ok: false, status: 429 });
     const client = new Tank01Client({ apiKey: "k", fetchImpl });
 
-    await expect(client.get("getNFLTeams")).rejects.toThrow(/1,000 calls\/month/);
+    await expect(client.get("getNFLTeams")).rejects.toThrow(/burst limit/);
   });
 
   it("surfaces an error inside a 200 response", async () => {

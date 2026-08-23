@@ -69,10 +69,32 @@ export class Tank01Client {
       );
     }
     if (response.status === 429) {
-      throw new ProviderError(
-        "Tank01 rate limit reached. The Basic tier allows 1,000 calls/month.",
-        "tank01",
-      );
+      /**
+       * Report what the response says, never what the plan was assumed to be.
+       *
+       * This used to read "The Basic tier allows 1,000 calls/month" on every
+       * 429, which is wrong twice. RapidAPI returns 429 for a **burst** limit as
+       * well as an exhausted quota, and the two need opposite responses — wait a
+       * second, or wait for the reset. And the tier is not this code's to know:
+       * the message sent somebody to check a monthly quota on an account that
+       * had been upgraded, when the request was simply too quick after the last.
+       *
+       * The headers carry the truth and cost nothing to read. `reset` is
+       * seconds until the window rolls, which is also what distinguishes a
+       * daily allowance from a monthly one without anybody guessing.
+       */
+      const limit = response.headers.get("x-ratelimit-requests-limit");
+      const remaining = response.headers.get("x-ratelimit-requests-remaining");
+      const reset = response.headers.get("x-ratelimit-requests-reset");
+
+      const detail =
+        remaining === null && limit === null
+          ? "No rate-limit headers came back, so this may be a per-second burst limit rather than an exhausted quota."
+          : `${remaining ?? "?"} of ${limit ?? "?"} requests left${
+              reset === null ? "" : `, window resets in ${reset}s`
+            }.`;
+
+      throw new ProviderError(`Tank01 refused the request (HTTP 429). ${detail}`, "tank01");
     }
     if (!response.ok) {
       throw new ProviderError(`Tank01 returned HTTP ${response.status}`, "tank01");
