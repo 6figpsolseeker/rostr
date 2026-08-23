@@ -88,7 +88,7 @@ describe("expectedJobs", () => {
     expect(expectedJobs({})).toEqual([]);
   });
 
-  it("pins the six real jobs against the real vercel.json", () => {
+  it("pins the seven real jobs against the real vercel.json", () => {
     // The tripwire. If the file moves, or a job is added or renamed without
     // this being revisited, the check silently reports zero jobs scheduled —
     // which is exactly the "everything is fine" reading that hid the problem.
@@ -101,6 +101,10 @@ describe("expectedJobs", () => {
       { name: "score-week", everyMinutes: 10 },
       { name: "waivers", everyMinutes: 60 },
       { name: "trades", everyMinutes: 60 },
+      // Hourly because Tank01 refreshes rosters hourly and this reads the
+      // roster endpoint — a faster cadence would spend calls to learn what one
+      // already knew. Offset to :35 so it does not land with waivers and trades.
+      { name: "injuries", everyMinutes: 60 },
       { name: "season-sync", everyMinutes: 1440 },
     ]);
   });

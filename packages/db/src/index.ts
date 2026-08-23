@@ -335,3 +335,5 @@ export {
 export { activateFromIr, IrError, moveToIr } from "./injured-reserve.js";
 
 export { lastWaiverRun, type WaiverRun, type WaiverRunClaim } from "./waiver-run.js";
+
+export { syncInjuries, type InjurySyncResult } from "./injuries.js";

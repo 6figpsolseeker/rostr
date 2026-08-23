@@ -21,6 +21,10 @@
       "schedule": "0 * * * *"
     },
     {
+      "path": "/api/cron/injuries",
+      "schedule": "35 * * * *"
+    },
+    {
       "path": "/api/cron/season-sync",
       "schedule": "20 9 * * *"
     }
