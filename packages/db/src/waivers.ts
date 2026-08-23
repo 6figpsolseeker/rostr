@@ -39,6 +39,7 @@ import {
   availabilityAt,
   everyoneIsOnWaivers,
   buildRosterShape,
+  countedRosterSize,
   dropDestination,
   initialWaiverPriority,
   NFL,
@@ -584,12 +585,40 @@ export async function addFreeAgent(db: SqlClient, input: AddInput): Promise<void
       ]);
     }
 
-    const [count] = await tx.query<{ n: number }>(
-      "SELECT count(*)::int AS n FROM roster_entries WHERE team_id = $1 AND released_at IS NULL",
+    /*
+      Roster capacity, with injured reserve subtracted.
+
+      `totalSlots` is starters plus bench and has always excluded IR — the
+      rules said so and nothing acted on it. What changed is that genuinely
+      stashed players are now taken out of the count before the comparison.
+
+      **The designation is read here, live.** A player who recovers while on IR
+      stops being exempt at that moment and counts again, which is the owner's
+      rule that somebody on IR must actually be injured. Nothing is dropped or
+      moved to enforce it: the team simply finds itself at capacity, which is a
+      state they already understand and can fix by activating him.
+    */
+    const held = await tx.query<{
+      player_id: string;
+      on_ir: boolean;
+      designation: string | null;
+    }>(
+      `SELECT r.player_id, r.on_ir, p.injury_designation AS designation
+         FROM roster_entries r
+         JOIN players p ON p.id = r.player_id
+        WHERE r.team_id = $1 AND r.released_at IS NULL`,
       [input.teamId],
     );
     const shape = buildRosterShape(stored.rules.roster, NFL);
-    if (Number(count?.n ?? 0) >= shape.totalSlots) {
+    const counted = countedRosterSize(
+      held.map((row) => ({
+        playerId: row.player_id,
+        onIr: row.on_ir,
+        injuryDesignation: row.designation,
+      })),
+      shape.irSlots,
+    );
+    if (counted >= shape.totalSlots) {
       throw new WaiverError("This roster is full — drop someone first", "ROSTER_FULL");
     }
 

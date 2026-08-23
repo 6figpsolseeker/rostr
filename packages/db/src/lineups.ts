@@ -348,6 +348,15 @@ export type RosterPlayer = LineupPlayer & {
    * not be able to invalidate a lineup that was legal when it was set.
    */
   readonly injuryDesignation: string | null;
+  /**
+   * Whether he is stashed on injured reserve.
+   *
+   * **Unlike `injuryDesignation` this is not display-only.** It is the team's
+   * own recorded decision, it decides whether he counts against the roster
+   * limit, and `autoFillLineup` must not start him — a stashed player is on the
+   * roster and out of the rotation.
+   */
+  readonly onIr: boolean;
 };
 export async function loadRosterForWeek(
   db: SqlClient,
@@ -365,6 +374,7 @@ export async function loadRosterForWeek(
     image_url: string | null;
     team_ref: string | null;
     injury_designation: string | null;
+    on_ir: boolean;
   }>(
     `SELECT p.id AS player_id,
             p.full_name,
@@ -375,6 +385,7 @@ export async function loadRosterForWeek(
             p.image_url,
             p.team_ref,
             p.injury_designation,
+            r.on_ir,
             array_agg(DISTINCT pos.key) AS positions,
             g.kickoff_at,
             -- Does this player's team appear anywhere in the season's schedule?
@@ -397,7 +408,7 @@ export async function loadRosterForWeek(
         AND g.week = $3
         AND (g.home_team_ref = p.team_ref OR g.away_team_ref = p.team_ref)
       WHERE r.team_id = $1 AND r.released_at IS NULL
-      GROUP BY p.id, p.full_name, p.status, g.kickoff_at, p.team_ref, p.sport_id,
+      GROUP BY p.id, p.full_name, p.status, g.kickoff_at, p.team_ref, p.sport_id, r.on_ir,
                p.image_url, p.injury_designation`,
     [teamId, season, week],
   );
@@ -418,6 +429,7 @@ export async function loadRosterForWeek(
         imageUrl: row.image_url,
         teamRef: row.team_ref,
         injuryDesignation: row.injury_designation,
+        onIr: row.on_ir,
         kickoffAt: row.kickoff_at
           ? Math.floor(new Date(row.kickoff_at).getTime() / 1000)
           : // No game this week. A bye keeps null and stays movable; a player
@@ -809,12 +821,23 @@ export async function autoFillLineup(
       ? await loadProjectedPoints(db, season, week, stored.rules)
       : new Map<string, number>();
 
-  const candidates: AutolineupCandidate[] = [...roster.values()].map((player) =>
-    autolineupCandidate(player, {
-      averageMilliPoints: averages.get(player.playerId) ?? null,
-      projectedMilliPoints: projected.get(player.playerId) ?? null,
-    }),
-  );
+  /*
+    Stashed players are not candidates.
+
+    A player on injured reserve is on the roster and out of the rotation — that
+    is what the slot is for. Leaving him in the pool would let the autofill start
+    the very player his manager put aside as unable to play, and it would do it
+    on a Sunday morning with nobody watching. He is also exempt from the roster
+    limit while he sits there, so starting him would be having it both ways.
+  */
+  const candidates: AutolineupCandidate[] = [...roster.values()]
+    .filter((player) => !player.onIr)
+    .map((player) =>
+      autolineupCandidate(player, {
+        averageMilliPoints: averages.get(player.playerId) ?? null,
+        projectedMilliPoints: projected.get(player.playerId) ?? null,
+      }),
+    );
 
   const slotTypeIds = await loadSlotTypeIds(db, stored.rules);
 

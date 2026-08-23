@@ -272,3 +272,13 @@ export {
   type DraftState,
   type MakePickInput,
 } from "./draft/state.js";
+
+export {
+  countedRosterSize,
+  irExemptCount,
+  IR_ELIGIBLE_DESIGNATIONS,
+  isIrEligible,
+  refuseIrPlacement,
+  type IrPlacementRefusal,
+  type IrRosterEntry,
+} from "./season/injured-reserve.js";
