@@ -1029,9 +1029,17 @@ export async function processWaivers(
     for (const row of claims) {
       if (!alreadyHeld.has(row.add_player_id) && !dropIsFrozen(row)) continue;
 
+      // The reason is known here and nowhere else: these two never reach the
+      // resolver, so its `ClaimFailure` cannot speak for them. Recording the
+      // resolver's vocabulary keeps one set of words for one idea.
       await tx.query(
-        "UPDATE waiver_claims SET state = 'FAILED', processed_at = $2 WHERE id = $1",
-        [row.id, now.toISOString()],
+        `UPDATE waiver_claims SET state = 'FAILED', processed_at = $2, failure_reason = $3
+          WHERE id = $1`,
+        [
+          row.id,
+          now.toISOString(),
+          alreadyHeld.has(row.add_player_id) ? "ALREADY_ROSTERED" : "DROP_NOT_ON_ROSTER",
+        ],
       );
       failed++;
     }
@@ -1044,9 +1052,13 @@ export async function processWaivers(
       const claim = claims.find((row) => row.id === outcome.claimId)!;
 
       if (!outcome.awarded) {
+        // `resolveWaiverClaims` already decided why, and it was being thrown
+        // away. The four reasons are not interchangeable — one says somebody
+        // outranked you, one says your own roster had no room.
         await tx.query(
-          "UPDATE waiver_claims SET state = 'FAILED', processed_at = $2 WHERE id = $1",
-          [outcome.claimId, now.toISOString()],
+          `UPDATE waiver_claims SET state = 'FAILED', processed_at = $2, failure_reason = $3
+            WHERE id = $1`,
+          [outcome.claimId, now.toISOString(), outcome.reason ?? null],
         );
         failed++;
         continue;
