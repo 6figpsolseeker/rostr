@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { HeaderControls } from "@/components/HeaderControls";
+import { UrgentStrip } from "@/components/UrgentStrip";
 import { currentUser } from "@/lib/session";
 
 /**
@@ -74,6 +75,12 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
           </div>
         </nav>
       </header>
+
+      {/*
+        Under the header, above everything. A 90-second clock cannot live behind
+        a click — the bell holds the same item, so nothing lives only here.
+      */}
+      <UrgentStrip />
 
       <main className="mx-auto w-full max-w-[1180px] flex-1 px-10 py-12">{children}</main>
 

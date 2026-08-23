@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { HeroThrow } from "@/components/landing/HeroThrow";
 import { HeaderControls } from "@/components/HeaderControls";
+import { UrgentStrip } from "@/components/UrgentStrip";
 import { SectionExplorer } from "@/components/landing/SectionExplorer";
 
 /**
@@ -31,6 +32,7 @@ export default function LandingPage() {
   return (
     <div className="nocturne min-h-screen">
       <SiteHeader />
+      <UrgentStrip />
 
       {/*
         Full-width text again — drop 7.
@@ -246,18 +248,18 @@ function ClosingBand() {
       <div className="mx-auto grid w-full max-w-[1100px] gap-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.72fr)] lg:items-end">
         <div>
           <h2 className="text-[clamp(34px,4.4vw,54px)] font-medium leading-[1.06] tracking-[-0.03em]">
-            Start a league nobody can rewrite.
+            A league can be joined, created, and drafted end to end today.
           </h2>
           <p className="mt-6 max-w-[520px] text-[16px] leading-[1.65] text-nocturne-accent-200">
-            Free leagues are open now. Create one, invite eleven people, and the rules you agree
-            on are the rules the season runs on.
+            Nothing touches money yet. Bring eleven friends, or two — a single bot can square an
+            odd field.
           </p>
           <div className="mt-9 flex flex-wrap items-center gap-3">
             <a
-              href="/leagues/new"
+              href="/leagues"
               className="rounded-[4px] border border-nocturne-accent-300 px-[22px] py-3 text-[14.5px] text-nocturne-accent-100 transition-colors hover:bg-white/5"
             >
-              Create a free league
+              Join or create a league
             </a>
             <a
               href="https://github.com/6figpsolseeker/rostr"
