@@ -2,7 +2,7 @@ Branch: `design/screens`
 
 ---
 
-## Design drop 8 — the Leagues hub
+## Design drop 9 — session and navigation in the header
 
 Thirteen screen files plus an index and a logo sheet, covering rostr end to end: the public
 landing page, the signed-in Leagues hub, creating and freezing a league, inviting and joining
@@ -12,105 +12,92 @@ dissolving a league, and ten screens designed for mobile web.
 
 Nothing here is wired into `apps/web`. `design_handoff/` is the reference to build against.
 
-### What changed since drop 7
+### What changed since drop 8
 
-**One `Leagues` nav item replaces three surfaces.** The shell carried "Join a league", a
-"Create a league" button and an `InvitationBadge` side by side; `/leagues` browsed public
-leagues with an `InvitationsCorner` aside; `/invitations` was a third page. `Rostr
-Leagues.dc.html` is one page ordered **your leagues → invitations → public leagues**, with
-create given equal weight as a card in the page head.
+**"Create a league" is now "Leagues", everywhere on the landing page.** The user's reasoning:
+not everyone arriving is starting a league — plenty are joining a friend's — so naming only
+the create path is misleading. The nav button points at `/leagues`. Both page CTAs read **"Join
+or create a league"**, and the closing headline is "joined, created, and drafted".
 
-The gap it closes: nothing on the old `/leagues` listed the leagues you are already in, which
-is the first thing a returning manager wants.
+**The landing header has a connected state.** Disconnected shows *Connect wallet*. Connected
+replaces that button in the same slot with the avatar and username, and adds a notification
+bell to its left.
 
-**A notification model, in two parts.** An **urgent strip** under the header for anything on a
-clock — on the clock, draft within the hour, veto window closing, lineup unset near kickoff,
-waivers running, a trade awaiting your answer — one item at a time, the most pressing. And a
-**bell** holding everything, including whatever is currently in the strip, so nothing lives
-only in a place that disappears.
+**Disconnecting is signing out.** The wallet is the account, so the menu carries one row —
+*Disconnect wallet* — not a Disconnect and a Sign out doing the same thing. The Leagues page's
+account menu now matches, and states in words that it returns you to the landing page: signing
+out from any screen lands on `/`.
 
-The reasoning worth keeping: a 90-second draft clock cannot live behind a click. If a manager
-has to open a dropdown to learn their pick is live, the dropdown failed. The strip is empty
-almost always, which is what makes it mean something when it is not.
+Three behaviours worth preserving when you build it:
 
-Anything needing a **signature** — submitting a pick, voting on a trade — carries a wallet
-mark, so "this will ask for your wallet" is visible before the click.
+- The username menu **opens on hover**, with the hover zone wrapping both button and menu and
+  an 8px bridge between them, so travelling into the menu does not close it. It also opens on
+  `focus` — hover alone is unreachable by keyboard.
+- The bell **opens on click**. A hover-open bell fires by accident constantly. Opening either
+  panel closes the other, so only one is ever up.
+- The bell **exists only when connected**. An anonymous visitor has no notifications, and an
+  empty bell on a marketing page is furniture.
 
-**State 4 exists to stop a regression.** Collapsing `SessionBar` into an avatar and a chevron
-silently deletes two shipped affordances: the **Sign out** button, and the `username === null`
-branch that renders **Finish setting up** linking to `/welcome`, because an account with no
-username cannot be invited to anything. Both are drawn in the account menu.
+The landing page opens disconnected, which is what a first-time visitor sees. The
+`walletConnected` prop and the in-page buttons both flip it.
 
-### What is grounded, and what is a proposal
+### One decision still open
 
-**Grounded** — recreate from source, not from these pixels:
+**The two account menus disagree: the landing page's opens on hover, the app's on click.** You
+were asked and left it blank, so both are in the file as built. Pick one before a developer
+implements two behaviours for one control.
 
-- The header is `(app)/layout.tsx` verbatim except where noted: wordmark 19px/600/−0.02em plus
-  the `FANTASY FOOTBALL` descriptor (11px/0.14em/neutral-600), `max-w-[1180px] px-10
-  py-[14px]`, "How scoring works", and the footer on every signed-in page — *Pre-alpha. Not
-  audited. Do not use with funds you cannot lose.*
-- The invitation count is `InvitationBadge`: `INVITATIONS_KEY` = `/api/invitations`,
-  deduplicated with the panel so the count and the list cannot disagree, rendering nothing at
-  zero rather than a `0`.
-- Browse cards are `LeagueBrowser`: PUBLIC and FORMING only, seats against `maxTeams`, draft
-  time in the reader's timezone, buy-in from base units by string surgery (no floating point
-  near money).
+### A CSS trap worth reading, because it took three attempts
 
-**Proposals with no backing route:** the urgent strip, the bell, the account menu, and the
-`Your leagues` section. Only the invitation count has a real source today.
+The overlay states (Leagues states 2 and 4) show a dropdown over the page. Built the obvious
+way — `position: absolute` panel in a `position: relative` frame — the panel is out of flow and
+**cannot push the footer**: the footer followed only the short dimmed paragraph and landed
+400px above the panel's bottom.
 
-### Three rules this screen must not break
+Two fixes each broke something new. `margin-top: auto` on the footer made its position depend
+on a **guessed `min-height`** — which cleared in one state and collided by 39px in the other,
+and would re-break every time the menu gained a row. And auto side margins on a flex item
+**suppress `align-self: stretch` and trigger shrink-to-fit**, silently collapsing two 1180px
+columns to content width.
 
-**No join control in a list.** Neither a browse card nor an invitation card offers one — both
-lead to the league page, where the whole rule set renders above the join button. `RULES.md`
-requires the full document before anyone joins, and a join button in a directory is a way to
-agree to a rule set nobody read.
+What is in the file now: each overlay frame is a `row-reverse` flex row holding the panel as a
+real `flex: 0 0 392px` column and the dimmed page beside it, so whichever is taller pushes the
+footer through ordinary flow — no `min-height`, nothing to re-tune. **In production the panel
+really is absolutely positioned**; this structure exists only so a static review artifact can
+show an open dropdown without the page beneath it lying about its height. Don't copy the row
+into the app.
 
-**Private leagues never appear in the public list.** They arrive only as an invitation or a
-link.
+The lasting rule: **`mx-auto` on a flex child needs `w-full` with it.**
 
-**Every public league shows Free.** The escrow program is unwritten, so no league can take a
-deposit. The buy-in filter is drawn for when that changes and the page says so; dollar amounts
-would be designing a feature that does not exist.
+### Read the README's second section first
 
-Two smaller corrections from reading the source: the nav names only routes that exist — there
-is no global `/players` or `/activity`, both are league-scoped — and invitation rows say
-"addressed to your username", because `/api/invitations` returns `addressedAs: "USERNAME" |
-"WALLET"`, which is how you were reached, not who sent it.
-
-### Two CSS traps this screen hit
-
-Both shipped broken here before review caught them, and both are the kind that look fine until
-they don't:
-
-**An absolutely-positioned panel does not push a footer.** The overlay frames flowed their
-footer after only a short paragraph and landed it 400px above the panel's bottom edge. Fixed
-by making the frame a flex column with the footer on `margin-top: auto`.
-
-**Auto side margins on a flex item suppress `align-self: stretch` and trigger shrink-to-fit.**
-That fix immediately collapsed two 1180px columns to content width and re-centred them. Hence
-the explicit `width: 100%` beside every `max-width: 1180px; margin: 0 auto` inside a flex
-frame. If you rebuild these in Tailwind, `mx-auto` on a flex child needs `w-full` with it.
+Most defects found while designing these were not visual — they were the same league described
+inconsistently in two places. The README lists the twelve facts that must be **derived from one
+source and never restated**: roster limit, standings order, veto threshold, veto deadline,
+draft order, autofill target, positional need, lock state, season dates, snake-pick arithmetic,
+bracket shape, unanimity denominator.
 
 ### Still open, and needing you rather than a developer
 
 - **How autopick signs a transaction the manager was not present for.** Session key,
   pre-authorization at draft start, or a delegated signer. Settle it before the escrow program
   is written.
-- **Which hero animation ships, A or B.**
+- **Which hero animation ships, A or B.** Both are in the file behind a switcher.
 - **Kickoff is 9 September in `README.md` and 10 September across all designs.** 9 Sept 2026 is
   a Wednesday and NFL Week 1 opens Thursday.
 - **When a week label flips** — Tuesday sits between two weeks and the screens call it the one
   just ended.
 - **Whether escrow release can move a player whose game is already in progress.**
+- **Hover or click for the account menu.**
 
 ### Not done
 
-- The Leagues hub has no mobile design. Five other desktop screens have none either — create
-  league, the commissioner's invite side, draft lobby, amend and dissolve — nor does the
-  playoff bracket.
+- The Leagues hub has no mobile design, and the landing page's connected header has no mobile
+  design either. Five other desktop screens have none — create league, the commissioner's
+  invite side, draft lobby, amend and dissolve — nor does the playoff bracket.
+- The urgent strip and the bell have no route behind them; only the invitation count does
+  (`/api/invitations`).
 - Player detail, full standings.
-- The wallet signing round-trip is designed three times and needed in four more places.
 - Player names are real on the landing page only; the other twelve screens carry invented
   ones, and the landing page's ADP ordering is a designer's guess — reconcile against the live
   Tank01 board.
