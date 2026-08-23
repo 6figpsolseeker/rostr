@@ -167,6 +167,23 @@ export default async function LeaguePage({ params }: { params: Promise<{ id: str
       */}
       {navOpen ? (
         <div className="flex flex-wrap gap-3">
+          {/*
+            **The lobby had no inbound link from anywhere in the app.** Nearly
+            900 lines of `DraftLobby` — the countdown, the field, and the
+            order-draw explainer with its slot, blockhash and seed — plus
+            `SettlementPanel`, reachable only by typing the URL. It was built to
+            drop 8 and then never connected, so the one screen that shows the
+            draw is verifiable was the one screen nobody could reach.
+
+            First in the row because it comes first in time: the lobby is where
+            a league waits, and the room is where it drafts.
+          */}
+          <a
+            href={`/leagues/${league.id}/lobby`}
+            className="rounded-[4px] border border-nocturne-neutral-800 px-[14px] py-2 text-[13.5px] text-nocturne-neutral-400 transition-colors hover:text-nocturne-text"
+          >
+            Draft lobby
+          </a>
           <a
             href={`/leagues/${league.id}/draft`}
             className="rounded-[4px] border border-nocturne-neutral-800 px-[14px] py-2 text-[13.5px] text-nocturne-neutral-400 transition-colors hover:text-nocturne-text"

@@ -41,8 +41,16 @@ export function LeagueChrome({
   /** "Week 3 · 12 teams · full PPR" — composed by the caller, which knows. */
   readonly subtitle: string;
   readonly rulesHash: string;
-  /** The tab to mark current, as its `href` suffix. `""` is Home. */
-  readonly active: (typeof TABS)[number]["href"];
+  /**
+   * The tab to mark current, as its `href` suffix. `""` is Home.
+   *
+   * `"NONE"` for a screen the nav does not contain — the bracket and the draft
+   * room, which are deliberately not tabs. Borrowing a neighbouring tab was the
+   * obvious alternative and is wrong: the marker sets `aria-current="page"`, so
+   * it would tell a screen reader the visitor is on Standings while they are on
+   * the bracket. A screen with no tab should light no tab.
+   */
+  readonly active: (typeof TABS)[number]["href"] | "NONE";
   /**
    * Whether these tabs lead anywhere for this viewer — `leagueNavOpen`.
    *
