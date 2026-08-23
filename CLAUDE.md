@@ -433,6 +433,47 @@ still needs Rust and a decision before Aug 22:
   below. Three independent sources of "which chain", no cross-check, and the most
   dangerous default sitting on the one that signs.
 
+### Wallet sign-in works, and a wallet had never been marked verified
+
+**Confirmed in a browser by the owner on 2026-08-23** — Phantom opens, the
+signature is accepted, the session lands. Dated because it is a claim about what
+a _person_ did, which no test can re-establish; this file has already paid for
+that once, with the create → join → draft click-through it called unverified for
+weeks after it had been done.
+
+**The feature exists because the emailed code is wrong for a returning member.**
+Sessions already last 30 days (`SESSION_TTL_MS`), so the friction the owner hit
+was their own testing pattern — five alt accounts across Chrome profiles, each a
+separate session. Wallet sign-in is still the better path: a returning member
+already holds a key this account has verified.
+
+Sign-**up** stays email-first. An unlinked wallet is told to sign in by email
+once; registering from a wallet would make accounts with no email, which nothing
+could send an invitation to.
+
+**And building it found that `wallets.verified_at` was written by nothing.**
+`linkWalletWithSignature` verified the signature and then called `linkWallet`,
+whose INSERT omitted the column. So every row was unverified, `findUserByWallet`
+matched nobody, and **inviting somebody by wallet address answered "no such
+user" for every address, including correct ones** — silently, with no error
+anywhere. Its own docstring asserted the column "is set by
+`linkWalletWithSignature` and by nothing else".
+
+Two fixes, and the second is the one that was nearly missed: `linkWallet` now
+records it, **and `0040` backfills every existing row**. Without the backfill the
+repair reached only wallets linked afterwards, so the owner's own accounts still
+refused — which is exactly what they hit on the first attempt.
+
+The backfill is safe because `linkWalletWithSignature` is the only thing in the
+repo that creates a `wallets` row and refuses without a valid signature over a
+server-issued nonce. **Check that again before adding any other path**, because
+the argument for the backfill is the argument that no unproven row can exist.
+
+**Two signed messages, not one.** `SIGNIN_PREFIX` differs from `LINK_PREFIX`
+because the two prove the same fact and authorise different things: one message
+would let a linking prompt — approved by somebody already inside the account —
+double as a session for it.
+
 ### Handoff, 2026-08-23 — the design audit, and the crons are real
 
 Seven PRs landed (#207–#213), all from a three-agent audit of `docs/design/` against what
