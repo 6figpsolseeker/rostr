@@ -105,7 +105,7 @@ const ROUNDS: readonly {
 const COLUMNS = [
   { name: "Pylon Co.", tag: "" },
   { name: "Route 66", tag: "you" },
-  { name: "Tuesday Night Reg…", tag: "" },
+  { name: "Tuesday Night Regrets", tag: "" },
 ] as const;
 
 export function LandingDraftBoard() {

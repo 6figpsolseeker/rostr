@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { HeaderControls } from "@/components/HeaderControls";
+import { UrgentStrip } from "@/components/UrgentStrip";
 import { currentUser } from "@/lib/session";
 
 /**
@@ -56,8 +57,17 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
               in its head with equal weight rather than a button competing with
               the nav.
 
-              The badge stays beside the link. It renders nothing at zero, so
-              this is a bare word until something is actually waiting.
+              **There is no badge, and there is not going to be one.** This
+              comment used to claim one was rendered here. The design keeps a
+              count beside this link and calls it the one grounded element in
+              its header; what shipped instead is the bell, which already counts
+              invitations among six kinds.
+
+              **Decided by the owner, 2026-08-23: the count belongs on the bell
+              alone.** Two numbers in one header can disagree for a second while
+              their fetches settle, and a header that appears to contradict
+              itself reads as broken. So this stays a bare word — not because
+              the badge is unbuilt, but because it is not wanted.
             */}
             <a
               href="/leagues"
@@ -74,6 +84,12 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
           </div>
         </nav>
       </header>
+
+      {/*
+        Under the header, above everything. A 90-second clock cannot live behind
+        a click — the bell holds the same item, so nothing lives only here.
+      */}
+      <UrgentStrip />
 
       <main className="mx-auto w-full max-w-[1180px] flex-1 px-10 py-12">{children}</main>
 
