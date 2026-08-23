@@ -135,6 +135,7 @@ export {
   loadByeWeeks,
   loadLineup,
   loadKickoffs,
+  autolineupCandidate,
   loadRosterForWeek,
   loadTbdKickoffs,
   type RosterPlayer,

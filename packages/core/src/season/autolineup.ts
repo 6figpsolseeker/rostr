@@ -144,18 +144,62 @@ function compare(a: AutolineupCandidate, b: AutolineupCandidate, mode: AutofillM
  * Returns an assignment for every starting slot, with `null` where nobody on the
  * roster could fill it.
  */
-export function autolineup(input: AutolineupInput): readonly LineupAssignment[] {
+/**
+ * Why the runner-up did not get the slot.
+ *
+ * Three reasons rather than one number, because they are different instructions
+ * to a manager. "Projected lower" says the autofill is working and you may
+ * disagree with it; "on a bye or out" says the alternative was never really an
+ * alternative; "nothing to rank him on" says the autofill is guessing and your
+ * own opinion is worth more than its ordering.
+ */
+export type RunnerUpReason = "LOWER_RANKED" | "UNAVAILABLE" | "NO_DATA";
+
+export interface AutolineupChoice extends LineupAssignment {
+  /**
+   * The best eligible player this slot did **not** take, if there was one.
+   *
+   * Null when the slot had exactly one candidate, or none — in which case the
+   * autofill made no choice worth explaining.
+   */
+  readonly runnerUpId: string | null;
+  readonly runnerUpReason: RunnerUpReason | null;
+}
+
+/**
+ * The fill, with the road not taken.
+ *
+ * **`autolineup` delegates to this**, rather than the preview reimplementing
+ * the fill. A preview that ranked players itself would be the same decision
+ * authored twice, and the failure mode is the worst kind: the screen names one
+ * player all week and a different one gets started on Sunday, silently, in the
+ * league's own records.
+ *
+ * The runner-up is computed inside the loop because it is only knowable there —
+ * it depends on `used`, which changes as scarcer slots are filled first. A tight
+ * end taken by TE is genuinely not available to FLEX, and reporting him as
+ * FLEX's runner-up would describe a choice nobody could make.
+ */
+export function autolineupChoices(input: AutolineupInput): readonly AutolineupChoice[] {
   const { shape, roster, locked, mode = "SEASON_AVERAGE" } = input;
 
   const slots = startingSlots(shape);
 
-  const assignments = new Map<string, LineupAssignment>();
+  const assignments = new Map<string, AutolineupChoice>();
   const used = new Set<string>();
 
   // Locked slots are fixed points: preserved exactly, and their players are
   // unavailable to everything else.
+  const lockedKeys = new Set((locked ?? []).map((e) => `${e.slotType}#${e.slotIndex}`));
+
   for (const entry of locked ?? []) {
-    assignments.set(`${entry.slotType}#${entry.slotIndex}`, entry);
+    // A locked slot was not chosen by the autofill and has no alternative to
+    // report — its player is a fact about a game that has started.
+    assignments.set(`${entry.slotType}#${entry.slotIndex}`, {
+      ...entry,
+      runnerUpId: null,
+      runnerUpReason: null,
+    });
     if (entry.playerId) used.add(entry.playerId);
   }
 
@@ -193,26 +237,104 @@ export function autolineup(input: AutolineupInput): readonly LineupAssignment[] 
         slotType: slot.slotType,
         slotIndex: slot.slotIndex,
         playerId: best.playerId,
+        runnerUpId: null,
+        runnerUpReason: null,
       });
     } else {
       assignments.set(key, {
         slotType: slot.slotType,
         slotIndex: slot.slotIndex,
         playerId: null,
+        runnerUpId: null,
+        runnerUpReason: null,
       });
     }
   }
 
   // Returned in roster order, not fill order — the caller is writing a lineup a
   // human will read.
-  return slots.map(
-    (slot) =>
-      assignments.get(`${slot.slotType}#${slot.slotIndex}`) ?? {
-        slotType: slot.slotType,
-        slotIndex: slot.slotIndex,
-        playerId: null,
-      },
+  /*
+    The runner-up, in a second pass and against the **finished** lineup.
+
+    Computing it inside the fill loop is the obvious approach and is wrong: the
+    best player a slot passes over is usually the one the *next* slot of the same
+    type takes. RB#0 would report RB#1's starter as "also eligible", so the
+    screen would offer a manager somebody already in their own lineup.
+
+    What a manager wants named is the best player who ends up on the **bench** —
+    the alternative that really was foregone. That is only knowable once every
+    slot is filled, which is why this cannot live in the loop.
+  */
+  const started = new Set(
+    [...assignments.values()]
+      .map((entry) => entry.playerId)
+      .filter((id): id is string => id !== null),
   );
+  const bench = roster.filter((player) => !started.has(player.playerId));
+
+  return slots.map((slot) => {
+    const entry = assignments.get(`${slot.slotType}#${slot.slotIndex}`) ?? {
+      slotType: slot.slotType,
+      slotIndex: slot.slotIndex,
+      playerId: null,
+      runnerUpId: null,
+      runnerUpReason: null,
+    };
+
+    // A locked slot was not chosen by the autofill, and an empty one had nobody
+    // to pass over. Neither has an alternative worth reporting.
+    if (entry.playerId === null) return entry;
+    if (lockedKeys.has(`${slot.slotType}#${slot.slotIndex}`)) return entry;
+
+    const winner = roster.find((player) => player.playerId === entry.playerId);
+    const runnerUp = bench
+      .filter((player) =>
+        player.positions.some((position) => slot.eligiblePositions.includes(position)),
+      )
+      .sort((a, b) => compare(a, b, mode))[0];
+
+    if (!winner || !runnerUp) return entry;
+
+    return {
+      ...entry,
+      runnerUpId: runnerUp.playerId,
+      runnerUpReason: reasonAgainst(winner, runnerUp, mode),
+    };
+  });
+}
+
+/**
+ * Why `loser` lost to `winner`.
+ *
+ * Order matters. Unavailability is checked first because it is the reason a
+ * manager can act on — an alternative who is on a bye is not a judgement call,
+ * and reporting "projected lower" for a player with no game would be true and
+ * useless. `NO_DATA` comes next: a null ranking sorts last by construction, so
+ * "projected lower" would imply a comparison that never happened.
+ */
+function reasonAgainst(
+  winner: AutolineupCandidate,
+  loser: AutolineupCandidate,
+  mode: AutofillMode,
+): RunnerUpReason {
+  if (loser.unavailable === true && winner.unavailable !== true) return "UNAVAILABLE";
+  if (rankingValue(loser, mode) === null) return "NO_DATA";
+  return "LOWER_RANKED";
+}
+
+/**
+ * The fill alone.
+ *
+ * Kept as the public entry point every existing caller uses, so adding the
+ * preview cannot change what gets written. It is a projection of
+ * `autolineupChoices`, not a second implementation.
+ */
+export function autolineup(input: AutolineupInput): readonly LineupAssignment[] {
+  return autolineupChoices(input).map(({ slotType, slotIndex, playerId }) => ({
+    slotType,
+    slotIndex,
+    playerId,
+  }));
 }
 
 /**

@@ -730,6 +730,40 @@ export async function loadProjectedPoints(
 const OUT_STATUSES = new Set(["OUT", "IR", "INACTIVE", "SUSPENDED", "DOUBTFUL", "PUP", "NFI"]);
 
 /**
+ * One roster row, as the autofill sees it.
+ *
+ * **Exported so the preview cannot describe a different player from the write.**
+ * The lineup route has every input already loaded and would otherwise restate
+ * the `unavailable` rule inline — a bye and an out designation both meaning
+ * "will not appear", neither being a hard exclusion. That rule sitting in two
+ * files is how a screen ends up promising one starter while Sunday produces
+ * another.
+ */
+export function autolineupCandidate(
+  player: {
+    readonly playerId: string;
+    readonly positions: readonly string[];
+    readonly kickoffAt: number | null;
+    readonly status: string;
+  },
+  ranking: {
+    readonly averageMilliPoints: number | null;
+    readonly projectedMilliPoints: number | null;
+  },
+): AutolineupCandidate {
+  return {
+    playerId: player.playerId,
+    positions: player.positions,
+    kickoffAt: player.kickoffAt,
+    averageMilliPoints: ranking.averageMilliPoints,
+    projectedMilliPoints: ranking.projectedMilliPoints,
+    // A bye and an injury designation both mean "will not appear". Neither is a
+    // hard exclusion — a team with nobody else still has to field someone.
+    unavailable: player.kickoffAt === null || OUT_STATUSES.has(player.status.toUpperCase()),
+  };
+}
+
+/**
  * Fill a team's lineup automatically.
  *
  * Preserves any slot that has already locked and any slot the manager has
@@ -775,16 +809,12 @@ export async function autoFillLineup(
       ? await loadProjectedPoints(db, season, week, stored.rules)
       : new Map<string, number>();
 
-  const candidates: AutolineupCandidate[] = [...roster.values()].map((player) => ({
-    playerId: player.playerId,
-    positions: player.positions,
-    kickoffAt: player.kickoffAt,
-    averageMilliPoints: averages.get(player.playerId) ?? null,
-    projectedMilliPoints: projected.get(player.playerId) ?? null,
-    // A bye and an injury designation both mean "will not appear". Neither is a
-    // hard exclusion — a team with nobody else still has to field someone.
-    unavailable: player.kickoffAt === null || OUT_STATUSES.has(player.status.toUpperCase()),
-  }));
+  const candidates: AutolineupCandidate[] = [...roster.values()].map((player) =>
+    autolineupCandidate(player, {
+      averageMilliPoints: averages.get(player.playerId) ?? null,
+      projectedMilliPoints: projected.get(player.playerId) ?? null,
+    }),
+  );
 
   const slotTypeIds = await loadSlotTypeIds(db, stored.rules);
 

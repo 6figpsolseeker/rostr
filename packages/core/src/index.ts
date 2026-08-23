@@ -175,6 +175,9 @@ export {
 
 export {
   autolineup,
+  autolineupChoices,
+  type AutolineupChoice,
+  type RunnerUpReason,
   rankingValue,
   seasonAverage,
   type AutofillMode,

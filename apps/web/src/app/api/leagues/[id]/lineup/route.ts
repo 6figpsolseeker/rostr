@@ -7,9 +7,10 @@ import {
   slotLocksAt,
   startingSlots,
 } from "@rostr/core";
-import { buildRosterShape, NFL } from "@rostr/core";
+import { autolineupChoices, buildRosterShape, NFL } from "@rostr/core";
 import type { LineupAssignment } from "@rostr/core";
 import {
+  autolineupCandidate,
   getAutofillEnabled,
   LineupError,
   loadAverages,
@@ -104,10 +105,69 @@ export async function GET(
 
     const now = Math.floor(Date.now() / 1000);
 
+    /*
+      What the autofill would do, computed here rather than in the browser.
+
+      The screen used to offer a checkbox and no account of what turning it on
+      does — which is the one thing worth knowing before trusting it with a week
+      that counts. `autolineupChoices` is the same function `autoFillLineup`
+      fills with, so the preview cannot name a different player from the write.
+
+      **Locked slots are passed in, not filtered out.** A locked player is
+      unavailable to every other slot, so omitting them would let the preview
+      offer somebody who is already playing — and the FLEX preview in particular
+      would be wrong every Sunday afternoon.
+    */
+    const shape = buildRosterShape(context.rules.roster, NFL);
+    const currentAssignments: LineupAssignment[] = startingSlots(shape).map((slot) => {
+      const found = assignments.find(
+        (entry) => entry.slotType === slot.slotType && entry.slotIndex === slot.slotIndex,
+      );
+      return found ?? { slotType: slot.slotType, slotIndex: slot.slotIndex, playerId: null };
+    });
+
+    const choices = autolineupChoices({
+      shape,
+      roster: [...roster.values()].map((player) =>
+        autolineupCandidate(player, {
+          averageMilliPoints: averages.get(player.playerId) ?? null,
+          projectedMilliPoints: projected.get(player.playerId) ?? null,
+        }),
+      ),
+      mode: context.rules.roster.autofill,
+      locked: currentAssignments.filter((entry) => slotIsLocked(entry, kickoffs, now)),
+    });
+
+    /*
+      Only slots the manager has left empty.
+
+      The autofill "only touches slots you leave empty" — the label already says
+      so — and a preview covering filled slots would read as a threat to replace
+      a starter somebody deliberately chose.
+    */
+    const preview = choices.filter((choice) => {
+      const current = currentAssignments.find(
+        (entry) => entry.slotType === choice.slotType && entry.slotIndex === choice.slotIndex,
+      );
+      return current?.playerId == null && choice.playerId !== null;
+    });
+
     return NextResponse.json({
       week,
       autofill: {
         enabled: autofillEnabled ?? true,
+        /**
+         * Per empty slot: who it would start, and the best player left on the
+         * bench that it passed over. Empty when nothing is outstanding, which is
+         * the ordinary state of a lineup somebody has set.
+         */
+        preview: preview.map((choice) => ({
+          slotType: choice.slotType,
+          slotIndex: choice.slotIndex,
+          playerId: choice.playerId,
+          runnerUpId: choice.runnerUpId,
+          runnerUpReason: choice.runnerUpReason,
+        })),
         /** Frozen in the league's rules, so it is the same for everybody. */
         mode: context.rules.roster.autofill,
       },

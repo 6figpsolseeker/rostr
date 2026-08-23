@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { previewHeading, whyNot } from "@/lib/autofill";
 import useSWR from "swr";
 import { PlayerAvatar } from "./PlayerAvatar";
 import { PlayerCard } from "./PlayerCard";
@@ -59,7 +60,18 @@ interface RosterPlayer {
 
 interface LineupResponse {
   week: number;
-  autofill: { enabled: boolean; mode: "WEEKLY_PROJECTION" | "SEASON_AVERAGE" };
+  autofill: {
+    enabled: boolean;
+    mode: "WEEKLY_PROJECTION" | "SEASON_AVERAGE";
+    /** Per empty slot: who it would start, and who it left on the bench. */
+    preview: {
+      slotType: string;
+      slotIndex: number;
+      playerId: string;
+      runnerUpId: string | null;
+      runnerUpReason: "LOWER_RANKED" | "UNAVAILABLE" | "NO_DATA" | null;
+    }[];
+  };
   slots: Slot[];
   roster: RosterPlayer[];
 }
@@ -214,6 +226,17 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
     void save(next);
   }
 
+  /*
+    Counted from the slots, not from the preview's length.
+
+    The preview only covers slots the autofill can actually fill; a slot with no
+    eligible player left produces no entry. Deriving the count from it would
+    quietly under-report — the manager would be told two slots are empty while
+    three score nothing.
+  */
+  const emptySlots = data.slots.filter((slot) => slot.playerId === null).length;
+  const heading = previewHeading({ enabled: data.autofill.enabled, emptySlots });
+
   const starterPoints = data.slots.reduce(
     (total, slot) => total + (slot.playerId ? (byId.get(slot.playerId)?.milliPoints ?? 0) : 0),
     0,
@@ -248,6 +271,52 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
           </span>
         </span>
       </label>
+
+      {/*
+        What the autofill will actually do, named.
+
+        The checkbox alone asks a manager to trust a decision taken while they
+        are asleep, on a week that counts. This is the same `autolineupChoices`
+        the write uses, so the names here are the names that get started.
+
+        Rendered whether autofill is on or off, and saying different things: on,
+        it is a prediction; off, an empty slot scores nothing and that is the
+        more useful warning.
+      */}
+      {heading && (
+        <div className="space-y-2 rounded border border-nocturne-neutral-900 px-4 py-3 text-sm">
+          <p className={data.autofill.enabled ? "text-nocturne-neutral-400" : "text-amber-300"}>
+            {heading}
+          </p>
+
+          {data.autofill.enabled && (
+            <ul className="space-y-1.5">
+              {data.autofill.preview.map((choice) => {
+                const starter = byId.get(choice.playerId);
+                const passed = choice.runnerUpId ? byId.get(choice.runnerUpId) : null;
+                if (!starter) return null;
+
+                return (
+                  <li key={`${choice.slotType}#${choice.slotIndex}`} className="text-[13px]">
+                    <span className="text-nocturne-neutral-600">{choice.slotType}</span>{" "}
+                    <span className="text-nocturne-text">{starter.name}</span>
+                    {passed && choice.runnerUpReason && (
+                      // The road not taken. Without it the preview is an
+                      // assertion; with it, a manager can tell whether the
+                      // autofill understood something they did not.
+                      <span className="text-nocturne-neutral-600">
+                        {" "}
+                        — over {passed.name},{" "}
+                        {whyNot(choice.runnerUpReason, data.autofill.mode)}
+                      </span>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      )}
 
       {(saveError || problems.length > 0) && (
         <div className="space-y-1 rounded border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
