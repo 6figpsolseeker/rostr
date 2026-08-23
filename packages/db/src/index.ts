@@ -5,6 +5,14 @@ export type { SqlClient } from "./client.js";
 // app entry point breaks the build. It lives at `@rostr/db/migrate`, for CLI and
 // setup code only.
 
+export {
+  compareSources,
+  ingestSecondSource,
+  SECOND_STAT_SOURCE,
+  type SecondSourceResult,
+  type SourceDisagreement,
+} from "./second-source.js";
+
 export { leaguesForUser, type MyLeague } from "./my-leagues.js";
 
 export {

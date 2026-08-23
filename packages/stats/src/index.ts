@@ -36,3 +36,21 @@ export {
   TANK01_STAT_MAP,
   TANK01_UNAVAILABLE_STATS,
 } from "./tank01/stat-map.js";
+
+/**
+ * The second source.
+ *
+ * `@rostr/db`'s `second-source.ts` translates a Sleeper week with these before
+ * writing it, so they have to leave the package. The client goes with them
+ * because the caller that fetches a week is the one that ingests it.
+ */
+export {
+  SleeperClient,
+  type SleeperClientOptions,
+  type SleeperWeek,
+} from "./sleeper/client.js";
+export {
+  sleeperPlayerStats,
+  sleeperTeamDefenseStats,
+  type SleeperStats,
+} from "./sleeper/stats.js";
