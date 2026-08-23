@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { HeroThrow } from "@/components/landing/HeroThrow";
-import { LandingAccountLink } from "@/components/landing/LandingAccountLink";
+import { HeaderControls } from "@/components/HeaderControls";
 import { SectionExplorer } from "@/components/landing/SectionExplorer";
 
 /**
@@ -71,7 +71,7 @@ export default function LandingPage() {
           </p>
 
           <div className="mt-9 flex flex-wrap items-center gap-3">
-            <PrimaryButton href="/leagues/new">Create a free league</PrimaryButton>
+            <PrimaryButton href="/leagues">Join or create a league</PrimaryButton>
             <GhostButton href="#how">See how a season runs</GhostButton>
           </div>
 
@@ -189,11 +189,18 @@ function SiteHeader() {
               <path d="M9.52 6.78 15.48 0h-1.41L8.89 5.89 4.76 0H0l6.25 8.9L0 16h1.41l5.46-6.22L11.24 16H16L9.52 6.78Zm-1.93 2.2-.63-.89L1.92 1.04h2.17l4.06 5.72.63.89 5.28 7.42h-2.17L7.59 8.98Z" />
             </svg>
           </a>
+          {/*
+            "Leagues", not "Create a league" — drop 9.
+
+            Not everyone arriving is starting one; plenty are joining a friend's,
+            and naming only the create path told half of them this was not for
+            them. The /leagues hub is both doors.
+          */}
           <a
-            href="/leagues/new"
+            href="/leagues"
             className="rounded-[4px] border border-nocturne-accent px-4 py-2 text-[13px] text-nocturne-accent-200 transition-colors hover:bg-nocturne-accent/10"
           >
-            Create a league
+            Leagues
           </a>
           {/*
             **A link, not a wallet button, and that is a deliberate divergence.**
@@ -211,7 +218,12 @@ function SiteHeader() {
             same control as a stranger — which reads as "it forgot me". The
             wallet was connected throughout; nothing here said so.
           */}
-          <LandingAccountLink />
+          {/*
+            Disconnected shows Connect wallet; connected replaces it in the
+            same slot with the username and adds the bell to its left — drop
+            9. It resolves the account itself, because this page is static.
+          */}
+          <HeaderControls />
         </div>
       </nav>
     </header>

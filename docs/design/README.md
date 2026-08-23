@@ -241,8 +241,31 @@ need for one revision and the cells never behaved that way — need-colouring be
 `Rostr Draft Room.dc.html`, where it is recomputed after each of your own picks. On a
 three-column marketing board there is no room to explain a colour that means something else.
 
-**The nav is four items:** How it works, a GitHub and an X icon, Create a league, and
-Connect wallet. `#explore` is the one content anchor, since the explorer absorbed the three
+**The nav is four items:** How it works, a GitHub and an X icon, **Leagues**, and the wallet
+slot.
+
+"Create a league" became **Leagues** at the user's reasoning: not everyone arriving is
+starting a league — plenty are joining a friend's — so naming only the create path is
+misleading. It points at `/leagues`. The two page CTAs read **"Join or create a league"** for
+the same reason, and the closing headline is "joined, created, and drafted".
+
+**The wallet slot has two states, and the connected one is new.** Disconnected shows *Connect
+wallet*. Connected replaces that button in the same position with the avatar and username, and
+adds a notification bell to its left. **Disconnecting is signing out** — the wallet is the
+account, so the menu carries one row, *Disconnect wallet*, not two.
+
+Three behaviours to preserve:
+
+- **The username menu opens on hover**, and the hover zone wraps the button and the menu with
+  an 8px bridge between them, so travelling into the menu does not close it. It also opens on
+  `focus`, because hover alone is unreachable by keyboard.
+- **The bell opens on click**, not hover — a hover-open bell fires by accident constantly — and
+  opening either panel closes the other, so only one is ever up.
+- **The bell exists only when connected.** There are no notifications for an anonymous
+  visitor, and an empty bell on a marketing page is furniture.
+
+The page opens **disconnected**, which is what a first-time visitor sees; the `walletConnected`
+prop and the in-page buttons both flip it so the connected header can be reviewed. `#explore` is the one content anchor, since the explorer absorbed the three
 tabs that used to point at separate sections. The X icon points at
 `https://x.com/rostr_app`. Connect wallet is a `<button>`, not an anchor — connecting is an
 action, and it is a **fourth surface needing the wallet signing round-trip** (see the list at
@@ -291,9 +314,17 @@ Everything else in the header is new:
   so "this will ask for your wallet" is visible before the click.
 - **The account menu**, which absorbs what `SessionBar` rendered inline. State 4 exists
   specifically because collapsing that component into a chevron silently deletes two shipped
-  affordances: the **Sign out** button, and the `username === null` branch that renders
-  **Finish setting up** linking to `/welcome`, because an account with no username cannot be
-  invited to anything. Both must survive.
+  affordances: the sign-out control, and the `username === null` branch that renders **Finish
+  setting up** linking to `/welcome`, because an account with no username cannot be invited to
+  anything. Both must survive.
+
+  **This is one menu on every signed-in page, and its single action is `Disconnect wallet`.**
+  Disconnecting ends the session, because the wallet is the account — so there is no separate
+  Sign out row, and the menu says in words that it returns you to the landing page. Signing
+  out from any screen lands on `/`.
+
+  One inconsistency left deliberately unresolved: **this menu opens on click, the landing
+  page's opens on hover.** The user was asked and left it open. Pick one before building both.
 
 **Two rules this screen must not break.** Neither a browse card nor an invitation card offers
 a join control — both lead to the league page, where the whole rule set renders above the join
@@ -312,12 +343,24 @@ feed, that is a new route, not an implied one.
 Invitation rows say **"addressed to your username"**, because `/api/invitations` returns
 `addressedAs: "USERNAME" | "WALLET"` — how you were reached — and not who sent it.
 
-Two containment notes, both of which shipped broken here first. The overlay frames (states 2
-and 4) hold an absolutely-positioned panel, so their footer flowed after only the short dimmed
-paragraph and landed 400px above the panel's bottom; they are now flex columns with the footer
-on `margin-top: auto`. That fix then collapsed those columns, because **auto side margins on
-a flex item suppress `align-self: stretch` and trigger shrink-to-fit** — hence the explicit
-`width: 100%` beside every `max-width: 1180px; margin: 0 auto`.
+**How the overlay states are built, and why it took three attempts.** States 2 and 4 show a
+dropdown over the page. Drawn the obvious way — `position: absolute` panel inside a
+`position: relative` frame — the panel is out of flow, so it cannot push the footer: the
+footer followed only the short dimmed paragraph and landed 400px above the panel's bottom
+edge. Two fixes made it worse in new ways. `margin-top: auto` on the footer made its position
+depend on a **guessed `min-height`**, which cleared the panel in one state and collided by
+39px in the other, and would re-break every time the menu gained a row. And auto side margins
+on a flex item **suppress `align-self: stretch` and trigger shrink-to-fit**, which silently
+collapsed two 1180px columns to content width.
+
+What is in the file now: each overlay frame is a `flex-direction: row-reverse` row holding the
+panel as a real `flex: 0 0 392px` (or 268px) column and the dimmed page as `flex: 1 1 auto`
+beside it. Whichever is taller pushes the footer through ordinary flow — no `min-height`, no
+`margin-top: auto`, nothing to re-tune. In production the panel really is absolutely
+positioned; this structure exists so a **static review artifact** can show an open dropdown
+without the page beneath it lying about its height. Do not copy the row into the app.
+
+The lasting rule from the collapse: **`mx-auto` on a flex child needs `w-full` with it.**
 
 ### 3. `Rostr Create League.dc.html` — 2 states
 **The finding that shaped this screen: only ten values are the commissioner's.** Scoring

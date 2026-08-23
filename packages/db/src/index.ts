@@ -6,6 +6,13 @@ export type { SqlClient } from "./client.js";
 // setup code only.
 
 export {
+  notificationsForUser,
+  NOTIFICATION_URGENCY,
+  type Notification,
+  type NotificationKind,
+} from "./notifications.js";
+
+export {
   compareSources,
   ingestSecondSource,
   SECOND_STAT_SOURCE,

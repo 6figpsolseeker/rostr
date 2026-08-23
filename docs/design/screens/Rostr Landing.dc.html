@@ -58,11 +58,118 @@
           <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"></path></svg>
         </a>
       </span>
-      <a class="btn btn-primary" href="#start" style="font-size: 13px; padding: 8px 16px;">Create a league</a>
-      <button type="button" class="btn btn-ghost" style="display: inline-flex; align-items: center; gap: 7px; font-size: 13px; padding: 8px 14px; color: var(--color-neutral-300); font-family: inherit; cursor: pointer;">
+      <a class="btn btn-primary" href="#" style="font-size: 13px; padding: 8px 16px;">Leagues</a>
+
+      <sc-if value="{{ disconnected }}" hint-placeholder-val="{{ true }}">
+      <button type="button" class="btn btn-ghost" onClick="{{ connect }}" style="display: inline-flex; align-items: center; gap: 7px; font-size: 13px; padding: 8px 14px; color: var(--color-neutral-300); font-family: inherit; cursor: pointer;">
         <svg width="15" height="15" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M216 64H56a8 8 0 0 1 0-16h136a8 8 0 0 0 0-16H56a24 24 0 0 0-24 24v128a24 24 0 0 0 24 24h160a16 16 0 0 0 16-16V80a16 16 0 0 0-16-16Zm-36 84a12 12 0 1 1 12-12 12 12 0 0 1-12 12Z"></path></svg>
         Connect wallet
       </button>
+      </sc-if>
+
+      <sc-if value="{{ connected }}">
+      <span style="display: inline-flex; align-items: center; gap: 6px;">
+
+        <span style="position: relative; display: inline-flex;">
+          <button type="button" aria-label="Notifications, 4 unread" aria-haspopup="true" aria-expanded="{{ bellOpen }}" onClick="{{ toggleBell }}" style="{{ bellBtn }}">
+            <svg width="17" height="17" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M221.8 175.94c-5.55-9.56-13.8-36.61-13.8-71.94a80 80 0 1 0-160 0c0 35.34-8.26 62.38-13.81 71.94A16 16 0 0 0 48 200h40.81a40 40 0 0 0 78.38 0H208a16 16 0 0 0 13.8-24.06ZM128 216a24 24 0 0 1-22.62-16h45.24A24 24 0 0 1 128 216Z"></path></svg>
+            <span style="position: absolute; top: 3px; right: 2px; display: inline-flex; align-items: center; justify-content: center; min-width: 15px; height: 15px; padding: 0 4px; border-radius: 999px; background: var(--color-accent); color: var(--color-bg); font-family: ui-monospace, monospace; font-size: 9.5px; font-weight: 600;">4</span>
+          </button>
+
+          <sc-if value="{{ bellOpen }}">
+          <span style="position: absolute; right: 0; top: 100%; z-index: 50; padding-top: 8px; display: block; width: 352px;">
+            <span class="card elev-lg" style="display: block; padding: 0; overflow: hidden; background: var(--color-surface);">
+              <span style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 15px; border-bottom: 1px solid var(--color-neutral-900);">
+                <span style="font-family: var(--font-heading); font-size: 14px; font-weight: 500;">Notifications</span>
+                <span style="font-size: 11.5px; color: var(--color-neutral-500);">4 unread</span>
+              </span>
+
+              <span style="display: block; padding: 9px 15px 5px; font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-accent-400);">Needs you</span>
+
+              <a href="#" style="display: grid; grid-template-columns: 17px minmax(0, 1fr); gap: 10px; padding: 10px 15px; border-bottom: 1px solid var(--color-neutral-900); background: color-mix(in srgb, var(--color-accent) 9%, transparent); color: inherit;" style-hover="background: color-mix(in srgb, var(--color-accent) 15%, transparent);">
+                <span style="display: inline-flex; align-items: flex-start; justify-content: center; color: var(--color-accent-300); padding-top: 2px;">
+                  <svg width="13" height="13" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M216 64H56a8 8 0 0 1 0-16h136a8 8 0 0 0 0-16H56a24 24 0 0 0-24 24v128a24 24 0 0 0 24 24h160a16 16 0 0 0 16-16V80a16 16 0 0 0-16-16Zm-36 84a12 12 0 1 1 12-12 12 12 0 0 1-12 12Z"></path></svg>
+                </span>
+                <span style="display: flex; flex-direction: column; gap: 3px; min-width: 0;">
+                  <span style="font-size: 13px; color: var(--color-accent-100);">You are on the clock &middot; pick 3.04</span>
+                  <span style="font-size: 11.5px; color: var(--color-neutral-400);">Sunday Scaries &middot; autopick takes J. Cook in 47 seconds</span>
+                </span>
+              </a>
+
+              <a href="#" style="display: grid; grid-template-columns: 17px minmax(0, 1fr); gap: 10px; padding: 10px 15px; border-bottom: 1px solid var(--color-neutral-900); background: color-mix(in srgb, var(--color-accent) 9%, transparent); color: inherit;" style-hover="background: color-mix(in srgb, var(--color-accent) 15%, transparent);">
+                <span style="display: inline-flex; align-items: flex-start; justify-content: center; color: var(--color-accent-300); padding-top: 2px;">
+                  <svg width="13" height="13" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M216 64H56a8 8 0 0 1 0-16h136a8 8 0 0 0 0-16H56a24 24 0 0 0-24 24v128a24 24 0 0 0 24 24h160a16 16 0 0 0 16-16V80a16 16 0 0 0-16-16Zm-36 84a12 12 0 1 1 12-12 12 12 0 0 1-12 12Z"></path></svg>
+                </span>
+                <span style="display: flex; flex-direction: column; gap: 3px; min-width: 0;">
+                  <span style="font-size: 13px; color: var(--color-accent-100);">A trade is in its veto window</span>
+                  <span style="font-size: 11.5px; color: var(--color-neutral-400);">Dynasty of Dropped Passes &middot; not voting allows it</span>
+                </span>
+              </a>
+
+              <a href="#" style="display: grid; grid-template-columns: 17px minmax(0, 1fr); gap: 10px; padding: 10px 15px; border-bottom: 1px solid var(--color-neutral-900); color: inherit;" style-hover="background: color-mix(in srgb, var(--color-accent) 10%, transparent);">
+                <span style="display: inline-flex; align-items: flex-start; justify-content: center; color: var(--color-neutral-500); padding-top: 2px;">
+                  <svg width="13" height="13" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M232 128a104 104 0 1 1-104-104 104.11 104.11 0 0 1 104 104Zm-40-8h-56V64a8 8 0 0 0-16 0v64a8 8 0 0 0 8 8h64a8 8 0 0 0 0-16Z"></path></svg>
+                </span>
+                <span style="display: flex; flex-direction: column; gap: 3px; min-width: 0;">
+                  <span style="font-size: 13px;">Lineup not set for Week 3</span>
+                  <span style="font-size: 11.5px; color: var(--color-neutral-400);">One slot empty &middot; autofill starts T. Kraft Sunday</span>
+                </span>
+              </a>
+
+              <a href="#" style="display: grid; grid-template-columns: 17px minmax(0, 1fr); gap: 10px; padding: 10px 15px; border-bottom: 1px solid var(--color-neutral-900); color: inherit;" style-hover="background: color-mix(in srgb, var(--color-accent) 10%, transparent);">
+                <span style="display: inline-flex; align-items: flex-start; justify-content: center; color: var(--color-neutral-500); padding-top: 2px;">
+                  <svg width="13" height="13" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M224 48H32a8 8 0 0 0-8 8v136a16 16 0 0 0 16 16h176a16 16 0 0 0 16-16V56a8 8 0 0 0-8-8Zm-96 85.15L52.57 64h150.86Z"></path></svg>
+                </span>
+                <span style="display: flex; flex-direction: column; gap: 3px; min-width: 0;">
+                  <span style="font-size: 13px;">Bye Week Blues invited you</span>
+                  <span style="font-size: 11.5px; color: var(--color-neutral-400);">Private league &middot; drafts Sat 23 Aug, 8:00 PM</span>
+                </span>
+              </a>
+
+              <span style="display: block; padding: 10px 15px 5px; font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-500);">Earlier</span>
+
+              <a href="#" style="display: grid; grid-template-columns: 17px minmax(0, 1fr); gap: 10px; padding: 10px 15px; color: inherit;" style-hover="background: color-mix(in srgb, var(--color-accent) 10%, transparent);">
+                <span style="display: inline-flex; align-items: flex-start; justify-content: center; color: var(--color-neutral-600); padding-top: 2px;">
+                  <svg width="13" height="13" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M229.66 77.66l-128 128a8 8 0 0 1-11.32 0l-56-56a8 8 0 0 1 11.32-11.32L96 188.69 218.34 66.34a8 8 0 0 1 11.32 11.32Z"></path></svg>
+                </span>
+                <span style="display: flex; flex-direction: column; gap: 3px; min-width: 0;">
+                  <span style="font-size: 13px; color: var(--color-neutral-300);">Waivers ran &middot; you won D. Achane</span>
+                  <span style="font-size: 11.5px; color: var(--color-neutral-500);">Priority moved to 12 of 12</span>
+                </span>
+              </a>
+
+              <span style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 15px; border-top: 1px solid var(--color-neutral-900);">
+                <span style="font-size: 11px; color: var(--color-neutral-500);">A wallet mark needs a signature.</span>
+                <a href="#" style="font-size: 11.5px;">See all</a>
+              </span>
+            </span>
+          </span>
+          </sc-if>
+        </span>
+
+        <span style="position: relative; display: inline-flex;" onMouseEnter="{{ openMenu }}" onMouseLeave="{{ closeMenu }}">
+          <button type="button" aria-haspopup="true" aria-expanded="{{ menuOpen }}" onFocus="{{ openMenu }}" style="{{ userBtn }}">
+            <span style="display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: color-mix(in srgb, var(--color-accent) 22%, transparent); box-shadow: inset 0 0 0 1px var(--color-accent-700); font-size: 9.5px; font-weight: 600; color: var(--color-accent-100);">R6</span>
+            <span>route66</span>
+            <svg width="10" height="10" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="m213.66 101.66-80 80a8 8 0 0 1-11.32 0l-80-80A8 8 0 0 1 48 88h160a8 8 0 0 1 5.66 13.66Z"></path></svg>
+          </button>
+
+          <sc-if value="{{ menuOpen }}">
+          <span style="position: absolute; right: 0; top: 100%; z-index: 50; padding-top: 8px; display: block; width: 244px;">
+            <span class="card elev-lg" style="display: block; padding: 0; overflow: hidden; background: var(--color-surface);">
+              <span style="display: flex; align-items: center; gap: 9px; padding: 11px 14px; border-bottom: 1px solid var(--color-neutral-900);">
+                <span style="display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; color: var(--color-accent-400);">
+                  <svg width="13" height="13" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M216 64H56a8 8 0 0 1 0-16h136a8 8 0 0 0 0-16H56a24 24 0 0 0-24 24v128a24 24 0 0 0 24 24h160a16 16 0 0 0 16-16V80a16 16 0 0 0-16-16Zm-36 84a12 12 0 1 1 12-12 12 12 0 0 1-12 12Z"></path></svg>
+                </span>
+                <span style="font-family: ui-monospace, monospace; font-size: 11.5px; color: var(--color-neutral-300);">7xKq&hellip;4vNb</span>
+              </span>
+              <button type="button" onClick="{{ disconnect }}" style="display: block; width: 100%; text-align: left; padding: 10px 14px; border: 0; background: transparent; color: var(--color-neutral-300); font-family: inherit; font-size: 13px; cursor: pointer;" style-hover="background: color-mix(in srgb, var(--color-accent) 10%, transparent); color: var(--color-text);">Disconnect wallet</button>
+            </span>
+          </span>
+          </sc-if>
+        </span>
+      </span>
+      </sc-if>
     </nav>
   </header>
 
@@ -96,9 +203,9 @@
         <div class="tag tag-outline" style="display: inline-flex; align-items: center; gap: 8px; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;">Pre-alpha &middot; 2026 NFL season</div>
         <h1 style="font-family: var(--font-heading); font-weight: 500; font-size: clamp(46px, 6.2vw, 86px); line-height: 1.02; letter-spacing: -0.035em; margin: 22px 0 0; text-wrap: pretty;">Your roster<br>is yours.</h1>
         <div ref="{{ underlineRef }}" style="height: 1px; width: 0; margin-top: 26px;"></div>
-        <p style="max-width: 620px; font-size: 18.5px; line-height: 1.62; color: var(--color-neutral-400); margin: 26px 0 0; text-wrap: pretty;">Drafted players are held in your wallet, not on a platform's server. League rules are frozen at creation and hashed on-chain. The champion is derived from the Week 17 result, not declared by an administrator.</p>
+        <p style="max-width: 620px; font-size: 18.5px; line-height: 1.62; color: var(--color-neutral-400); margin: 26px 0 0; text-wrap: pretty;">No commissioner can edit your team, force a trade through, or overrule a result — there is no such function to call. League rules are frozen at creation and hashed on-chain, and you sign that hash to join. The champion is derived from the Week 17 result, not declared by an administrator.</p>
         <div style="display: flex; align-items: center; gap: 14px; margin-top: 36px; flex-wrap: wrap;">
-          <a class="btn btn-primary" href="#start" style="font-size: 14.5px; padding: 12px 22px;">Create a free league</a>
+          <a class="btn btn-primary" href="#start" style="font-size: 14.5px; padding: 12px 22px;">Join or create a league</a>
           <a class="btn btn-ghost" href="#explore" style="font-size: 14.5px; padding: 12px 18px;">See how a season runs</a>
         </div>
         <div style="display: flex; gap: 22px; flex-wrap: wrap; margin-top: 42px; padding-bottom: 84px; font-size: 13px; color: var(--color-neutral-600);">
@@ -183,7 +290,7 @@
               <div class="card" style="padding: 24px; background: var(--color-surface); border-radius: var(--radius-md);">
                 <div style="font-family: ui-monospace, monospace; font-size: 11.5px; color: var(--color-accent-600);">04</div>
                 <h4 style="font-family: var(--font-heading); font-weight: 500; font-size: 20px; letter-spacing: -0.018em; margin: 11px 0 0;">Your roster is yours</h4>
-                <p style="font-size: 14.5px; line-height: 1.65; color: var(--color-neutral-400); margin: 11px 0 0; text-wrap: pretty;">Drafted players mint as Token-2022 NFTs held in your wallet. Trades move through an escrow with a 48-hour league veto window, so they can't be front-run on a marketplace and can't be forced through by a commissioner.</p>
+                <p style="font-size: 14.5px; line-height: 1.65; color: var(--color-neutral-400); margin: 11px 0 0; text-wrap: pretty;">Drafted players freeze the moment a trade is accepted, then wait out a 48-hour window in which a third of the uninvolved managers can veto it. No commissioner can force one through, reverse one, or edit a roster.</p>
               </div>
             </div>
           </div>
@@ -595,16 +702,16 @@
   <section data-screen-label="Close" id="start" style="margin: 40px 20px 0; border-radius: var(--radius-lg); background: radial-gradient(120% 140% at 12% 0%, var(--color-section-glow) 0%, var(--color-section) 46%, #1d2048 100%); padding: 84px 48px;">
     <div style="max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 0.72fr); gap: 56px; align-items: end;">
       <div>
-        <h2 style="font-family: var(--font-heading); font-weight: 500; font-size: clamp(34px, 4.4vw, 54px); line-height: 1.06; letter-spacing: -0.03em; margin: 0; text-wrap: pretty;">A league can be created, joined, and drafted end to end today.</h2>
+        <h2 style="font-family: var(--font-heading); font-weight: 500; font-size: clamp(34px, 4.4vw, 54px); line-height: 1.06; letter-spacing: -0.03em; margin: 0; text-wrap: pretty;">A league can be joined, created, and drafted end to end today.</h2>
         <p style="font-size: 16.5px; line-height: 1.6; color: var(--color-accent-200); margin: 20px 0 0; max-width: 520px;">Nothing touches money yet. Bring eleven friends, or two &mdash; a single bot can square an odd field.</p>
         <div style="display: flex; align-items: center; gap: 14px; margin-top: 34px; flex-wrap: wrap;">
-          <a class="btn btn-primary" href="#start" style="font-size: 15px; padding: 13px 24px; border-color: var(--color-accent-300); color: var(--color-accent-100);">Create a free league</a>
+          <a class="btn btn-primary" href="#start" style="font-size: 15px; padding: 13px 24px; border-color: var(--color-accent-300); color: var(--color-accent-100);">Join or create a league</a>
           <a class="btn btn-ghost" href="https://github.com/6figpsolseeker/rostr" style="font-size: 15px; padding: 13px 18px; color: var(--color-accent-200);">Read the source</a>
         </div>
       </div>
       <div style="display: flex; flex-direction: column; gap: 12px; font-size: 13.5px; line-height: 1.55; color: var(--color-accent-300); border-left: 1px solid rgba(210,206,253,0.22); padding-left: 22px;">
-        <span>MIT licensed. 614 tests. Node &ge; 22.13 and pnpm to run it yourself.</span>
-        <span>Targeting the Solana Seeker dApp Store and the 2026 NFL season — kickoff September 10, drafts in late August.</span>
+        <span>MIT licensed. Node &ge; 22.13 and pnpm to run it yourself.</span>
+        <span>Targeting the Solana Seeker dApp Store and the 2026 NFL season — kickoff September 9, drafts in late August.</span>
       </div>
     </div>
   </section>
@@ -621,7 +728,7 @@
   </footer>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props="{&quot;heroVariant&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;A&quot;,&quot;B&quot;],&quot;default&quot;:&quot;A&quot;,&quot;tsType&quot;:&quot;'A' | 'B'&quot;,&quot;section&quot;:&quot;Hero animation&quot;},&quot;showSwitcher&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Hero animation&quot;},&quot;startPanel&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Why it's different&quot;,&quot;How it works&quot;,&quot;Format&quot;,&quot;The draft&quot;,&quot;Inside a league&quot;,&quot;Playoffs and payout&quot;,&quot;Beyond football&quot;],&quot;default&quot;:&quot;Why it's different&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Explorer&quot;}}">
+<script type="text/x-dc" data-dc-script data-props="{&quot;heroVariant&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;A&quot;,&quot;B&quot;],&quot;default&quot;:&quot;A&quot;,&quot;tsType&quot;:&quot;'A' | 'B'&quot;,&quot;section&quot;:&quot;Hero animation&quot;},&quot;showSwitcher&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Hero animation&quot;},&quot;startPanel&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Why it's different&quot;,&quot;How it works&quot;,&quot;Format&quot;,&quot;The draft&quot;,&quot;Inside a league&quot;,&quot;Playoffs and payout&quot;,&quot;Beyond football&quot;],&quot;default&quot;:&quot;Why it's different&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Explorer&quot;},&quot;walletConnected&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Header&quot;}}">
 const PANELS = ["Why it's different", 'How it works', 'Format', 'The draft', 'Inside a league', 'Playoffs and payout', 'Beyond football'];
 
 class Component extends DCLogic {
@@ -630,7 +737,10 @@ class Component extends DCLogic {
     const start = PANELS.indexOf(props.startPanel);
     this.state = {
       variant: props.heroVariant === 'B' ? 'B' : 'A',
-      panel: start >= 0 ? start + 1 : 1
+      panel: start >= 0 ? start + 1 : 1,
+      wallet: props.walletConnected === true,
+      menuOpen: false,
+      bellOpen: false
     };
     this.heroRef = React.createRef();
     this.arcRef = React.createRef();
@@ -774,7 +884,26 @@ class Component extends DCLogic {
       showSwitcher: this.props.showSwitcher !== false,
       tabAStyle: this.tab(v === 'A'),
       tabBStyle: this.tab(v === 'B'),
-      counter: String(n).padStart(2, '0') + ' / 07'
+      counter: String(n).padStart(2, '0') + ' / 07',
+      connected: this.state.wallet,
+      disconnected: !this.state.wallet,
+      menuOpen: this.state.menuOpen,
+      bellOpen: this.state.bellOpen,
+      openMenu: () => this.setState({ menuOpen: true, bellOpen: false }),
+      closeMenu: () => this.setState({ menuOpen: false }),
+      toggleBell: () => this.setState(s => ({ bellOpen: !s.bellOpen, menuOpen: false })),
+      connect: () => this.setState({ wallet: true }),
+      disconnect: () => this.setState({ wallet: false, menuOpen: false, bellOpen: false }),
+      bellBtn: 'position: relative; display: inline-flex; align-items: center; justify-content: center;'
+        + ' width: 34px; height: 34px; border: 0; border-radius: var(--radius-sm);'
+        + ' background: ' + (this.state.bellOpen ? 'color-mix(in srgb, var(--color-accent) 14%, transparent)' : 'transparent') + ';'
+        + ' color: ' + (this.state.bellOpen ? 'var(--color-accent-200)' : 'var(--color-neutral-400)') + '; cursor: pointer;',
+      userBtn: 'display: inline-flex; align-items: center; gap: 8px; padding: 6px 10px 6px 7px;'
+        + ' border: 1px solid ' + (this.state.menuOpen ? 'var(--color-accent-700)' : 'var(--color-neutral-800)') + ';'
+        + ' border-radius: var(--radius-sm);'
+        + ' background: ' + (this.state.menuOpen ? 'color-mix(in srgb, var(--color-accent) 12%, transparent)' : 'transparent') + ';'
+        + ' color: ' + (this.state.menuOpen ? 'var(--color-text)' : 'var(--color-neutral-300)') + ';'
+        + ' font-family: inherit; font-size: 13px; cursor: pointer;'
     };
     for (let i = 1; i <= 7; i++) {
       vals['p' + i] = n === i;

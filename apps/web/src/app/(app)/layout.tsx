@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { InvitationBadge } from "@/components/InvitationsCorner";
-import { SessionBar } from "@/components/SessionBar";
+import { HeaderControls } from "@/components/HeaderControls";
 import { currentUser } from "@/lib/session";
 
 /**
@@ -60,16 +59,18 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
               The badge stays beside the link. It renders nothing at zero, so
               this is a bare word until something is actually waiting.
             */}
-            <span className="flex items-center gap-2">
-              <Link
-                href="/leagues"
-                className="text-[13.5px] text-nocturne-neutral-400 transition-colors hover:text-nocturne-text"
-              >
-                Leagues
-              </Link>
-              {user && <InvitationBadge />}
-            </span>
-            <SessionBar email={user?.email ?? null} username={user?.username ?? null} />
+            <a
+              href="/leagues"
+              className="text-[13.5px] text-nocturne-neutral-400 transition-colors hover:text-nocturne-text"
+            >
+              Leagues
+            </a>
+            {/*
+              The bell and the account menu, replacing a bare username link, a
+              sign-out button and an invitation count that sat inline. The
+              count moves into the bell, which holds five other kinds besides.
+            */}
+            <HeaderControls username={user?.username ?? null} email={user?.email ?? null} />
           </div>
         </nav>
       </header>

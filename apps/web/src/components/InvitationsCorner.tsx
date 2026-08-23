@@ -95,30 +95,3 @@ export function InvitationsCorner() {
     </section>
   );
 }
-
-/**
- * The count, for the header.
- *
- * Renders nothing when there is nothing waiting, rather than a zero. A badge
- * showing `0` is a permanent piece of chrome that teaches people to stop looking
- * at it, which is the opposite of what a notification is for.
- */
-export function InvitationBadge() {
-  const { data } = useSWR<PendingInvitation[]>(INVITATIONS_KEY, invitationsFetcher, {
-    revalidateOnFocus: true,
-  });
-
-  const count = data?.length ?? 0;
-  if (count === 0) return null;
-
-  return (
-    <a
-      href="/invitations"
-      className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-nocturne-accent px-1.5 py-0.5 text-[11px] font-semibold text-nocturne-bg transition-opacity hover:opacity-90"
-      title={count === 1 ? "1 league has invited you" : `${count} leagues have invited you`}
-      aria-label={count === 1 ? "1 invitation" : `${count} invitations`}
-    >
-      {count}
-    </a>
-  );
-}
