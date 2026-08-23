@@ -4,6 +4,8 @@ import { chromeProps } from "@/lib/chrome";
 import { LeagueChrome } from "@/components/LeagueChrome";
 import { getLeagueRules, nextWaiverRun } from "@rostr/db";
 import { PlayerMarket } from "@/components/PlayerMarket";
+import { WaiverRunPanel } from "@/components/WaiverRunPanel";
+import { draftContext } from "@/lib/draft-context";
 import { db } from "@/lib/db";
 import { currentUser } from "@/lib/session";
 
@@ -30,6 +32,12 @@ export default async function PlayersPage({ params }: { params: Promise<{ id: st
   if (!stored) notFound();
 
   const user = await currentUser();
+
+  // Only to mark the caller's own rows in the run. `draftContext` derives it
+  // from the session and the league's membership, never from a request — the
+  // panel itself is gated at its route, so a null here dims nothing that
+  // matters.
+  const { myTeamId } = await draftContext(id);
   const nextRun = nextWaiverRun(stored.rules, new Date());
 
   return (
@@ -42,6 +50,20 @@ export default async function PlayersPage({ params }: { params: Promise<{ id: st
           its player clears at, which is not always the next one.
         </p>
       </header>
+
+      {/*
+        What the last run decided, above the market rather than below it.
+
+        Somebody opening this page on a Wednesday is here *because* of the run —
+        to find out whether they got the player. Putting the answer under the
+        board would make them scroll past the thing they came for.
+
+        Rendered whether or not they are signed in, and gated by
+        `leagueReadForbidden` at the route: the resolution is a fact about the
+        league, and anyone entitled to see the standings is entitled to see how a
+        player changed hands. `myTeamId` only marks your own rows.
+      */}
+      <WaiverRunPanel leagueId={league.id} myTeamId={myTeamId} />
 
       {user ? (
         <PlayerMarket leagueId={league.id} />
