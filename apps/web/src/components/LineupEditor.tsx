@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { isIrEligible as irEligible } from "@rostr/core";
 import { previewHeading, whyNot } from "@/lib/autofill";
 import useSWR from "swr";
 import { PlayerAvatar } from "./PlayerAvatar";
@@ -41,6 +42,8 @@ interface RosterPlayer {
    * `UNSCHEDULED` is the same news with less of it: no fixture stored at all.
    */
   availability: "SCHEDULED" | "TIME_TBD" | "BYE" | "UNSCHEDULED";
+  /** Stashed on injured reserve: on the roster, out of the rotation. */
+  onIr: boolean;
   milliPoints: number;
   /** This week's projection under this league's scoring. Null if unpublished. */
   projectedMilliPoints: number | null;
@@ -74,6 +77,8 @@ interface LineupResponse {
   };
   slots: Slot[];
   roster: RosterPlayer[];
+  /** From the frozen rules. Zero means the league has no injured reserve. */
+  irSlots: number;
 }
 
 /**
@@ -242,7 +247,42 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
     0,
   );
 
-  const bench = data.roster.filter((player) => !started.has(player.playerId));
+  /*
+    Three places a player can be, not two.
+
+    A stashed player is neither started nor on the bench — he is out of the
+    rotation, and listing him among the bench would offer him in every slot's
+    dropdown, which is precisely what injured reserve exists to stop.
+  */
+  const stashed = data.roster.filter((player) => player.onIr);
+  const bench = data.roster.filter((player) => !started.has(player.playerId) && !player.onIr);
+
+  /**
+   * Move a player on or off injured reserve.
+   *
+   * The server decides. This sends the intent and re-reads — every rule that
+   * matters (is he injured, is there room, has his game started) lives in
+   * `@rostr/core` and `@rostr/db`, and duplicating any of it here would be a
+   * screen that permits what the server refuses.
+   */
+  async function ir(playerId: string, action: "STASH" | "ACTIVATE"): Promise<void> {
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const response = await fetch(`/api/leagues/${leagueId}/ir`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ playerId, week, action }),
+      });
+      const body = (await response.json()) as { error?: string };
+      if (!response.ok) throw new Error(body.error ?? "Could not change injured reserve");
+      await mutate();
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -504,6 +544,22 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
               {OUT_STATUSES.has(player.status.toUpperCase()) && (
                 <span className="text-amber-400/70">{player.status}</span>
               )}
+              {/*
+                Offered only to a player the server would actually accept. The
+                rule is enforced there; this just avoids a button whose only
+                outcome is a refusal.
+              */}
+              {data.irSlots > 0 &&
+                stashed.length < data.irSlots &&
+                irEligible(player.injuryDesignation) && (
+                  <button
+                    onClick={() => void ir(player.playerId, "STASH")}
+                    disabled={saving}
+                    className="text-[10px] text-nocturne-neutral-600 hover:text-nocturne-accent-300 disabled:opacity-40"
+                  >
+                    To IR
+                  </button>
+                )}
               {player.availability === "BYE" && (
                 <span className="text-nocturne-neutral-600">bye</span>
               )}
@@ -543,6 +599,81 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
           ))}
         </ul>
       </section>
+
+      {/*
+        Injured reserve.
+
+        Rendered whenever the league has slots, even when empty, because unlike
+        the bell's badge this is a *rule members signed* — `roster.irSlots` is in
+        the frozen document and `RulesView` shows it above the join control. A
+        section that only appeared once used would leave a manager unable to find
+        out the allowance existed.
+      */}
+      {data.irSlots > 0 && (
+        <section className="space-y-2">
+          <h3 className="text-sm font-medium text-nocturne-neutral-400">
+            Injured reserve{" "}
+            <span className="text-xs font-normal text-nocturne-neutral-600">
+              {stashed.length} of {data.irSlots}
+            </span>
+          </h3>
+
+          {stashed.length === 0 ? (
+            <p className="text-[11px] text-nocturne-neutral-600">
+              Holds players carrying an official out designation. They do not count against your
+              roster limit and the autofill will never start them.
+            </p>
+          ) : (
+            <ul className="space-y-1 text-xs">
+              {stashed.map((player) => {
+                // The owner's rule made visible: a player on IR must actually be
+                // injured. When he recovers nothing is dropped or moved — he
+                // simply stops being exempt, so the roster is over its limit
+                // until the manager acts. Saying so is the whole remedy.
+                const recovered = !irEligible(player.injuryDesignation);
+
+                return (
+                  <li key={player.playerId} className="flex items-center gap-3">
+                    <button
+                      onClick={() => setOpenPlayerId(player.playerId)}
+                      className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
+                    >
+                      <PlayerAvatar
+                        name={player.name}
+                        positions={player.positions}
+                        imageUrl={player.imageUrl}
+                        size={28}
+                      />
+                      <span className="min-w-0">
+                        <span className="block truncate text-xs">{player.name}</span>
+                        <span className="block text-[10px] text-nocturne-neutral-600">
+                          {positionGroup(player.positions)}
+                          {player.teamRef ? ` · ${player.teamRef}` : ""}
+                          {player.injuryDesignation ? ` · ${player.injuryDesignation}` : ""}
+                        </span>
+                      </span>
+                    </button>
+
+                    {recovered && (
+                      <span className="text-[10px] text-amber-300">
+                        no longer out — counts against your roster
+                      </span>
+                    )}
+
+                    <button
+                      onClick={() => void ir(player.playerId, "ACTIVATE")}
+                      disabled={saving}
+                      className="text-[10px] text-nocturne-neutral-600 hover:text-nocturne-accent-300 disabled:opacity-40"
+                    >
+                      Activate
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+      )}
 
       <p className="text-xs text-nocturne-neutral-600">
         Each slot locks when that player&rsquo;s game kicks off, not all at once — so a Thursday

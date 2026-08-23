@@ -331,3 +331,5 @@ export {
   type OnChainJoin,
   type OnChainStake,
 } from "./membership.js";
+
+export { activateFromIr, IrError, moveToIr } from "./injured-reserve.js";

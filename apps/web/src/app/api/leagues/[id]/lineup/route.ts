@@ -128,12 +128,16 @@ export async function GET(
 
     const choices = autolineupChoices({
       shape,
-      roster: [...roster.values()].map((player) =>
-        autolineupCandidate(player, {
-          averageMilliPoints: averages.get(player.playerId) ?? null,
-          projectedMilliPoints: projected.get(player.playerId) ?? null,
-        }),
-      ),
+      // Stashed players are out of the rotation, exactly as in `autoFillLineup`.
+      // A preview that offered one would name a starter the write will not make.
+      roster: [...roster.values()]
+        .filter((player) => !player.onIr)
+        .map((player) =>
+          autolineupCandidate(player, {
+            averageMilliPoints: averages.get(player.playerId) ?? null,
+            projectedMilliPoints: projected.get(player.playerId) ?? null,
+          }),
+        ),
       mode: context.rules.roster.autofill,
       locked: currentAssignments.filter((entry) => slotIsLocked(entry, kickoffs, now)),
     });
@@ -154,6 +158,8 @@ export async function GET(
 
     return NextResponse.json({
       week,
+      /** From the frozen rules, so the screen cannot invent an allowance. */
+      irSlots: context.rules.roster.irSlots,
       autofill: {
         enabled: autofillEnabled ?? true,
         /**
@@ -203,6 +209,12 @@ export async function GET(
         imageUrl: player.imageUrl,
         teamRef: player.teamRef,
         injuryDesignation: player.injuryDesignation,
+        /**
+         * On injured reserve. Unlike the designation above this is **not**
+         * display-only: it decides whether he counts against the roster limit
+         * and keeps him out of the autofill.
+         */
+        onIr: player.onIr,
         kickoffAt: player.kickoffAt,
         /**
          * How settled this player's week is. A bye, a fixture whose kickoff
