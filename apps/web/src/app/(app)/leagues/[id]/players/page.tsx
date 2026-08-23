@@ -1,5 +1,7 @@
 import { notFound } from "next/navigation";
 import { leagueReadAccess } from "@/lib/visibility";
+import { chromeProps } from "@/lib/chrome";
+import { LeagueChrome } from "@/components/LeagueChrome";
 import { getLeagueRules, nextWaiverRun } from "@rostr/db";
 import { PlayerMarket } from "@/components/PlayerMarket";
 import { db } from "@/lib/db";
@@ -20,6 +22,10 @@ export default async function PlayersPage({ params }: { params: Promise<{ id: st
   // the league exists, which is the fact an unguessable id is protecting.
   if (!(await leagueReadAccess(id)).ok) notFound();
 
+  // After the gate, never before: the chrome carries the league's name, size and
+  // rules hash, which is exactly what a private league owes a stranger none of.
+  const chrome = await chromeProps(id);
+
   const stored = await getLeagueRules(client, id);
   if (!stored) notFound();
 
@@ -28,13 +34,8 @@ export default async function PlayersPage({ params }: { params: Promise<{ id: st
 
   return (
     <div className="space-y-6">
+      {chrome && <LeagueChrome {...chrome} active="/players" />}
       <header className="space-y-1">
-        <a
-          href={`/leagues/${id}`}
-          className="text-xs text-nocturne-neutral-600 hover:text-nocturne-text"
-        >
-          ← {league.name}
-        </a>
         <h1 className="text-2xl font-semibold tracking-tight">Players</h1>
         <p className="text-sm text-nocturne-neutral-500">
           Next waiver run {nextRun.toLocaleString()}. A claim is resolved by priority at the run
