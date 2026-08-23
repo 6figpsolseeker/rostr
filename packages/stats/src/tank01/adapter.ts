@@ -61,6 +61,16 @@ const POSITION_MAP: Readonly<Record<string, string>> = {
  */
 export const DST_REF_PREFIX = "DST_";
 
+/**
+ * Where Sleeper's team abbreviations differ from ours.
+ *
+ * A table rather than a fuzzy match, for the reason the corpus records: a
+ * D/ST joined to the wrong team is a swing between two rosters. Only
+ * Washington differs — `LAR`, `LV` and `JAX`, the ones that usually vary
+ * between feeds, are identical here.
+ */
+const SLEEPER_TEAM_ALIASES: Readonly<Record<string, string>> = { WSH: "WAS" };
+
 export interface AdpEntry {
   readonly externalRef: string;
   readonly fullName: string;
@@ -374,7 +384,15 @@ export class Tank01Provider implements StatsProvider {
         profile: { ...EMPTY_PROFILE, imageUrl: imageUrl(team.espnLogo1) },
         // Sleeper identifies a team unit by its abbreviation rather than by a
         // numeric id, so the join key for a defence is the team ref itself.
-        secondSourceRef: team.teamAbv,
+        // Sleeper's own abbreviation, not ours. The two agree for 31 teams and
+        // disagree for Washington: we carry `WSH` and Sleeper keys the D/ST
+        // under `WAS` — verified against the live week endpoint on 2026-08-22,
+        // whose 32 team keys include `WAS` and no `WSH`.
+        //
+        // Without the alias that one unit never joins, and the failure is the
+        // quiet kind: the second source simply covers 31 of 32 defences, which
+        // is indistinguishable from two feeds that agree.
+        secondSourceRef: SLEEPER_TEAM_ALIASES[team.teamAbv] ?? team.teamAbv,
       });
     }
 
