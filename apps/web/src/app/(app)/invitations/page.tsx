@@ -85,8 +85,8 @@ export default async function InvitationsPage() {
                   <h2 className="truncate text-base font-medium">{invitation.leagueName}</h2>
                   <span className="shrink-0 text-xs text-nocturne-neutral-600">
                     {invitation.addressedAs === "WALLET"
-                      ? "invited by wallet address"
-                      : "invited by username"}
+                      ? "addressed to your wallet address"
+                      : "addressed to your username"}
                   </span>
                 </div>
                 <p className="text-xs text-nocturne-neutral-600">

@@ -20,12 +20,12 @@ import { currentUser } from "@/lib/session";
  * here. The invitation count and the browse cards are grounded, and are the
  * shipped `InvitationsCorner` and `LeagueBrowser` rather than rebuilt.
  *
- * **The urgent strip, the notification bell and the account menu are proposals
- * with no backing route**, so they are not drawn. The one urgent fact that does
- * have a source — being on the clock — rides on the league's own card in
- * `YourLeagues`, which links straight into the draft. A 90-second clock cannot
- * live behind a click, which is the design's own argument for the strip; this
- * satisfies it without inventing the other five things the strip would carry.
+ * **The urgent strip, the notification bell and the account menu are drawn**,
+ * and this paragraph used to say they were not. They were proposals with no
+ * backing route when it was written; `notificationsForUser` is that route, so
+ * the layout renders all three. Being on the clock also still rides on the
+ * league's own card in `YourLeagues` — deliberate duplication, because a
+ * 90-second clock must not live behind a click.
  *
  * **No join control anywhere on this page.** Both card types lead to the
  * league, where the whole rule set renders above the join button. `RULES.md`

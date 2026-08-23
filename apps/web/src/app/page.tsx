@@ -163,9 +163,12 @@ function SiteHeader() {
             answers before knowing what any of them were, and the sections were
             already adjacent.
 
-            The `#trust` and `#format` ids stay on their sections. Nothing points
-            at them now, but they are what anyone who shared a deep link is
-            holding, and breaking those to tidy a nav costs more than it saves.
+            `#trust` and `#format` are **gone**, and this comment used to say
+            they stayed. They were ids on three separate sections; the explorer
+            made those sections panels behind a rail, so there is nothing left
+            for either to land on. Nobody holds such a link — nothing is
+            launched — but the sentence claiming otherwise is the kind this repo
+            treats as a defect in its own right.
           */}
           <a
             href="#how"

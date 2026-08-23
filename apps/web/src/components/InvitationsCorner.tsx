@@ -5,9 +5,12 @@ import useSWR from "swr";
 /**
  * Invitations waiting for you, in the corner.
  *
- * Two components, **one request**: this and `InvitationBadge` share an SWR key,
- * so the header's count and the panel's list are the same fetch deduplicated
- * rather than two round trips that could disagree with each other for a second.
+ * **This is the only consumer of `INVITATIONS_KEY`.** The comment here used to
+ * describe it as one of two components deduplicating a shared SWR key — the
+ * other was `InvitationBadge`, the count beside the nav's Leagues link, which
+ * no longer exists. The header's bell counts a different thing from a different
+ * route (`/api/me/notifications`), so nothing is being deduplicated and the
+ * export is kept for the badge's return rather than for a sharer it has.
  *
  * The panel renders nothing at all when there is nothing waiting. An empty
  * "no invitations" card in the corner of every visit is furniture — the page
@@ -77,7 +80,8 @@ export function InvitationsCorner() {
             >
               <span className="block truncate text-sm">{invitation.leagueName}</span>
               <span className="block text-[11px] text-nocturne-neutral-600">
-                invited by {invitation.addressedAs === "WALLET" ? "wallet address" : "username"}
+                addressed to your{" "}
+                {invitation.addressedAs === "WALLET" ? "wallet address" : "username"}
               </span>
             </a>
           </li>

@@ -57,8 +57,13 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
               in its head with equal weight rather than a button competing with
               the nav.
 
-              The badge stays beside the link. It renders nothing at zero, so
-              this is a bare word until something is actually waiting.
+              **There is no badge, and this comment used to say there was.**
+              The design keeps a count beside this link and calls it the one
+              grounded element in its header; what shipped instead is the bell,
+              which counts invitations among six kinds from a different route.
+              Whether the badge returns is an open question — the bell already
+              carries the number, and two counts that disagree for a second are
+              worse than one.
             */}
             <a
               href="/leagues"
