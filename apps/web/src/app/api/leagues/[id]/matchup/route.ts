@@ -66,7 +66,8 @@ export async function GET(
     // Default to the week being played, from the schedule rather than a
     // calendar guess. Week 1 before kickoff, so a league in preseason opens on
     // something rather than on nothing.
-    const week = requestedWeek(request) ?? (await currentWeek(client, NFL.key, now)) ?? 1;
+    const week =
+      requestedWeek(request) ?? (await currentWeek(client, NFL.key, context.season, now)) ?? 1;
 
     const views = await loadWeekMatchups(client, id, week, now);
 

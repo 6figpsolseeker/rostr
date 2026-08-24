@@ -59,17 +59,38 @@ async function run(client: SqlClient, now: Date, request: Request): Promise<Next
     10,
   );
 
-  // The current NFL week, from the schedule rather than a calendar guess: the
-  // week whose games have started and are not yet a week old.
-  const [current] = await client.query<{ week: number }>(
-    `SELECT g.week
-       FROM games g
-       JOIN sports s ON s.id = g.sport_id
-      WHERE s.key = $1 AND g.kickoff_at <= $2
-      ORDER BY g.kickoff_at DESC
-      LIMIT 1`,
-    [NFL.key, now.toISOString()],
+  /*
+    The season this job is actually about. Issue #105.
+
+    The query below is a copy of `currentWeek` — deliberately, because this
+    wants the *lagging* answer and `transactionWeek` is strict — and it carried
+    the same defect: no `g.season`, so with a prior season's games in the table
+    it answered that season's last week from any instant afterwards, forever.
+    Latent only while one season is ingested, and unconditional from January 2027
+    once two coexist.
+
+    Derived from the leagues this run would score rather than from a constant or
+    a calendar: those are the only leagues whose weeks it is about to write, and
+    a season nobody is playing is not one to score.
+  */
+  const [active] = await client.query<{ season: number | null }>(
+    "SELECT max(season) AS season FROM leagues WHERE state IN ('IN_SEASON', 'PLAYOFFS')",
   );
+  const season =
+    active?.season === null || active?.season === undefined ? null : Number(active.season);
+
+  const [current] =
+    season === null
+      ? [undefined]
+      : await client.query<{ week: number }>(
+          `SELECT g.week
+           FROM games g
+           JOIN sports s ON s.id = g.sport_id
+          WHERE s.key = $1 AND g.season = $2 AND g.kickoff_at <= $3
+          ORDER BY g.kickoff_at DESC
+          LIMIT 1`,
+          [NFL.key, season, now.toISOString()],
+        );
 
   const week = Number.isFinite(requestedWeek) ? requestedWeek : Number(current?.week ?? 0);
   if (!week) {
