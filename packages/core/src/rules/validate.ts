@@ -366,12 +366,49 @@ function validateWaivers(rules: LeagueRules, out: string[]): void {
     if (!Number.isInteger(moment.hour) || moment.hour < 0 || moment.hour > 23) {
       out.push(`${label}.hour must be an integer 0-23, got ${moment.hour}`);
     }
+
+    /*
+      The day, checked against the union it is typed as. Issue #132.
+
+      The hour beside it was validated and the day was not, which is the gap
+      that matters: `nextWeekly` resolves a weekday to an index, and an
+      unrecognised one produces a schedule that cannot be computed. Every value
+      here is frozen at creation and hashed, so a league created with a typo can
+      never be corrected — and `leaguesDueForWaivers` calls this for every league
+      with a pending claim, which is why one bad value used to be able to stop
+      every league's waivers (#131).
+
+      `WEEKDAYS` is written out rather than derived from the type: a union is
+      erased at runtime, so there is nothing to iterate. It is the same
+      arrangement `TIEBREAKER_DISCRIMINANTS` uses, and carries the same
+      obligation — a weekday added to the type must be added here too.
+    */
+    if (!WEEKDAYS.has(moment.day)) {
+      out.push(`${label}.day must be one of ${[...WEEKDAYS].join(", ")}, got "${moment.day}"`);
+    }
   }
 
   if (w.weeklyLock.day === w.processing.day && w.weeklyLock.hour === w.processing.hour) {
     out.push("the weekly lock and processing run cannot be the same moment");
   }
 }
+
+/**
+ * The seven days, as values.
+ *
+ * A `Weekday` union exists at the type level and is gone at runtime, so nothing
+ * generated from it can check a value that arrived as JSON — which is exactly how
+ * a rule field typed as an enum reaches this function unchecked.
+ */
+const WEEKDAYS: ReadonlySet<string> = new Set([
+  "SUNDAY",
+  "MONDAY",
+  "TUESDAY",
+  "WEDNESDAY",
+  "THURSDAY",
+  "FRIDAY",
+  "SATURDAY",
+]);
 
 function validateTrades(rules: LeagueRules, out: string[]): void {
   const t = rules.trades;

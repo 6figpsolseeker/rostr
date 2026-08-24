@@ -963,3 +963,66 @@ describe("hashLeagueRules", () => {
     );
   });
 });
+
+describe("the waiver weekday is checked against the union — #132", () => {
+  /*
+    The hour beside it was validated and the day was not. `nextWeekly` resolves a
+    weekday to an index, so an unrecognised one produces a schedule that cannot
+    be computed — and every value here is frozen at creation and hashed, so a
+    league created with a typo can never be corrected.
+
+    It is also what made #131 dangerous: `leaguesDueForWaivers` computes this for
+    every league with a pending claim, so one league with an unusable weekday
+    could take the whole run down.
+
+    The timezone next to it *was* checked for being a real IANA zone. This closes
+    the gap the pair left.
+  */
+
+  it("refuses a weekday that is not one of the seven", () => {
+    const rules = FIXTURE;
+    const broken = {
+      ...rules,
+      waivers: {
+        ...rules.waivers,
+        processing: { ...rules.waivers.processing, day: "WENSDAY" },
+      },
+    } as LeagueRules;
+
+    const problems = validateLeagueRules(broken, NFL);
+    expect(problems.some((p) => p.includes("WENSDAY"))).toBe(true);
+  });
+
+  it("names the acceptable values, so the fix is obvious", () => {
+    // A rule frozen at creation is worth an error somebody can act on the first
+    // time rather than after a second refused attempt.
+    const rules = FIXTURE;
+    const broken = {
+      ...rules,
+      waivers: { ...rules.waivers, weeklyLock: { ...rules.waivers.weeklyLock, day: "funday" } },
+    } as LeagueRules;
+
+    const problems = validateLeagueRules(broken, NFL);
+    expect(problems.some((p) => p.includes("WEDNESDAY"))).toBe(true);
+  });
+
+  it("is case-sensitive, because the stored value is", () => {
+    // The document is hashed verbatim, so "monday" and "MONDAY" are different
+    // bytes and only one of them is what every reader compares against.
+    const rules = FIXTURE;
+    const broken = {
+      ...rules,
+      waivers: {
+        ...rules.waivers,
+        processing: { ...rules.waivers.processing, day: "wednesday" },
+      },
+    } as LeagueRules;
+
+    expect(validateLeagueRules(broken, NFL).length).toBeGreaterThan(0);
+  });
+
+  it("accepts the default rule set unchanged", () => {
+    const rules = FIXTURE;
+    expect(validateLeagueRules(rules, NFL)).toEqual([]);
+  });
+});
