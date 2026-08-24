@@ -160,7 +160,9 @@ describe("syncBoxScores", () => {
     await syncBoxScores(fx.client, provider, NFL.key, SEASON);
 
     // Force it back onto the work list, as a recheck inside the window would.
-    await fx.client.query("UPDATE games SET stats_synced_at = now() - interval '2 days'");
+    await fx.client.query(
+      "UPDATE games SET stats_synced_at = now() - interval '2 days', stats_attempted_at = now() - interval '2 days'",
+    );
 
     const again = await syncBoxScores(fx.client, provider, NFL.key, SEASON);
 
@@ -182,7 +184,9 @@ describe("syncBoxScores", () => {
     );
     await syncBoxScores(fx.client, provider, NFL.key, SEASON);
 
-    await fx.client.query("UPDATE games SET stats_synced_at = now() - interval '2 days'");
+    await fx.client.query(
+      "UPDATE games SET stats_synced_at = now() - interval '2 days', stats_attempted_at = now() - interval '2 days'",
+    );
     const corrected = fakeProvider(
       new Map([["g1", boxScore("g1", { qb1: [line("pass_yd", 312)], ...bothDefenses })]]),
     );
@@ -216,7 +220,9 @@ describe("syncBoxScores", () => {
       SEASON,
     );
 
-    await fx.client.query("UPDATE games SET stats_synced_at = now() - interval '2 days'");
+    await fx.client.query(
+      "UPDATE games SET stats_synced_at = now() - interval '2 days', stats_attempted_at = now() - interval '2 days'",
+    );
     const result = await syncBoxScores(
       fx.client,
       fakeProvider(
@@ -245,7 +251,9 @@ describe("syncBoxScores", () => {
       SEASON,
     );
 
-    await fx.client.query("UPDATE games SET stats_synced_at = now() - interval '2 days'");
+    await fx.client.query(
+      "UPDATE games SET stats_synced_at = now() - interval '2 days', stats_attempted_at = now() - interval '2 days'",
+    );
     // Both defenses still present, so they are "covered" and therefore eligible
     // for retraction — but points allowed is excluded by key.
     await syncBoxScores(
@@ -414,7 +422,7 @@ describe("syncBoxScores", () => {
     // The retry clause needs the last attempt to be older than
     // FAILED_RETRY_MINUTES, which it is not in a test that just ran.
     await fx.client.query(
-      "UPDATE games SET stats_synced_at = now() - interval '1 hour' WHERE id = $1",
+      "UPDATE games SET stats_synced_at = now() - interval '1 hour', stats_attempted_at = now() - interval '1 hour' WHERE id = $1",
       [fx.gameId],
     );
     await syncBoxScores(fx.client, fakeProvider(new Map([["g1", good]])), NFL.key, SEASON);
@@ -537,7 +545,7 @@ describe("the work list bounds what one run can spend", () => {
     // does not recognise and only two of the five statuses have been observed.
     const fx = await setup("IN_PROGRESS");
     await fx.client.query(
-      "UPDATE games SET kickoff_at = now() - interval '30 hours', stats_synced_at = now()",
+      "UPDATE games SET kickoff_at = now() - interval '30 hours', stats_synced_at = now(), stats_attempted_at = now()",
     );
 
     const result = await syncBoxScores(fx.client, fakeProvider(new Map()), NFL.key, SEASON);
@@ -550,7 +558,7 @@ describe("the work list bounds what one run can spend", () => {
     // that never treats anything as live.
     const fx = await setup("IN_PROGRESS");
     await fx.client.query(
-      "UPDATE games SET kickoff_at = now() - interval '2 hours', stats_synced_at = now()",
+      "UPDATE games SET kickoff_at = now() - interval '2 hours', stats_synced_at = now(), stats_attempted_at = now()",
     );
 
     const box = boxScore("g1", { qb1: [line("pass_yd", 120)], ...bothDefenses });
@@ -574,6 +582,7 @@ describe("the work list bounds what one run can spend", () => {
     await fx.client.query(
       `UPDATE games SET stats_error = 'fgMade disagrees with the parsed plays',
                        stats_synced_at = now() - interval '1 hour',
+                       stats_attempted_at = now() - interval '1 hour',
                        final_at = now() - interval '9 days'`,
     );
 
@@ -658,5 +667,91 @@ describe("the work list bounds what one run can spend", () => {
 
     const result = await syncBoxScores(fx.client, fakeProvider(boxes), NFL.key, SEASON);
     expect(result.games).toBe(2);
+  });
+});
+
+describe("a game whose ingest failed — #227", () => {
+  /*
+    `syncBoxScores` stamps `stats_synced_at = now()` on **both** paths: on
+    success, and on failure alongside the reason. The failure stamp is deliberate
+    — it paces the retry, so a game that cannot be read is not re-fetched every
+    ten minutes forever.
+
+    The cost is that the column means two things at once: "when did we last try"
+    and "do we have stats". #140's hold reads it as the second, counting FINAL
+    games with `stats_synced_at IS NULL`, so it catches a game nobody ever tried
+    to read and **misses one somebody tried and failed on** — which is exactly
+    what a 429 mid-Sunday produces.
+
+    These tests drive the real producer against a failing provider rather than
+    hand-writing the row, so they keep describing what the product actually does
+    when the two columns are separated.
+  */
+
+  it("does not claim to have synced a game it could not read", async () => {
+    const fx = await setup();
+    const provider = fakeProvider(
+      new Map([["g1", new Error("Tank01 refused the request (HTTP 429)")]]),
+    );
+
+    const result = await syncBoxScores(fx.client, provider, NFL.key, SEASON);
+
+    expect(result.failures).toHaveLength(1);
+
+    const [row] = await fx.client.query<{
+      stats_synced_at: string | null;
+      stats_attempted_at: string | null;
+      stats_error: string | null;
+    }>("SELECT stats_synced_at, stats_attempted_at, stats_error FROM games WHERE id = $1", [
+      fx.gameId,
+    ]);
+
+    // The attempt is recorded, so the retry stays paced.
+    expect(row?.stats_attempted_at).not.toBeNull();
+    expect(row?.stats_error).toContain("429");
+
+    // But nothing was synced, and the column that says so must not claim it was.
+    // This is the assertion #140's hold depends on.
+    expect(row?.stats_synced_at).toBeNull();
+  });
+
+  it("records both when the read succeeds", async () => {
+    // The other half: a successful ingest sets both, so nothing that paces on
+    // the attempt loses its pacing.
+    const fx = await setup();
+
+    const provider = fakeProvider(
+      new Map([["g1", boxScore("g1", { qb1: [line("pass_yd", 300)] })]]),
+    );
+    await syncBoxScores(fx.client, provider, NFL.key, SEASON);
+
+    const [row] = await fx.client.query<{
+      stats_synced_at: string | null;
+      stats_attempted_at: string | null;
+    }>("SELECT stats_synced_at, stats_attempted_at FROM games WHERE id = $1", [fx.gameId]);
+
+    expect(row?.stats_synced_at).not.toBeNull();
+    expect(row?.stats_attempted_at).not.toBeNull();
+  });
+
+  it("does not re-read a failed game on the very next tick", async () => {
+    /*
+      The reason the failure stamp existed in the first place, preserved.
+
+      `stats_error` is set by ordinary warnings as much as by failures, so
+      without pacing one game with a permanent discrepancy was re-read seventy-two
+      times a day — sixteen of those would have exceeded the daily quota outright.
+      Moving the pace onto `stats_attempted_at` must not lose that.
+    */
+    const fx = await setup();
+    const provider = fakeProvider(
+      new Map([["g1", new Error("Tank01 refused the request (HTTP 429)")]]),
+    );
+
+    const first = await syncBoxScores(fx.client, provider, NFL.key, SEASON);
+    expect(first.games).toBe(1);
+
+    const second = await syncBoxScores(fx.client, provider, NFL.key, SEASON);
+    expect(second.games).toBe(0);
   });
 });

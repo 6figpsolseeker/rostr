@@ -829,6 +829,37 @@ describe("a week whose box scores were never read — #140", () => {
     return row?.finalized_at ?? null;
   };
 
+  it("holds a game that was tried and failed, not only one nobody tried", async () => {
+    /*
+      The gap #227 found in this hold, closed by `0041`.
+
+      `syncBoxScores` used to stamp `stats_synced_at` on the **failure** path as
+      well as the success one, because that column was also pacing the retry. So a
+      game that a rate limit had made unreadable looked synced, this hold read it
+      as ingested, and the week finalised with those players at zero —
+      permanently, since a finalised week is never rescored.
+
+      `stats_attempted_at` now carries the pacing and `stats_synced_at` means
+      what its name says. This stages the state the producer writes after a failed
+      read: attempted, an error recorded, nothing synced.
+    */
+    const fx = await setup();
+    await schedule(fx);
+    await fx.client.query(
+      `UPDATE games SET status = 'FINAL',
+                       stats_attempted_at = now(),
+                       stats_synced_at = NULL,
+                       stats_error = 'Tank01 refused the request (HTTP 429)'
+        WHERE season = $1 AND week = $2`,
+      [SEASON, WEEK],
+    );
+
+    const outcome = await resolveLeagueWeek(fx.client, fx.leagueId, WEEK, DURING);
+
+    expect(outcome.finalized).toBe(false);
+    expect(outcome.holdReason).toMatch(/no box score/);
+  });
+
   it("holds inside the window rather than settling at zero", async () => {
     const fx = await setup();
     await schedule(fx);
