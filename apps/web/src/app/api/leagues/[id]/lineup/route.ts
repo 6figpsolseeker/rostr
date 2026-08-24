@@ -215,6 +215,13 @@ export async function GET(
          * and keeps him out of the autofill.
          */
         onIr: player.onIr,
+        /**
+         * Who he plays this week, from the fixture already stored. Sent as the
+         * two raw facts rather than a composed "vs NO" — the screen decides how
+         * to say it, and `lib/opponent.ts` is where that decision is tested.
+         */
+        opponentRef: player.opponentRef,
+        isHome: player.isHome,
         kickoffAt: player.kickoffAt,
         /**
          * How settled this player's week is. A bye, a fixture whose kickoff

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { opponentLabel } from "@/lib/opponent";
 import { isIrEligible as irEligible } from "@rostr/core";
 import { previewHeading, whyNot } from "@/lib/autofill";
 import useSWR from "swr";
@@ -44,6 +45,9 @@ interface RosterPlayer {
   availability: "SCHEDULED" | "TIME_TBD" | "BYE" | "UNSCHEDULED";
   /** Stashed on injured reserve: on the roster, out of the rotation. */
   onIr: boolean;
+  /** This week's opponent, or null on a bye and on an un-ingested fixture. */
+  opponentRef: string | null;
+  isHome: boolean | null;
   milliPoints: number;
   /** This week's projection under this league's scoring. Null if unpublished. */
   projectedMilliPoints: number | null;
@@ -424,6 +428,30 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
                         {positionGroup(player.positions)}
                       </span>
                       {player.teamRef ?? "FA"}
+                      {/*
+                        Who he plays, next to who he plays for. A manager
+                        deciding a lineup is comparing matchups, and sending
+                        them to another tab to find out who somebody faces is
+                        the friction this removes.
+                      */}
+                      {(() => {
+                        const opponent = opponentLabel({
+                          opponentRef: player.opponentRef,
+                          isHome: player.isHome,
+                          availability: player.availability,
+                        });
+                        return opponent === null ? null : (
+                          <span
+                            className={
+                              opponent === "BYE"
+                                ? "text-nocturne-neutral-700"
+                                : "text-nocturne-neutral-500"
+                            }
+                          >
+                            {opponent}
+                          </span>
+                        );
+                      })()}
                     </span>
                   </span>
                 </button>
@@ -538,6 +566,21 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
                   <span className="block text-[10px] text-nocturne-neutral-600">
                     {positionGroup(player.positions)}
                     {player.teamRef ? ` · ${player.teamRef}` : ""}
+                    {/*
+                      The bench is where a substitution gets decided, so the
+                      matchup matters here at least as much as it does on a
+                      starter. Injured reserve deliberately does not carry it:
+                      a stashed player is out of the rotation, and naming his
+                      fixture would invite a comparison that cannot be acted on.
+                    */}
+                    {(() => {
+                      const opponent = opponentLabel({
+                        opponentRef: player.opponentRef,
+                        isHome: player.isHome,
+                        availability: player.availability,
+                      });
+                      return opponent === null ? null : ` · ${opponent}`;
+                    })()}
                   </span>
                 </span>
               </button>
