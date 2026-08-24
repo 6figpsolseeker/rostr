@@ -8,6 +8,7 @@ import { setLineup } from "./lineups.js";
 import { addTestTeam, createTestDatabase } from "./testing.js";
 import type { PGliteClient } from "./testing.js";
 import {
+  currentWeek,
   finalizationHours,
   generateSeasonSchedule,
   loadScheduledWeek,
@@ -971,5 +972,86 @@ describe("generateSeasonSchedule below two teams", () => {
     const { written } = await generateSeasonSchedule(fx.client, fx.leagueId, "seed");
 
     expect(written).toBeGreaterThan(0);
+  });
+});
+
+describe("currentWeek is scoped to one season — #105", () => {
+  /*
+    The query selected on sport and kickoff only. With a prior season's games in
+    the table it answered that season's last week from any instant afterwards,
+    permanently — the issue verified 18 for an August 2026 call with a single
+    2025 week-18 row present.
+
+    Latent only because no prior season is ingested today. It becomes live the
+    moment one is, and unconditional from January 2027, when 2026 and 2027 rows
+    coexist every offseason.
+
+    Two readers wanted the lagging answer and were right to: the scoreboard must
+    keep showing Sunday's result until Thursday, and the cron is writing that
+    week's scores. What neither wanted was a row from a different season, which
+    is why this is a filter rather than a move to `transactionWeek`.
+  */
+
+  /** One game, in a season and week of its own. */
+  async function game(
+    fx: Fixture,
+    season: number,
+    week: number,
+    kickoff: Date,
+    ref: string,
+  ): Promise<void> {
+    const [sport] = await fx.client.query<{ id: string }>(
+      "SELECT id FROM sports WHERE key = $1",
+      [NFL.key],
+    );
+    await fx.client.query(
+      "INSERT INTO games (sport_id, external_ref, season, week, home_team_ref, away_team_ref, kickoff_at, status) " +
+        "VALUES ($1, $2, $3, $4, 'CIN', 'BAL', $5, 'FINAL')",
+      [sport.id, ref, season, week, kickoff.toISOString()],
+    );
+  }
+
+  it("ignores a prior season's last week", async () => {
+    // The exact scenario from the issue.
+    const fx = await setup();
+    await game(fx, 2025, 18, new Date("2026-01-04T18:00:00Z"), "prior-18");
+
+    const august = new Date("2026-08-13T12:00:00Z");
+    expect(await currentWeek(fx.client, NFL.key, 2026, august)).toBeNull();
+  });
+
+  it("still lags within its own season, which is the point of it", async () => {
+    /*
+      The behaviour that must survive the fix. This answers "which week am I
+      scoring", so from a week's last game until the next week's first kickoff it
+      keeps naming the week just played — that is correct for the scoreboard and
+      for the cron, and it is why neither caller was moved to
+      `transactionWeek`.
+    */
+    const fx = await setup();
+    await game(fx, 2026, 3, new Date("2026-09-27T17:00:00Z"), "w3");
+
+    // Tuesday after week 3, before week 4 kicks off.
+    const tuesday = new Date("2026-09-29T12:00:00Z");
+    expect(await currentWeek(fx.client, NFL.key, 2026, tuesday)).toBe(3);
+  });
+
+  it("prefers the most recent kickoff within the season, not the highest week", async () => {
+    // Ordering is by kickoff and not by week number, so a fixture moved later
+    // than a higher-numbered one still answers correctly.
+    const fx = await setup();
+    await game(fx, 2026, 3, new Date("2026-09-27T17:00:00Z"), "w3b");
+    await game(fx, 2026, 4, new Date("2026-10-04T17:00:00Z"), "w4b");
+
+    const between = new Date("2026-09-30T12:00:00Z");
+    expect(await currentWeek(fx.client, NFL.key, 2026, between)).toBe(3);
+  });
+
+  it("answers null before the season's first kickoff", async () => {
+    const fx = await setup();
+    await game(fx, 2026, 1, new Date("2026-09-10T00:20:00Z"), "w1b");
+
+    const preseason = new Date("2026-08-01T12:00:00Z");
+    expect(await currentWeek(fx.client, NFL.key, 2026, preseason)).toBeNull();
   });
 });

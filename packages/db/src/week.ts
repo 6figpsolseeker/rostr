@@ -80,25 +80,37 @@ export class WeekError extends Error {
  * answers "which week am I scoring" and so keeps naming a week whose games have
  * all been played, right up until the next week kicks off — which is the correct
  * lag for the scoreboard and a three-day hole in any rule that binds on where a
- * roster change lands. It is also not season-scoped: with a prior season's games
- * ingested it answers "week 18" all summer. Both defects have been shipped and
- * fixed once each, in the waiver lock and in the trade deadline.
+ * roster change lands.
+ *
+ * **It is season-scoped now, and this paragraph used to record that it was not.**
+ * Issue #105: with a prior season's games in the table it answered that season's
+ * last week from any instant afterwards — verified as returning 18 for an August
+ * 2026 call with a single 2025 week-18 row present. Latent only because no prior
+ * season is ingested, and unconditional from January 2027 once two seasons
+ * coexist.
+ *
+ * The **lag** is deliberate and stays: this answers "which week am I scoring",
+ * so it keeps naming a week whose games have all been played until the next week
+ * kicks off. A caller enforcing a rule wants `transactionWeek`, which is
+ * strict — that is a different defect, shipped and fixed once each in the waiver
+ * lock and the trade deadline.
  *
  * Returns `null` before the season's first kickoff, when there is no week yet.
  */
 export async function currentWeek(
   db: SqlClient,
   sportKey: string,
+  season: number,
   at: Date,
 ): Promise<number | null> {
   const [row] = await db.query<{ week: number }>(
     `SELECT g.week
        FROM games g
        JOIN sports s ON s.id = g.sport_id
-      WHERE s.key = $1 AND g.kickoff_at <= $2
+      WHERE s.key = $1 AND g.season = $2 AND g.kickoff_at <= $3
       ORDER BY g.kickoff_at DESC
       LIMIT 1`,
-    [sportKey, at.toISOString()],
+    [sportKey, season, at.toISOString()],
   );
 
   return row ? Number(row.week) : null;
