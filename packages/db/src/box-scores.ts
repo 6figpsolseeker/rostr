@@ -182,7 +182,11 @@ export async function syncBoxScores(
         -- clause that can stay true indefinitely is a call every ten minutes
         -- until the season ends.
         AND (
-              g.stats_synced_at IS NULL
+              -- Never *attempted*. Keyed on the attempt rather than the sync
+              -- since #227: a game that failed has no sync time, and selecting
+              -- on that would re-read it every tick — the hammering the retry
+              -- clause below exists to prevent.
+              g.stats_attempted_at IS NULL
            -- Live, and bounded by the clock rather than by the provider
            -- agreeing to move the status on.
            OR (g.status = 'IN_PROGRESS'
@@ -195,7 +199,7 @@ export async function syncBoxScores(
            -- seventy-two times a day for the rest of the season, and sixteen of
            -- them would have exceeded the daily quota outright.
            OR (g.stats_error IS NOT NULL
-               AND g.stats_synced_at < now() - make_interval(mins => $4::int)
+               AND g.stats_attempted_at < now() - make_interval(mins => $4::int)
                AND g.final_at > now() - make_interval(hours => $5::int))
            -- The NFL stat-correction sweep.
            OR (g.final_at > now() - make_interval(hours => $5::int)
@@ -206,6 +210,9 @@ export async function syncBoxScores(
       -- read scores its players zero *right now*, where a re-read only refines a
       -- number that already exists, and plain kickoff order would let a backlog
       -- of old games starve today's.
+      -- Never-read first, and "never read" is now the honest column: a failed
+      -- game still has no stats and still scores its players zero, so it belongs
+      -- at the front with the untried ones rather than behind them.
       ORDER BY (g.stats_synced_at IS NULL) DESC,
                (g.status = 'IN_PROGRESS') DESC,
                g.kickoff_at
@@ -276,8 +283,13 @@ export async function syncBoxScores(
       // and the reason is stored so a game that can never be read does not look
       // healthy forever while the week finalises around it.
       const reason = error instanceof Error ? error.message : String(error);
+      // **The attempt, not the sync.** #227: stamping `stats_synced_at` here made
+      // a game that could not be read indistinguishable from one that was, so
+      // #140's hold — which reads that column as "has a box score" — let the week
+      // finalise with those players at zero. The attempt is what paces the retry
+      // and it is recorded; the sync is not, because none happened.
       await db.query(
-        "UPDATE games SET stats_synced_at = now(), stats_error = $2 WHERE id = $1",
+        "UPDATE games SET stats_attempted_at = now(), stats_error = $2 WHERE id = $1",
         [game.id, reason],
       );
       failures.push({ gameRef: game.external_ref, reason });
@@ -531,10 +543,12 @@ async function ingestOneGame(
     // re-read. The column's own comment says it is set by warnings too. What the
     // *caller* is handed is the list, unjoined — see `GameOutcome.warnings`.
     const problem = problems.length > 0 ? problems.join("; ") : null;
-    await tx.query("UPDATE games SET stats_synced_at = now(), stats_error = $2 WHERE id = $1", [
-      game.id,
-      problem,
-    ]);
+    // Both, on the success path. The attempt column paces the retry and must not
+    // lose its pacing just because the read worked.
+    await tx.query(
+      "UPDATE games SET stats_synced_at = now(), stats_attempted_at = now(), stats_error = $2 WHERE id = $1",
+      [game.id, problem],
+    );
 
     let inserted = 0;
     let revised = 0;
