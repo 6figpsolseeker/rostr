@@ -37,7 +37,14 @@ export async function GET(request: Request): Promise<NextResponse> {
 }
 
 async function run(client: SqlClient, now: Date): Promise<NextResponse> {
-  const due = await leaguesDueForWaivers(client, now);
+  /*
+    Selection can fail per league now, and says so. Issue #131.
+
+    It used to be a bare list, computed before the per-league guard below, so one
+    league whose waiver schedule could not be read threw out of here and 500'd
+    the route — no league's waivers ran at all, every hour, deterministically.
+  */
+  const { due, problems } = await leaguesDueForWaivers(client, now);
 
   const runs: {
     leagueId: string;
@@ -80,11 +87,32 @@ async function run(client: SqlClient, now: Date): Promise<NextResponse> {
   // already reported in `runs`, and a row saying "ran, all fine" while three
   // leagues threw would be the healthy face this record exists to remove.
   const failed = runs.filter((entry) => entry.error).length;
-  await recordCronRun(
-    client,
-    "waivers",
-    failed > 0 ? `${failed} of ${due.length} leagues failed` : null,
-  );
 
-  return NextResponse.json({ at: now.toISOString(), due: due.length, runs });
+  /*
+    Both kinds of failure reach the heartbeat, and they are different facts.
+
+    A league that *ran* and threw has a bad claim or a bad roster and will
+    probably be fine next hour. A league that could not even be **asked** whether
+    it was due will never process a claim again until somebody looks — its rules
+    do not parse, or its waiver schedule cannot be computed. Collapsing the two
+    into one count would hide the permanent one behind the transient one.
+  */
+  const notes = [
+    failed > 0 ? `${failed} of ${due.length} leagues failed` : null,
+    problems.length > 0
+      ? `${problems.length} league(s) could not be checked at all: ` +
+        problems.map((p) => `${p.leagueId}: ${p.error}`).join("; ")
+      : null,
+  ].filter((note): note is string => note !== null);
+
+  await recordCronRun(client, "waivers", notes.length > 0 ? notes.join(" — ") : null);
+
+  return NextResponse.json({
+    at: now.toISOString(),
+    due: due.length,
+    runs,
+    // Surfaced in the response as well as the heartbeat: the heartbeat truncates
+    // and this is the one place the whole list is legible.
+    ...(problems.length > 0 ? { unreadable: problems } : {}),
+  });
 }

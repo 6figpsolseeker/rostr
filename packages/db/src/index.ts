@@ -72,6 +72,7 @@ export {
   cancelClaim,
   dropPlayer,
   leaguesDueForWaivers,
+  type WaiverDueSelection,
   loadWaiverPriority,
   nextWaiverRun,
   pendingClaims,
