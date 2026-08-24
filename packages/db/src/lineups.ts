@@ -357,6 +357,21 @@ export type RosterPlayer = LineupPlayer & {
    * roster and out of the rotation.
    */
   readonly onIr: boolean;
+  /**
+   * Who he plays this week — "NO", "MIA" — and whether at home.
+   *
+   * **Derived from the fixture we already store, not fetched.** `games` carries
+   * both team refs and `players.team_ref` says which one he is, so the opponent
+   * is the other one. No provider call, no new column, and it cannot disagree
+   * with the kickoff shown beside it because both come from the same row.
+   *
+   * Null on a bye, and on a week whose fixture has not been ingested — the two
+   * are told apart by `availability`, which is the field that already makes that
+   * distinction. Nothing here should be used to infer a bye.
+   */
+  readonly opponentRef: string | null;
+  /** True when his club is the home side. Null whenever `opponentRef` is. */
+  readonly isHome: boolean | null;
 };
 export async function loadRosterForWeek(
   db: SqlClient,
@@ -375,6 +390,8 @@ export async function loadRosterForWeek(
     team_ref: string | null;
     injury_designation: string | null;
     on_ir: boolean;
+    home_team_ref: string | null;
+    away_team_ref: string | null;
   }>(
     `SELECT p.id AS player_id,
             p.full_name,
@@ -388,6 +405,8 @@ export async function loadRosterForWeek(
             r.on_ir,
             array_agg(DISTINCT pos.key) AS positions,
             g.kickoff_at,
+            g.home_team_ref,
+            g.away_team_ref,
             -- Does this player's team appear anywhere in the season's schedule?
             -- Distinguishes a bye (scheduled, just not this week) from a
             -- team_ref that matches nothing at all.
@@ -409,6 +428,7 @@ export async function loadRosterForWeek(
         AND (g.home_team_ref = p.team_ref OR g.away_team_ref = p.team_ref)
       WHERE r.team_id = $1 AND r.released_at IS NULL
       GROUP BY p.id, p.full_name, p.status, g.kickoff_at, p.team_ref, p.sport_id, r.on_ir,
+               g.home_team_ref, g.away_team_ref,
                p.image_url, p.injury_designation`,
     [teamId, season, week],
   );
@@ -430,6 +450,15 @@ export async function loadRosterForWeek(
         teamRef: row.team_ref,
         injuryDesignation: row.injury_designation,
         onIr: row.on_ir,
+        // The other side of his own fixture. Both refs are present or neither
+        // is, so one null check covers the pair.
+        opponentRef:
+          row.home_team_ref === null || row.away_team_ref === null
+            ? null
+            : row.home_team_ref === row.team_ref
+              ? row.away_team_ref
+              : row.home_team_ref,
+        isHome: row.home_team_ref === null ? null : row.home_team_ref === row.team_ref,
         kickoffAt: row.kickoff_at
           ? Math.floor(new Date(row.kickoff_at).getTime() / 1000)
           : // No game this week. A bye keeps null and stays movable; a player
