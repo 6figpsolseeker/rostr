@@ -12,6 +12,7 @@ import {
   autoFillLineup,
   ensureLineups,
   loadAverages,
+  LineupError,
   loadKickoffs,
   loadLineup,
   loadProjectedPoints,
@@ -1315,5 +1316,153 @@ describe("the lock survives a drop", () => {
 
     const qb = filled.find((slot) => slot.slotType === "QB" && slot.slotIndex === 0);
     expect(qb?.playerId).toBe(fx.players.get("thu-qb"));
+  });
+});
+
+describe("a lineup that moves under the manager — #100", () => {
+  /*
+    `setLineup` validated against a lineup it read **before** its transaction
+    opened, and `current` is the sole input to both lock guards: `SLOT_LOCKED`
+    compares against it, and `PLAYER_LOCKED` uses it to decide whether a slot is
+    even changing. An empty slot never locks.
+
+    So: the manager's PUT reads RB1 as empty; the score-week cron's autofill
+    commits a mid-game player into RB1; the manager's write lands and neither
+    guard fires, because both were evaluated against a slot that was empty when
+    it was read. A locked slot holding a player whose game had started was
+    replaced — which `season/lineup.ts` names as the exact thing the lock
+    exists to prevent.
+
+    **No second human is needed.** The manager races the cron, which runs every
+    ten minutes.
+
+    Migration `0016` predicted this in writing and closed only the duplicate
+    half with a unique index; the lock half stayed open until now.
+
+    ## Why the interference is injected
+
+    PGlite is a single connection, so the two writers cannot genuinely overlap.
+    What can be staged exactly is the ordering that matters: the snapshot is
+    taken, *then* somebody else's write commits, *then* our write runs. The proxy
+    below performs the interfering write at the instant `setLineup` opens its
+    transaction — which is the same interleaving, deterministically.
+  */
+
+  /**
+   * A client that lets one write land the moment `setLineup` takes its row lock.
+   *
+   * Keyed on the `FOR UPDATE` statement rather than on `BEGIN`, because that is
+   * the first thing inside the transaction and leaves the snapshot already taken.
+   */
+  function interferingAt(client: PGliteClient, interfere: () => Promise<void>): PGliteClient {
+    let fired = false;
+    return new Proxy(client, {
+      get(target, prop, receiver) {
+        if (prop !== "query") return Reflect.get(target, prop, receiver);
+        return async (sql: string, params?: unknown[]) => {
+          const run = (
+            target as unknown as {
+              query: (s: string, p?: unknown[]) => Promise<unknown>;
+            }
+          ).query.bind(target);
+          if (!fired && sql.includes("FOR UPDATE") && sql.includes("lineups")) {
+            fired = true;
+            await interfere();
+          }
+          return run(sql, params);
+        };
+      },
+    }) as PGliteClient;
+  }
+
+  it("refuses a write whose slot changed after validation", async () => {
+    const fx = await setup();
+
+    // The manager's snapshot: QB is empty.
+
+    const client = interferingAt(fx.client, async () => {
+      // Somebody else — the autofill — puts a player in that slot after the
+      // snapshot was taken and before the write lands.
+      await setLineup(fx.client, {
+        leagueId: fx.leagueId,
+        teamId: fx.teamId,
+        week: WEEK,
+        assignments: [{ slotType: "QB", slotIndex: 0, playerId: fx.players.get("thu-qb") }],
+        now: BEFORE_ANYTHING,
+      });
+    });
+
+    await expect(
+      setLineup(client, {
+        leagueId: fx.leagueId,
+        teamId: fx.teamId,
+        week: WEEK,
+        assignments: [{ slotType: "QB", slotIndex: 0, playerId: fx.players.get("sun-qb") }],
+        now: BEFORE_ANYTHING,
+      }),
+    ).rejects.toSatisfy((e) => e instanceof LineupError && e.code === "LINEUP_MOVED");
+  });
+
+  it("leaves the other writer's value in place when it refuses", async () => {
+    // The refusal must not be a partial write. What is in the slot afterwards is
+    // what the winner put there, not a half-applied version of the loser's
+    // request.
+    const fx = await setup();
+
+    const client = interferingAt(fx.client, async () => {
+      await setLineup(fx.client, {
+        leagueId: fx.leagueId,
+        teamId: fx.teamId,
+        week: WEEK,
+        assignments: [{ slotType: "QB", slotIndex: 0, playerId: fx.players.get("thu-qb") }],
+        now: BEFORE_ANYTHING,
+      });
+    });
+
+    await expect(
+      setLineup(client, {
+        leagueId: fx.leagueId,
+        teamId: fx.teamId,
+        week: WEEK,
+        assignments: [{ slotType: "QB", slotIndex: 0, playerId: fx.players.get("sun-qb") }],
+        now: BEFORE_ANYTHING,
+      }),
+    ).rejects.toThrow();
+
+    const after = await loadLineup(fx.client, fx.teamId, WEEK, fx.rules);
+    const held = after.find((slot) => slot.slotType === "QB");
+    expect(held?.playerId).toBe(fx.players.get("thu-qb"));
+  });
+
+  it("still accepts a save that changes nothing about the moved slot", async () => {
+    /*
+      The scoping that keeps the editor working. `LineupEditor` posts the whole
+      slot list on every dropdown change, from a snapshot up to 30 s old, so a
+      whole-lineup compare would refuse every save issued within thirty seconds
+      of an autofill pass — reintroducing from the other side the exact failure
+      #99 removed.
+
+      Here the manager submits the QB slot holding the value it already holds.
+      That asserts nothing, so it must not refuse.
+    */
+    const fx = await setup();
+
+    await setLineup(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: fx.teamId,
+      week: WEEK,
+      assignments: [{ slotType: "QB", slotIndex: 0, playerId: fx.players.get("sun-qb") }],
+      now: BEFORE_ANYTHING,
+    });
+
+    await expect(
+      setLineup(fx.client, {
+        leagueId: fx.leagueId,
+        teamId: fx.teamId,
+        week: WEEK,
+        assignments: [{ slotType: "QB", slotIndex: 0, playerId: fx.players.get("sun-qb") }],
+        now: BEFORE_ANYTHING,
+      }),
+    ).resolves.toBeDefined();
   });
 });

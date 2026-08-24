@@ -31,7 +31,15 @@ const STATUS: Record<string, number> = {
   LEAGUE_NOT_FOUND: 404,
   TEAM_NOT_IN_LEAGUE: 403,
   INVALID_LINEUP: 422,
+  // Retryable, unlike every other code here. Nothing about the lineup is wrong —
+  // somebody else wrote the slot between validation and the write, so the client
+  // re-reads and submits again. 409 rather than 422: the request was well formed.
+  LINEUP_MOVED: 409,
   SLOT_TYPE_UNKNOWN: 500,
+  // #98: this fell through to 400 with no diagnosis. A league whose games are
+  // not ingested cannot enforce a kickoff lock, so it refuses rather than
+  // accepting a lineup it could not police.
+  SCHEDULE_MISSING: 409,
 };
 
 function weekOf(request: Request): number {
