@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { HeroThrow } from "@/components/landing/HeroThrow";
 import { HeaderControls } from "@/components/HeaderControls";
 import { UrgentStrip } from "@/components/UrgentStrip";
+import { Roadmap } from "@/components/landing/Roadmap";
 import { SectionExplorer } from "@/components/landing/SectionExplorer";
 
 /**
@@ -96,6 +97,14 @@ export default function LandingPage() {
         that the band owns the h2.
       */}
       <SectionExplorer />
+
+      {/*
+        Between the explorer and the closing CTA, and deliberately not an eighth
+        panel inside it. The explorer describes how the product works today; the
+        roadmap is what is coming, and somebody looking for future features
+        should not have to click through seven tabs about the present.
+      */}
+      <Roadmap />
       <ClosingBand />
       <SiteFooter />
     </div>
@@ -175,6 +184,12 @@ function SiteHeader() {
             className="text-[13.5px] text-nocturne-neutral-400 hover:text-nocturne-text"
           >
             How it works
+          </a>
+          <a
+            href="#roadmap"
+            className="text-[13.5px] text-nocturne-neutral-400 hover:text-nocturne-text"
+          >
+            Roadmap
           </a>
           <a
             href="https://github.com/6figpsolseeker/rostr"
