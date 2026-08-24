@@ -106,7 +106,21 @@ export class LineupError extends Error {
       | "TEAM_NOT_IN_LEAGUE"
       | "INVALID_LINEUP"
       | "SLOT_TYPE_UNKNOWN"
-      | "SCHEDULE_MISSING",
+      | "SCHEDULE_MISSING"
+      /**
+       * The stored lineup moved between validation and the write. **Retryable.**
+       *
+       * Issue #100. `setLineup` validated against a snapshot taken before its
+       * transaction opened, so a manager whose PUT was in flight while the
+       * score-week cron's autofill committed had their lock check evaluated
+       * against a slot that was empty when they looked and is not any more.
+       *
+       * Distinct from `INVALID_LINEUP` because the two need opposite responses:
+       * an illegal lineup must be shown to the person so they can change it, and
+       * this one means nothing is wrong except the timing. The client re-reads
+       * and submits again.
+       */
+      | "LINEUP_MOVED",
     readonly problems: readonly LineupProblem[] = [],
   ) {
     super(message);
@@ -631,7 +645,50 @@ export async function setLineup(
 
   const slotTypeIds = await loadSlotTypeIds(db, stored.rules);
 
+  /*
+    Everything above validated against `current`, which was read before this
+    transaction opened. Issue #100: that snapshot can go stale under the manager,
+    and the thing it goes stale about is the **lock**.
+
+    `current` is the sole input to both lock guards — `SLOT_LOCKED` compares
+    against it, `PLAYER_LOCKED` uses it to decide whether a slot is even
+    changing — and an empty slot never locks. So the sequence is: the manager's
+    PUT reads RB1 as empty; the score-week cron's autofill commits a mid-game
+    player into RB1; the manager's write lands and neither guard fires, because
+    both were evaluated against a slot that was empty when it was read.
+
+    That is a **lock bypass**, not a lost update. It is the thing
+    `season/lineup.ts` names as the whole point of the lock: "someone starts a
+    player after seeing him score." No second human is needed — the manager
+    races the cron.
+
+    Two things close it, and both are needed:
+
+    - The row lock stops an existing row moving under us. It cannot help for a
+      slot that has **no row yet**, which is exactly the autofill's case: it
+      INSERTs where the manager saw nothing.
+    - So the write also carries a compare-and-swap against the value validated
+      against. `0016` predicted this in writing and closed only the duplicate
+      half with a unique index.
+
+    **Scoped to slots this request actually changes.** `LineupEditor` posts the
+    entire slot list on every dropdown change, from a snapshot up to 30 s old, so
+    a whole-lineup compare would fail every save issued within thirty seconds of
+    an autofill pass — reintroducing from the other side the exact failure #99
+    removed. An unchanged slot is not a claim about anything and must never
+    refuse.
+  */
   return withTransaction(db, async (tx) => {
+    // Locks the rows that exist. See above for why that is half the answer.
+    await tx.query(`SELECT 1 FROM lineups WHERE team_id = $1 AND week = $2 FOR UPDATE`, [
+      input.teamId,
+      input.week,
+    ]);
+
+    const byKey = new Map(
+      current.map((slot) => [`${slot.slotType}#${slot.slotIndex}`, slot.playerId]),
+    );
+
     for (const assignment of input.assignments) {
       const slotTypeId = slotTypeIds.get(assignment.slotType);
       if (!slotTypeId) {
@@ -641,13 +698,57 @@ export async function setLineup(
         );
       }
 
-      await tx.query(
+      const key = `${assignment.slotType}#${assignment.slotIndex}`;
+      const expected = byKey.get(key) ?? null;
+
+      // Unchanged slots are written without a guard. They assert nothing about
+      // the state, so a concurrent write to one is not a conflict — and guarding
+      // them is what would break the editor's whole-lineup save.
+      if (expected === assignment.playerId) {
+        await tx.query(
+          `INSERT INTO lineups (team_id, week, slot_type_id, slot_index, player_id, locked_at)
+           VALUES ($1, $2, $3, $4, $5, NULL)
+           ON CONFLICT (team_id, week, slot_type_id, slot_index)
+           DO UPDATE SET player_id = EXCLUDED.player_id`,
+          [input.teamId, input.week, slotTypeId, assignment.slotIndex, assignment.playerId],
+        );
+        continue;
+      }
+
+      const written = await tx.query<{ slot_index: number }>(
         `INSERT INTO lineups (team_id, week, slot_type_id, slot_index, player_id, locked_at)
          VALUES ($1, $2, $3, $4, $5, NULL)
          ON CONFLICT (team_id, week, slot_type_id, slot_index)
-         DO UPDATE SET player_id = EXCLUDED.player_id`,
-        [input.teamId, input.week, slotTypeId, assignment.slotIndex, assignment.playerId],
+         DO UPDATE SET player_id = EXCLUDED.player_id
+          WHERE lineups.player_id IS NOT DISTINCT FROM $6
+        RETURNING slot_index`,
+        [
+          input.teamId,
+          input.week,
+          slotTypeId,
+          assignment.slotIndex,
+          assignment.playerId,
+          expected,
+        ],
       );
+
+      if (written.length === 0) {
+        /*
+          The slot holds something other than what we validated against, so the
+          lock decision above was made about a state that no longer exists.
+
+          Refused rather than reconciled here: what belongs in that slot now
+          depends on whether the new occupant's game has started, which is the
+          question `validateLineup` answers, and answering it a second time
+          inside the write loop would be a second implementation of the lock.
+          The caller re-reads and submits against the truth.
+        */
+        throw new LineupError(
+          `${assignment.slotType} slot ${assignment.slotIndex + 1} changed while you were ` +
+            `editing — reload and try again`,
+          "LINEUP_MOVED",
+        );
+      }
     }
 
     return loadLineup(tx, input.teamId, input.week, stored.rules);

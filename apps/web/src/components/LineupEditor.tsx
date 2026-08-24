@@ -162,7 +162,12 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
   if (error) return <p className="text-sm text-red-400">{error.message}</p>;
   if (!data) return <p className="text-sm text-nocturne-neutral-600">Loading your lineup…</p>;
 
-  async function save(next: Slot[]): Promise<void> {
+  /**
+   * Save, with one retry reserved for a stale snapshot.
+   *
+   * `isRetry` exists so the retry cannot recurse: see the LINEUP_MOVED branch.
+   */
+  async function save(next: Slot[], isRetry = false): Promise<void> {
     setSaving(true);
     setProblems([]);
     setSaveError(null);
@@ -183,8 +188,44 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
 
       const body = (await response.json()) as {
         error?: string;
+        code?: string;
         problems?: { message: string }[];
       };
+
+      /*
+        `LINEUP_MOVED` is retryable and everything else here is not. Issue #100.
+
+        The server now validates the kickoff lock against state it holds a lock
+        on, so a save built from a stale snapshot can be refused — and the
+        ordinary cause is nobody's fault: the score-week cron's autofill wrote a
+        slot in the ten minutes since this screen last polled.
+
+        Surfacing that as an error would be worse than the bug it closes. The
+        manager did nothing wrong, the fix is mechanical, and `setSaveError`
+        renders text nobody could act on. So it re-reads and submits the same
+        intent once.
+
+        **Once, not in a loop.** A second refusal means the slot is genuinely
+        contested rather than merely stale, and a retry loop against a lock is
+        how a UI hammers a server it cannot win against. The second failure is
+        shown.
+      */
+      if (!response.ok && body.code === "LINEUP_MOVED" && !isRetry) {
+        const fresh = await mutate();
+        if (fresh) {
+          // Re-submit against what the server actually holds now, keeping this
+          // manager's own change and taking everything else from the refresh.
+          const merged = fresh.slots.map((slot) => {
+            const mine = next.find(
+              (entry) => entry.slotType === slot.slotType && entry.slotIndex === slot.slotIndex,
+            );
+            return mine && mine.playerId !== slot.playerId ? mine : slot;
+          });
+          await save(merged, true);
+          return;
+        }
+      }
+
       if (!response.ok) {
         setProblems((body.problems ?? []).map((problem) => problem.message));
         throw new Error(body.error ?? "Could not save that lineup");
