@@ -1472,3 +1472,100 @@ describe("listing", () => {
     expect(proposed.map((trade) => trade.tradeId)).toEqual([open]);
   });
 });
+
+describe("a veto cast while the trade is being resolved — #134", () => {
+  /*
+    `vetoTrade` read the trade's state through `loadTrade` — no lock, nothing
+    binding that read to the insert — and then wrote the vote. So a member voting
+    in the same hour `/api/cron/trades` resolved the trade had their vote written
+    against a trade already decided: `resolveTrade` took its tally before the row
+    landed, so the vote did not count, the row existed, and the screen showed the
+    veto recorded.
+
+    That is worse than refusing them. A member told their vote was late can go and
+    persuade somebody else; a member whose vote is silently dropped believes the
+    league declined to block a trade it may in fact have blocked.
+
+    #133 guards every trade *state* write, and this is not one — a veto is a row
+    in a different table, and the tally is a count taken earlier in the same run,
+    so that guard cannot see it. It was deliberately left out of that PR rather
+    than folded into one whose title would have implied coverage.
+  */
+
+  /**
+   * Settles the trade at the instant the vote is about to be written.
+   *
+   * The state check at the top of vetoTrade passes — the trade really is
+   * ACCEPTED when the voter looks — and the resolution lands before the insert.
+   * That is the race, and it cannot be staged any other way on single-connection
+   * PGlite: the two writers cannot genuinely overlap, but the ordering that
+   * matters can be produced exactly.
+   */
+  function settlingBeforeTheVote(fx: Fixture): PGliteClient {
+    let fired = false;
+    return new Proxy(fx.client, {
+      get(target, prop, receiver) {
+        if (prop !== "query") return Reflect.get(target, prop, receiver);
+        return async (sql: string, params?: unknown[]) => {
+          const run = (
+            target as unknown as {
+              query: (s: string, p?: unknown[]) => Promise<unknown>;
+            }
+          ).query.bind(target);
+          if (!fired && sql.includes("INSERT INTO trade_vetoes")) {
+            fired = true;
+            await settle(fx.client, fx.leagueId, AFTER_WINDOW);
+          }
+          return run(sql, params);
+        };
+      },
+    }) as PGliteClient;
+  }
+
+  it("refuses a vote once the trade has been settled", async () => {
+    const fx = await setupWithSecondLeague();
+
+    const tradeId = await propose(fx);
+    await acceptTrade(fx.client, tradeId, fx.teams[1], MONDAY);
+
+    await expect(
+      vetoTrade(settlingBeforeTheVote(fx), tradeId, fx.teams[2], MONDAY),
+    ).rejects.toSatisfy((e) => e instanceof TradeError && e.code === "TRADE_ALREADY_SETTLED");
+  });
+
+  it("writes no vote row when it refuses", async () => {
+    /*
+      The half that matters. Refusing loudly is only an improvement if the row is
+      genuinely absent — a vote recorded but uncounted is the original defect
+      wearing an error message.
+    */
+    const fx = await setupWithSecondLeague();
+
+    const tradeId = await propose(fx);
+    await acceptTrade(fx.client, tradeId, fx.teams[1], MONDAY);
+    await expect(
+      vetoTrade(settlingBeforeTheVote(fx), tradeId, fx.teams[2], MONDAY),
+    ).rejects.toThrow();
+
+    const rows = await fx.client.query("SELECT team_id FROM trade_vetoes WHERE trade_id = $1", [
+      tradeId,
+    ]);
+    expect(rows).toHaveLength(0);
+  });
+
+  it("still accepts a vote while the trade is genuinely open", async () => {
+    // The control. Without it the refusal above passes just as well against a
+    // rule that rejected every veto.
+    const fx = await setupWithSecondLeague();
+
+    const tradeId = await propose(fx);
+    await acceptTrade(fx.client, tradeId, fx.teams[1], MONDAY);
+
+    await expect(vetoTrade(fx.client, tradeId, fx.teams[2], MONDAY)).resolves.toBeDefined();
+
+    const rows = await fx.client.query("SELECT team_id FROM trade_vetoes WHERE trade_id = $1", [
+      tradeId,
+    ]);
+    expect(rows).toHaveLength(1);
+  });
+});
