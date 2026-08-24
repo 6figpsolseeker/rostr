@@ -568,15 +568,24 @@ describe("joinLeague", () => {
     ).rejects.toSatisfy((e: unknown) => e instanceof JoinError && e.code === "LEAGUE_FULL");
   });
 
-  it("says LEAGUE_FULL when the slot index refuses, not just when the count does", async () => {
-    // The count and the insert are not atomic against each other, so two people
-    // clicking Join on the last seat both read the same `taken` and both derive
-    // the same slot. `UNIQUE (league_id, slot)` refuses the loser — correctly,
-    // and previously as an unhandled 500, because the route maps only `JoinError`.
-    //
-    // The race cannot be staged on single-connection PGlite. One team present
-    // makes `taken` 1, so the join derives slot 2 — occupying exactly that slot
-    // puts the insert in the state the loser of a real race reaches.
+  it("joins into a gap rather than refusing, when a slot has been vacated", async () => {
+    /*
+      **This test previously asserted the opposite, and that is issue #73.**
+
+      It was called "says LEAGUE_FULL when the slot index refuses", and it staged
+      a league whose only team sat at slot 2 — a gap at slot 1 — then asserted
+      the join was refused. Its comment explained the state as the loser of a
+      concurrent-join race, because a real race cannot be staged on
+      single-connection PGlite.
+
+      But a hole below `max(slot)` is not what losing a race looks like. It is
+      what `removeBot` and `removeMember` leave behind, and under the old
+      `count(*) + 1` arithmetic it bricked the league permanently. Somebody had
+      the defect on screen, read it as the race, and wrote it down as correct.
+
+      The fixture is kept and the assertion inverted, because the state it builds
+      is exactly the one that used to fail.
+    */
     const fx = await setup();
     const m = await member(fx, 1, "a@example.com");
 
@@ -585,6 +594,8 @@ describe("joinLeague", () => {
       [fx.leagueId, "Squatter"],
     );
 
+    // `count(*)` is 1 and `max(slot)` is 2. The old arithmetic derived 2 and
+    // collided; the slot asserted here is what says which formula ran.
     await expect(
       joinLeague(fx.client, {
         leagueId: fx.leagueId,
@@ -592,6 +603,43 @@ describe("joinLeague", () => {
         walletAddress: m.address,
         signature: signJoin(fx, m.address, m.secret),
         teamName: "A",
+      }),
+    ).resolves.toMatchObject({ slot: 3 });
+  });
+
+  it("still refuses a full league whose slots are not contiguous", async () => {
+    /*
+      The capacity check must survive the fix, and this is the case that proves
+      it rather than the contiguous one above.
+
+      Under the old arithmetic the seat cap was enforced twice: once by
+      `count(*) >= maxTeams`, and once by accident, because two joiners deriving
+      the same `count + 1` collided on the unique index. `max + 1` removes the
+      second, so the first has to hold on its own — including on a field with a
+      hole in it, where `max(slot)` has run ahead of the count.
+
+      Twelve teams occupying slots 1..13 with slot 5 vacated: the count says
+      full, the highest slot says there is room. The count is the one that
+      decides.
+    */
+    const fx = await setup();
+    for (let i = 0; i < 13; i++) await addTestTeam(fx.client, fx.leagueId, `Team ${i}`);
+    await fx.client.query("DELETE FROM teams WHERE league_id = $1 AND slot = 5", [fx.leagueId]);
+
+    const [row] = await fx.client.query<{ n: number; hi: number }>(
+      "SELECT count(*)::int AS n, max(slot)::int AS hi FROM teams WHERE league_id = $1",
+      [fx.leagueId],
+    );
+    expect(row).toMatchObject({ n: 12, hi: 13 });
+
+    const m = await member(fx, 1, "a@example.com");
+    await expect(
+      joinLeague(fx.client, {
+        leagueId: fx.leagueId,
+        userId: m.userId,
+        walletAddress: m.address,
+        signature: signJoin(fx, m.address, m.secret),
+        teamName: "Late",
       }),
     ).rejects.toSatisfy((e: unknown) => e instanceof JoinError && e.code === "LEAGUE_FULL");
   });
@@ -654,6 +702,92 @@ describe("bots", () => {
       rules,
     };
   }
+
+  describe("a league survives a removal", () => {
+    /*
+      Issue #73, end to end through the real product paths — no hand-crafted rows.
+
+      `joinLeague` derived its slot from `count(*) + 1` while `addBot` used
+      `max(slot) + 1`, and both removal paths hard-delete without renumbering.
+      After any non-top deletion the next joiner derived an occupied slot,
+      `UNIQUE (league_id, slot)` refused it, and it surfaced as `LEAGUE_FULL` —
+      permanently, because joining is the only thing that would raise the count.
+    */
+
+    it("lets somebody join after a bot is removed", async () => {
+      /*
+        **The mandatory sequence**, not an exotic one. `drawDraftOrder` refuses
+        an odd number of *rows*, so a league that squared an odd field with a bot
+        and then found one more manager cannot draft until the bot goes — which
+        is precisely what `removeBot` is for.
+      */
+      const fx = await freeLeague(3);
+      await addBot(fx.client, fx.leagueId, "Robo");
+      await addTestTeam(fx.client, fx.leagueId, "Human 4");
+
+      await removeBot(fx.client, fx.leagueId);
+
+      const m = await member(fx, 1, "late@example.com");
+      const team = await joinLeague(fx.client, {
+        leagueId: fx.leagueId,
+        userId: m.userId,
+        walletAddress: m.address,
+        signature: signJoin(fx, m.address, m.secret),
+        teamName: "Late",
+      });
+
+      // The number, not merely that it resolved: `count(*) + 1` would be 5,
+      // which the bot's departure left occupied. Pinning 6 is what says the
+      // derivation changed rather than the symptom being papered over.
+      expect(team.slot).toBe(6);
+    });
+
+    it("lets somebody join after a member is removed", async () => {
+      // The second trigger, which the issue does not mention and which needs no
+      // bot — so it fires in leagues that allow none.
+      const fx = await freeLeague(3);
+      await fx.client.query("DELETE FROM teams WHERE league_id = $1 AND slot = 2", [
+        fx.leagueId,
+      ]);
+
+      const m = await member(fx, 1, "late@example.com");
+      const team = await joinLeague(fx.client, {
+        leagueId: fx.leagueId,
+        userId: m.userId,
+        walletAddress: m.address,
+        signature: signJoin(fx, m.address, m.secret),
+        teamName: "Late",
+      });
+
+      expect(team.slot).toBe(4);
+    });
+
+    it("keeps join order readable across a gap", async () => {
+      // The only thing anything reads `slot` for is `ORDER BY` — the draft
+      // shuffle's input, standings order, a waiver tiebreak. A gap must not
+      // disturb that, which is what makes gaps acceptable rather than damage to
+      // be repaired by renumbering.
+      const fx = await freeLeague(3);
+      await fx.client.query("DELETE FROM teams WHERE league_id = $1 AND slot = 2", [
+        fx.leagueId,
+      ]);
+
+      const m = await member(fx, 1, "late@example.com");
+      await joinLeague(fx.client, {
+        leagueId: fx.leagueId,
+        userId: m.userId,
+        walletAddress: m.address,
+        signature: signJoin(fx, m.address, m.secret),
+        teamName: "Late",
+      });
+
+      const rows = await fx.client.query<{ name: string; slot: number }>(
+        "SELECT name, slot FROM teams WHERE league_id = $1 ORDER BY slot",
+        [fx.leagueId],
+      );
+      expect(rows.map((r) => r.name)).toEqual(["Human 1", "Human 3", "Late"]);
+    });
+  });
 
   it("adds a bot with no owner", async () => {
     const fx = await freeLeague();

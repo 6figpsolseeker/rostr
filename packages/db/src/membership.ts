@@ -44,6 +44,17 @@ export class JoinError extends Error {
       | "LEAGUE_NOT_FOUND"
       | "LEAGUE_CLOSED"
       | "LEAGUE_FULL"
+      /**
+       * Two seats claimed at the same instant. **Retryable, unlike
+       * `LEAGUE_FULL`**, which is why it is a separate code rather than a
+       * friendlier message.
+       *
+       * Before #73 a slot collision was reported as `LEAGUE_FULL`, so a league
+       * holding four of twelve seats told everybody it was full — and told them
+       * to look at a count that said otherwise. Whatever lands here in future is
+       * a genuine race, and a race is worth trying again.
+       */
+      | "SEAT_CONFLICT"
       | "ALREADY_JOINED"
       | "INVALID_WALLET"
       | "WALLET_NOT_LINKED"
@@ -240,6 +251,34 @@ export async function joinLeague(db: SqlClient, input: JoinLeagueInput): Promise
   const maxTeams = stored.rules.league.maxTeams;
 
   return withTransaction(db, async (tx) => {
+    /*
+      One join per league at a time, and an **advisory** lock rather than a row
+      lock. Issue #73.
+
+      Something has to serialise this, because the count below and the insert
+      after it are two statements: without it both joiners read the same `taken`
+      and both pass a capacity check only one of them may pass. That used to be
+      arbitrated by accident — see the slot comment below — and it no longer is.
+
+      `SELECT ... FROM leagues ... FOR UPDATE` was the obvious choice and is
+      wrong. It would order this path leagues → teams, while `drawDraftOrder`
+      runs drafts → teams and `startDraft` runs drafts → leagues, putting a
+      `teams`-then-`leagues` edge in reach of the draft path and a
+      `leagues`-then-`teams` edge here. Nothing takes this advisory key
+      anywhere else in the schema, so no cycle through it can exist at all.
+
+      Transaction-scoped, so it is released by COMMIT or ROLLBACK and can never
+      be stranded on a backend the connection pooler hands back —
+      `migrations/README.md` records that failure for session-scoped locks.
+
+      **PGlite is a single connection, so no test here can exercise the
+      contention this exists for.** What the tests below do prove is the
+      arithmetic, which is what actually bricked leagues.
+    */
+    await tx.query("SELECT pg_advisory_xact_lock(hashtext('teams.slot'), hashtext($1))", [
+      league.id,
+    ]);
+
     const [count] = await tx.query<{ taken: number }>(
       "SELECT count(*)::int AS taken FROM teams WHERE league_id = $1",
       [league.id],
@@ -247,27 +286,60 @@ export async function joinLeague(db: SqlClient, input: JoinLeagueInput): Promise
     const taken = Number(count?.taken ?? 0);
     if (taken >= maxTeams) throw new JoinError("League is full", "LEAGUE_FULL");
 
-    // Two people clicking Join on the last seat both read the same `taken` and
-    // both compute the same slot, so `UNIQUE (league_id, slot)` arbitrates and
-    // the loser is refused. That is why the count above cannot admit an extra
-    // member even without a lock — the collision is on the value derived from
-    // the stale read, not on the read itself.
-    //
-    // Translated rather than left to escape: losing that race means the league
-    // filled up, which is `LEAGUE_FULL` and a 409, not a 500. The wrap is around
-    // this one statement so no other uniqueness in the transaction can be
-    // relabelled as a full league.
+    /*
+      The slot is `max + 1`, never `count + 1`. **This is issue #73**, and the
+      comment that stood here asserted the opposite as a safety property.
+
+      Nothing renumbers on removal — `removeBot` and `removeMember` both
+      hard-delete — so after any non-top deletion `count + 1` names a slot that
+      is still occupied. `UNIQUE (league_id, slot)` then refuses the insert, and
+      the catch below relabelled that as `LEAGUE_FULL`: a four-of-twelve league
+      reporting itself full, **permanently**, because the count cannot rise when
+      joining is the thing that would raise it.
+
+      The sequence is not exotic. `drawDraftOrder` refuses an **odd number of
+      rows**, so a league that squared itself with a bot and then found one more
+      manager *has* to remove that bot before it can draft. That is the flow
+      `removeBot` exists for.
+
+      `max(slot) + 1` is what `addBot` and `addTestTeam` already did — this was
+      the odd one out of three. Gaps are fine and always were: every consumer
+      reads `slot` only as an `ORDER BY` (the draft shuffle's input, standings
+      order, a waiver tiebreak), and no caller reads the value.
+
+      **Do not "fix" this by renumbering instead.** `slot` orders the shuffle
+      input and `0028`'s field lock watches INSERT and DELETE but **not UPDATE**,
+      so a renumbering path would re-roll the draft order straight past the lock
+      that exists to freeze it.
+    */
     let team: { id: string; slot: number } | undefined;
     try {
       [team] = await tx.query<{ id: string; slot: number }>(
         `INSERT INTO teams (league_id, owner_id, is_bot, name, slot)
-         VALUES ($1, $2, false, $3, $4)
+         VALUES ($1, $2, false, $3,
+                 COALESCE((SELECT max(slot) FROM teams WHERE league_id = $1), 0) + 1)
          RETURNING id, slot`,
-        [league.id, input.userId, input.teamName, taken + 1],
+        [league.id, input.userId, input.teamName],
       );
     } catch (error) {
+      /*
+        Kept as a backstop, and no longer as the routine path.
+
+        Under the lock above a collision with another *join* is impossible, and
+        `max + 1` cannot collide with a committed row by construction. What is
+        still reachable is a join racing `addBot`, which derives its slot the
+        same way and takes no lock — transient, and a retry succeeds.
+
+        It is reported as `SEAT_CONFLICT` rather than `LEAGUE_FULL` because the
+        two are different facts and only one of them is retryable. Telling
+        somebody a four-of-twelve league is full is what sent commissioners to
+        stare at a seat count that contradicted the error.
+      */
       if (isUniqueViolation(error)) {
-        throw new JoinError("League is full", "LEAGUE_FULL");
+        throw new JoinError(
+          "Somebody else took a seat at that moment. Try again.",
+          "SEAT_CONFLICT",
+        );
       }
       throw error;
     }

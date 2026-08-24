@@ -37,6 +37,9 @@ const STATUS: Record<string, number> = {
   RULES_MISSING: 500,
   LEAGUE_CLOSED: 409,
   LEAGUE_FULL: 409,
+  // A genuine race for the last seat, unlike LEAGUE_FULL beside it. 409 rather
+  // than 500 because nothing is wrong, and the client may simply try again.
+  SEAT_CONFLICT: 409,
   ALREADY_JOINED: 409,
   INVALID_WALLET: 400,
   WALLET_NOT_LINKED: 403,
