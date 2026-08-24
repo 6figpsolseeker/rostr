@@ -519,8 +519,18 @@ for leagues without a pot, or the rule would only hold where there is money.
 
 Without it the attack is trivial and does not even look like one: accept a trade, drop the
 player you promised, and the swap executes into a roster spot that no longer holds him.
-`lockedByTrade` is consulted by dropping and by proposing, so a committed player cannot
-leave by any path.
+`lockedByTrade` is consulted by dropping, by proposing and by accepting.
+
+**It used to say "so a committed player cannot leave by any path", and that inference is
+what produced #77.** Three call sites are not every path: `processWaivers` and
+`resolveTrade` both release players and neither can refuse, because a throw inside
+`processWaivers` rolls back the whole league's run and leaves the claim PENDING forever,
+and `resolveTrade` cannot undo a trade the league already approved because a game started.
+
+Guarding the door and guarding the outcome are different jobs, and this needs both. What
+actually closes it is `ASSET_GONE` — execution refuses rather than inserting when the
+release matches no row, which is the only check that does not depend on knowing _how_ the
+player left.
 
 ### The bracket is recomputed, never accumulated
 

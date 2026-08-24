@@ -33,7 +33,12 @@
  *
  * "Unsafe" means it would leave the starting lineup unfillable. A manager may do
  * that to themselves deliberately; auto-pick never does it on their behalf,
- * because they were not there to choose and the penalty is a forfeited stake.
+ * because they were not there to choose.
+ *
+ * **The penalty is not a forfeited stake, and this used to say it was.** That
+ * rule was removed in schema 4 (2026-08-08, see `DECISIONS.md`); the real cost is
+ * a slot the autofill can never fill, scoring zero every week for the rest of the
+ * season.
  */
 
 import type { DraftablePlayer, RosterShape } from "./roster.js";
@@ -88,7 +93,9 @@ export function autoPick(context: AutoPickContext): AutoPickResult | null {
    *
    * A manager who picks manually may strand their own starters — that is their
    * call. Auto-pick must not do it on their behalf, because the manager was not
-   * there to make the choice and the penalty is a forfeited stake.
+   * there to make the choice, and an unfillable slot scores zero every week for
+   * the rest of the season. (Not a forfeited stake — see the note at the top of
+   * this file.)
    */
   const isSafe = (player: DraftablePlayer): boolean =>
     isLegal(player) && !wouldStrandStarters(roster, player, shape, picksRemainingAfter);

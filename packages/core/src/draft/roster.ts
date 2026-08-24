@@ -246,9 +246,24 @@ export function canDraft(
  * Advisory, not a block. A manual pick may proceed anyway; auto-pick avoids it.
  *
  * The stakes are worth stating plainly wherever this surfaces in a UI: a roster
- * that cannot fill its starting slots produces an invalid lineup every week,
- * and three consecutive invalid lineups mean the team is abandoned and its stake
- * is forfeited. On ESPN that is an embarrassment; here it is someone's buy-in.
+ * that cannot fill its starting slots cannot field a legal lineup, so the
+ * autofill has nobody to put in the empty slot and it scores zero every week
+ * for the rest of the season. On ESPN that is an embarrassment; here it is a
+ * team that cannot compete in a league other people are playing.
+ *
+ * **This used to say the team would be abandoned and its stake forfeited. That
+ * rule was removed in schema 4 on 2026-08-08 and is not coming back** — see
+ * `DECISIONS.md` and `CLAUDE.md`'s "Abandonment is gone. Do not bring it back".
+ * It could never fire: it counted consecutive weeks with an *invalid* lineup,
+ * and the autofill runs before a week is scored, so a lineup is never invalid at
+ * that moment. It was removed rather than repaired, because a manager who stops
+ * setting lineups is not defrauding anyone and a stake forfeited for inattention
+ * is a rule people would only ever meet by losing money to it.
+ *
+ * A comment describing a punishment the system deliberately no longer has is the
+ * defect class this repo treats as real in its own right, and this one had the
+ * added cost of making the consequence sound worse than it is — which is exactly
+ * the kind of sentence a UI would have copied.
  *
  * @param picksRemainingAfter picks this team has left *after* this one
  */
