@@ -143,11 +143,34 @@ async function score(
   );
 }
 
+/**
+ * A week's games finish **and their box scores are read**.
+ *
+ * Both, because in production both happen: `syncGames` advances the status and
+ * `syncBoxScores` stamps `stats_synced_at`, and a game that is FINAL with no
+ * stats is a failure state rather than a normal one. A fixture that marked only
+ * the status would put every test in that failure state and prove nothing about
+ * the ordinary path — the mistake issue #73's test made, in the other direction.
+ *
+ * Use {@link finishGamesUnread} for the failure this distinction exists to catch.
+ */
 const finishGames = (fx: Fixture) =>
-  fx.client.query("UPDATE games SET status = 'FINAL' WHERE season = $1 AND week = $2", [
-    SEASON,
-    WEEK,
-  ]);
+  fx.client.query(
+    "UPDATE games SET status = 'FINAL', stats_synced_at = now() WHERE season = $1 AND week = $2",
+    [SEASON, WEEK],
+  );
+
+/**
+ * Games the provider called FINAL whose box score was never read. Issue #140.
+ *
+ * The state that used to finalise a week **clean** at 0–0, permanently, and look
+ * exactly like a week in which nobody scored.
+ */
+const finishGamesUnread = (fx: Fixture) =>
+  fx.client.query(
+    "UPDATE games SET status = 'FINAL', stats_synced_at = NULL WHERE season = $1 AND week = $2",
+    [SEASON, WEEK],
+  );
 
 /**
  * Add one more game to a week, at the same kickoff, with a status of its own.
@@ -619,8 +642,10 @@ describe("finalisation", () => {
       [NFL.key],
     );
     await fx.client.query(
-      `INSERT INTO games (sport_id, external_ref, season, week, home_team_ref, away_team_ref, kickoff_at, status)
-       VALUES ($1, 'g14', $2, 14, 'CIN', 'BAL', $3, 'FINAL')`,
+      // `stats_synced_at` too: a FINAL game whose box score was never read is
+      // the #140 failure state, and this test is about the correction window.
+      `INSERT INTO games (sport_id, external_ref, season, week, home_team_ref, away_team_ref, kickoff_at, status, stats_synced_at)
+       VALUES ($1, 'g14', $2, 14, 'CIN', 'BAL', $3, 'FINAL', now())`,
       [sport!.id, SEASON, KICKOFF],
     );
 
@@ -774,6 +799,106 @@ describe("a game that never finishes — docs/RULES.md §10", () => {
 
     expect(outcome.finalized).toBe(false);
     expect(outcome.holdReason).toMatch(/no games are scheduled/);
+  });
+});
+
+describe("a week whose box scores were never read — #140", () => {
+  /*
+    The case that used to finalise **clean**.
+
+    `finalizationHold` decided from the clock and `count(*) FILTER (WHERE status
+    = 'FINAL')` and never once asked whether a box score had been read. So a week
+    where every game was marked FINAL and nothing was ingested settled with
+    `finished === total` — no fallback, nothing in the cron's JSON, nothing on
+    the scoreboard. Every player scored zero, permanently, because a finalised
+    week is never rescored, and twelve teams at 0–0 looks exactly like a week in
+    which nobody scored.
+
+    Reachable because two different jobs on two different cadences write the two
+    facts: `syncGames` advances the status daily, `syncBoxScores` stamps
+    `stats_synced_at` every ten minutes. Nothing orders them, and the stats job
+    can fail for a week while the schedule job keeps marking games FINAL.
+  */
+
+  const finalizedAt = async (fx: Fixture): Promise<string | null> => {
+    const [row] = await fx.client.query<{ finalized_at: string | null }>(
+      "SELECT finalized_at FROM matchups WHERE league_id = $1 AND week = $2 LIMIT 1",
+      [fx.leagueId, WEEK],
+    );
+    return row?.finalized_at ?? null;
+  };
+
+  it("holds inside the window rather than settling at zero", async () => {
+    const fx = await setup();
+    await schedule(fx);
+    await finishGamesUnread(fx);
+
+    const outcome = await resolveLeagueWeek(fx.client, fx.leagueId, WEEK, DURING);
+
+    expect(outcome.finalized).toBe(false);
+    expect(outcome.holdReason).toMatch(/no box score/);
+    expect(await finalizedAt(fx)).toBeNull();
+  });
+
+  it("names the stats, not the clock, while it is holding", async () => {
+    // Inside the window an operator can still act on this — the stats job can be
+    // re-run and the week finalises on real data. Reporting it as "waiting for
+    // the correction window" would hide the one thing worth doing.
+    const fx = await setup();
+    await schedule(fx);
+    await finishGamesUnread(fx);
+
+    const outcome = await resolveLeagueWeek(fx.client, fx.leagueId, WEEK, DURING);
+
+    expect(outcome.holdReason).not.toMatch(/stat corrections/);
+    expect(outcome.holdReason).toMatch(/permanently/);
+  });
+
+  it("still finalises once the window has passed, because the clock is a ceiling", async () => {
+    /*
+      A hold the clock could not override would reintroduce exactly what §10's
+      fallback exists to prevent: one game whose box score never arrives keeping
+      a paying week open forever. Weeks 14 and 17 have to settle.
+    */
+    const fx = await setup();
+    await schedule(fx);
+    await finishGamesUnread(fx);
+
+    const outcome = await resolveLeagueWeek(fx.client, fx.leagueId, WEEK, AFTER_STANDARD);
+
+    expect(outcome.finalized).toBe(true);
+    expect(await finalizedAt(fx)).not.toBeNull();
+  });
+
+  it("says the cause was our ingest, not an abandoned game", async () => {
+    /*
+      The distinction that makes this worth reporting at all. "The clock ran out
+      with games unplayed" is the NFL's doing and §10 covers it; "the clock ran
+      out with stats unread" is our pipeline failing, and those players are about
+      to be paid nothing on data we never fetched. Same permanent outcome, two
+      different responses.
+    */
+    const fx = await setup();
+    await schedule(fx);
+    await finishGamesUnread(fx);
+
+    const outcome = await resolveLeagueWeek(fx.client, fx.leagueId, WEEK, AFTER_STANDARD);
+
+    expect(outcome.finalizedWithUnfinishedGames).toMatch(/never ingested/);
+    expect(outcome.finalizedWithUnfinishedGames).toMatch(/stats pipeline/);
+    // Not the postponement wording — the two must stay tellable apart.
+    expect(outcome.finalizedWithUnfinishedGames).not.toMatch(/RULES.md §10/);
+  });
+
+  it("reports nothing extra once the box scores are in", async () => {
+    const fx = await setup();
+    await schedule(fx);
+    await finishGames(fx);
+
+    const outcome = await resolveLeagueWeek(fx.client, fx.leagueId, WEEK, AFTER_STANDARD);
+
+    expect(outcome.finalized).toBe(true);
+    expect(outcome.finalizedWithUnfinishedGames).toBeUndefined();
   });
 });
 
