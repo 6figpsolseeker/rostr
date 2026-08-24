@@ -7,6 +7,7 @@ import { seedSport } from "./sports.js";
 import { addTestTeam, createTestDatabase } from "./testing.js";
 import type { PGliteClient } from "./testing.js";
 import {
+  leaguesDueForWaivers,
   addFreeAgent,
   availabilityOf,
   availablePlayers,
@@ -1251,5 +1252,124 @@ describe("RULES.md §6 — a player whose game has kicked off cannot be moved", 
         new Date("2026-09-20T17:30:00Z"),
       ),
     ).rejects.toMatchObject({ code: "GAME_STARTED" });
+  });
+});
+
+describe("choosing which leagues are due — #131", () => {
+  /*
+    Selection used to run before the cron's per-league guard, so a throw in here
+    escaped it and 500'd the whole route: **no league's waivers ran at all**,
+    deterministically, every hour, until somebody noticed.
+
+    That is the shape CLAUDE.md documents under "One league's failure never stops
+    the others". It counts waivers among the three cron routes that always did it
+    correctly — and it was looking at the processing loop, which does. This ran
+    above it.
+
+    ## Why the fault is injected rather than staged from data
+
+    The obvious real trigger is an unusable waiver timezone, since nextWeekly
+    hands it to Intl.DateTimeFormat, which throws RangeError on an unknown zone.
+    **That route is closed**: validateLeagueRules checks the value is a real IANA
+    zone and createLeague refuses it, which was worth finding out rather than
+    assuming.
+
+    So there is no cheap way to build a league that throws here today, and that is
+    a good property rather than a reason to skip the test. The guard is not about
+    one cause — it is about the shape: anything that throws while deciding one
+    league's due-ness must not decide for every other league. A wrapper that fails
+    one specific read proves exactly that, and keeps proving it when a future
+    cause arrives that nobody has thought of.
+  */
+
+  /**
+   * A client that fails one league's rules read and passes everything else
+   * through untouched.
+   */
+  function failingFor(client: PGliteClient, leagueId: string): PGliteClient {
+    return new Proxy(client, {
+      get(target, prop, receiver) {
+        if (prop !== "query") return Reflect.get(target, prop, receiver);
+        return async (sql: string, params?: unknown[]) => {
+          if (sql.includes("league_rules") && params?.includes(leagueId)) {
+            throw new Error("simulated: this league's rules could not be read");
+          }
+          return (
+            target as unknown as { query: (s: string, p?: unknown[]) => Promise<unknown> }
+          ).query(sql, params);
+        };
+      },
+    }) as PGliteClient;
+  }
+
+  /** A second league in the same database, with a claim of its own pending. */
+  async function secondLeague(client: PGliteClient): Promise<string> {
+    const commissioner = await createUser(client, "second@example.com", "Second");
+    const rules = buildNflPprRules({ seasonYear: 2026, draft: DRAFT }) as LeagueRules;
+    const league = await createLeague(client, NFL, {
+      name: "The Other League",
+      commissionerId: commissioner.id,
+      rules,
+    });
+    await client.query("UPDATE leagues SET state = 'IN_SEASON' WHERE id = $1", [league.id]);
+
+    const [player] = await client.query<{ id: string }>("SELECT id FROM players LIMIT 1");
+    const team = await addTestTeam(client, league.id, "Someone");
+    await client.query(
+      "INSERT INTO waiver_claims (league_id, team_id, add_player_id, state, created_at) " +
+        "VALUES ($1, $2, $3, 'PENDING', $4)",
+      [league.id, team.teamId, player.id, MONDAY],
+    );
+    return league.id;
+  }
+
+  const WEDNESDAY = new Date("2026-09-16T08:00:00Z");
+
+  it("still returns the healthy leagues when one cannot be checked", async () => {
+    const fx = await setup();
+    await dropPlayer(fx.client, fx.leagueId, fx.teams[0], fx.players.get("held"), MONDAY);
+    await submitClaim(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: fx.teams[1],
+      addPlayerId: fx.players.get("held"),
+      now: MONDAY,
+    });
+
+    // The selection query only considers leagues actually playing.
+    await fx.client.query("UPDATE leagues SET state = 'IN_SEASON' WHERE id = $1", [
+      fx.leagueId,
+    ]);
+
+    const broken = await secondLeague(fx.client);
+    const client = failingFor(fx.client, broken);
+
+    const selection = await leaguesDueForWaivers(client, WEDNESDAY);
+
+    // The whole point. Before the fix this call threw and the cron 500'd, so no
+    // league's waivers ran — including every healthy one.
+    expect(selection.due).toContain(fx.leagueId);
+  });
+
+  it("reports the league it could not check, rather than skipping it silently", async () => {
+    /*
+      A league whose due-ness cannot be computed will never process another claim
+      until somebody looks at it. Skipping in silence would make it identical to a
+      league with nothing due — which is what this reports for most leagues most
+      hours, so the difference has to be said out loud.
+    */
+    const fx = await setup();
+    const broken = await secondLeague(fx.client);
+    const client = failingFor(fx.client, broken);
+
+    const selection = await leaguesDueForWaivers(client, WEDNESDAY);
+
+    expect(selection.problems.map((entry) => entry.leagueId)).toContain(broken);
+    expect(selection.due).not.toContain(broken);
+  });
+
+  it("reports no problems when every league is readable", async () => {
+    const fx = await setup();
+    const selection = await leaguesDueForWaivers(fx.client, MONDAY);
+    expect(selection.problems).toEqual([]);
   });
 });

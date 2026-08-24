@@ -1169,10 +1169,25 @@ export function nextWaiverRun(rules: LeagueRules, now: Date): Date {
 }
 
 /** Leagues whose waiver run is due and has not happened since. */
+/**
+ * Which leagues are due, and which could not be asked.
+ *
+ * A bare `string[]` was the old shape and it had nowhere to put a failure, so
+ * the only options were to throw — taking every league down with one — or to
+ * skip in silence. Neither is acceptable for a job nobody watches: a league that
+ * can never process another claim has to be distinguishable from one with
+ * nothing due, and most leagues have nothing due most hours.
+ */
+export interface WaiverDueSelection {
+  readonly due: readonly string[];
+  /** Leagues whose due-ness could not be computed. Never empty silently. */
+  readonly problems: readonly { readonly leagueId: string; readonly error: string }[];
+}
+
 export async function leaguesDueForWaivers(
   db: SqlClient,
   now: Date,
-): Promise<readonly string[]> {
+): Promise<WaiverDueSelection> {
   const rows = await db.query<{ id: string }>(
     `SELECT DISTINCT l.id
        FROM leagues l
@@ -1181,25 +1196,62 @@ export async function leaguesDueForWaivers(
   );
 
   const due: string[] = [];
+  const problems: { leagueId: string; error: string }[] = [];
+
   for (const row of rows) {
-    const stored = await getLeagueRules(db, row.id);
-    if (!stored) continue;
+    /*
+      One league's failure must not decide for the others, and **selection is
+      inside that rule as much as processing is** — issue #131.
 
-    // The run this league is currently waiting for. If the next one is more than
-    // a full cycle away, the moment has passed and claims are overdue.
-    const [oldest] = await db.query<{ created_at: string }>(
-      `SELECT min(created_at) AS created_at FROM waiver_claims
-        WHERE league_id = $1 AND state = 'PENDING'`,
-      [row.id],
-    );
-    if (!oldest?.created_at) continue;
+      The cron guards `processWaivers` per league and this function ran before
+      that guard existed, so a throw here escaped it and 500'd the whole route:
+      no league's waivers ran, deterministically, every hour, forever. Exactly
+      the shape `CLAUDE.md` documents under "One league's failure never stops
+      the others", which named the four cron routes and counted waivers among
+      the three that always did it correctly — the loop it was looking at was
+      the one below this.
 
-    if (nextProcessingAt(new Date(oldest.created_at), stored.rules.waivers) <= now) {
-      due.push(row.id);
+      Two things in here can throw for a single league. `getLeagueRules` parses
+      a stored document, and `nextProcessingAt` reads `rules.waivers`, whose
+      weekday is validated nowhere (#132) — so one league with an unusable
+      waiver schedule silently stopped everybody's.
+    */
+    try {
+      const stored = await getLeagueRules(db, row.id);
+      if (!stored) continue;
+
+      // The run this league is currently waiting for. If the next one is more
+      // than a full cycle away, the moment has passed and claims are overdue.
+      const [oldest] = await db.query<{ created_at: string }>(
+        `SELECT min(created_at) AS created_at FROM waiver_claims
+          WHERE league_id = $1 AND state = 'PENDING'`,
+        [row.id],
+      );
+      if (!oldest?.created_at) continue;
+
+      if (nextProcessingAt(new Date(oldest.created_at), stored.rules.waivers) <= now) {
+        due.push(row.id);
+      }
+    } catch (error) {
+      /*
+        Recorded, never swallowed. A league whose schedule cannot be computed
+        will never process a claim again, and a selection that quietly skipped it
+        would look identical to a league with nothing due — which is the state
+        this function reports for most leagues most hours.
+
+        Caught by shape rather than by class, deliberately. An `instanceof`
+        allowlist here would be the same defect this whole change is about:
+        `CLAUDE.md` — "if you find yourself adding an error class to an allowlist
+        inside a per-league loop, the allowlist is the bug."
+      */
+      problems.push({
+        leagueId: row.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 
-  return due;
+  return { due, problems };
 }
 
 export { availabilityAt };
