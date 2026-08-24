@@ -534,9 +534,20 @@ async function finalizationHold(
   week: number,
   now: Date,
 ): Promise<FinalizationDecision> {
-  const rows = await db.query<{ total: number; finished: number; last_kickoff: string | null }>(
+  const rows = await db.query<{
+    total: number;
+    finished: number;
+    unread: number;
+    last_kickoff: string | null;
+  }>(
     `SELECT count(*)::int AS total,
             count(*) FILTER (WHERE g.status = 'FINAL')::int AS finished,
+            -- Games the provider called FINAL whose box score was never read.
+            -- Migration 0027 added both columns for exactly this question; nothing
+            -- had asked it. See the stats hold below.
+            count(*) FILTER (
+              WHERE g.status = 'FINAL' AND g.stats_synced_at IS NULL
+            )::int AS unread,
             max(g.kickoff_at) AS last_kickoff
        FROM games g
        JOIN sports s ON s.id = g.sport_id
@@ -557,6 +568,7 @@ async function finalizationHold(
   if (!row?.last_kickoff) return { hold: "no kickoff times are known" };
 
   const finished = Number(row?.finished ?? 0);
+  const unread = Number(row?.unread ?? 0);
   const hours = finalizationHours(rules, week);
   const clearsAt = new Date(new Date(row.last_kickoff).getTime() + hours * 3600 * 1000);
 
@@ -566,6 +578,29 @@ async function finalizationHold(
     // anyway.
     if (finished < total) {
       return { hold: `${total - finished} of ${total} games are still in progress` };
+    }
+
+    /*
+      Every game is FINAL and some box score was never read. Issue #140.
+
+      This is the case that used to finalise **clean** — `finished === total`, so
+      no fallback was set and nothing distinguished it from a healthy week. Every
+      player in those games scores zero, permanently, because a finalised week is
+      never rescored. Twelve teams settling 0–0 looks exactly like a week in
+      which nobody scored.
+
+      Reachable because `games.status` and the box score are written by different
+      jobs on different cadences: `syncGames` marks a game FINAL from the daily
+      season sync, `syncBoxScores` stamps `stats_synced_at` from the ten-minute
+      stats job. Nothing orders them, and the stats job can fail for a week while
+      the schedule job keeps advancing status.
+    */
+    if (unread > 0) {
+      return {
+        hold:
+          `${unread} of ${finished} finished games have no box score yet — ` +
+          `scoring them now would settle the week at zero, permanently`,
+      };
     }
 
     const paying = rules.settlement.payingWeeks.includes(week);
@@ -585,6 +620,29 @@ async function finalizationHold(
         `finalised ${hours}h after the last kickoff with ${total - finished} of ${total} ` +
         `games not marked FINAL — docs/RULES.md §10: affected players score 0 for the ` +
         `week and the matchup stands`,
+    };
+  }
+
+  /*
+    The window is a ceiling on the stats hold too, and that is deliberate.
+
+    A hold the clock could not override would reintroduce exactly what §10's
+    fallback exists to prevent: one game whose box score never arrives keeping a
+    paying week open forever. Weeks 14 and 17 have to settle.
+
+    But it settles **saying so**, as a distinct reason. "The clock ran out with
+    games unplayed" and "the clock ran out with stats unread" call for different
+    responses — the first is the NFL's doing and §10 covers it; the second is our
+    ingest failing, and it means those players are about to be paid nothing on
+    data we never fetched.
+  */
+  if (unread > 0) {
+    return {
+      hold: null,
+      fallback:
+        `finalised ${hours}h after the last kickoff with ${unread} of ${total} ` +
+        `games never ingested — those players score 0 permanently, and the cause ` +
+        `is our stats pipeline rather than an abandoned game`,
     };
   }
 
