@@ -56,6 +56,22 @@ export class TradeError extends Error {
       | "BOT_CANNOT_TRADE"
       | "BOT_CANNOT_VETO"
       | "INVOLVED_CANNOT_VETO"
+      /**
+       * The trade was resolved while this vote was in flight. Issue #134.
+       *
+       * Distinct from `WRONG_STATE`, which means the trade was already settled
+       * when the voter looked. This one means it settled underneath them, and
+       * the difference is what the screen has to say: one is "you are looking at
+       * something old", the other is "you were a moment late".
+       *
+       * Worth telling them at all because the alternative was silence. The vote
+       * used to be written against a trade already decided — the row existed,
+       * the tally had been taken before it landed, and the screen showed the
+       * veto recorded. A member who is told their vote was late can go and
+       * persuade somebody; a member whose vote is silently dropped believes the
+       * league declined to block a trade it may in fact have blocked.
+       */
+      | "TRADE_ALREADY_SETTLED"
       | "ALREADY_VETOED"
       | "ROSTER_WOULD_OVERFLOW"
       | "ASSET_GONE",
@@ -674,14 +690,52 @@ export async function vetoTrade(
   );
   if (existing) throw new TradeError("You have already voted", "ALREADY_VETOED");
 
-  await db.query(
+  /*
+    The state check rides **inside the insert**, not above it. Issue #134.
+
+    The check at the top of this function read the trade through `loadTrade`
+    with no lock and nothing binding that read to this write, so a member voting
+    in the same hour `/api/cron/trades` resolved the trade had their vote written
+    against a trade already decided: `resolveTrade` took its tally before the row
+    landed, so the vote did not count, the row existed, and nothing told the
+    member either fact.
+
+    Adding `AND t.state = 'ACCEPTED'` to the SELECT makes the insert itself the
+    check. If the resolution committed first, the SELECT matches nothing, no row
+    is written, and the caller is told — rather than the vote being recorded and
+    quietly ignored.
+
+    **Refusing rather than locking**, which is the choice the issue set out and
+    the reason it is the right one here: `RULES.md` §6 gives the veto window a
+    definite end, so a vote arriving after it closes is genuinely late and saying
+    so is the honest answer. Taking `FOR UPDATE` on the trade in both this
+    function and `resolveTrade` would close the window instead of reporting it,
+    at the cost of a lock on the resolution path that #133 argued against — a
+    bigger change needing its own review, for a race whose correct outcome is
+    "you were late" either way.
+
+    The early check above stays. It is the error message for the ordinary case —
+    somebody opening a settled trade and voting on it — and this one cannot
+    distinguish that from the race.
+  */
+  const written = await db.query<{ trade_id: string }>(
     // The league is stored on the vote, not inferred at read time: the composite
     // foreign keys in 0020 use it to make an out-of-league vote unrepresentable
     // rather than merely uncounted.
     `INSERT INTO trade_vetoes (trade_id, team_id, league_id, created_at)
-       SELECT $1, $2, t.league_id, $3 FROM trades t WHERE t.id = $1`,
+       SELECT $1, $2, t.league_id, $3
+         FROM trades t
+        WHERE t.id = $1 AND t.state = 'ACCEPTED'
+     RETURNING trade_id`,
     [tradeId, actingTeamId, now.toISOString()],
   );
+
+  if (written.length === 0) {
+    throw new TradeError(
+      "That trade was settled while your vote was in flight, so it was not counted",
+      "TRADE_ALREADY_SETTLED",
+    );
+  }
 
   return loadTrade(db, tradeId);
 }

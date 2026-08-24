@@ -25,6 +25,10 @@ const STATUS: Record<string, number> = {
   BOT_CANNOT_TRADE: 403,
   BOT_CANNOT_VETO: 403,
   WRONG_STATE: 409,
+  // The vote arrived while the cron was resolving the trade. 409 like
+  // WRONG_STATE beside it, and a separate code because the screen says something
+  // different: "you were a moment late", not "you are looking at something old".
+  TRADE_ALREADY_SETTLED: 409,
   PLAYER_IN_ANOTHER_TRADE: 409,
   ALREADY_VETOED: 409,
   ROSTER_WOULD_OVERFLOW: 409,
