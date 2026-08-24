@@ -46,8 +46,8 @@ exist under that name.
 | `getNFLBoxScore`       | Full player stats, DST, scoring plays         | **Weekly scoring**                               |
 | `getNFLGameInfo`       | Game metadata                                 | Venue, referees                                  |
 | `getNFLNews`           | `{link, title}`                               | Injury/news feed                                 |
-| `getNFLDFS`            | DraftKings, FanDuel, Yahoo salaries           | Ranking cross-check                              |
-| `getNFLBettingOdds`    | Many sportsbooks                              | Not used                                         |
+| `getNFLDFS`            | DraftKings, FanDuel, Yahoo salaries           | Ranking cross-check — **shape below**            |
+| `getNFLBettingOdds`    | Many sportsbooks                              | Not used — **best matchup signal, see below**    |
 | `getNFLChangelog`      | Recent data corrections                       | **Stat-correction detection**                    |
 | `getNFLInactiveList`   | Whole season, per game, per team `players[]`  | **Gameday inactives** — see docs/LIVE-SCORING.md |
 
@@ -703,6 +703,115 @@ getNFLProjections?week=N&archiveSeason=YYYY
 
 Team defense projections carry `blockKick`, `ptsAgainst`, `sacks`,
 `interceptions`, `fumbleRecoveries`, `safeties`, `defTD`, `returnTD`.
+
+---
+
+## How hard is his next matchup? — nothing says so directly
+
+Asked on 2026-08-23 and probed live rather than reasoned about. **There is no
+strength-of-schedule endpoint, no defense-vs-position rating, and no matchup
+grade anywhere in the API.** Nothing in Tank01 says "this week is hard for him".
+
+Three things can be used to derive one, in descending order of quality.
+
+### `getNFLBettingOdds` — the market's own answer
+
+Spreads and totals per game, from a dozen books. This is the strongest signal
+available and it is what DFS sites lean on, because it is priced by people with
+money at risk rather than by an editor.
+
+```json
+{
+  "awayTeam": "DAL",
+  "ballybet": {
+    "totalUnder": "47.5",
+    "awayTeamSpread": "+8",
+    "homeTeamSpread": "-8",
+    "totalOver": "47.5",
+    "homeTeamMLOdds": "-480"
+  }
+}
+```
+
+An implied team total falls out of the pair: `(total ± spread) / 2`. Philadelphia
+favoured by 8 on a 47.5 total implies **27.75** for them and **19.75** for Dallas.
+That number _is_ matchup difficulty.
+
+Listed as "Not used" in the endpoint table above, and it is the most useful thing
+in the API that nothing calls.
+
+### `getNFLProjections.teamDefenseProjections` — already fetched, half discarded
+
+The projections call returns `{teamDefenseProjections, playerProjections, week,
+season}` and `syncProjections` reads only the second. The first carries a
+per-team, per-week `ptsAgainst`:
+
+```json
+{
+  "teamAbv": "ARI",
+  "teamID": "1",
+  "ptsAgainst": "18.5",
+  "sacks": "2.8",
+  "interceptions": "0.9",
+  "fumbleRecoveries": "0.5",
+  "defTD": "0.1",
+  "returnTD": "0.0",
+  "safeties": "0.0",
+  "blockKick": "0.1",
+  "fantasyPointsDefault": "10.3"
+}
+```
+
+"How many points this defense is expected to concede this week" is a direct
+difficulty number, and we are paying for it on every projections sync and
+throwing it away.
+
+### `getNFLTeams` — `pa` and `pf`
+
+Season-to-date points allowed and scored, already synced. Crude, free, and no
+use in week 1.
+
+### What no provider field gives you
+
+**Defense versus a _position_** — "the Jets are hard on tight ends specifically".
+Neither Tank01 nor its ESPN source publishes it. It would have to be computed
+from historical box scores, which we hold in `stat_lines`, and it is the number
+most fantasy sites actually show.
+
+---
+
+## `getNFLDFS` — DraftKings, FanDuel and Yahoo salaries
+
+Probed 2026-08-23. `getNFLDFS?date=20250904` returns
+`{date, draftkings, fanduel, yahoo}`, each an array. One slate gave **898**
+DraftKings entries:
+
+```json
+{
+  "team": "PIT",
+  "salary": "5200",
+  "pos": "QB",
+  "longName": "Aaron Rodgers",
+  "playerID": "8439",
+  "teamID": "26"
+}
+```
+
+**Keyed on `playerID`**, so it joins to `players.external_ref` with no name
+matching and cannot drift the way a name join would.
+
+Relevant because the roadmap's daily-fantasy stage needs a price per player per
+slate, and a mispriced player is a broken contest rather than merely an unfair
+one. Sourcing DK's own salaries removes the need for a pricing model entirely.
+
+**The cost of doing that, stated because it is not obvious:** it makes our
+contests derivative of somebody else's pricing. If DraftKings changes its model,
+withdraws the feed, or is simply wrong about a player, our salary cap inherits it
+with nothing underneath. That is a product decision rather than a technical one
+and has not been taken.
+
+Note also `date` is a **slate date**, not a week — the parameter is `date=YYYYMMDD`
+and a week's games span several.
 
 ---
 

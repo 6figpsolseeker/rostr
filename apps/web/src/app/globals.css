@@ -140,3 +140,82 @@ body {
     animation: none;
   }
 }
+
+/**
+ * The roadmap's live marker — stage 01, and only stage 01.
+ *
+ * Two keyframes on one 2.2s cycle: a solid core that breathes, and a halo that
+ * expands out of it and fades. Defined here for the same reason `rostrFade` is:
+ * the design handoff names the animation in an inline style and its keyframes
+ * live in the prototype's own `<style>` block, which does not travel with the
+ * markup. A named animation with no keyframe is generated, applied, and moves
+ * nothing.
+ *
+ * **Only the one live stage carries it.** Six pulsing dots would mark nothing —
+ * the whole point is that a glance separates "running today" from "not yet".
+ */
+@keyframes rostrLivePulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.72;
+    transform: scale(0.86);
+  }
+}
+
+@keyframes rostrLiveHalo {
+  0% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+  70%,
+  100% {
+    opacity: 0;
+    transform: scale(2.6);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /*
+    The dot stays, the motion goes. Removing the marker entirely would take the
+    information with it — "live" is the one thing this pill exists to say, and
+    somebody who asked for less motion did not ask for less meaning.
+  */
+  .animate-\[rostrLivePulse_2\.2s_ease-in-out_infinite\],
+  .animate-\[rostrLiveHalo_2\.2s_ease-out_infinite\] {
+    animation: none;
+  }
+
+  .rostr-stage {
+    transition: none;
+  }
+
+  .rostr-stage:hover {
+    transform: none;
+  }
+}
+
+/**
+ * The roadmap stage card's hover lift.
+ *
+ * A class rather than Tailwind's `hover:` utilities because the transform,
+ * the wash, the hairline and the shadow move together on one curve, and
+ * `transform-origin: left center` is the part that matters: a centre origin
+ * makes the numbered spine beside it look like it shifted.
+ */
+.rostr-stage {
+  transform-origin: left center;
+  transition:
+    transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 220ms ease,
+    border-color 220ms ease,
+    box-shadow 220ms ease;
+}
+
+.rostr-stage:hover {
+  transform: scale(1.022);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.35);
+}
