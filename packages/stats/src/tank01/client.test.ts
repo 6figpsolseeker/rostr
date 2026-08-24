@@ -145,3 +145,168 @@ describe("healthCheck", () => {
 
 // Stat mapping is covered in stat-map.test.ts, against field names verified
 // from a live box score.
+
+describe("retrying a request — #97", () => {
+  /*
+    The client threw on the first 429 and on any non-OK response. No retry, no
+    backoff, no pacing — while randomness.ts has given the Solana beacon three
+    attempts with a doubling backoff since it was written, for the same exposure.
+
+    It did not matter while every sync was operator-run and infrequent.
+    syncBoxScores is the first caller to make bursts of sequential calls on a
+    schedule, one per game, at the top of a ten-minute tick.
+
+    And since #140 a dropped game is no longer merely missing: a FINAL game with
+    no box score holds the whole week from finalising until the correction window
+    runs out, so one unretried 429 on a Sunday costs either a week that will not
+    settle or one that settles with those players at zero permanently.
+  */
+
+  /** Fails the first `failures` calls with `status`, then succeeds. */
+  function flaky(failures: number, status: number) {
+    let calls = 0;
+    const impl = vi.fn().mockImplementation(() => {
+      calls += 1;
+      if (calls <= failures) {
+        return Promise.resolve({
+          ok: false,
+          status,
+          text: () => Promise.resolve(""),
+          json: () => Promise.resolve({}),
+          headers: new Headers({}),
+        } as Response);
+      }
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        text: () => Promise.resolve(""),
+        json: () => Promise.resolve({ statusCode: 200, body: ["ok"] }),
+        headers: new Headers({}),
+      } as Response);
+    });
+    return impl;
+  }
+
+  /** No wall-clock cost, and it records the waits so the shape can be asserted. */
+  function recordingSleep() {
+    const waits: number[] = [];
+    return {
+      waits,
+      sleepImpl: (ms: number) => {
+        waits.push(ms);
+        return Promise.resolve();
+      },
+    };
+  }
+
+  it("succeeds after a transient 429", async () => {
+    const fetchImpl = flaky(1, 429);
+    const { sleepImpl } = recordingSleep();
+    const client = new Tank01Client({
+      apiKey: "test",
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      sleepImpl,
+    });
+
+    await expect(client.get("getNFLBoxScore")).resolves.toEqual(["ok"]);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it("backs off by doubling, rather than hammering", async () => {
+    // Matches randomness.ts: 200ms then 400ms. Asserted rather than assumed,
+    // because a retry with no wait is a way to meet a burst limit faster.
+    const fetchImpl = flaky(2, 429);
+    const { waits, sleepImpl } = recordingSleep();
+    const client = new Tank01Client({
+      apiKey: "test",
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      sleepImpl,
+    });
+
+    await client.get("getNFLBoxScore");
+    expect(waits).toEqual([200, 400]);
+  });
+
+  it("gives up after the third attempt and reports the real reason", async () => {
+    const fetchImpl = flaky(99, 429);
+    const { sleepImpl } = recordingSleep();
+    const client = new Tank01Client({
+      apiKey: "test",
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      sleepImpl,
+    });
+
+    await expect(client.get("getNFLBoxScore")).rejects.toThrow(/HTTP 429/);
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+  });
+
+  it("retries a 5xx", async () => {
+    const fetchImpl = flaky(1, 503);
+    const { sleepImpl } = recordingSleep();
+    const client = new Tank01Client({
+      apiKey: "test",
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      sleepImpl,
+    });
+
+    await expect(client.get("getNFLBoxScore")).resolves.toEqual(["ok"]);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not retry a rejected key", async () => {
+    /*
+      The narrowness that keeps a clear failure from becoming a slow one. A 401
+      answers identically however many times it is asked, and three attempts
+      with backoff would delay the one error an operator can actually act on.
+    */
+    const fetchImpl = flaky(99, 401);
+    const { sleepImpl } = recordingSleep();
+    const client = new Tank01Client({
+      apiKey: "test",
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      sleepImpl,
+    });
+
+    await expect(client.get("getNFLBoxScore")).rejects.toThrow(/rejected the API key/);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not retry a 404", async () => {
+    const fetchImpl = flaky(99, 404);
+    const { sleepImpl } = recordingSleep();
+    const client = new Tank01Client({
+      apiKey: "test",
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      sleepImpl,
+    });
+
+    await expect(client.get("getNFLBoxScore")).rejects.toThrow(/HTTP 404/);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries a thrown transport error", async () => {
+    // A socket reset mid-Sunday is exactly the transient this exists for, and it
+    // never reaches a status code at all.
+    let calls = 0;
+    const fetchImpl = vi.fn().mockImplementation(() => {
+      calls += 1;
+      if (calls === 1) return Promise.reject(new Error("ECONNRESET"));
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        text: () => Promise.resolve(""),
+        json: () => Promise.resolve({ statusCode: 200, body: ["ok"] }),
+        headers: new Headers({}),
+      } as Response);
+    });
+    const { sleepImpl } = recordingSleep();
+    const client = new Tank01Client({
+      apiKey: "test",
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      sleepImpl,
+    });
+
+    await expect(client.get("getNFLBoxScore")).resolves.toEqual(["ok"]);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+});
