@@ -219,8 +219,15 @@ export interface ResolveWeekOutcome {
   /** Why it was not finalised, when it was not. */
   readonly holdReason?: string;
   /**
-   * Set when the week finalised on `RULES.md` §10's postponement fallback —
-   * the scoring window elapsed with games still not marked `FINAL`.
+   * Set when the week finalised on the clock rather than on complete data.
+   *
+   * **Two causes, not one, and the name only describes the first.** It began as
+   * `RULES.md` §10's postponement fallback — the window elapsed with games not
+   * marked `FINAL` — and #140 added a second: the window elapsed with games
+   * marked `FINAL` whose box score we never read. That one is our ingest
+   * failing, not the NFL's, and §10 does not cover it. The string says which,
+   * and says both when both are true; the field name is kept because renaming
+   * it across the route and its consumers buys nothing the string does not.
    *
    * Reported rather than inferred. A week settled on complete data and a week
    * settled because the clock ran out are different facts about the same
@@ -554,11 +561,26 @@ async function finalizationHold(
   }>(
     `SELECT count(*)::int AS total,
             count(*) FILTER (WHERE g.status = 'FINAL')::int AS finished,
-            -- Games the provider called FINAL whose box score was never read.
-            -- Migration 0027 added both columns for exactly this question; nothing
-            -- had asked it. See the stats hold below.
+            -- No box score for this game as it finally stood. Migration 0027
+            -- added both columns for exactly this question and nothing had
+            -- asked it; the stats hold below is what asks.
+            --
+            -- Not simply "stats_synced_at IS NULL", which was the first version
+            -- and is too weak: a game read while IN_PROGRESS stamps the column,
+            -- so a game whose every post-final read then failed counted as
+            -- ingested and settled the week on third-quarter numbers. The sync
+            -- has to be newer than the final whistle to be the final line.
+            --
+            -- A null final_at on a FINAL game means the provider called it
+            -- final without saying when. There is nothing to compare against,
+            -- so the presence of any sync is the best answer available and this
+            -- does not hold on it.
             count(*) FILTER (
-              WHERE g.status = 'FINAL' AND g.stats_synced_at IS NULL
+              WHERE g.status = 'FINAL'
+                AND (
+                  g.stats_synced_at IS NULL
+                  OR (g.final_at IS NOT NULL AND g.stats_synced_at < g.final_at)
+                )
             )::int AS unread,
             max(g.kickoff_at) AS last_kickoff
        FROM games g
@@ -625,13 +647,55 @@ async function finalizationHold(
     };
   }
 
-  if (finished < total) {
+  /*
+    Past the window the week settles, and it reports **every** reason it settled
+    badly rather than the first one found.
+
+    This used to be two `if`s in a row, and the earlier one swallowed the later.
+    `finished < total` returned immediately, so the "stats unread" fallback was
+    unreachable in exactly the mixed state where both were true — one postponed
+    game alongside six whose box scores never arrived reported only the
+    postponement. The comment below asserted the two "call for different
+    responses" while the code made the second one silent.
+
+    Worse at the extreme: when the provider's status column freezes, **nothing**
+    reaches FINAL, `unread` is structurally zero — it counts only FINAL games —
+    and the whole week settled 0–0 under §10's sentence, blaming the NFL for our
+    own stalled ingest. `syncGames` runs once a day from a single cron, and
+    `mapGameStatus` answers SCHEDULED for any wording it does not recognise, so
+    that is a live shape rather than a hypothetical.
+
+    "No game finished at all" is therefore called out separately. §10 is written
+    about *an* abandoned game — it is the right answer for one fixture out of
+    sixteen and the wrong one for sixteen out of sixteen, which is the same
+    argument the `total === 0` branch above already makes.
+  */
+  const reasons: string[] = [];
+
+  if (finished === 0 && total > 0) {
+    reasons.push(
+      `not one of ${total} games is marked FINAL — the schedule sync has not ` +
+        `advanced any status, so this is our ingest rather than an abandoned game`,
+    );
+  } else if (finished < total) {
+    reasons.push(
+      `${total - finished} of ${total} games are not marked FINAL — ` +
+        `docs/RULES.md §10: affected players score 0 for the week and the matchup stands`,
+    );
+  }
+
+  if (unread > 0) {
+    reasons.push(
+      `${unread} of ${total} games have no box score from after the final whistle — ` +
+        `those players score 0 permanently, and the cause is our stats pipeline ` +
+        `rather than an abandoned game`,
+    );
+  }
+
+  if (reasons.length > 0) {
     return {
       hold: null,
-      fallback:
-        `finalised ${hours}h after the last kickoff with ${total - finished} of ${total} ` +
-        `games not marked FINAL — docs/RULES.md §10: affected players score 0 for the ` +
-        `week and the matchup stands`,
+      fallback: `finalised ${hours}h after the last kickoff: ${reasons.join("; ")}`,
     };
   }
 
@@ -648,16 +712,6 @@ async function finalizationHold(
     ingest failing, and it means those players are about to be paid nothing on
     data we never fetched.
   */
-  if (unread > 0) {
-    return {
-      hold: null,
-      fallback:
-        `finalised ${hours}h after the last kickoff with ${unread} of ${total} ` +
-        `games never ingested — those players score 0 permanently, and the cause ` +
-        `is our stats pipeline rather than an abandoned game`,
-    };
-  }
-
   return { hold: null };
 }
 

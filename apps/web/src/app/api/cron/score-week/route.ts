@@ -250,11 +250,37 @@ async function run(client: SqlClient, now: Date, request: Request): Promise<Next
   const failed = scored.filter(
     (entry) => entry.skipped || entry.failedWeeks?.length || entry.bracketProblem,
   ).length;
-  await recordCronRun(
-    client,
-    "score-week",
-    failed > 0 ? `${failed} of ${scored.length} leagues had a problem` : null,
-  );
+
+  /*
+    A week that settled on the fallback is recorded here too, and it was not.
+
+    `finalizedWithUnfinishedGames` reached the JSON response body and stopped
+    there. Vercel does not keep cron response bodies, so the one durable record
+    of a run — the row `pnpm cron:status` reads — said nothing, and a run in
+    which a paying week permanently scored twelve teams zero on box scores we
+    never fetched was indistinguishable from a quiet Tuesday. Green.
+
+    It is deliberately **not** folded into `failed`. That count means "this
+    league did not get scored", which is a different and recoverable thing; a
+    fallback settlement is the opposite — the league was scored, once, for good.
+    Counting them together would let a retry-shaped response be applied to
+    something no retry can reach.
+  */
+  const onFallback = scored.filter((entry) =>
+    entry.weeks?.some((week) => week.finalizedWithUnfinishedGames),
+  ).length;
+
+  const notes = [
+    ...(failed > 0 ? [`${failed} of ${scored.length} leagues had a problem`] : []),
+    ...(onFallback > 0
+      ? [
+          `${onFallback} of ${scored.length} leagues permanently settled a week on the ` +
+            `clock rather than on complete data — see finalizedWithUnfinishedGames`,
+        ]
+      : []),
+  ];
+
+  await recordCronRun(client, "score-week", notes.length > 0 ? notes.join("; ") : null);
 
   return NextResponse.json({ at: now.toISOString(), week, leagues: scored });
 }
