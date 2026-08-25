@@ -1451,6 +1451,31 @@ the lock from a roster map that had already lost the player, so they agreed and 
 wrong. `loadKickoffs` is now the one definition of when a player locks, and the lineup
 route asks it the same question `setLineup` does.
 
+**The lock is decided from a snapshot read outside the transaction, and that is deliberate
+— issue #100.** Nothing slow may run under a row lock, so the rules load, the roster load,
+the kickoff load and `validateLineup` all happen first. What closes the gap between that
+read and the write is a **per-slot compare on the way out**: a slot whose stored value has
+moved since the snapshot is refused with `LINEUP_MOVED` (409, retryable), and a slot the
+request did not change is **skipped**, not rewritten.
+
+Skipping is the half that had to be corrected after the fact, and it defeated the fix in
+its own headline case. Unchanged slots were originally written with no `WHERE`, which is an
+assertion about state rather than an abstention: the editor posts every slot on every save,
+so `null === null` took that branch and blanked whatever the autofill had just put in a slot
+the manager's page showed as empty — past the lock, and past `validateLineup`, which had
+judged an empty slot that no longer existed.
+
+**The retry carries the manager's edit, not their snapshot.** `applyLineupEdit` in
+`apps/web/src/lib/lineup-edit.ts` is the one definition of what a change means, used both to
+build the first attempt and to re-apply it to a re-read lineup. The first version diffed two
+slot lists and kept the stale one wherever they differed — reverting the other writer across
+the whole lineup while its comment claimed to preserve it.
+
+**What no test in this repo can show:** PGlite is a single connection, so the interleaving
+helper's "other writer" shares the session under test and its `COMMIT` commits the
+transaction it is interfering with. The race tests pin the compare; they say nothing about
+the row lock, and `setLineup`'s atomicity is not demonstrable here. The helper says so.
+
 **`autoFillLineup` evicts a player who left the roster before his kickoff.** He is a hole,
 not a choice the manager made — and leaving him let his slot lock at kickoff around a
 player nobody rosters, who then scored for the team that cut him. Note the `lockedAssignments`

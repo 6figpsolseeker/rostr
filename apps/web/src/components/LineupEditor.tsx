@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { applyLineupEdit } from "@/lib/lineup-edit";
+import type { LineupEdit } from "@/lib/lineup-edit";
 import { opponentLabel } from "@/lib/opponent";
 import { isIrEligible as irEligible } from "@rostr/core";
 import { previewHeading, whyNot } from "@/lib/autofill";
@@ -167,7 +169,7 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
    *
    * `isRetry` exists so the retry cannot recurse: see the LINEUP_MOVED branch.
    */
-  async function save(next: Slot[], isRetry = false): Promise<void> {
+  async function save(next: Slot[], edit: LineupEdit, isRetry = false): Promise<void> {
     setSaving(true);
     setProblems([]);
     setSaveError(null);
@@ -195,10 +197,18 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
       /*
         `LINEUP_MOVED` is retryable and everything else here is not. Issue #100.
 
-        The server now validates the kickoff lock against state it holds a lock
-        on, so a save built from a stale snapshot can be refused — and the
-        ordinary cause is nobody's fault: the score-week cron's autofill wrote a
-        slot in the ten minutes since this screen last polled.
+        The server compares each slot against its own read and refuses one that
+        moved underneath the request, so a save can come back refused through
+        nobody's fault: the score-week cron's autofill committed a slot in the
+        milliseconds between that read and the write.
+
+        Two corrections to what this said, because both would mislead somebody
+        reasoning about the window. The lock is **not** validated against state
+        the server holds a lock on — the read is still outside the transaction
+        and the compare-and-swap is what detects movement. And the window is not
+        "the ten minutes since this screen last polled": this page polls every
+        thirty seconds, and the comparison is against the server's own fresh
+        read, so the client's staleness does not enter it at all.
 
         Surfacing that as an error would be worse than the bug it closes. The
         manager did nothing wrong, the fix is mechanical, and `setSaveError`
@@ -213,15 +223,22 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
       if (!response.ok && body.code === "LINEUP_MOVED" && !isRetry) {
         const fresh = await mutate();
         if (fresh) {
-          // Re-submit against what the server actually holds now, keeping this
-          // manager's own change and taking everything else from the refresh.
-          const merged = fresh.slots.map((slot) => {
-            const mine = next.find(
-              (entry) => entry.slotType === slot.slotType && entry.slotIndex === slot.slotIndex,
-            );
-            return mine && mine.playerId !== slot.playerId ? mine : slot;
-          });
-          await save(merged, true);
+          /*
+            Re-apply the manager's **decision** to what the server now holds.
+
+            Not a merge of two slot lists. This used to diff `next` against
+            `fresh` and keep `next` wherever they disagreed — which is the slot
+            the manager changed *and* every slot another writer had moved since
+            the page last polled, so the retry reverted the other writer across
+            the whole lineup while its comment claimed to be preserving it. On an
+            unlocked slot that silently undid the autofill; on a locked one it
+            came back 422 naming a slot the manager never touched.
+
+            `applyLineupEdit` is the same function `assign` used to build the
+            first attempt, so there is one definition of what a change means
+            rather than an apply and a re-apply that can drift.
+          */
+          await save(applyLineupEdit(fresh.slots, edit), edit, true);
           return;
         }
       }
@@ -264,16 +281,8 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
   }
 
   function assign(slot: Slot, playerId: string | null): void {
-    const next = data!.slots.map((entry) =>
-      entry.slotType === slot.slotType && entry.slotIndex === slot.slotIndex
-        ? { ...entry, playerId }
-        : // Moving a player into a slot takes him out of wherever he was.
-          entry.playerId === playerId && playerId !== null
-          ? { ...entry, playerId: null }
-          : entry,
-    );
-
-    void save(next);
+    const edit = { slotType: slot.slotType, slotIndex: slot.slotIndex, playerId };
+    void save(applyLineupEdit(data!.slots, edit), edit);
   }
 
   /*

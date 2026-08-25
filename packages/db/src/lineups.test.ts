@@ -716,6 +716,54 @@ describe("ensureLineups", () => {
     expect(lineup.every((slot) => slot.playerId === null)).toBe(true);
   });
 
+  it("fills a slot whose row already exists holding null", async () => {
+    /*
+      **The case `IS NOT DISTINCT FROM` exists for in `setLineup`, and the one
+      `=` would break silently.**
+
+      `setLineupUnchecked` has carried this test since it was written. #224
+      copied the compare-and-swap into `setLineup` and did not copy the test, so
+      the same one-character mutation — `IS NOT DISTINCT FROM $6` to `= $6` —
+      was green across the whole suite.
+
+      What it costs: `NULL = NULL` is `NULL`, so the CAS matches nothing, zero
+      rows come back, and the manager is told `LINEUP_MOVED`. Forever. The
+      editor's one retry re-reads the same null and is refused again. Every
+      autofill-off manager would be locked out of setting a lineup at all, and
+      every team gets rows like this the moment `ensureLineups` runs.
+
+      The ordering here is the whole point: `ensureLineups` **first**, so the row
+      is present holding null, then the manager fills it. The sibling test below
+      does it the other way round and cannot see this.
+    */
+    const fx = await setup();
+    await fx.client.query("UPDATE teams SET autofill_enabled = false WHERE id = $1", [
+      fx.teamId,
+    ]);
+
+    // Materialised, empty — exactly what an opted-out team carries.
+    await ensureLineups(fx.client, fx.leagueId, WEEK, BEFORE_ANYTHING);
+    const [row] = await fx.client.query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM lineups
+        WHERE team_id = $1 AND week = $2 AND player_id IS NULL`,
+      [fx.teamId, WEEK],
+    );
+    expect(row?.n).toBe(9);
+
+    await setLineup(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: fx.teamId,
+      week: WEEK,
+      assignments: [{ slotType: "QB", slotIndex: 0, playerId: fx.players.get("sun-qb") }],
+      now: BEFORE_ANYTHING,
+    });
+
+    const after = await loadLineup(fx.client, fx.teamId, WEEK, fx.rules);
+    expect(after.find((slot) => slot.slotType === "QB")?.playerId).toBe(
+      fx.players.get("sun-qb"),
+    );
+  });
+
   it("does not touch a slot the opted-out manager set themselves", async () => {
     // The switch means "do not choose for me", not "do not let me choose".
     const fx = await setup();
@@ -1354,6 +1402,27 @@ describe("a lineup that moves under the manager — #100", () => {
    * Keyed on the `FOR UPDATE` statement rather than on `BEGIN`, because that is
    * the first thing inside the transaction and leaves the snapshot already taken.
    */
+  /*
+    Runs `interfere` immediately before the transaction's `FOR UPDATE` executes.
+
+    **What this proves and what it does not.** PGlite is a single connection, so
+    the "other writer" runs on the *same* session as the transaction it is
+    interfering with. Two consequences, both stated because neither is obvious
+    and one of them makes an assertion here weaker than it reads:
+
+    - The interference lands after the snapshot at `loadLineup` and before the
+      lock is taken, which is the window the **compare-and-swap** closes. So
+      these tests pin the CAS. They say nothing about the row lock — no test in
+      this repo can, and deleting `FOR UPDATE` fails them only because the hook
+      keys on that SQL text.
+    - The interferer's own `withTransaction` issues a real `COMMIT` on the shared
+      connection, which commits the outer transaction too. So a test here cannot
+      demonstrate that `setLineup` is atomic; a `ROLLBACK` afterwards would not
+      undo what the loop had already written.
+
+    Both are limits of the harness rather than of the code, and both were found
+    by the #100 re-audit rather than being known when this was written.
+  */
   function interferingAt(client: PGliteClient, interfere: () => Promise<void>): PGliteClient {
     let fired = false;
     return new Proxy(client, {
@@ -1432,6 +1501,54 @@ describe("a lineup that moves under the manager — #100", () => {
     const after = await loadLineup(fx.client, fx.teamId, WEEK, fx.rules);
     const held = after.find((slot) => slot.slotType === "QB");
     expect(held?.playerId).toBe(fx.players.get("thu-qb"));
+  });
+
+  it("does not revert another writer's change to a slot it did not touch", async () => {
+    /*
+      **The hole the unchanged-slot exemption left, and it defeated the fix in
+      its own headline scenario.**
+
+      The test below asserts that submitting a slot at the value you read is not
+      refused — correct, and it is uncontended, so it could not see what the
+      write actually did. Unchanged slots were written with no `WHERE`, which
+      reverts a concurrent write rather than ignoring it.
+
+      Here the manager changes RB while the autofill fills the QB slot their
+      snapshot showed as empty. The QB assignment is unchanged from that
+      snapshot, so it must neither refuse nor overwrite.
+    */
+    const fx = await setup();
+
+    const client = interferingAt(fx.client, async () => {
+      await setLineup(fx.client, {
+        leagueId: fx.leagueId,
+        teamId: fx.teamId,
+        week: WEEK,
+        assignments: [{ slotType: "QB", slotIndex: 0, playerId: fx.players.get("thu-qb") }],
+        now: BEFORE_ANYTHING,
+      });
+    });
+
+    // The whole-snapshot save the editor sends: QB as it was read (empty), RB
+    // changed. Only the RB assertion is the manager's.
+    await expect(
+      setLineup(client, {
+        leagueId: fx.leagueId,
+        teamId: fx.teamId,
+        week: WEEK,
+        assignments: [
+          { slotType: "QB", slotIndex: 0, playerId: null },
+          { slotType: "RB", slotIndex: 0, playerId: fx.players.get("rb-a") },
+        ],
+        now: BEFORE_ANYTHING,
+      }),
+    ).resolves.toBeDefined();
+
+    const after = await loadLineup(fx.client, fx.teamId, WEEK, fx.rules);
+    expect(after.find((slot) => slot.slotType === "QB")?.playerId).toBe(
+      fx.players.get("thu-qb"),
+    );
+    expect(after.find((slot) => slot.slotType === "RB")?.playerId).toBe(fx.players.get("rb-a"));
   });
 
   it("still accepts a save that changes nothing about the moved slot", async () => {
