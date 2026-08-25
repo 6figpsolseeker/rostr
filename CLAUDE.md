@@ -741,6 +741,19 @@ is 2.
   number is a paragraph away. Check the issue is still open after a merge; it
   takes one command and this has now cost five.
 
+  **Backticks do not protect it, and the PR that documented this proved so by
+  firing it.** #247 was written to record the heading variant above. Its body
+  quoted the offending form as an example, inline, inside backticks — and GitHub
+  parsed the example as a directive and closed the same two issues a second time,
+  on the merge of the commit explaining why they must not be closed. Inline code
+  is not quoting to that parser, and neither, as far as this repo can tell, is
+  anything else.
+
+  So the trap **cannot be written down by demonstrating it**. Describe the shape
+  in words, or use a placeholder number that belongs to nothing. Every real issue
+  number in a PR body wants a paragraph between it and any word resembling close,
+  fix or resolve — including one you are quoting in order to warn about.
+
 - **#157** — provider stats that contradict themselves are ingested silently. Only
   field goals are cross-checked today. Two cheap checks would have caught both
   known cases without a season sweep or a second source.
