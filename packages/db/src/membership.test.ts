@@ -607,6 +607,45 @@ describe("joinLeague", () => {
     ).resolves.toMatchObject({ slot: 3 });
   });
 
+  it("lets the replacement for a removed member in, when max(slot) says full and the count does not", async () => {
+    /*
+      **The discriminating case, and the one the test below cannot see.**
+
+      That test stages count 12 and max 13 against a cap of 12 — both say full,
+      so it passes whether the capacity gate reads `count(*)` or `max(slot)`.
+      Harmonising the two, which is the natural-looking cleanup since they sit
+      thirty lines apart, would therefore stay green while reintroducing #73 at
+      the capacity gate — and in its worst form: a league with a visibly free
+      seat refusing every join forever, because joining is the only thing that
+      raises the number.
+
+      Here they disagree. Twelve teams, the one at slot 5 removed: count is 11,
+      `max(slot)` is 12, the cap is 12. The seat is genuinely free and the join
+      must succeed. Removing the *top* slot would not do — that drops max as
+      well, and the two agree again.
+    */
+    const fx = await setup();
+    for (let i = 0; i < 12; i++) await addTestTeam(fx.client, fx.leagueId, `Team ${i}`);
+    await fx.client.query("DELETE FROM teams WHERE league_id = $1 AND slot = 5", [fx.leagueId]);
+
+    const [before] = await fx.client.query<{ n: number; hi: number }>(
+      "SELECT count(*)::int AS n, max(slot)::int AS hi FROM teams WHERE league_id = $1",
+      [fx.leagueId],
+    );
+    expect(before).toMatchObject({ n: 11, hi: 12 });
+
+    const m = await member(fx, 1, "replacement@example.com");
+    await expect(
+      joinLeague(fx.client, {
+        leagueId: fx.leagueId,
+        userId: m.userId,
+        walletAddress: m.address,
+        signature: signJoin(fx, m.address, m.secret),
+        teamName: "Replacement",
+      }),
+    ).resolves.toMatchObject({ slot: 13 });
+  });
+
   it("still refuses a full league whose slots are not contiguous", async () => {
     /*
       The capacity check must survive the fix, and this is the case that proves

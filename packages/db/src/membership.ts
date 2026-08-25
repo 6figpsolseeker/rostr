@@ -325,10 +325,19 @@ export async function joinLeague(db: SqlClient, input: JoinLeagueInput): Promise
       /*
         Kept as a backstop, and no longer as the routine path.
 
-        Under the lock above a collision with another *join* is impossible, and
-        `max + 1` cannot collide with a committed row by construction. What is
-        still reachable is a join racing `addBot`, which derives its slot the
-        same way and takes no lock — transient, and a retry succeeds.
+        Under the lock a collision with another writer of this table is
+        impossible, because every one of them now takes the same key —
+        `joinLeague` here and `addBot` below.
+
+        **This used to say `max + 1` "cannot collide with a committed row by
+        construction", and that was false**, in a way its own next sentence
+        contradicted. Under READ COMMITTED the `max(slot)` subquery reads the
+        statement's snapshot, so a row committed by an unlocked writer between
+        that snapshot and the index check is a committed row that collides. It
+        was true only of rows committed *before* the statement began. `addBot`
+        was that unlocked writer, and it could also push the league past
+        `maxTeams` entirely, which is why it now takes the lock rather than the
+        comment being reworded.
 
         It is reported as `SEAT_CONFLICT` rather than `LEAGUE_FULL` because the
         two are different facts and only one of them is retryable. Telling
@@ -344,12 +353,37 @@ export async function joinLeague(db: SqlClient, input: JoinLeagueInput): Promise
       throw error;
     }
 
-    const [membership] = await tx.query<{ id: string }>(
-      `INSERT INTO league_memberships (league_id, user_id, team_id, wallet_id, rules_hash, signature)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING id`,
-      [league.id, input.userId, team!.id, wallet.id, stored.hash, input.signature],
-    );
+    /*
+      Wrapped, because the lock above made this the **only** way a same-user
+      double-submit can fail.
+
+      The `ALREADY_JOINED` check runs outside the transaction, so two overlapping
+      requests from one person both read no membership. Before the lock they also
+      both derived `count + 1`, so the loser hit the caught unique violation on
+      `teams` — the wrong message, but a 409. Now the lock serialises them: the
+      loser sees a fresh count, takes a non-colliding `max + 1` slot, and fails
+      here instead, on `UNIQUE (league_id, user_id)`, unwrapped, as a 500.
+      Deterministically, where it used to be one ordering of two.
+
+      The lock did not create the path. It made it the only one, so it needs the
+      translation the other insert already had.
+    */
+    let membership: { id: string } | undefined;
+    try {
+      [membership] = await tx.query<{ id: string }>(
+        `INSERT INTO league_memberships (league_id, user_id, team_id, wallet_id, rules_hash, signature)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         RETURNING id`,
+        [league.id, input.userId, team!.id, wallet.id, stored.hash, input.signature],
+      );
+    } catch (error) {
+      // Same fact as the pre-transaction check above, reached by the racing
+      // path. It should answer alike rather than as an unhandled 500.
+      if (isUniqueViolation(error)) {
+        throw new JoinError("Already a member of this league", "ALREADY_JOINED");
+      }
+      throw error;
+    }
 
     return {
       teamId: team!.id,
@@ -388,6 +422,36 @@ export async function addBot(
   const { maxBots, maxTeams } = stored.rules.league;
 
   return withTransaction(db, async (tx) => {
+    /*
+      The same lock `joinLeague` takes, and it belongs here for the same reason.
+
+      **A lock only closes a hole if every writer respects it**, and when the
+      join took this key it was the only one that did. `addBot` has the identical
+      check-then-insert — it reads `count(*)` in one statement and inserts in
+      another, and under READ COMMITTED those are separate snapshots.
+
+      So a commissioner adding a bot while the last manager joins could overfill
+      the league. `addBot` reads 11 of 12 and passes; the join commits at slot
+      12; `addBot`'s INSERT then re-reads `max(slot)` as 12 and writes **13** — a
+      different slot, so `UNIQUE (league_id, slot)` never arbitrates and a
+      thirteenth team lands silently in a twelve-team league.
+
+      **That is a regression from the join fix, not an old hole.** Under
+      `count(*) + 1` the join derived the same slot as the bot and the unique
+      index refused one of them. `max(slot) + 1` removes that accidental
+      arbitration, which is exactly why the capacity check needed a real lock —
+      on every writer, not one of them.
+
+      `maxTeams` is an anchored term compared against the chain, so exceeding it
+      diverges the Postgres field from what members signed.
+
+      Two concurrent `addBot` calls had the same shape against `maxBots`; this
+      closes that too.
+    */
+    await tx.query("SELECT pg_advisory_xact_lock(hashtext('teams.slot'), hashtext($1))", [
+      leagueId,
+    ]);
+
     await requireOpenField(tx, leagueId);
 
     const [counts] = await tx.query<{ taken: number; bots: number; humans: number }>(
@@ -428,12 +492,34 @@ export async function addBot(
 
     if (taken >= maxTeams) throw new JoinError("League is full", "LEAGUE_FULL");
 
-    const [team] = await tx.query<{ id: string; slot: number }>(
-      `INSERT INTO teams (league_id, is_bot, name, slot)
-       VALUES ($1, true, $2, COALESCE((SELECT max(slot) FROM teams WHERE league_id = $1), 0) + 1)
-       RETURNING id, slot`,
-      [leagueId, name],
-    );
+    /*
+      Translated rather than left to escape, which is what `joinLeague`'s
+      equivalent does.
+
+      The join's `SEAT_CONFLICT` docstring named "a join racing `addBot`" as the
+      one collision still reachable, and gave the join side a retryable code. This
+      side got nothing: the INSERT was unwrapped and the route rethrows anything
+      that is not a `JoinError`, so a commissioner met an unlabelled 500 for the
+      very event the other side calls retryable. Same fact, two answers.
+
+      With both writers on the lock the collision should now be unreachable. The
+      catch stays for the reason the join's does — a backstop that says something
+      useful if it ever is.
+    */
+    let team: { id: string; slot: number } | undefined;
+    try {
+      [team] = await tx.query<{ id: string; slot: number }>(
+        `INSERT INTO teams (league_id, is_bot, name, slot)
+         VALUES ($1, true, $2, COALESCE((SELECT max(slot) FROM teams WHERE league_id = $1), 0) + 1)
+         RETURNING id, slot`,
+        [leagueId, name],
+      );
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        throw new JoinError("Somebody took a seat at that moment. Try again.", "SEAT_CONFLICT");
+      }
+      throw error;
+    }
 
     return { teamId: team!.id, slot: Number(team!.slot) };
   });
