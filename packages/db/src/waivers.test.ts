@@ -5,6 +5,7 @@ import { createLeague } from "./leagues.js";
 import { createUser } from "./identity.js";
 import { seedSport } from "./sports.js";
 import { addTestTeam, createTestDatabase } from "./testing.js";
+import { moveToIr } from "./injured-reserve.js";
 import type { PGliteClient } from "./testing.js";
 import {
   leaguesDueForWaivers,
@@ -355,6 +356,68 @@ describe("processing", () => {
   }
 
   const WEDNESDAY = new Date(MONDAY.getTime() + 2 * DAY);
+
+  it("awards a claim whose drop is a player on injured reserve", async () => {
+    /*
+      **This rolled back the whole league's waiver cycle, every hour, forever.**
+
+      `0038` asserts `CHECK (NOT on_ir OR released_at IS NULL)` — an IR slot
+      belongs to a rostered player — and the awarded claim's drop set
+      `released_at` without clearing `on_ir`. The run is a single transaction, so
+      the violation did not fail one claim: it discarded every award in the
+      league, left all the claims PENDING, and `leaguesDueForWaivers` re-selected
+      the league on the next tick to fail identically.
+
+      None of the four release paths had a test staging an IR'd player. The IR
+      suite asserted the constraint against a hand-written UPDATE that no code in
+      this repo executes, and called the refusal correct.
+    */
+    const fx = await setup();
+    const claimant = fx.teams[1]!;
+
+    // Acquired through the product, then genuinely out, then parked on IR the
+    // way a manager does it — no hand-written roster row.
+    const injured = fx.players.get("target")!;
+    await addFreeAgent(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: claimant,
+      addPlayerId: injured,
+      now: MONDAY,
+    });
+    await fx.client.query("UPDATE players SET injury_designation = 'OUT' WHERE id = $1", [
+      injured,
+    ]);
+    await moveToIr(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: claimant,
+      playerId: injured,
+      week: 1,
+      now: MONDAY,
+    });
+
+    // Somebody to claim, and a claim that pays for him with the IR'd player.
+    const wanted = fx.players.get("held")!;
+    await dropPlayer(fx.client, fx.leagueId, fx.teams[0]!, wanted, MONDAY);
+    await submitClaim(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: claimant,
+      addPlayerId: wanted,
+      dropPlayerId: injured,
+      now: MONDAY,
+    });
+
+    const outcome = await processWaivers(fx.client, fx.leagueId, WEDNESDAY);
+
+    expect(outcome.awarded).toBe(1);
+    expect(outcome.failed).toBe(0);
+
+    const [row] = await fx.client.query<{ on_ir: boolean; released_at: string | null }>(
+      "SELECT on_ir, released_at FROM roster_entries WHERE player_id = $1 AND team_id = $2",
+      [injured, claimant],
+    );
+    expect(row?.released_at).not.toBeNull();
+    expect(row?.on_ir).toBe(false);
+  });
 
   it("awards a contested player to the best priority", async () => {
     // Priority is the reverse of the draft order, so team 4 outranks team 2.

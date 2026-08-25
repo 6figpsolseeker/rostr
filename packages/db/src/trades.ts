@@ -959,8 +959,22 @@ async function resolveTrade(
       // append-only with `released_at` precisely so any past week's roster can be
       // reconstructed — a trade that edited history would make a settled week
       // unverifiable.
+      /*
+        `on_ir = false` because the row is being released, and `0038` asserts
+        an IR slot belongs to a rostered player.
+
+        Without it a trade naming an IR'd player threw a check violation inside
+        this transaction and rolled back a trade the league had already approved
+        — the outcome `ASSET_GONE` exists to make impossible, arriving by a
+        route none of its reasoning covers.
+
+        The player does not arrive at the receiving team on IR. That is correct:
+        IR eligibility is the *receiving* league's roster rules applied to a
+        current designation, and `moveToIr` is how it is claimed. Carrying the
+        flag across would spend one of the new team's slots without them asking.
+      */
       const released = await tx.query<{ id: string }>(
-        `UPDATE roster_entries SET released_at = $3
+        `UPDATE roster_entries SET released_at = $3, on_ir = false
           WHERE team_id = $1 AND player_id = $2 AND released_at IS NULL
         RETURNING id`,
         [asset.from_team_id, asset.player_id, now.toISOString()],

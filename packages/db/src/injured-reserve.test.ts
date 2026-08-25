@@ -7,6 +7,7 @@ import { seedSport } from "./sports.js";
 import { addTestTeam, createTestDatabase } from "./testing.js";
 import type { PGliteClient } from "./testing.js";
 import { activateFromIr, IrError, moveToIr } from "./injured-reserve.js";
+import { dropPlayer } from "./waivers.js";
 
 const DRAFT: DraftRules = {
   type: "SNAKE",
@@ -239,6 +240,80 @@ describe("activateFromIr", () => {
         playerId: fx.players.get("fit")!,
       }),
     ).rejects.toMatchObject({ code: "NOT_ON_IR" });
+  });
+});
+
+describe("releasing a player who is on injured reserve", () => {
+  /*
+    **A manager could not drop a player they had put on IR.**
+
+    `0038` asserts `CHECK (NOT on_ir OR released_at IS NULL)` — IR is a state of
+    a *rostered* player, so a released row must not still claim one of the
+    league's IR slots. Right, and nothing in the product upheld it: four places
+    set `released_at` and not one of them cleared `on_ir`. Every drop, every
+    free-agent swap-out, every awarded waiver claim's drop, and every executed
+    trade of an IR'd player raised a constraint violation instead.
+
+    The test below is the reason it survived. It asserts the constraint fires on
+    a hand-written UPDATE and treats that as the feature — which it is — while
+    never once asking what the product's own release paths do. The constraint
+    was checked against a statement no code in this repo executes, and the four
+    that do were never staged.
+
+    The waiver run's site is the worst of them: it throws inside
+    `processWaivers`' transaction, so the whole league's cycle rolls back, the
+    claims stay PENDING, and `leaguesDueForWaivers` re-selects that league every
+    hour, forever. The trade site rolls back a trade the league already approved,
+    which `ASSET_GONE` exists to make impossible.
+  */
+  it("lets a manager drop a player who is on IR", async () => {
+    const fx = await setup();
+    const playerId = fx.players.get("hurt")!;
+    await moveToIr(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: fx.teamId,
+      playerId,
+      week: 2,
+      now: NOW,
+    });
+
+    await expect(
+      dropPlayer(fx.client, fx.leagueId, fx.teamId, playerId, NOW),
+    ).resolves.toBeTruthy();
+
+    const [row] = await fx.client.query<{ on_ir: boolean; released_at: string | null }>(
+      "SELECT on_ir, released_at FROM roster_entries WHERE player_id = $1",
+      [playerId],
+    );
+
+    // Released, and no longer holding an IR slot. Both halves matter: the row
+    // stays for the audit trail, and a count that forgot `released_at` must not
+    // exempt somebody who left months ago — which is what the constraint is for.
+    expect(row?.released_at).not.toBeNull();
+    expect(row?.on_ir).toBe(false);
+  });
+
+  it("frees the IR slot for somebody else once the drop lands", async () => {
+    // The consequence of leaving `on_ir` set on a released row, had the
+    // constraint not refused it outright. Two IR slots, one used and dropped:
+    // the allowance has to come back.
+    const fx = await setup();
+    const dropped = fx.players.get("hurt")!;
+    await moveToIr(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: fx.teamId,
+      playerId: dropped,
+      week: 2,
+      now: NOW,
+    });
+    await dropPlayer(fx.client, fx.leagueId, fx.teamId, dropped, NOW);
+
+    const [held] = await fx.client.query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM roster_entries
+        WHERE team_id = $1 AND on_ir AND released_at IS NULL`,
+      [fx.teamId],
+    );
+    expect(held?.n).toBe(0);
   });
 });
 

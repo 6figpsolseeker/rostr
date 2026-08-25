@@ -459,7 +459,11 @@ export async function dropPlayer(
     await refuseIfFrozen(tx, leagueId, playerId);
     await refuseIfKickedOff(tx, stored.rules, playerId, now, "dropped");
 
-    await tx.query("UPDATE roster_entries SET released_at = $2 WHERE id = $1", [
+    // Leaving IR is part of leaving the roster. `0038` asserts
+    // `CHECK (NOT on_ir OR released_at IS NULL)` — an IR slot belongs to a
+    // rostered player — and this UPDATE violated it outright, so a manager
+    // simply could not release anyone they had placed there.
+    await tx.query("UPDATE roster_entries SET released_at = $2, on_ir = false WHERE id = $1", [
       entry.id,
       now.toISOString(),
     ]);
@@ -579,10 +583,12 @@ export async function addFreeAgent(db: SqlClient, input: AddInput): Promise<void
 
       await refuseIfFrozen(tx, input.leagueId, input.dropPlayerId);
 
-      await tx.query("UPDATE roster_entries SET released_at = $2 WHERE id = $1", [
-        entry.id,
-        input.now.toISOString(),
-      ]);
+      // Same as `dropPlayer`: releasing clears the IR slot, or `0038`'s check
+      // refuses the swap.
+      await tx.query(
+        "UPDATE roster_entries SET released_at = $2, on_ir = false WHERE id = $1",
+        [entry.id, input.now.toISOString()],
+      );
     }
 
     /*
@@ -1065,8 +1071,19 @@ export async function processWaivers(
       }
 
       if (claim.drop_player_id) {
+        /*
+          `on_ir = false` for the same reason as every other release, and this
+          is the site where omitting it cost the most.
+
+          The whole run is one transaction, so `0038`'s check did not refuse one
+          claim — it rolled back the entire league's cycle. The claims stayed
+          PENDING, `leaguesDueForWaivers` re-selected the league on the next
+          hourly tick, and it failed identically. A league with one manager
+          dropping an IR'd player as part of a claim would never have processed
+          a waiver again.
+        */
         await tx.query(
-          `UPDATE roster_entries SET released_at = $3
+          `UPDATE roster_entries SET released_at = $3, on_ir = false
             WHERE team_id = $1 AND player_id = $2 AND released_at IS NULL`,
           [claim.team_id, claim.drop_player_id, now.toISOString()],
         );
