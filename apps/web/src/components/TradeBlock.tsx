@@ -145,6 +145,11 @@ export function TradeBlock({ leagueId }: { leagueId: string }) {
       setTheyGive(new Set());
       await mutate();
     } catch (e) {
+      // Refresh on the way out as well as on success. Every refusal here means
+      // the card is showing something that is no longer true — a settled trade
+      // with a live Veto button, or a window that has shut — so leaving it up
+      // invites a second press that gets a different message for the same fact.
+      void mutate();
       setFailure(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);

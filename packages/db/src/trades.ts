@@ -36,6 +36,7 @@ import type { LeagueRules } from "@rostr/core";
 import type { SqlClient } from "./client.js";
 import { getLeagueRules } from "./leagues.js";
 import { withTransaction } from "./transaction.js";
+import { isUniqueViolation } from "./pg-errors.js";
 import { transactionWeek } from "./week.js";
 
 export class TradeError extends Error {
@@ -72,6 +73,23 @@ export class TradeError extends Error {
        * league declined to block a trade it may in fact have blocked.
        */
       | "TRADE_ALREADY_SETTLED"
+      /**
+       * The voter is late. The trade is still accepted and its window has shut.
+       *
+       * Separate from `WRONG_STATE` because the member is not confused about the
+       * state — telling them "only an accepted trade can be blocked" about a
+       * trade that plainly is one sends them looking for a fault that is not
+       * there. `vetoTrade` compared `now` to nothing at all until this existed,
+       * so the window's real end was whenever the hourly cron next ran.
+       */
+      | "WINDOW_CLOSED"
+      /**
+       * Enough vetoes landed while the swap was in flight.
+       *
+       * Rolls the swap back and leaves the trade accepted, so the next run reads
+       * the fuller tally and settles it as VETOED.
+       */
+      | "VETOED_WHILE_EXECUTING"
       | "ALREADY_VETOED"
       | "ROSTER_WOULD_OVERFLOW"
       | "ASSET_GONE",
@@ -666,6 +684,19 @@ export async function vetoTrade(
       "WRONG_STATE",
     );
   }
+
+  /*
+    Read once here so the refusal can say which of the two it was, and enforced
+    again in the write below because this read decides nothing on its own.
+
+    `WINDOW_CLOSED` rather than `WRONG_STATE`: the trade is still accepted and
+    the member is not confused about that, they are late. Telling them "only an
+    accepted trade can be blocked" about a trade that plainly is one sends them
+    looking for a fault that is not there.
+  */
+  if (trade.vetoDeadline !== null && now.getTime() > trade.vetoDeadline.getTime()) {
+    throw new TradeError("The veto window for this trade has closed", "WINDOW_CLOSED");
+  }
   if ([trade.proposerTeamId, trade.receiverTeamId].includes(actingTeamId)) {
     throw new TradeError("A team in the trade cannot vote on it", "INVOLVED_CANNOT_VETO");
   }
@@ -718,18 +749,69 @@ export async function vetoTrade(
     The early check above stays. It is the error message for the ordinary case —
     somebody opening a settled trade and voting on it — and this one cannot
     distinguish that from the race.
+
+    **Two of the three guards below cannot be tested in this repo, and are kept
+    anyway.** PGlite is a single connection, so nothing here can hold a lock
+    against a second session or move a deadline between this read and this
+    write. Deleting either `FOR UPDATE OF t` or the `veto_deadline` clause
+    leaves the suite green. They are the halves that matter in production, and
+    the note is here so a future reader does not read a green suite as licence
+    to simplify them away.
+
+    **`FOR UPDATE OF t`, because a bare SELECT closed only half the window.**
+    An `UPDATE … WHERE state = X` takes a row lock and re-evaluates its
+    predicate against the committed row when it wakes; a `SELECT` inside an
+    `INSERT` does neither. So a vote arriving while `resolveTrade` held its
+    transaction open read the pre-update tuple, matched `ACCEPTED`, and was
+    written — and `resolveTrade` had taken its tally before the swap began, so
+    it was discarded exactly as #134 describes. The lock makes the voter block
+    until that transaction commits and then re-check, which is what the sibling
+    race file's header assumed of this statement and is only true of an UPDATE.
+
+    **And `veto_deadline`, because the window's end was decided by the cron.**
+    The comment below said `RULES.md` §6 "gives the veto window a definite end,
+    so a vote arriving after it closes is genuinely late" — and nothing here
+    compared `now` to anything. A trade whose window shut at 14:30 is not
+    resolved until the hourly run at 15:00, so a vote at 14:45 was accepted,
+    written, and counted. Two members could block a trade after the league had
+    stopped being able to.
   */
-  const written = await db.query<{ trade_id: string }>(
-    // The league is stored on the vote, not inferred at read time: the composite
-    // foreign keys in 0020 use it to make an out-of-league vote unrepresentable
-    // rather than merely uncounted.
-    `INSERT INTO trade_vetoes (trade_id, team_id, league_id, created_at)
+  /*
+    Wrapped, because the read above cannot arbitrate a simultaneous one.
+
+    `ALREADY_VETOED` is decided by a `SELECT` a few statements earlier, so two
+    requests from the same manager — two tabs, a retried fetch — both read no
+    vote and both insert. The loser hits `PRIMARY KEY (trade_id, team_id)` as a
+    raw 23505, and the route translates only `TradeError`, so it became a 500
+    carrying the constraint name.
+
+    That is the shape this module already names in a comment two hundred lines
+    down ("now does, but as a 23505 rather than as an answer") and that six other
+    files in this package translate. It answers the same as the sequential path,
+    which is the point: one manager, one vote, told so either way.
+  */
+  let written: { trade_id: string }[];
+  try {
+    written = await db.query<{ trade_id: string }>(
+      // The league is stored on the vote, not inferred at read time: the composite
+      // foreign keys in 0020 use it to make an out-of-league vote unrepresentable
+      // rather than merely uncounted.
+      `INSERT INTO trade_vetoes (trade_id, team_id, league_id, created_at)
        SELECT $1, $2, t.league_id, $3
          FROM trades t
-        WHERE t.id = $1 AND t.state = 'ACCEPTED'
+        WHERE t.id = $1
+          AND t.state = 'ACCEPTED'
+          AND t.veto_deadline >= $3
+          FOR UPDATE OF t
      RETURNING trade_id`,
-    [tradeId, actingTeamId, now.toISOString()],
-  );
+      [tradeId, actingTeamId, now.toISOString()],
+    );
+  } catch (error) {
+    if (isUniqueViolation(error)) {
+      throw new TradeError("This team has already voted on this trade", "ALREADY_VETOED");
+    }
+    throw error;
+  }
 
   if (written.length === 0) {
     throw new TradeError(
@@ -1005,6 +1087,41 @@ async function resolveTrade(
         `INSERT INTO roster_entries (team_id, player_id, acquired_via, acquired_at)
          VALUES ($1, $2, 'TRADE', $3)`,
         [to, asset.player_id, now.toISOString()],
+      );
+    }
+
+    /*
+      **The tally is re-read here, under the trade's own lock.**
+
+      The count this function decided on was taken before the transaction opened
+      — before the roster swap, which is many round trips and grows with the
+      number of players named. Every vote committed inside that window was
+      written against a trade that was still `ACCEPTED`, passed the guard in
+      `vetoTrade`, and was then discarded, because the decision had already been
+      made. That is #134's own title case, "a veto cast while a trade is
+      executing", and the state predicate on the write does not reach it: the
+      predicate is a *read*, so unlike #133's `UPDATE … WHERE state = X` it takes
+      no row lock and never contends.
+
+      Two halves close it, and neither is sufficient alone. `vetoTrade` takes
+      `FOR UPDATE` on the trade, so a vote arriving from here on blocks until
+      this transaction commits and then re-checks against `EXECUTED`. And this
+      re-read catches every vote that landed before that lock was taken.
+
+      **Locked after the rosters, never before.** `acceptTrade` takes
+      `roster_entries` and then `trades`; taking them the other way round here
+      would be the deadlock this file already orders `ORDER BY player_id` to
+      avoid, in a second pair.
+
+      Throwing rolls the swap back and leaves the trade `ACCEPTED`, which is
+      right: the next hourly run reads the fuller tally and writes `VETOED`.
+    */
+    await tx.query("SELECT id FROM trades WHERE id = $1 FOR UPDATE", [tradeId]);
+    const settled = await loadTrade(tx, tradeId);
+    if (isVetoed(settled.vetoes, electorate, rules.trades)) {
+      throw new TradeError(
+        "This trade was vetoed while it was executing",
+        "VETOED_WHILE_EXECUTING",
       );
     }
 
