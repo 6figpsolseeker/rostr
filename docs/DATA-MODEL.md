@@ -94,7 +94,7 @@ silently change — which is precisely the thing immutability is meant to preven
 
 ```
 teams             id, league_id, owner_id (nullable), is_bot, name,
-                  draft_position, waiver_priority, strikes, abandoned_at
+                  draft_position, waiver_priority, ~~strikes, abandoned_at~~ (dropped by migration `0015` — abandonment was removed in schema 4)
 roster_entries    id, team_id, league_id, player_id, acquired_via, acquired_at,
                   released_at
 lineups           id, team_id, week, slot_type_id, player_id, locked_at

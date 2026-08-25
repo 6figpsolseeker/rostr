@@ -246,10 +246,20 @@ export function canDraft(
  * Advisory, not a block. A manual pick may proceed anyway; auto-pick avoids it.
  *
  * The stakes are worth stating plainly wherever this surfaces in a UI: a roster
- * that cannot fill its starting slots cannot field a legal lineup, so the
- * autofill has nobody to put in the empty slot and it scores zero every week
- * for the rest of the season. On ESPN that is an embarrassment; here it is a
+ * that cannot fill its starting slots leaves one empty, so the autofill has
+ * nobody to put in it and it scores nothing every week until somebody signs or
+ * trades their way out of it. On ESPN that is an embarrassment; here it is a
  * team that cannot compete in a league other people are playing.
+ *
+ * **Not "cannot field a legal lineup", and not "for the rest of the season."**
+ * This said both, and both are stronger than the code. `validateLineup` refuses
+ * an empty starter only under `requireFull`, which no production caller sets —
+ * and the paragraph below says as much, that the autofill runs before a week is
+ * scored so a lineup is never invalid at that moment. A hole drafted on Sunday
+ * is fillable from free agency on Monday. This comment was rewritten once
+ * already, to remove a forfeited-stake rule that no longer exists; the
+ * replacement overshot in the other direction and contradicted its own next
+ * paragraph.
  *
  * **This used to say the team would be abandoned and its stake forfeited. That
  * rule was removed in schema 4 on 2026-08-08 and is not coming back** — see
