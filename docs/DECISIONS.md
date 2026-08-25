@@ -333,7 +333,7 @@ rights; unacceptable when the contract has to settle. The chain ends on lowest t
 
 **Rejected: join order.** The obvious reading of "team ID" is a 1..N number, and
 `teams.slot` is exactly that. Ranking on it is worse than the arbitrariness it removes.
-`slot` is `count(*) + 1` at join, so the lowest belongs to whoever joined first — in
+`slot` is `max(slot) + 1` at join — it was `count(*) + 1` until #73, which is a mechanism change and not a conclusion one: both are monotone in join order, so the lowest slot still belongs to whoever joined first and the rejection of join-order as a tiebreaker still stands —, so the lowest belongs to whoever joined first — in
 practice the commissioner, who holds the league URL before anyone else has seen it. That
 makes the last word on every unresolved tie, and the 1000 bps regular-season prize hanging
 off seed 1, a standing property of having created the league. It is the same special power

@@ -265,7 +265,7 @@ function orderGroup(
     // checksum moved.
     //
     // Sorting on the join slot was considered and rejected. `slot` is
-    // `count(*) + 1` at join, so the lowest belongs to whoever joined first —
+    // `max(slot) + 1` at join (it was `count(*) + 1` until #73), so the lowest belongs to whoever joined first —
     // in practice the commissioner, who holds the league URL before anyone
     // else. That would give one participant the last word on every unresolved
     // tie, and the 1000 bps regular-season prize that hangs off seed 1, by
