@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { BracketError, NFL } from "@rostr/core";
 import {
+  currentWeek,
   advancePlayoffs,
   enterPlayoffs,
   PlayoffError,
@@ -60,72 +61,40 @@ async function run(client: SqlClient, now: Date, request: Request): Promise<Next
   );
 
   /*
-    The season this job is actually about. Issue #105.
+    **Each league is scored against its own season, one week per league.**
 
-    The query below is a copy of `currentWeek` — deliberately, because this
-    wants the *lagging* answer and `transactionWeek` is strict — and it carried
-    the same defect: no `g.season`, so with a prior season's games in the table
-    it answered that season's last week from any instant afterwards, forever.
-    Latent only while one season is ingested, and unconditional from January 2027
-    once two coexist.
+    Issue #105 gave this route a season filter and a season to put in it, and
+    the season it chose was `max(season)` over every active league — one scalar,
+    applied to every league in the loop. That is a worse defect than the
+    cross-season read it removed, and it is reachable without an attacker.
 
-    Derived from the leagues this run would score rather than from a constant or
-    a calendar: those are the only leagues whose weeks it is about to write, and
-    a season nobody is playing is not one to score.
+    `seasonYear` comes off the request body and is range-checked nowhere; a
+    league reaches IN_SEASON on its final draft pick, months before its season
+    kicks off; and nothing in this repo ever writes SETTLED, so an active league
+    never stops being active. So one league created for a later season makes
+    `max(season)` name a season with no kicked-off games, the week comes back 0,
+    and the whole job returns `{week: null, leagues: []}` — before the loop, for
+    everybody, every ten minutes — while recording a **healthy** run, because a
+    run over no weeks legitimately is one. That is the confident green this file
+    already has a paragraph about.
+
+    In January 2027 it needs no stray league at all: any 2027 league drafted
+    while the 2026 championship is inside its 168-hour window starves that
+    settlement permanently, since `max(season)` never comes back down.
+
+    It also made the two copies of "the current week" disagree for the first
+    time. They used to be byte-identical and wrong together; the fix gave the
+    scoreboard the league's own frozen season and gave this one a global max, so
+    a 2026 league's scoreboard would read week 17 while this wrote week 2 of
+    2027 into it.
+
+    Per league closes all three, and deletes the duplicated SQL that #105
+    declined to deduplicate: there is now one `currentWeek`, called with the
+    league's own season, and the cron and the scoreboard cannot disagree because
+    they are the same function on the same argument.
   */
-  const [active] = await client.query<{ season: number | null }>(
-    "SELECT max(season) AS season FROM leagues WHERE state IN ('IN_SEASON', 'PLAYOFFS')",
-  );
-  const season =
-    active?.season === null || active?.season === undefined ? null : Number(active.season);
-
-  const [current] =
-    season === null
-      ? [undefined]
-      : await client.query<{ week: number }>(
-          `SELECT g.week
-           FROM games g
-           JOIN sports s ON s.id = g.sport_id
-          WHERE s.key = $1 AND g.season = $2 AND g.kickoff_at <= $3
-          ORDER BY g.kickoff_at DESC
-          LIMIT 1`,
-          [NFL.key, season, now.toISOString()],
-        );
-
-  const week = Number.isFinite(requestedWeek) ? requestedWeek : Number(current?.week ?? 0);
-  if (!week) {
-    /*
-      Stamped, because a run over no weeks is a healthy run.
-
-      This path is taken every ten minutes from now until the first kickoff of
-      the season, and it used to return without touching `cron_runs` — so
-      `pnpm cron:status` read `NEVER_RAN` for a job that was firing correctly
-      the whole time, and could not distinguish it from one the deployment had
-      never registered. That is the single thing the heartbeat exists to tell
-      apart, and this was the one route that defeated it.
-
-      The `catch` above stamps and rethrows for exactly this reason. Its comment
-      says a route that throws on every invocation is worse than one that never
-      fires, "and without this both read as a stale row" — the same argument, and
-      the early return was simply missed.
-
-      The outcome is `null`, and it has to be: `cronJobState` reads *any*
-      non-null `last_outcome` as `FAILING`, before it even checks staleness.
-      Writing a helpful sentence here would trade `NEVER_RAN` for `FAILING`
-      every ten minutes until September, which is not an improvement — it is the
-      same false alarm wearing a different label.
-
-      A run over no weeks is a healthy run, so it records as one.
-    */
-    await recordCronRun(client, "score-week", null);
-    return NextResponse.json({ at: now.toISOString(), week: null, leagues: [] });
-  }
-
-  // The enum is FORMING / DRAFTING / IN_SEASON / PLAYOFFS / SETTLED / DISSOLVED.
-  // An invented value here is not a no-op — Postgres fails to cast it and the
-  // whole job errors.
-  const leagues = await client.query<{ id: string; name: string }>(
-    "SELECT id, name FROM leagues WHERE state IN ('IN_SEASON', 'PLAYOFFS')",
+  const leagues = await client.query<{ id: string; name: string; season: number }>(
+    "SELECT id, name, season FROM leagues WHERE state IN ('IN_SEASON', 'PLAYOFFS')",
   );
 
   const scored: {
@@ -143,11 +112,45 @@ async function run(client: SqlClient, now: Date, request: Request): Promise<Next
     bracketGames?: number;
     bracketProblem?: string;
     skipped?: string;
+    awaitingKickoff?: boolean;
   }[] = [];
+
+  let anyWeek = false;
 
   for (const league of leagues) {
     let bracketGames = 0;
     let bracketProblem: string | null = null;
+
+    /*
+      The lagging answer, for this league's season.
+
+      `currentWeek` rather than `transactionWeek`: this wants the week of the
+      most recent kickoff and keeps answering it until the next week's first
+      game, which is exactly the window in which a week is scored and finalised.
+
+      A league whose season has not kicked off yet has no week and is skipped —
+      it is not a failure, and it must not decide anything for the leagues that
+      do have one. That was the whole bug.
+    */
+    const week = Number.isFinite(requestedWeek)
+      ? requestedWeek
+      : ((await currentWeek(client, NFL.key, league.season, now)) ?? 0);
+
+    if (!week) {
+      /*
+        Reported, and deliberately **not** as `skipped`.
+
+        `skipped` is what the failure count below reads, and a league whose
+        season has not kicked off yet is not a failure — it is every league,
+        every ten minutes, from now until September. Filing it there would trade
+        the old silent no-op for a permanent red, which is the same false alarm
+        wearing the other label; `cronJobState` reads any non-null outcome as
+        FAILING before it looks at staleness.
+      */
+      scored.push({ leagueId: league.id, name: league.name, awaitingKickoff: true });
+      continue;
+    }
+    anyWeek = true;
 
     // Bracket fixtures are laid *before* scoring, not after. Week 15 has no
     // matchups until the regular season finalises and `advancePlayoffs` writes
@@ -282,5 +285,11 @@ async function run(client: SqlClient, now: Date, request: Request): Promise<Next
 
   await recordCronRun(client, "score-week", notes.length > 0 ? notes.join("; ") : null);
 
-  return NextResponse.json({ at: now.toISOString(), week, leagues: scored });
+  /*
+    No top-level `week` any more: there is one per league, and publishing a
+    single number for a run that may span two seasons is how this went wrong.
+    `anyWeek` keeps the one fact the old field was actually read for — whether
+    this run had anything to score at all.
+  */
+  return NextResponse.json({ at: now.toISOString(), scoring: anyWeek, leagues: scored });
 }

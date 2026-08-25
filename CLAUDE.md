@@ -10,10 +10,9 @@ between machines and between sessions.
 **rostr** — open-source fantasy sports on Solana, football first. Web app and native app,
 targeting the **Solana Seeker dApp Store**.
 
-Owner: [@6figpsolseeker](https://github.com/6figpsolseeker). Previously shipped
-[`percolator-mobile`](https://github.com/6figpsolseeker/percolator-mobile) to Seeker
-(React Native 0.81 + Expo 54 bare, Mobile Wallet Adapter, Seed Vault) — **use it as the
-reference build for anything mobile.**
+Owner: [@6figpsolseeker](https://github.com/6figpsolseeker). Has already shipped a native
+Solana app to the Seeker dApp Store — React Native 0.81 + Expo 54 bare, Mobile Wallet
+Adapter, Seed Vault. **That is the proven stack for anything mobile here.**
 
 The thesis in one line: every other fantasy platform asks you to trust an administrator;
 this one replaces that trust with immutable rules, escrowed funds, and automatic
@@ -1947,10 +1946,35 @@ its trade window, and such a league cannot set a lineup either, so it is not ope
 deadline checked against a client-supplied week is not a deadline — anyone could trade in
 January by posting `week: 1`. Routes that legitimately display an arbitrary week (a past
 lineup) still accept one; routes enforcing a rule must not — and a rule-enforcing caller
-wants `transactionWeek` rather than this one. `score-week` still carries its own copy of
-the same SQL (`apps/web/src/app/api/cron/score-week/route.ts:46-54`) rather than importing
-it; that is tolerable, because it wants exactly the lagging semantics, but it is a copy and
-not a shared call.
+wants `transactionWeek` rather than this one.
+
+**`currentWeek` takes a season, and `score-week` no longer keeps its own copy of the query.**
+Both changed for issue #105 and its re-audit, and the second half is the part worth knowing.
+
+The query had no `g.season`, so with a second season's games ingested it answered the
+previous season's last week from any instant afterwards. The fix added the filter to both
+copies — and gave the cron's copy a season derived as `max(season)` over every active
+league, applied to every league in the loop. That is worse than what it replaced and needs
+no attacker: `seasonYear` comes off the request body and is range-checked nowhere, a league
+reaches IN_SEASON on its final draft pick, and **nothing in this repo ever writes SETTLED**,
+so one league declaring a later season makes the whole job return `{week: null, leagues: []}`
+before the loop, for everybody, every ten minutes — recorded as a **healthy** run, because a
+run over no weeks legitimately is one. In January 2027 it needs no stray league: any 2027
+league drafted while the 2026 championship sits in its 168-hour window starves that
+settlement permanently.
+
+It also made the two answers disagree for the first time. They had been byte-identical and
+wrong together; the fix gave the scoreboard the league's own season and the cron a global
+max.
+
+**Now each league is scored against its own season**, through the one `currentWeek`, so the
+copy is gone and the two cannot diverge. A league whose season has not kicked off reports
+`awaitingKickoff` and is skipped — deliberately not as `skipped`, which the failure count
+reads and which would have traded the old silent no-op for a permanent red.
+
+The season itself is read from the **frozen rules**, not `leagues.season`. That column is a
+denormalised copy written once at creation and, unlike `rules_hash` and `season_started_at`,
+carries no immutability trigger — the same argument that moved `visibility` off its column.
 
 **A trade never leaves the league it was proposed in, and until recently only the _veto_
 enforced that.** `proposeTrade` took the receiving team out of the request body and never
@@ -2973,10 +2997,10 @@ Tests run on **PGlite** — real Postgres compiled to WASM, in-process, no servi
 Docker, no credentials. `createTestDatabase()` in `packages/db/src/testing.ts` gives a
 fresh migrated database per test.
 
-The real database is **Supabase** (hosted, so it follows you between machines; also
-matches the stack in `percolator-launch`). **Provisioned since 2026-08-06** — the
-connection string is in `.env`, which is gitignored and has never been committed. This
-file and `SETUP-REQUIRED.md` both said "not set up yet" until 2026-08-14, and that
+The real database is **Supabase** (hosted, so it follows you between machines).
+**Provisioned since 2026-08-06** — the connection string is in `.env`, which is
+gitignored and has never been committed. This file and `SETUP-REQUIRED.md` both said
+"not set up yet" until 2026-08-14, and that
 staleness cost real time: a migration renumber was reasoned about on the premise that
 nothing had ever been applied.
 

@@ -57,7 +57,21 @@ export async function draftContext(leagueId: string): Promise<DraftContext> {
     isCommissioner: user !== null && league.commissioner_id === user.id,
     rules: stored.rules,
     shape: buildRosterShape(stored.rules.roster, NFL),
-    season: Number(league.season),
+    /*
+      From the frozen rules, not `leagues.season`.
+
+      The column is a denormalised copy written once at creation from this same
+      value, so the two agree today by construction — and unlike `rules_hash`
+      and `season_started_at` it carries no immutability trigger, so nothing
+      makes them go on agreeing. Members signed the document; the document
+      decides. Same reasoning as `visibility`, which was moved off its column
+      for exactly this reason.
+
+      It matters here because this season selects which season's games answer
+      "what week is it" on the scoreboard, and a wrong one shows week 1 forever
+      through the caller's `?? 1` fallback.
+    */
+    season: stored.rules.seasonYear,
   };
 }
 

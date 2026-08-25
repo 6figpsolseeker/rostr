@@ -1216,14 +1216,47 @@ describe("currentWeek is scoped to one season — #105", () => {
   });
 
   it("prefers the most recent kickoff within the season, not the highest week", async () => {
-    // Ordering is by kickoff and not by week number, so a fixture moved later
-    // than a higher-numbered one still answers correctly.
-    const fx = await setup();
-    await game(fx, 2026, 3, new Date("2026-09-27T17:00:00Z"), "w3b");
-    await game(fx, 2026, 4, new Date("2026-10-04T17:00:00Z"), "w4b");
+    /*
+      **A postponement, which is the only shape that tells the two orderings
+      apart — and the first version of this test did not have one.**
 
-    const between = new Date("2026-09-30T12:00:00Z");
-    expect(await currentWeek(fx.client, NFL.key, 2026, between)).toBe(3);
+      It staged week 3 on the 27th and week 4 on the 4th of October and asked on
+      the 30th. Week 4 is excluded by `kickoff_at <= at` before any ordering
+      runs, so there was one candidate and `ORDER BY g.week DESC` answered 3 as
+      well. The assertion could not fire under the mutation its own comment
+      named.
+
+      Here week 4 is played on schedule and week 3 is postponed to after it —
+      which `syncGames` writes verbatim and the NFL genuinely produces. Both are
+      candidates. By kickoff the answer is 3; by week number it is 4. Scoring the
+      wrong week is permanent, because a finalised week is never rescored.
+    */
+    const fx = await setup();
+    await game(fx, 2026, 4, new Date("2026-10-04T17:00:00Z"), "w4b");
+    await game(fx, 2026, 3, new Date("2026-10-11T17:00:00Z"), "w3-postponed");
+
+    const after = new Date("2026-10-12T12:00:00Z");
+    expect(await currentWeek(fx.client, NFL.key, 2026, after)).toBe(3);
+  });
+
+  it("chooses between two seasons that both have a game behind them", async () => {
+    /*
+      The filter has to **choose**, not merely reject.
+
+      Every other case here gives the named season no candidate and a foreign
+      season one, so they pin that a foreign row cannot be picked when there is
+      nothing else. They do not pin that it loses when there is. So
+      `g.season = $2` widened to `g.season >= $2` was green across the block —
+      live from September 2027, when a league frozen at 2026 would read 2027's
+      week number onto its scoreboard.
+    */
+    const fx = await setup();
+    await game(fx, 2026, 5, new Date("2026-10-11T17:00:00Z"), "s26w5");
+    await game(fx, 2027, 2, new Date("2027-09-19T17:00:00Z"), "s27w2");
+
+    const at = new Date("2027-09-26T12:00:00Z");
+    expect(await currentWeek(fx.client, NFL.key, 2026, at)).toBe(5);
+    expect(await currentWeek(fx.client, NFL.key, 2027, at)).toBe(2);
   });
 
   it("answers null before the season's first kickoff", async () => {
