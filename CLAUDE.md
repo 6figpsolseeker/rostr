@@ -144,12 +144,16 @@ lineup at all** — `setLineup` refuses with `SCHEDULE_MISSING`. `currentWeek` w
 minutes since it shipped. And with `games` hand-populated but no stat lines, every week
 would have finalised **0–0, permanently**, because a finalised week is never rescored.
 
-`docs/LIVE-SCORING.md` describes six automation jobs in the present tense. **Four now
-exist** — season sync, the stats poller, score finalisation and week finalisation.
-**Injury sync and inactives do not exist at all**, and that document argues inactives is
-the one that matters most. Its table now carries an "Exists?" column so the plan and the
-code can be told apart at a glance. Reading a plan as a description is how the claim above
-got written.
+`docs/LIVE-SCORING.md` describes six automation jobs in the present tense. **Five now
+exist** — season sync, the stats poller, score finalisation, week finalisation, and, since
+2026-08-25, **injury sync** (`/api/cron/injuries`, hourly, `packages/db/src/injuries.ts`).
+That passage said injury sync did not exist at all; it does, and it runs.
+
+**Inactives still does not exist**, and that document argues it is the one that matters
+most — a player ruled out ninety minutes before kickoff is the difference between a lineup
+that scores and one that does not. Its table carries an "Exists?" column so the plan and
+the code can be told apart at a glance. Reading a plan as a description is how the claim
+above got written, twice.
 
 **Corrected 2026-08-17, and this passage was the stale one.** It said `syncBoxScores` did
 not exist and that every player therefore scores zero. Both halves are now false, and the
@@ -173,7 +177,7 @@ deployed. Nothing revisited it, so it went on telling every session to discount 
 claim in the file — the confident sentence that stops anyone looking, which is the exact
 failure this document names three times elsewhere.
 
-`pnpm cron:status` on 2026-08-23:
+`pnpm cron:status` on 2026-08-25 — **seven jobs, and this table listed six**:
 
 | Job           | Cadence | State |
 | ------------- | ------- | ----- |
@@ -182,7 +186,13 @@ failure this document names three times elsewhere.
 | `score-week`  | 10m     | OK    |
 | `waivers`     | 60m     | OK    |
 | `trades`      | 60m     | OK    |
+| `injuries`    | 60m     | OK    |
 | `season-sync` | 1440m   | OK    |
+
+`injuries` was added with the injury sync and this table was not revisited — the same
+staleness the table itself was written to correct, one job later. **Do not hand-maintain
+this list.** `cron:status` reads the expected jobs out of `vercel.json`, so the command is
+never wrong; anything transcribed here is a snapshot with a date on it and nothing else.
 
 **And `season-sync` was failing until that morning, which is how this was found.** It had
 recorded `1 of 1 seasons failed` and nothing else — the failure that #419f994 exists to
