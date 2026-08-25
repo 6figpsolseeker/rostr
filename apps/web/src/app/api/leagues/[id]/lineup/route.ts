@@ -36,9 +36,16 @@ const STATUS: Record<string, number> = {
   // re-reads and submits again. 409 rather than 422: the request was well formed.
   LINEUP_MOVED: 409,
   SLOT_TYPE_UNKNOWN: 500,
-  // #98: this fell through to 400 with no diagnosis. A league whose games are
-  // not ingested cannot enforce a kickoff lock, so it refuses rather than
-  // accepting a lineup it could not police.
+  // A league whose games are not ingested cannot enforce a kickoff lock, so it
+  // refuses rather than accepting a lineup it could not police.
+  //
+  // **409 is a partial answer to #98 and this comment used to overstate it
+  // twice.** It said the code "fell through to 400 with no diagnosis"; the catch
+  // already returned the error message, and #98 says so itself ("the diagnosis
+  // is right"). What #98 actually asks for is **503** — the manager did nothing
+  // wrong and there is nothing they can do, which is a server-state problem
+  // wearing a 4xx. Moving it out of the 400 bucket is an improvement and not the
+  // fix; #98 stays open for the status itself.
   SCHEDULE_MISSING: 409,
 };
 

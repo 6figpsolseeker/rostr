@@ -13,6 +13,15 @@
  * refuses any change to them — so starting a player after seeing him score is
  * rejected regardless of what the client believed.
  *
+ * **That read is taken before the transaction opens, and it is worth being exact
+ * about what follows from it.** The lock decision is made against a snapshot,
+ * not against rows the request holds a lock on; what closes the gap is the
+ * per-slot compare on the way out, which refuses a slot that moved in between
+ * (`LINEUP_MOVED`) and skips one the request asserted nothing about. So a
+ * crafted request gets the same answer as the screen for every rule the lock
+ * expresses — and can additionally be told to try again, which the screen never
+ * is. Issue #100, and its re-audit.
+ *
  * ## A team always has a lineup by kickoff
  *
  * `resolveWeek` throws if a scheduled team has no lineup, deliberately: scoring
@@ -110,10 +119,12 @@ export class LineupError extends Error {
       /**
        * The stored lineup moved between validation and the write. **Retryable.**
        *
-       * Issue #100. `setLineup` validated against a snapshot taken before its
-       * transaction opened, so a manager whose PUT was in flight while the
-       * score-week cron's autofill committed had their lock check evaluated
-       * against a slot that was empty when they looked and is not any more.
+       * Issue #100. `setLineup` validates against a snapshot taken before its
+       * transaction opens — still, deliberately, so that nothing slow is done
+       * under a row lock — so a manager whose PUT is in flight while the
+       * score-week cron's autofill commits can have their lock check evaluated
+       * against a slot that was empty when they looked and is not any more. This
+       * is how that is caught, rather than how it was.
        *
        * Distinct from `INVALID_LINEUP` because the two need opposite responses:
        * an illegal lineup must be shown to the person so they can change it, and
@@ -701,19 +712,43 @@ export async function setLineup(
       const key = `${assignment.slotType}#${assignment.slotIndex}`;
       const expected = byKey.get(key) ?? null;
 
-      // Unchanged slots are written without a guard. They assert nothing about
-      // the state, so a concurrent write to one is not a conflict — and guarding
-      // them is what would break the editor's whole-lineup save.
-      if (expected === assignment.playerId) {
-        await tx.query(
-          `INSERT INTO lineups (team_id, week, slot_type_id, slot_index, player_id, locked_at)
-           VALUES ($1, $2, $3, $4, $5, NULL)
-           ON CONFLICT (team_id, week, slot_type_id, slot_index)
-           DO UPDATE SET player_id = EXCLUDED.player_id`,
-          [input.teamId, input.week, slotTypeId, assignment.slotIndex, assignment.playerId],
-        );
-        continue;
-      }
+      /*
+        An unchanged slot is **skipped**, not written.
+
+        The principle was already right here and the code did the opposite of it.
+        The comment read "they assert nothing about the state, so a concurrent
+        write to one is not a conflict" — and then wrote the value anyway, with
+        no `WHERE`, which is precisely how you assert something about the state:
+        it reverted whatever another writer had put there in the meantime.
+
+        The common instance is `null === null`, because the editor posts every
+        slot on every change. So the sequence the whole fix was written for —
+        read the lineup, the autofill commits a player into an empty slot, write
+        — clobbered that slot back to empty. And it did so **past the lock**: the
+        `FOR UPDATE` above had by then locked a row holding a player whose game
+        had kicked off, and `validateLineup` had already passed, because the
+        snapshot it judged said the slot was empty and an empty slot never locks.
+        That is the "a locked slot may not be emptied" bypass this module names
+        two hundred lines up, arriving through the write loop instead of the
+        validator.
+
+        Skipping rather than guarding, and the reason is not the one the
+        original comment gave. It said a whole-lineup compare "would refuse every
+        save issued within thirty seconds of an autofill pass", which is false:
+        the CAS baseline is not the client's snapshot but `current`, the server's
+        own read taken milliseconds earlier in the same request. A compare on
+        every slot would refuse only when something moved inside that window.
+
+        The real reason is smaller and holds: refusing the manager's whole save
+        because a slot they never touched moved is charging them for another
+        writer's timing. They asserted nothing about it, so we write nothing to
+        it, and whatever the other writer decided stands.
+
+        Nothing depends on the row existing. `loadLineup` synthesises an entry
+        for every starting slot whether or not a row is there, and `resolveWeek`
+        is preceded by `ensureLineups`, which materialises them.
+      */
+      if (expected === assignment.playerId) continue;
 
       const written = await tx.query<{ slot_index: number }>(
         `INSERT INTO lineups (team_id, week, slot_type_id, slot_index, player_id, locked_at)
@@ -1072,9 +1107,11 @@ export async function autoFillLineup(
  * tidy. The ordinary case is an empty slot, so the compared value is `NULL`, and
  * `NULL = NULL` is `NULL` rather than true — `=` would refuse to fill any row
  * that had ever been materialised, which is every slot the autofill itself could
- * not fill on an earlier pass. The `::uuid` cast goes with it: beside a `uuid`
- * column a bare parameter is `unknown` on the null path and Postgres cannot
- * resolve the operator.
+ * not fill on an earlier pass. The `::uuid` cast is kept for explicitness, not because it is required. This was
+ * described here as load-bearing — "beside a uuid column a bare parameter is
+ * unknown on the null path and Postgres cannot resolve the operator" — and
+ * `setLineup`'s copy of this compare omits it and resolves against both PGlite
+ * and Postgres. One of the two had to be wrong; measured, it was this sentence.
  *
  * **Not `WHERE lineups.player_id IS NULL`.** "Only ever fill an empty slot" is
  * the tempting simplification and it is wrong twice: it forbids evicting a
