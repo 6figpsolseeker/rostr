@@ -1792,8 +1792,15 @@ than rendering as a blank page for seven days.
 
 ### One league's failure never stops the others
 
-Every cron loops over leagues, and a throw inside that loop must never escape it. Four
-routes do this; three always did it correctly. `score-week`'s playoff block was the
+Every cron does per-league work, and a throw in any of it must never decide for the other
+leagues. Four routes loop; three always did the **loop** correctly.
+
+**And that framing is what hid #131 for months.** This section said "a throw inside that
+loop", named waivers among the three that were fine, and was right about the loop it was
+looking at — while `leaguesDueForWaivers` sat _above_ the loop doing a per-league read per
+league, outside the guard. One league whose rules would not parse threw there and 500'd the
+whole route: no league's waivers ran, every hour, until somebody looked. The rule is about
+**per-league work**, not about a syntactic loop body, and selection is per-league work. `score-week`'s playoff block was the
 exception and the **only** deny-by-default catch in the repo — an `instanceof PlayoffError`
 allowlist that rethrew everything else.
 
@@ -1801,12 +1808,24 @@ allowlist that rethrew everything else.
 run, and left every league after it in a query with **no `ORDER BY`** unscored — the same
 set every ten minutes, deterministically.
 
+Fixed by #223. `leaguesDueForWaivers` returns `{ due, problems }` and guards each league
+itself, so a league nobody can assess is named in `cron_runs` rather than taking the run
+down. Its re-audit found the guard's own comments overclaiming — a permanence the
+catch-by-shape cannot establish, and a heartbeat truncation that does not exist — which
+#239 corrects.
+
 **The fix is the shape, not the class.** Adding `BracketError` to the allowlist would have
 left `StandingsError` — reachable from the same `seedOrder` call — and every future class
 exactly as exposed, because none of these share a base class for an `instanceof` to catch.
 So it records and continues, like `waivers`, `trades`, `draft-tick`, and `score-week`'s own
 scoring catch. **If you find yourself adding an error class to an allowlist inside a
 per-league loop, the allowlist is the bug.**
+
+**Reporting is half of it, and the half that goes missing.** A per-league failure that is
+caught and continued but reaches only the JSON response body is invisible: Vercel keeps no
+cron response bodies, so `pnpm cron:status` reads green. Both `score-week` (#234) and
+`waivers` (#223) shipped a catch before they shipped the `cron_runs` note. If you add a
+guard, add the row.
 
 **Nothing is swallowed.** The failure is reported as `bracketProblem`, because a league
 whose bracket can never be built would otherwise look healthy forever. `BracketError`
