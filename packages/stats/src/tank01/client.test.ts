@@ -188,6 +188,22 @@ describe("retrying a request — #97", () => {
   }
 
   /** No wall-clock cost, and it records the waits so the shape can be asserted. */
+  /** A 429 carrying the headers RapidAPI sends when the window is spent. */
+  function spentQuota(resetSeconds: string) {
+    return vi.fn(() =>
+      Promise.resolve({
+        ok: false,
+        status: 429,
+        headers: new Headers({
+          "x-ratelimit-requests-limit": "1000",
+          "x-ratelimit-requests-remaining": "0",
+          "x-ratelimit-requests-reset": resetSeconds,
+        }),
+        json: () => Promise.resolve({}),
+      } as unknown as Response),
+    );
+  }
+
   function recordingSleep() {
     const waits: number[] = [];
     return {
@@ -308,5 +324,199 @@ describe("retrying a request — #97", () => {
 
     await expect(client.get("getNFLBoxScore")).resolves.toEqual(["ok"]);
     expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it("waits for real when nothing injects a clock", async () => {
+    /*
+      **The production backoff, which every other test here replaces.**
+
+      All the retry cases inject `sleepImpl`, so they assert that the client
+      *computes* 200 and 400 and hands them to something — not that anything
+      waits. Defaulting the sleep to `() => Promise.resolve()` passed all
+      nineteen of them, and a retry with no wait is a way to meet a burst limit
+      three times faster, which is the failure the retry exists to avoid.
+
+      Measured loosely: the assertion is that time passed at all, not how much.
+      A tighter bound would be a timing flake on a busy machine, and zero versus
+      six hundred milliseconds is the distinction worth having.
+    */
+    const fetchImpl = flaky(1, 429);
+    const client = new Tank01Client({ apiKey: "k", fetchImpl });
+
+    const started = Date.now();
+    await client.get("getNFLBoxScore", { gameID: "g" });
+
+    expect(Date.now() - started).toBeGreaterThanOrEqual(150);
+  });
+
+  it("does not retry a 429 whose window is hours away", async () => {
+    /*
+      A burst limit and a spent quota both arrive as 429 and need opposite
+      answers — the throw site says so in as many words, and then retried both.
+
+      With `remaining: 0` and a reset measured in hours, two more calls at 200ms
+      and 400ms cannot succeed. They are spent on the allowance that just
+      refused, at the moment it has none left, and the next tick will ask again
+      in ten minutes regardless.
+    */
+    const fetchImpl = spentQuota("54213");
+    const client = new Tank01Client({ apiKey: "k", fetchImpl });
+
+    await expect(client.get("getNFLBoxScore", { gameID: "g" })).rejects.toThrow(/429/);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it("still retries a 429 whose window rolls in seconds", async () => {
+    // The other side of the same header. A burst limit is exactly what the
+    // retry is for, and refusing to retry it would be the fix overshooting.
+    const fetchImpl = spentQuota("3");
+    const client = new Tank01Client({ apiKey: "k", fetchImpl, ...recordingSleep() });
+
+    await expect(client.get("getNFLBoxScore", { gameID: "g" })).rejects.toThrow(/429/);
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+  });
+
+  it("retries every 5xx, not only the one a test happened to stage", async () => {
+    /*
+      The predicate was a regex over the message — `/HTTP 5[0-9][0-9]/` — and 503
+      was the only status any test staged, so narrowing it to `/HTTP 503/` was
+      green. 500, 502 and 504 are the ordinary gateway failures and would have
+      silently stopped retrying, with a test still named "retries a 5xx".
+    */
+    for (const status of [500, 502, 504]) {
+      const fetchImpl = flaky(1, status);
+      const client = new Tank01Client({ apiKey: "k", fetchImpl, ...recordingSleep() });
+
+      await expect(client.get("getNFLBoxScore", { gameID: "g" })).resolves.toBeDefined();
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+    }
+  });
+
+  it("retries a connection lost while the body is arriving", async () => {
+    /*
+      **The half of "a socket reset mid-Sunday" that was not covered.**
+
+      `fetch` resolves at the headers and streams the rest, so a reset partway
+      through rejects at `response.json()` rather than at the call — and a box
+      score is the largest response this client asks for, tens of kilobytes over
+      many packets, which is precisely where it happens. The parse sat outside
+      every `try`, so it arrived as a bare `TypeError`, failed the
+      `instanceof ProviderError` check, and was thrown on attempt one.
+
+      The existing transport test resets at connection time, which is the shape
+      that was already handled.
+    */
+    let calls = 0;
+    const fetchImpl = vi.fn(() => {
+      calls++;
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        headers: new Headers({}),
+        json: () =>
+          calls === 1
+            ? Promise.reject(new TypeError("terminated"))
+            : Promise.resolve({ statusCode: 200, body: { ok: true } }),
+      } as unknown as Response);
+    });
+
+    const client = new Tank01Client({ apiKey: "k", fetchImpl, ...recordingSleep() });
+
+    await expect(client.get("getNFLBoxScore", { gameID: "g" })).resolves.toEqual({
+      ok: true,
+    });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not retry an error Tank01 states in a 200 body", async () => {
+    /*
+      The predicate used to substring-match the message for "failed", and this
+      site interpolates provider text into it — so a Tank01 error string
+      containing that word decided our retry policy. Its comment claimed the
+      message was "composed in one place below", which this line disproves.
+
+      Deterministic errors about the request answer the same however often they
+      are asked.
+    */
+    const fetchImpl = vi.fn(() =>
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        headers: new Headers({}),
+        json: () => Promise.resolve({ statusCode: 200, error: "Request failed: bad gameID" }),
+      } as unknown as Response),
+    );
+
+    const client = new Tank01Client({ apiKey: "k", fetchImpl, ...recordingSleep() });
+
+    await expect(client.get("getNFLBoxScore", { gameID: "g" })).rejects.toThrow(/bad gameID/);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries a rate limit declared inside a 200 body", async () => {
+    /*
+      The narrowing `randomness.ts` was rewritten to add, and CLAUDE.md records
+      the cost of not having: some providers answer a rate limit as HTTP 200
+      with the limit in the error body, "where the HTTP-status retry never sees
+      it" — so the retry never fires for the case it was added for.
+
+      `statusCode` has been on this envelope since it was written and was read
+      nowhere. Whether Tank01 uses it this way is unverified; handling it costs
+      nothing and not handling it costs the whole point.
+    */
+    let calls = 0;
+    const fetchImpl = vi.fn(() => {
+      calls++;
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        headers: new Headers({}),
+        json: () =>
+          Promise.resolve(
+            calls === 1
+              ? { statusCode: 429, error: "Too many requests" }
+              : { statusCode: 200, body: { ok: true } },
+          ),
+      } as unknown as Response);
+    });
+
+    const client = new Tank01Client({ apiKey: "k", fetchImpl, ...recordingSleep() });
+
+    await expect(client.get("getNFLBoxScore", { gameID: "g" })).resolves.toEqual({ ok: true });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it("treats a nonsense attempt count as the default rather than throwing nothing", async () => {
+    // `options.attempts ?? REQUEST_ATTEMPTS` let 0 and NaN through, the loop ran
+    // zero times, and `throw lastError` threw `undefined` — no HTTP call, and
+    // recorded downstream as the literal string "undefined".
+    const fetchImpl = flaky(1, 429);
+    const client = new Tank01Client({
+      apiKey: "k",
+      fetchImpl,
+      attempts: 0,
+      ...recordingSleep(),
+    });
+
+    // Clamped to one attempt, not zero: it makes a real call and throws a real
+    // error. Before, it made none and threw `undefined`.
+    await expect(client.get("getNFLBoxScore", { gameID: "g" })).rejects.toThrow(/429/);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it("doubles the wait rather than adding to it", async () => {
+    // Two waits cannot tell 200·2^n from 200·n — they are 200 and 400 either
+    // way. A fourth attempt separates them, which is what the injectable
+    // `attempts` was added for and what no test used.
+    const { sleepImpl, waits } = recordingSleep();
+    const client = new Tank01Client({
+      apiKey: "k",
+      fetchImpl: flaky(99, 429),
+      attempts: 4,
+      sleepImpl,
+    });
+
+    await expect(client.get("getNFLBoxScore", { gameID: "g" })).rejects.toThrow(/429/);
+    expect(waits).toEqual([200, 400, 800]);
   });
 });

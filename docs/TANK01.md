@@ -1058,5 +1058,15 @@ Outstanding questions, none blocking:
 - **`getNFLChangelog` returned empty** for a 3-day window. Its behaviour during
   an active season, and whether it is a usable stat-correction signal, is
   untested.
-- **Rate limits.** Basic is 1,000 calls/month. A live season is ~700 by our
-  estimate, so **Pro ($10/mo) before Week 1** is not optional.
+- **Rate limits.** The plan header says **1,000 per day**, not per month: a live
+  call on 2026-08-22 came back `x-ratelimit-requests-limit: 1000`,
+  `-remaining: 998`, `-reset: ~54000` (about fifteen hours), and a monthly window
+  would not reset in fifteen hours. This line said "1,000 calls/month" and
+  `docs/SETUP-REQUIRED.md` recorded the reading that contradicts it.
+
+**What a 429 looks like on the wire is still unrecorded.** Nobody here has
+observed one — the reading above came from a 200. So the client's handling of it
+is reasoned from RapidAPI's documented headers rather than from a captured
+response, and the burst-versus-quota split it now makes is the part to verify
+first if the retry ever misbehaves. A live season is ~700 by our
+estimate, so **Pro ($10/mo) before Week 1** is not optional.
