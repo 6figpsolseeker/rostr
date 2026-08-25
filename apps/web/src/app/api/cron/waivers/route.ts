@@ -91,11 +91,17 @@ async function run(client: SqlClient, now: Date): Promise<NextResponse> {
   /*
     Both kinds of failure reach the heartbeat, and they are different facts.
 
-    A league that *ran* and threw has a bad claim or a bad roster and will
-    probably be fine next hour. A league that could not even be **asked** whether
-    it was due will never process a claim again until somebody looks — its rules
-    do not parse, or its waiver schedule cannot be computed. Collapsing the two
-    into one count would hide the permanent one behind the transient one.
+    A league that *ran* and threw got as far as its claims. A league that could
+    not even be **asked** whether it was due did not, and that is worth saying
+    separately: it is the state in which nothing about the league's waivers is
+    known, so it cannot be reasoned about from the rest of the response.
+
+    **Neither bucket is "permanent" and this comment used to say the second was.**
+    Both catches are by shape, so each holds a mixture — an unparseable rule set
+    sits beside a statement timeout in the same list. The split is by *how far the
+    run got*, not by whether the fault will recur, and a reader who takes it for
+    the latter will leave a transient fault alone waiting for a human, or send a
+    human at one that fixed itself an hour ago.
   */
   const notes = [
     failed > 0 ? `${failed} of ${due.length} leagues failed` : null,
@@ -111,8 +117,12 @@ async function run(client: SqlClient, now: Date): Promise<NextResponse> {
     at: now.toISOString(),
     due: due.length,
     runs,
-    // Surfaced in the response as well as the heartbeat: the heartbeat truncates
-    // and this is the one place the whole list is legible.
+    // Structured, where the heartbeat carries the same content flattened into a
+    // sentence. Nothing truncates — `cron_runs.last_outcome` is unbounded `text`
+    // and `cron:status` prints it whole; an earlier comment here claimed a
+    // truncation that does not exist anywhere in the path. What the heartbeat
+    // genuinely does not do is keep history: one row per job, upserted, so the
+    // record of this hour is gone next hour.
     ...(problems.length > 0 ? { unreadable: problems } : {}),
   });
 }

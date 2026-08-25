@@ -1185,7 +1185,6 @@ export function nextWaiverRun(rules: LeagueRules, now: Date): Date {
   return nextProcessingAt(now, rules.waivers);
 }
 
-/** Leagues whose waiver run is due and has not happened since. */
 /**
  * Which leagues are due, and which could not be asked.
  *
@@ -1197,7 +1196,15 @@ export function nextWaiverRun(rules: LeagueRules, now: Date): Date {
  */
 export interface WaiverDueSelection {
   readonly due: readonly string[];
-  /** Leagues whose due-ness could not be computed. Never empty silently. */
+  /**
+   * Leagues whose due-ness could not be computed.
+   *
+   * Every path that declines to answer for a league lands here — the two
+   * `continue`s below included. They said "never empty silently" while skipping
+   * in exactly the way that sentence forbade; both are unreachable in
+   * production, which is a reason to keep the claim true cheaply rather than a
+   * reason to have made it falsely.
+   */
   readonly problems: readonly { readonly leagueId: string; readonly error: string }[];
 }
 
@@ -1220,22 +1227,37 @@ export async function leaguesDueForWaivers(
       One league's failure must not decide for the others, and **selection is
       inside that rule as much as processing is** — issue #131.
 
-      The cron guards `processWaivers` per league and this function ran before
-      that guard existed, so a throw here escaped it and 500'd the whole route:
-      no league's waivers ran, deterministically, every hour, forever. Exactly
-      the shape `CLAUDE.md` documents under "One league's failure never stops
-      the others", which named the four cron routes and counted waivers among
-      the three that always did it correctly — the loop it was looking at was
-      the one below this.
+      The cron has guarded `processWaivers` per league since it was written, and
+      this call sat **above** that loop — before it in program order, not in
+      time. (An earlier draft of this comment said the guard did not yet exist,
+      which is not what happened and makes the bug sound older than it was.) So
+      a throw here escaped the guard and 500'd the whole route: no league's
+      waivers ran, deterministically, every hour. That is the shape `CLAUDE.md`
+      documents under "One league's failure never stops the others", which counts
+      waivers among the routes that do it correctly — true of the loop it was
+      looking at, and the reason the rule needs stating about *selection* too.
 
-      Two things in here can throw for a single league. `getLeagueRules` parses
-      a stored document, and `nextProcessingAt` reads `rules.waivers`, whose
-      weekday is validated nowhere (#132) — so one league with an unusable
-      waiver schedule silently stopped everybody's.
+      **Not silently.** The route already stamped `cron_runs` and rethrew, so
+      `pnpm cron:status` read FAILING throughout. What it could not say was
+      *which* league, which is what `problems` adds.
+
+      Four things in here can throw for one league: `getLeagueRules` issues a
+      query and then `JSON.parse`s what it finds, the `min(created_at)` query
+      below is a second round trip, and `nextProcessingAt` walks
+      `rules.waivers`. Both of the cheap content-level causes are now closed —
+      the timezone by `validateLeagueRules` and the weekday by #230 — so the
+      guard is latent, and deliberately kept: it is about the shape rather than
+      any one cause.
     */
     try {
       const stored = await getLeagueRules(db, row.id);
-      if (!stored) continue;
+      if (!stored) {
+        // Unrepresentable — `createLeague` writes both rows in one transaction
+        // and `league_rules` carries a DELETE trigger. Reported rather than
+        // skipped so the type's promise above is true of every path.
+        problems.push({ leagueId: row.id, error: "league has no stored rules" });
+        continue;
+      }
 
       // The run this league is currently waiting for. If the next one is more
       // than a full cycle away, the moment has passed and claims are overdue.
@@ -1244,22 +1266,36 @@ export async function leaguesDueForWaivers(
           WHERE league_id = $1 AND state = 'PENDING'`,
         [row.id],
       );
-      if (!oldest?.created_at) continue;
+      if (!oldest?.created_at) {
+        // Also unrepresentable: the selection query joins a PENDING claim, so
+        // one exists by construction. Same reasoning as above.
+        problems.push({ leagueId: row.id, error: "no pending claim to date the run from" });
+        continue;
+      }
 
       if (nextProcessingAt(new Date(oldest.created_at), stored.rules.waivers) <= now) {
         due.push(row.id);
       }
     } catch (error) {
       /*
-        Recorded, never swallowed. A league whose schedule cannot be computed
-        will never process a claim again, and a selection that quietly skipped it
-        would look identical to a league with nothing due — which is the state
-        this function reports for most leagues most hours.
+        Recorded, never swallowed. A selection that quietly skipped a league
+        would look identical to a league with nothing due — the state this
+        function reports for most leagues most hours.
 
-        Caught by shape rather than by class, deliberately. An `instanceof`
-        allowlist here would be the same defect this whole change is about:
-        `CLAUDE.md` — "if you find yourself adding an error class to an allowlist
-        inside a per-league loop, the allowlist is the bug."
+        **This does not mean the league is permanently stuck**, and an earlier
+        version of this comment said it did. Catching by shape is right, and its
+        price is that a transient fault — a statement timeout, a dropped
+        connection, a deadlock on either query above — arrives here looking
+        exactly like an unparseable rule set. Both are reported; only one
+        recovers unaided next hour. Do not let the reporting copy claim a
+        permanence the catch cannot establish.
+
+        Caught by shape rather than by class, deliberately — but note the rule it
+        follows is `CLAUDE.md`'s "if you find yourself adding an error class to an
+        allowlist inside a per-league loop, the allowlist is the bug", which came
+        out of #38 in `score-week`. It is a rule this change obeys, not the
+        defect this change is about; those are different, and conflating them
+        made #131 sound like a repeat of a bug it has nothing to do with.
       */
       problems.push({
         leagueId: row.id,

@@ -9,6 +9,7 @@ import { moveToIr } from "./injured-reserve.js";
 import type { PGliteClient } from "./testing.js";
 import {
   leaguesDueForWaivers,
+  nextWaiverRun,
   addFreeAgent,
   availabilityOf,
   availablePlayers,
@@ -1349,13 +1350,17 @@ describe("choosing which leagues are due — #131", () => {
    * A client that fails one league's rules read and passes everything else
    * through untouched.
    */
-  function failingFor(client: PGliteClient, leagueId: string): PGliteClient {
+  function failingOn(
+    client: PGliteClient,
+    match: string,
+    leagueIds: readonly string[],
+  ): PGliteClient {
     return new Proxy(client, {
       get(target, prop, receiver) {
         if (prop !== "query") return Reflect.get(target, prop, receiver);
         return async (sql: string, params?: unknown[]) => {
-          if (sql.includes("league_rules") && params?.includes(leagueId)) {
-            throw new Error("simulated: this league's rules could not be read");
+          if (sql.includes(match) && leagueIds.some((id) => params?.includes(id))) {
+            throw new Error("simulated: this league could not be read");
           }
           return (
             target as unknown as { query: (s: string, p?: unknown[]) => Promise<unknown> }
@@ -1365,9 +1370,29 @@ describe("choosing which leagues are due — #131", () => {
     }) as PGliteClient;
   }
 
+  /** The original: fails the rules read, which is the guard's first statement. */
+  const failingFor = (client: PGliteClient, leagueId: string): PGliteClient =>
+    failingOn(client, "league_rules", [leagueId]);
+
+  /*
+    Fails the **second** query in the guarded region instead.
+
+    Without this the guard was only ever proven over its first statement, so
+    narrowing the `try` to wrap `getLeagueRules` alone — which looks like a
+    tightening rather than a regression — would have left every later throw
+    escaping again, and all three original tests stayed green. The region has
+    four throw sites and the injection reached one.
+  */
+  const failingLater = (client: PGliteClient, leagueId: string): PGliteClient =>
+    failingOn(client, "min(created_at)", [leagueId]);
+
   /** A second league in the same database, with a claim of its own pending. */
-  async function secondLeague(client: PGliteClient): Promise<string> {
-    const commissioner = await createUser(client, "second@example.com", "Second");
+  async function secondLeague(
+    client: PGliteClient,
+    email = "second@example.com",
+    name = "Second",
+  ): Promise<string> {
+    const commissioner = await createUser(client, email, name);
     const rules = buildNflPprRules({ seasonYear: 2026, draft: DRAFT }) as LeagueRules;
     const league = await createLeague(client, NFL, {
       name: "The Other League",
@@ -1388,51 +1413,151 @@ describe("choosing which leagues are due — #131", () => {
 
   const WEDNESDAY = new Date("2026-09-16T08:00:00Z");
 
-  it("still returns the healthy leagues when one cannot be checked", async () => {
-    const fx = await setup();
-    await dropPlayer(fx.client, fx.leagueId, fx.teams[0], fx.players.get("held"), MONDAY);
+  /** The healthy fixture league, playing and with one claim pending. */
+  async function playingWithAClaim(fx: Fixture): Promise<void> {
+    await dropPlayer(fx.client, fx.leagueId, fx.teams[0]!, fx.players.get("held")!, MONDAY);
     await submitClaim(fx.client, {
       leagueId: fx.leagueId,
-      teamId: fx.teams[1],
-      addPlayerId: fx.players.get("held"),
+      teamId: fx.teams[1]!,
+      addPlayerId: fx.players.get("held")!,
       now: MONDAY,
     });
-
     // The selection query only considers leagues actually playing.
     await fx.client.query("UPDATE leagues SET state = 'IN_SEASON' WHERE id = $1", [
       fx.leagueId,
     ]);
+  }
+
+  it("still returns the healthy leagues when one cannot be checked", async () => {
+    const fx = await setup();
+    await playingWithAClaim(fx);
 
     const broken = await secondLeague(fx.client);
-    const client = failingFor(fx.client, broken);
-
-    const selection = await leaguesDueForWaivers(client, WEDNESDAY);
+    const selection = await leaguesDueForWaivers(failingFor(fx.client, broken), WEDNESDAY);
 
     // The whole point. Before the fix this call threw and the cron 500'd, so no
     // league's waivers ran — including every healthy one.
-    expect(selection.due).toContain(fx.leagueId);
+    expect(selection.due).toEqual([fx.leagueId]);
+
+    /*
+      And the healthy league is not blamed for its neighbour.
+
+      `toEqual` rather than `toContain`, on both sides, because attribution is
+      the assertion nobody had written: reporting `rows[0].id` instead of
+      `row.id` survived every original test — one of them had a single-league
+      row set where the two coincide, and the other never looked at `problems`
+      at all. A heartbeat naming an innocent league sends somebody to investigate
+      a healthy one while the stuck league goes on not processing claims.
+    */
+    expect(selection.problems.map((entry) => entry.leagueId)).toEqual([broken]);
   });
 
   it("reports the league it could not check, rather than skipping it silently", async () => {
     /*
-      A league whose due-ness cannot be computed will never process another claim
-      until somebody looks at it. Skipping in silence would make it identical to a
-      league with nothing due — which is what this reports for most leagues most
-      hours, so the difference has to be said out loud.
+      A league whose due-ness cannot be computed is one nothing is known about —
+      skipping in silence would make it identical to a league with nothing due,
+      which is what this reports for most leagues most hours.
     */
     const fx = await setup();
     const broken = await secondLeague(fx.client);
-    const client = failingFor(fx.client, broken);
 
-    const selection = await leaguesDueForWaivers(client, WEDNESDAY);
+    const selection = await leaguesDueForWaivers(failingFor(fx.client, broken), WEDNESDAY);
 
     expect(selection.problems.map((entry) => entry.leagueId)).toContain(broken);
     expect(selection.due).not.toContain(broken);
   });
 
-  it("reports no problems when every league is readable", async () => {
+  it("guards the whole of the per-league work, not just its first statement", async () => {
     const fx = await setup();
-    const selection = await leaguesDueForWaivers(fx.client, MONDAY);
+    await playingWithAClaim(fx);
+    const broken = await secondLeague(fx.client);
+
+    const selection = await leaguesDueForWaivers(failingLater(fx.client, broken), WEDNESDAY);
+
+    expect(selection.due).toEqual([fx.leagueId]);
+    expect(selection.problems.map((entry) => entry.leagueId)).toEqual([broken]);
+  });
+
+  it("keeps going after a failure rather than stopping at the first", async () => {
+    /*
+      Two broken leagues, so the assertion is independent of visit order.
+
+      The selection query has no `ORDER BY`, so a `break` in the catch — the
+      natural-looking edit for someone who reads the loop as "find the due ones"
+      — passed or failed at random depending on which league Postgres returned
+      first. An intermittent red on this repo gets re-run and dismissed, which
+      is worse than a deterministic escape.
+    */
+    const fx = await setup();
+    await playingWithAClaim(fx);
+    const first = await secondLeague(fx.client, "b1@example.com", "Broken One");
+    const second = await secondLeague(fx.client, "b2@example.com", "Broken Two");
+
+    const client = failingOn(fx.client, "league_rules", [first, second]);
+    const selection = await leaguesDueForWaivers(client, WEDNESDAY);
+
+    expect(selection.problems).toHaveLength(2);
+    expect(selection.due).toEqual([fx.leagueId]);
+  });
+
+  it("does not report a problem when every league is readable", async () => {
+    /*
+      **The negative control, and the first version of it ran zero iterations.**
+
+      It called `leaguesDueForWaivers` on the bare fixture, whose league is
+      FORMING with no claims — so the selection query matched nothing, the loop
+      never executed, and `problems` was `[]` because it was initialised `[]`.
+      It passed with the whole `try`/`catch` deleted, and with the function
+      stubbed to return empty. A test with no rows cannot tell you what the loop
+      does with a row.
+
+      This one gives it two readable leagues to walk.
+    */
+    const fx = await setup();
+    await playingWithAClaim(fx);
+    const other = await secondLeague(fx.client);
+
+    const selection = await leaguesDueForWaivers(fx.client, WEDNESDAY);
+
     expect(selection.problems).toEqual([]);
+    expect([...selection.due].sort()).toEqual([fx.leagueId, other].sort());
+  });
+
+  it("does not call a league due before its processing moment", async () => {
+    /*
+      **The rule itself, which had no test at all in the repo.**
+
+      Deleting the schedule comparison and pushing every league unconditionally
+      passed all three original tests — the healthy one was genuinely due at the
+      instant they used, so `toContain` held either way. What that mutation
+      produces is every pending claim resolving on the next hourly tick: the
+      waiver period gone, the blind cycle gone, a claim awarded within an hour of
+      being filed. Both directions are asserted here, the way the sibling
+      `leaguesWithDueTrades` tests already do.
+    */
+    const fx = await setup();
+    await playingWithAClaim(fx);
+
+    // Read the claim back rather than assuming when it was filed. `created_at`
+    // is deliberately the database's and not the caller's, so that a submission
+    // time cannot be chosen by whoever is submitting — which means a fixture
+    // cannot choose it either, and asserting against a hand-picked instant here
+    // would be asserting against a value the product does not write.
+    const [claim] = await fx.client.query<{ created_at: string }>(
+      "SELECT created_at FROM waiver_claims WHERE league_id = $1",
+      [fx.leagueId],
+    );
+    const filed = new Date(claim!.created_at);
+    const runsAt = nextWaiverRun(
+      buildNflPprRules({ seasonYear: 2026, draft: DRAFT }) as LeagueRules,
+      filed,
+    );
+
+    // A minute before its processing moment: filed, waiting, not due.
+    const justBefore = new Date(runsAt.getTime() - 60_000);
+    expect((await leaguesDueForWaivers(fx.client, justBefore)).due).toEqual([]);
+
+    // And due the moment it arrives.
+    expect((await leaguesDueForWaivers(fx.client, runsAt)).due).toEqual([fx.leagueId]);
   });
 });
