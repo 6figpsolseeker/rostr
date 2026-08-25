@@ -1002,8 +1002,29 @@ describe("the waiver weekday is checked against the union — #132", () => {
       waivers: { ...rules.waivers, weeklyLock: { ...rules.waivers.weeklyLock, day: "funday" } },
     } as LeagueRules;
 
-    const problems = validateLeagueRules(broken, NFL);
-    expect(problems.some((p) => p.includes("WEDNESDAY"))).toBe(true);
+    /*
+      Matched against the problem for **this** field, not against the whole
+      array. Searching every problem for "WEDNESDAY" passed for the wrong
+      reason under a mutation that dropped Wednesday from the accepted set: the
+      substring matched the message *rejecting* Wednesday. A test named "names
+      the acceptable values" was satisfied by a value being named unacceptable.
+    */
+    const problem = validateLeagueRules(broken, NFL).find((p) =>
+      p.startsWith("weeklyLock.day"),
+    );
+
+    expect(problem).toContain("funday");
+    for (const day of [
+      "SUNDAY",
+      "MONDAY",
+      "TUESDAY",
+      "WEDNESDAY",
+      "THURSDAY",
+      "FRIDAY",
+      "SATURDAY",
+    ]) {
+      expect(problem).toContain(day);
+    }
   });
 
   it("is case-sensitive, because the stored value is", () => {
@@ -1019,6 +1040,114 @@ describe("the waiver weekday is checked against the union — #132", () => {
     } as LeagueRules;
 
     expect(validateLeagueRules(broken, NFL).length).toBeGreaterThan(0);
+  });
+
+  it("accepts every one of the seven, so the list cannot lose a day", () => {
+    /*
+      Both directions. Three tests refuse a bad value and none accepted a good
+      one, so dropping a day from `WEEKDAYS` was green — and the consequence is
+      the opposite of the bug being fixed: a validator that refuses a correct,
+      ordinary rule set. Sunday and Saturday are the ones nobody would notice.
+    */
+    const days = ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
+
+    for (const day of days) {
+      const rules = {
+        ...FIXTURE,
+        waivers: {
+          ...FIXTURE.waivers,
+          weeklyLock: { day, hour: 0 },
+          processing: { day, hour: 3 },
+        },
+      } as LeagueRules;
+
+      expect(validateLeagueRules(rules, NFL)).toEqual([]);
+    }
+  });
+
+  it("refuses a processing run earlier in the day than its own lock", () => {
+    /*
+      **The silent one, two lines from the loud one.**
+
+      The pair was checked for identity only. `everyoneIsOnWaivers` asks whether
+      now is before the processing run that follows the most recent lock, and
+      `nextProcessingAt` is strictly after — so a processing hour earlier in the
+      same weekday pushes that answer a whole cycle forward, and every unrostered
+      player sits on waivers for 167 hours of every week.
+
+      Free agency open for one hour, all season, in a document that is frozen and
+      hashed and cannot be amended. Nothing throws; every function returns a
+      plausible answer. The weekday check got written because its failure is
+      loud, and this one is the reason that is not the right filter.
+    */
+    const broken = {
+      ...FIXTURE,
+      waivers: {
+        ...FIXTURE.waivers,
+        weeklyLock: { day: "WEDNESDAY", hour: 4 },
+        processing: { day: "WEDNESDAY", hour: 3 },
+      },
+    } as LeagueRules;
+
+    expect(
+      validateLeagueRules(broken, NFL).some((p) => p.includes("after the weekly lock")),
+    ).toBe(true);
+  });
+
+  it("allows the two moments on different days in any order", () => {
+    // Tuesday's lock and Wednesday's run is the default, and the ordering rule
+    // must not reach across days — a lock late on Tuesday with a run early on
+    // Wednesday is the ordinary arrangement.
+    const rules = {
+      ...FIXTURE,
+      waivers: {
+        ...FIXTURE.waivers,
+        weeklyLock: { day: "TUESDAY", hour: 23 },
+        processing: { day: "WEDNESDAY", hour: 3 },
+      },
+    } as LeagueRules;
+
+    expect(validateLeagueRules(rules, NFL)).toEqual([]);
+  });
+
+  it("refuses a waiver period that is fractional or absurd", () => {
+    /*
+      It was bounded below only. A fractional value passed here and threw from
+      `canonicalize` instead, which breaks this module's contract that a creator
+      sees everything wrong at once; and with no ceiling, 3650 meant no player
+      ever cleared waivers for the life of the league.
+    */
+    for (const days of [1.5, 3650]) {
+      const broken = {
+        ...FIXTURE,
+        waivers: { ...FIXTURE.waivers, waiverPeriodDays: days },
+      } as LeagueRules;
+
+      expect(validateLeagueRules(broken, NFL).some((p) => p.includes("waiverPeriodDays"))).toBe(
+        true,
+      );
+    }
+  });
+
+  it("refuses a tiebreaker that is not one of the five", () => {
+    /*
+      The same gap as the weekday, one field over, failing far more quietly.
+
+      `scoresFor` has no default arm, so an unrecognised link returns undefined
+      and `orderGroup` reads that as "not applicable here" — the typo is dropped
+      from a chain that is signed, hashed and unamendable. Nothing throws. It
+      just seeds the playoffs differently, and seed 1 carries the best-record
+      prize. Issue #132 asked for this sweep in the same pass.
+    */
+    const broken = {
+      ...FIXTURE,
+      schedule: {
+        ...FIXTURE.schedule,
+        tiebreakers: ["WIN_PCT", "POINTS_FRO", "LOWEST_TEAM_ID"],
+      },
+    } as LeagueRules;
+
+    expect(validateLeagueRules(broken, NFL).some((p) => p.includes("POINTS_FRO"))).toBe(true);
   });
 
   it("accepts the default rule set unchanged", () => {

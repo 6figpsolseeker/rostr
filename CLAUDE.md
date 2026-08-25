@@ -1895,9 +1895,15 @@ voters, so `vetoesRequired` returns 0 — and a threshold of zero would otherwis
 trade is vetoed before anyone votes. `isVetoed` short-circuits it.
 
 **Accepting freezes the players; it does not move them.** Between acceptance and execution
-they are in escrow: `lockedByTrade` is consulted by `dropPlayer` (which throws
-`IN_A_TRADE`), by `proposeTrade`, and by `acceptTrade` — the proposal's checks are stale by
-the time anyone accepts.
+they are in escrow. The freeze is consulted at **five** sites: `refuseIfFrozen` in
+`dropPlayer` (which throws `IN_A_TRADE`) and in `addFreeAgent`'s drop leg, `lockedByTrade`
+in `proposeTrade` and in `acceptTrade` — the proposal's checks are stale by the time anyone
+accepts — and a pre-resolution filter in `processWaivers`, which fails the claim rather than
+throwing, because a throw there rolls back every league's run.
+
+**This sentence named three of the five and #119 was closed without touching it.** That
+issue's title names this file; the fix reached `docs/DECISIONS.md` only, and got the count
+wrong there too. Recount before repeating it.
 
 **In `acceptTrade`, take every row lock first and read the freeze set second.** The obvious
 order is wrong and looks right: two concurrent accepts of the same player both read an

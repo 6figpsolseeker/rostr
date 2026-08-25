@@ -19,7 +19,7 @@ import {
   MILLI_POINTS_PER_POINT,
   MIN_BUY_IN_BASE_UNITS,
 } from "./types.js";
-import type { LeagueRules, ScoringRule } from "./types.js";
+import type { LeagueRules, ScoringRule, Tiebreaker, Weekday } from "./types.js";
 
 const FAST_PICK_SECONDS = [90, 120, 300, 600];
 const SLOW_PICK_SECONDS = [3600, 14_400, 28_800, 86_400];
@@ -333,6 +333,24 @@ function validateSchedule(rules: LeagueRules, out: string[]): void {
     if (prev !== undefined && week <= prev) out.push("playoffWeeks must ascend");
   }
 
+  /*
+    Every link checked for membership, not only the last one for identity.
+
+    This is the same gap as the weekday (#132) and it fails far more quietly.
+    `scoresFor` has no default arm, so an unrecognised tiebreaker returns
+    `undefined`, and `orderGroup` reads that as "not applicable here" and skips
+    it — a typo is silently dropped from a chain that is signed, hashed and
+    unamendable. The chain still terminates, so nothing throws; it just seeds the
+    playoffs differently, and seed 1 carries the best-record prize.
+
+    Issue #132 asked for this sweep in the same pass and it was not done.
+  */
+  for (const tiebreaker of s.tiebreakers) {
+    if (!TIEBREAKERS.has(tiebreaker)) {
+      out.push(`unknown tiebreaker "${tiebreaker}"`);
+    }
+  }
+
   if (s.tiebreakers.length === 0) {
     out.push("at least one tiebreaker is required");
   } else if (s.tiebreakers.at(-1) !== "LOWEST_TEAM_ID") {
@@ -345,7 +363,24 @@ function validateSchedule(rules: LeagueRules, out: string[]): void {
 function validateWaivers(rules: LeagueRules, out: string[]): void {
   const w = rules.waivers;
 
-  if (w.waiverPeriodDays <= 0) out.push("waiverPeriodDays must be positive");
+  /*
+    Bounded on both sides and required to be whole.
+
+    It was `<= 0` only. A fractional value passed here and then threw from
+    `canonicalize`, which breaks this module's own contract — validation returns
+    problems so a creator sees everything wrong at once, and does not throw. And
+    with no ceiling, `waiverPeriodDays: 3650` meant no player ever cleared
+    waivers for the life of the league, while a large enough value overflowed
+    `waiverClearsAt` into a bare `RangeError` with no per-league catch above it.
+
+    Fourteen days is generous against a rule ESPN sets at one; the point is that
+    a number beyond it is a typo rather than a preference.
+  */
+  if (!Number.isInteger(w.waiverPeriodDays) || w.waiverPeriodDays <= 0) {
+    out.push(`waiverPeriodDays must be a whole number of days, got ${w.waiverPeriodDays}`);
+  } else if (w.waiverPeriodDays > 14) {
+    out.push(`waiverPeriodDays must be 14 or fewer, got ${w.waiverPeriodDays}`);
+  }
   if (w.shortTenureHours < 0) out.push("shortTenureHours cannot be negative");
 
   // A timezone, never an offset — the season crosses the daylight-saving change.
@@ -371,8 +406,12 @@ function validateWaivers(rules: LeagueRules, out: string[]): void {
       The day, checked against the union it is typed as. Issue #132.
 
       The hour beside it was validated and the day was not, which is the gap
-      that matters: `nextWeekly` resolves a weekday to an index, and an
-      unrecognised one produces a schedule that cannot be computed. Every value
+      that matters: `nextWeekly` walks nine days comparing each one's weekday
+      against this value and throws when none matches, so an unrecognised one
+      produces a schedule that cannot be computed at all. (It does not resolve
+      the value to an index — an earlier version of this comment said so, and the
+      index lookup there is applied to the weekday `Intl` observed, never to
+      this one.) Every value
       here is frozen at creation and hashed, so a league created with a typo can
       never be corrected — and `leaguesDueForWaivers` calls this for every league
       with a pending claim, which is why one bad value used to be able to stop
@@ -388,8 +427,31 @@ function validateWaivers(rules: LeagueRules, out: string[]): void {
     }
   }
 
-  if (w.weeklyLock.day === w.processing.day && w.weeklyLock.hour === w.processing.hour) {
-    out.push("the weekly lock and processing run cannot be the same moment");
+  /*
+    The two moments must be distinct **and in order**, and only the first half
+    was checked.
+
+    `everyoneIsOnWaivers` asks whether now is before the processing run that
+    follows the most recent lock, and `nextProcessingAt` is strictly after — so
+    a processing hour *earlier* in the same weekday pushes that answer a whole
+    cycle forward. Lock Wednesday 04:00, process Wednesday 03:00, and every
+    unrostered player sits on waivers for 167 hours of every week: free agency
+    open for one hour, all season, in a document that is frozen and hashed and
+    cannot be amended.
+
+    Nothing throws on that. The weekday check above fails loudly, which is why it
+    was the one that got written; this one returns a plausible answer to every
+    question and simply makes the league unplayable in a way nobody can name.
+  */
+  if (w.weeklyLock.day === w.processing.day) {
+    if (w.weeklyLock.hour === w.processing.hour) {
+      out.push("the weekly lock and processing run cannot be the same moment");
+    } else if (w.processing.hour < w.weeklyLock.hour) {
+      out.push(
+        "the processing run must come after the weekly lock, not before it — " +
+          "otherwise free agency closes for all but an hour of each week",
+      );
+    }
   }
 }
 
@@ -399,8 +461,31 @@ function validateWaivers(rules: LeagueRules, out: string[]): void {
  * A `Weekday` union exists at the type level and is gone at runtime, so nothing
  * generated from it can check a value that arrived as JSON — which is exactly how
  * a rule field typed as an enum reaches this function unchecked.
+ *
+ * **Typed `ReadonlySet<Weekday>`, not `ReadonlySet<string>`.** As `string` this
+ * was the weaker of two hand-written copies of the same seven days — the one in
+ * `waivers/schedule.ts` is `readonly Weekday[]`, so a misspelling there fails the
+ * build, while a misspelling here compiled. The result would have been a
+ * validator that rejects the correct spelling and accepts the typo, for a
+ * document that is then hashed and frozen. The precedent this cites,
+ * `TIEBREAKER_DISCRIMINANTS`, is pinned by a test; the shape was copied and the
+ * guard was not.
  */
-const WEEKDAYS: ReadonlySet<string> = new Set([
+/**
+ * The tiebreaker names, as values, for the same reason WEEKDAYS exists.
+ *
+ * Typed against the union so a typo here is a build error rather than a
+ * validator that rejects the real chain and accepts a broken one.
+ */
+const TIEBREAKERS: ReadonlySet<Tiebreaker> = new Set<Tiebreaker>([
+  "WIN_PCT",
+  "POINTS_FOR",
+  "HEAD_TO_HEAD",
+  "POINTS_AGAINST",
+  "LOWEST_TEAM_ID",
+]);
+
+const WEEKDAYS: ReadonlySet<Weekday> = new Set<Weekday>([
   "SUNDAY",
   "MONDAY",
   "TUESDAY",

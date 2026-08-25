@@ -519,13 +519,25 @@ for leagues without a pot, or the rule would only hold where there is money.
 
 Without it the attack is trivial and does not even look like one: accept a trade, drop the
 player you promised, and the swap executes into a roster spot that no longer holds him.
-`lockedByTrade` is consulted by dropping, by proposing and by accepting.
+The freeze is consulted at **five** sites: `refuseIfFrozen` in `dropPlayer` and in
+`addFreeAgent`'s drop leg, `lockedByTrade` in `proposeTrade` and in `acceptTrade`, and a
+pre-resolution filter in `processWaivers`.
 
-**It used to say "so a committed player cannot leave by any path", and that inference is
-what produced #77.** Three call sites are not every path: `processWaivers` and
-`resolveTrade` both release players and neither can refuse, because a throw inside
-`processWaivers` rolls back the whole league's run and leaves the claim PENDING forever,
-and `resolveTrade` cannot undo a trade the league already approved because a game started.
+**This paragraph has now been wrong twice, in opposite directions, and the second time was
+the correction.** It first said "so a committed player cannot leave by any path", and that
+inference is what produced #77. The fix for #119 replaced it with "three call sites", which
+undercounted by two — and then said `processWaivers` "cannot refuse", which is false: it
+has carried a `dropIsFrozen` filter since #118, fails the claim rather than throwing, and
+its own docstring says exactly that. So a reader was told the guard was absent from the one
+release path that has a purpose-built one.
+
+What is true is narrower. `processWaivers` cannot refuse **by throwing** — the whole run is
+one transaction, so a throw would roll back every league's claims and leave them PENDING
+forever — which is why it filters instead. And `resolveTrade` is exempt for a different reason
+again, which the correction also got wrong. Not "because a game started" — that is the
+kickoff lock's rationale, copied across from a different rule — but because **it _is_ the
+trade executing.** Guarding it against the freeze it sets would expire every trade in the
+league.
 
 Guarding the door and guarding the outcome are different jobs, and this needs both. What
 actually closes it is `ASSET_GONE` — execution refuses rather than inserting when the

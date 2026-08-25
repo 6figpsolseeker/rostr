@@ -12,10 +12,10 @@ The only permitted post-creation changes are:
 
 Anything not listed as league state below is a rule, and rules do not move.
 
-|                                     |                                                                                                                                                                                                                                               |
-| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Rules** (frozen)                  | scoring, roster, league size, buy-in token + amount, payout split, draft type + timer + date, waiver system, trade deadline, veto threshold + window, playoff count, playoff weeks, tiebreaker order, abandonment policy, commissioner powers |
-| **State** (moves during the season) | rosters, standings, waiver order, matchup results, trade history, strike counts                                                                                                                                                               |
+|                                     |                                                                                                                                                                                                                           |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Rules** (frozen)                  | scoring, roster, league size, buy-in token + amount, payout split, draft type + timer + date, waiver system, trade deadline, veto threshold + window, playoff count, playoff weeks, tiebreaker order, commissioner powers |
+| **State** (moves during the season) | rosters, standings, waiver order, matchup results, trade history                                                                                                                                                          |
 
 ---
 

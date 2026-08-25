@@ -379,7 +379,13 @@ describe("autoPick", () => {
   it("skips a queued player who would strand the lineup", () => {
     // The queue was written before the board looked like this. Auto-pick must
     // not strand a lineup on the manager's behalf — they were not there to
-    // choose it, and the penalty is a forfeited stake.
+    // choose it, and an unfillable slot scores nothing until they trade or sign
+    // their way out of it.
+    //
+    // The reason here used to be "the penalty is a forfeited stake", which was
+    // the abandonment rule removed in schema 4. #129 corrected the two
+    // docstrings and missed this one — the test that pins the behaviour, and so
+    // the copy a maintainer reads before changing it.
     const roster = [
       player("qb1", ["QB"]),
       player("rb1", ["RB"]),
