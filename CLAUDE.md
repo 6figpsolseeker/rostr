@@ -730,6 +730,17 @@ is 2.
   it**. Write "this does not resolve the cause in #165", or keep the number away
   from the verb. Third issue swallowed, first by this mechanism.
 
+  **And a section heading counts. Fourth and fifth swallowed, 2026-08-25.** Two PRs
+  from the audit series carried the heading `## Filed, not fixed` directly above a
+  link to the issue they were explicitly declining to fix; GitHub read `fixed
+#240` and `fixed #243` and closed both on merge. The rule above was already
+  written and already says "in any form" — what it did not say is that headings,
+  labels and list markers are prose to the parser too, and that the safest habit
+  is to keep the word and the number on **different lines with text between
+  them**. "Filed rather than fixed" reads the same and does not fire, because the
+  number is a paragraph away. Check the issue is still open after a merge; it
+  takes one command and this has now cost five.
+
 - **#157** — provider stats that contradict themselves are ingested silently. Only
   field goals are cross-checked today. Two cheap checks would have caught both
   known cases without a season sweep or a second source.
