@@ -66,9 +66,15 @@ export const LIVE_WINDOW_HOURS = 8;
 /**
  * The most games one run will fetch.
  *
- * A bound on *spend*, not on work: the provider is metered, a run makes one call
- * per game, and nothing else in this query limits how many games it can select
- * at once. A season backfill — `pnpm db:sync 2025`, which is a planned task —
+ * A bound on *spend*, not on work: the provider is metered and nothing else in
+ * this query limits how many games it can select at once.
+ *
+ * **It is not one call per game, and this said it was.** Since #97 the client
+ * retries a transient failure up to three times, so twenty games is a ceiling of
+ * sixty calls when the provider is refusing — which is exactly when the quota is
+ * the thing under pressure. The number here was chosen against the old
+ * arithmetic and has not been re-derived; what has changed is that the sentence
+ * no longer hides the multiplier from whoever re-derives it. A season backfill — `pnpm db:sync 2025`, which is a planned task —
  * puts every game of a played season inside the correction window at once,
  * because `final_at` is stamped when a game is first *observed* final rather
  * than when it was played. Without a ceiling the first run of that fetches
@@ -177,10 +183,13 @@ export async function syncBoxScores(
         -- either, and RULES.md section 10 already scores those players 0 through
         -- the absence of a stat line.
         AND g.status IN ('IN_PROGRESS', 'FINAL')
-        -- **Every clause here needs a ceiling.** This query is the only thing
-        -- pacing a metered provider — the loop below has no delay in it — so a
-        -- clause that can stay true indefinitely is a call every ten minutes
-        -- until the season ends.
+        -- **Every clause here needs a ceiling.** This query is the main thing
+        -- pacing a metered provider, so a clause that can stay true indefinitely
+        -- is a call every ten minutes until the season ends.
+        --
+        -- It used to say "the only thing" and "the loop below has no delay in
+        -- it". Neither survived #97: the client now sleeps between its own
+        -- attempts, and one selection here can cost up to three calls.
         AND (
               -- Never *attempted*. Keyed on the attempt rather than the sync
               -- since #227: a game that failed has no sync time, and selecting

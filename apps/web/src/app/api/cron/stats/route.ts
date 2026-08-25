@@ -29,7 +29,9 @@ import { runStatsJob } from "@/lib/jobs/stats";
  * The bounds that make a ten-minute cadence affordable are all in
  * `syncBoxScores` and were sized for it — `LIVE_WINDOW_HOURS` stops a game whose
  * status never advances being re-read for the rest of the season,
- * `MAX_GAMES_PER_RUN` caps the spend of one run, and the query's `ORDER BY`
+ * `MAX_GAMES_PER_RUN` caps how many games one run selects — and since #97 a
+ * game can cost up to three calls, so the spend ceiling is three times the game
+ * ceiling — and the query's `ORDER BY`
  * puts games with no box score first, then live ones, then the newest — so a
  * backlog of older failures cannot starve the current slate. (It ordered
  * oldest-first until the #140 re-audit, at which point #227's promotion of

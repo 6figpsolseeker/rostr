@@ -43,30 +43,57 @@ const REQUEST_ATTEMPTS = 3;
 const RETRY_BASE_MS = 200;
 
 /**
- * Whether a failure is worth asking again.
+ * How long one request may hang before it is abandoned.
  *
- * **Narrow on purpose.** A rejected key, a 404 and a malformed envelope answer
- * identically however many times they are asked, so retrying them turns a clear
- * failure into a slow one. Giving up early is also cheap here in a way it is not
- * for the draw: `syncBoxScores` records the error against that game and the next
- * tick picks it up ten minutes later.
- *
- * A transport error counts — a socket reset mid-Sunday is exactly the transient
- * this exists for — but an unrecognised HTTP status does not, for the same
- * fail-closed reason `blockTime` refuses to read an unknown RPC error as a
- * skipped slot.
+ * The same 15s the Sleeper client uses. There was none here at all, which made
+ * the retry unreachable for the failure it most needed to cover: a hung socket
+ * at a throttling gateway never throws, so nothing was ever retried and the
+ * tick simply stalled.
  */
+const REQUEST_TIMEOUT_MS = 15_000;
+
+/*
+ * A 429 whose window rolls no sooner than this is treated as spent, not busy.
+ *
+ * Ten minutes is the stats cron's own period: past it, the next tick will ask
+ * again anyway, so sleeping 600ms and spending two more calls buys nothing.
+ */
+const QUOTA_RESET_FLOOR_S = 600;
+
+/*
+ * A request failure, carrying whether asking again could plausibly work.
+ *
+ * **The decision is made where the evidence is, and this used to be a substring
+ * match on the message.** That was wrong twice. Its comment claimed "the message
+ * is composed in one place below, so matching it is a check on this file" — but
+ * a provider error body is interpolated into a `ProviderError` too, so any
+ * Tank01 error string containing the word "failed" was retried three times. And
+ * a 429 arrives with headers saying whether the window rolls in a second or in
+ * fifteen hours, which the throw site read, formatted into prose, and discarded.
+ *
+ * Narrow on purpose, still: a rejected key, a 404 and a malformed envelope
+ * answer identically however many times they are asked, and an unrecognised
+ * status fails closed — the same direction `blockTime` takes about an
+ * unrecognised RPC error. Giving up early is cheap here in a way it is not for
+ * the draw, because `syncBoxScores` records the error against that game and a
+ * later tick re-reads it. **Not the next one** — this said "ten minutes later",
+ * and `FAILED_RETRY_MINUTES` is 20 against a ten-minute cron, so it is the tick
+ * after next. That interval is the whole argument for giving up early, which
+ * makes it worth stating correctly.
+ */
+class Tank01RequestError extends ProviderError {
+  constructor(
+    message: string,
+    readonly retryable: boolean,
+    cause?: unknown,
+  ) {
+    super(message, "tank01", cause);
+    this.name = "Tank01RequestError";
+  }
+}
+
 function isRetryable(error: unknown): boolean {
-  if (!(error instanceof ProviderError)) return false;
-
-  // A thrown fetch: DNS, connection reset, timeout. The message is composed in
-  // one place below, so matching it is a check on this file rather than on the
-  // runtime's wording.
-  if (error.message.includes("failed")) return true;
-
-  // Rate limited, or the far side is unwell. Both pass with a wait.
-  if (error.message.includes("HTTP 429")) return true;
-  return /HTTP 5[0-9][0-9]/.test(error.message);
+  return error instanceof Tank01RequestError && error.retryable;
 }
 
 interface Tank01Envelope<T> {
@@ -91,7 +118,14 @@ export class Tank01Client {
     }
     this.apiKey = options.apiKey;
     this.doFetch = options.fetchImpl ?? globalThis.fetch.bind(globalThis);
-    this.attempts = options.attempts ?? REQUEST_ATTEMPTS;
+    // Guarded rather than defaulted, which is what `randomness.ts` does and
+    // says why. `options.attempts ?? REQUEST_ATTEMPTS` lets 0 and NaN through
+    // because neither is nullish, and the loop below then runs zero times and
+    // falls to `throw lastError` with `lastError` still undefined — `throw
+    // undefined`, no HTTP call, recorded downstream as the literal "undefined".
+    this.attempts = Number.isFinite(options.attempts)
+      ? Math.max(1, Math.floor(options.attempts as number))
+      : REQUEST_ATTEMPTS;
     this.sleep = options.sleepImpl ?? ((ms) => new Promise((done) => setTimeout(done, ms)));
   }
 
@@ -104,10 +138,12 @@ export class Tank01Client {
    * meet a rate limit eventually, and one that fails the caller costs more than
    * the wait.
    *
-   * The exposure is newer here than the code is. Every sync before the box-score
-   * producer was operator-run and infrequent; `syncBoxScores` is the first
-   * caller to make **bursts of sequential calls on a schedule**, one per game, at
-   * the top of a ten-minute tick.
+   * The exposure is newer here than the code is, though this used to overstate
+   * how. It called `syncBoxScores` the **first** caller to burst on a schedule;
+   * `season-sync` makes eighteen sequential `listGames` calls plus four more,
+   * and the two crons landed in the same commit. What is particular to the
+   * box-score producer is the cadence — twenty calls at the top of a ten-minute
+   * tick, all day on a Sunday — and that a dropped one decides a matchup.
    *
    * And a dropped game is no longer merely missing. Since #140 a FINAL game with
    * no box score **holds the whole week from finalising** until the correction
@@ -151,67 +187,146 @@ export class Tank01Client {
       url.searchParams.set(key, value);
     }
 
-    let response: Response;
+    /*
+      A deadline, because there was none and the sibling Sleeper client has one.
+
+      Without it a stalled connection is bounded only by the runtime's defaults,
+      and since #97 there are three of them per game — inside a serverless
+      function whose own limit nothing here sets.
+    */
+    const controller = new AbortController();
+    const deadline = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
     try {
-      response = await this.doFetch(url.toString(), {
-        headers: {
-          "X-RapidAPI-Key": this.apiKey,
-          "X-RapidAPI-Host": HOST,
-        },
-      });
-    } catch (error) {
-      throw new ProviderError(`Request to ${path} failed`, "tank01", error);
-    }
+      let response: Response;
+      try {
+        response = await this.doFetch(url.toString(), {
+          signal: controller.signal,
+          headers: {
+            "X-RapidAPI-Key": this.apiKey,
+            "X-RapidAPI-Host": HOST,
+          },
+        });
+      } catch (error) {
+        throw new Tank01RequestError(`Request to ${path} failed`, true, error);
+      }
 
-    if (response.status === 401 || response.status === 403) {
-      throw new ProviderError(
-        `Tank01 rejected the API key (HTTP ${response.status}). ` +
-          `Check TANK01_API_KEY, and that you are subscribed to the NFL API ` +
-          `specifically — each Tank01 sport needs its own subscription.`,
-        "tank01",
-      );
-    }
-    if (response.status === 429) {
-      /**
-       * Report what the response says, never what the plan was assumed to be.
-       *
-       * This used to read "The Basic tier allows 1,000 calls/month" on every
-       * 429, which is wrong twice. RapidAPI returns 429 for a **burst** limit as
-       * well as an exhausted quota, and the two need opposite responses — wait a
-       * second, or wait for the reset. And the tier is not this code's to know:
-       * the message sent somebody to check a monthly quota on an account that
-       * had been upgraded, when the request was simply too quick after the last.
-       *
-       * The headers carry the truth and cost nothing to read. `reset` is
-       * seconds until the window rolls, which is also what distinguishes a
-       * daily allowance from a monthly one without anybody guessing.
-       */
-      const limit = response.headers.get("x-ratelimit-requests-limit");
-      const remaining = response.headers.get("x-ratelimit-requests-remaining");
-      const reset = response.headers.get("x-ratelimit-requests-reset");
+      if (response.status === 401 || response.status === 403) {
+        throw new Tank01RequestError(
+          `Tank01 rejected the API key (HTTP ${response.status}). ` +
+            `Check TANK01_API_KEY, and that you are subscribed to the NFL API ` +
+            `specifically — each Tank01 sport needs its own subscription.`,
+          false,
+        );
+      }
+      if (response.status === 429) {
+        /**
+         * Report what the response says, never what the plan was assumed to be.
+         *
+         * This used to read "The Basic tier allows 1,000 calls/month" on every
+         * 429, which is wrong twice. RapidAPI returns 429 for a **burst** limit as
+         * well as an exhausted quota, and the two need opposite responses — wait a
+         * second, or wait for the reset. And the tier is not this code's to know:
+         * the message sent somebody to check a monthly quota on an account that
+         * had been upgraded, when the request was simply too quick after the last.
+         *
+         * The headers carry the truth and cost nothing to read. `reset` is
+         * seconds until the window rolls, which is also what distinguishes a
+         * daily allowance from a monthly one without anybody guessing.
+         */
+        const limit = response.headers.get("x-ratelimit-requests-limit");
+        const remaining = response.headers.get("x-ratelimit-requests-remaining");
+        const reset = response.headers.get("x-ratelimit-requests-reset");
 
-      const detail =
-        remaining === null && limit === null
-          ? "No rate-limit headers came back, so this may be a per-second burst limit rather than an exhausted quota."
-          : `${remaining ?? "?"} of ${limit ?? "?"} requests left${
-              reset === null ? "" : `, window resets in ${reset}s`
-            }.`;
+        const detail =
+          remaining === null && limit === null
+            ? "No rate-limit headers came back, so this may be a per-second burst limit rather than an exhausted quota."
+            : `${remaining ?? "?"} of ${limit ?? "?"} requests left${
+                reset === null ? "" : `, window resets in ${reset}s`
+              }.`;
 
-      throw new ProviderError(`Tank01 refused the request (HTTP 429). ${detail}`, "tank01");
-    }
-    if (!response.ok) {
-      throw new ProviderError(`Tank01 returned HTTP ${response.status}`, "tank01");
-    }
+        /*
+          Busy or spent, and they are not the same request to make again.
 
-    const envelope = (await response.json()) as Tank01Envelope<T>;
-    if (envelope.error) {
-      throw new ProviderError(`Tank01 error: ${envelope.error}`, "tank01");
-    }
-    if (envelope.body === undefined) {
-      throw new ProviderError(`Tank01 returned no body for ${path}`, "tank01");
-    }
+          The headers above already tell them apart — that is what the comment
+          there is about — and the retry then ignored the answer and asked twice
+          more at 200ms and 400ms. Against a window measured in hours those two
+          calls are guaranteed futile, and they are spent on the quota that
+          refused the first one. Past the floor the next tick will ask anyway.
+        */
+        const resetIn = reset === null ? null : Number.parseInt(reset, 10);
+        const spent =
+          remaining === "0" && resetIn !== null && Number.isFinite(resetIn)
+            ? resetIn >= QUOTA_RESET_FLOOR_S
+            : false;
 
-    return envelope.body;
+        throw new Tank01RequestError(
+          `Tank01 refused the request (HTTP 429). ${detail}`,
+          !spent,
+        );
+      }
+      if (!response.ok) {
+        // 5xx is the far side being unwell and passes with a wait. Every other
+        // status answers the same however often it is asked, and an unrecognised
+        // one fails closed.
+        throw new Tank01RequestError(
+          `Tank01 returned HTTP ${response.status}`,
+          response.status >= 500 && response.status <= 599,
+        );
+      }
+
+      /*
+        Inside the guard, because a reset **during the body** is the transient this
+        whole change is about and it was the one shape not covered.
+
+        `fetch` resolves at the headers and streams the rest, so a connection lost
+        partway through rejects here rather than at the call above — and a box
+        score is the largest response this client asks for, tens of kilobytes over
+        many packets, which is exactly where that happens. It arrived as a bare
+        `TypeError`, failed the `instanceof` check, and was never retried. A
+        truncated body or an HTML error page under a 200 lands here too.
+      */
+      let envelope: Tank01Envelope<T>;
+      try {
+        envelope = (await response.json()) as Tank01Envelope<T>;
+      } catch (error) {
+        throw new Tank01RequestError(`Reading ${path} failed`, true, error);
+      }
+      if (envelope.error) {
+        /*
+          Provider text, so nothing here may be pattern-matched — that was the
+          hole in the old predicate. The **declared status** is what decides.
+
+          `statusCode` has been on this envelope since it was written and was
+          read nowhere, which is a divergence this repo has already paid for
+          once: `randomness.ts` carries 429 in its transient list precisely
+          because "some providers deliver a rate limit as HTTP 200 with the
+          limit in the error body, where the HTTP-status retry never sees it",
+          and CLAUDE.md records that the retry there "never fired for the case
+          it was added for".
+
+          Whether Tank01 does this is **unverified** — no 429 of any shape has
+          ever been captured from it, which `docs/TANK01.md` now says out loud.
+          Handling it costs nothing; not handling it costs the one case the
+          retry exists for. Same trade, same reasoning.
+        */
+        const declared = envelope.statusCode;
+        throw new Tank01RequestError(
+          `Tank01 error: ${envelope.error}`,
+          declared === 429 || (declared !== undefined && declared >= 500 && declared <= 599),
+        );
+      }
+      if (envelope.body === undefined) {
+        throw new Tank01RequestError(`Tank01 returned no body for ${path}`, false);
+      }
+
+      return envelope.body;
+    } finally {
+      // Cleared on every path. An uncleared deadline keeps the runtime's event
+      // loop alive for its full duration after the request has finished, which
+      // is 15 seconds per call in a job that makes twenty of them.
+      clearTimeout(deadline);
+    }
   }
 
   /**
