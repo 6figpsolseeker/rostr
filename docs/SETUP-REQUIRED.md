@@ -202,8 +202,7 @@ escrow and someone trying to set a playoff lineup.
 
 Why hosted rather than local Postgres: the database then follows you between machines.
 A local install strands your data on whichever PC you are sitting at, which is the exact
-problem this repo's `CLAUDE.md` exists to avoid. It also matches the stack already used in
-`percolator-launch` and `percolator-mobile`.
+problem this repo's `CLAUDE.md` exists to avoid.
 
 > **Decided: the owner is setting this up on their main PC.** Nothing is blocked on the
 > secondary machine in the meantime — the whole core, including the scoring engine, is
@@ -273,8 +272,7 @@ blocked kicks are both obtainable, from the play-by-play. See
 
 **Decided 2026-08-05:** no commercial audit firm **for the 2026 season**. The owner has a
 professional auditor who will review once the tech is mostly built, and audits Solana
-programs himself — `percolator` plus bug bounty submissions on other Solana DeFi
-programs.
+programs himself, including bug bounty submissions on other Solana DeFi programs.
 
 A commercial audit remains planned, with possible funding through the owner's
 connections. It is deferred past the 2026 season, not dropped. That removes the 2–4 week
@@ -288,8 +286,8 @@ booking lead time from the critical path without removing review.
   amount in between.
 - **The unconditional timelock refund.** Turns "funds are gone" into "funds are stuck
   until a date". Non-negotiable.
-- **Kani proofs.** Already used on `percolator-stake` and `percolator-match`. Free, and
-  it catches the class of bug that drains escrows.
+- **Kani proofs.** Already used on the owner's other Solana programs. Free, and it
+  catches the class of bug that drains escrows.
 - **The disclaimer belongs in the signed rules**, not a banner — members already sign the
   rules hash to join, so an unaudited warning inside the rule set is cryptographically
   acknowledged rather than dismissed.

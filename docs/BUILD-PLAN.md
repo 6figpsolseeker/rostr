@@ -228,13 +228,13 @@ alongside an unproven one.
 
 | #   | Commit                                             | Done when                                                                                    |
 | --- | -------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| H1  | `chore(mobile): RN + Expo bare workspace`          | Mirrors the `percolator-mobile` setup                                                        |
+| H1  | `chore(mobile): RN + Expo bare workspace`          | Mirrors the owner's shipped Seeker build                                                     |
 | H2  | `feat(mobile): Mobile Wallet Adapter + Seed Vault` | Biometric signing on Seeker                                                                  |
 | H3  | `feat(mobile): league, matchup, roster screens`    | Feature parity with web for in-season use                                                    |
 | H3b | `feat(mobile): how-scoring-works screen`           | Mirrors the web `/scoring` page. **Generate it from `NFL_PPR_SCORING`, never hand-write it** |
 | H4  | `feat(mobile): draft room`                         | Drafting from a phone                                                                        |
 | H5  | `feat(mobile): push notifications`                 | Veto windows and waiver results reach people                                                 |
-| H6  | `chore: dApp Store submission`                     | Per `percolator-mobile/DISTRIBUTION.md`                                                      |
+| H6  | `chore: dApp Store submission`                     | Per the owner's prior dApp Store submission                                                  |
 
 ---
 

@@ -10,10 +10,9 @@ between machines and between sessions.
 **rostr** — open-source fantasy sports on Solana, football first. Web app and native app,
 targeting the **Solana Seeker dApp Store**.
 
-Owner: [@6figpsolseeker](https://github.com/6figpsolseeker). Previously shipped
-[`percolator-mobile`](https://github.com/6figpsolseeker/percolator-mobile) to Seeker
-(React Native 0.81 + Expo 54 bare, Mobile Wallet Adapter, Seed Vault) — **use it as the
-reference build for anything mobile.**
+Owner: [@6figpsolseeker](https://github.com/6figpsolseeker). Has already shipped a native
+Solana app to the Seeker dApp Store — React Native 0.81 + Expo 54 bare, Mobile Wallet
+Adapter, Seed Vault. **That is the proven stack for anything mobile here.**
 
 The thesis in one line: every other fantasy platform asks you to trust an administrator;
 this one replaces that trust with immutable rules, escrowed funds, and automatic
@@ -2973,10 +2972,10 @@ Tests run on **PGlite** — real Postgres compiled to WASM, in-process, no servi
 Docker, no credentials. `createTestDatabase()` in `packages/db/src/testing.ts` gives a
 fresh migrated database per test.
 
-The real database is **Supabase** (hosted, so it follows you between machines; also
-matches the stack in `percolator-launch`). **Provisioned since 2026-08-06** — the
-connection string is in `.env`, which is gitignored and has never been committed. This
-file and `SETUP-REQUIRED.md` both said "not set up yet" until 2026-08-14, and that
+The real database is **Supabase** (hosted, so it follows you between machines).
+**Provisioned since 2026-08-06** — the connection string is in `.env`, which is
+gitignored and has never been committed. This file and `SETUP-REQUIRED.md` both said
+"not set up yet" until 2026-08-14, and that
 staleness cost real time: a migration renumber was reasoned about on the premise that
 nothing had ever been applied.
 
