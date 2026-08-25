@@ -286,9 +286,10 @@ export interface ProposeTradeInput {
  * it about a deadline let a trade land roughly three days past a date members
  * signed, which is exactly what `docs/RULES.md` §6 says the deadline prevents.
  *
- * It is also season-scoped, which `currentWeek` is not: with a prior season's
- * games ingested, `currentWeek` answers "week 18" all summer and would refuse
- * every proposal in the preseason.
+ * Both are season-scoped now — `currentWeek` gained the filter in #105, and
+ * this sentence used to be the reason to prefer `transactionWeek` over it. The
+ * reason that survives is strictness: `currentWeek` goes on naming a week whose
+ * games are finished, which is right for a scoreboard and wrong for a deadline.
  *
  * `null` when the schedule cannot answer. `pastTradeDeadline` decides what that
  * means, in one place, for both callers.

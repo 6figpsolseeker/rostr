@@ -136,10 +136,14 @@ export async function currentWeek(
  * never an offset, so it follows the November DST change rather than sliding an
  * hour through it.
  *
- * **Season-scoped, which `currentWeek` is not.** With two seasons ingested — and
- * validating the engine against real 2025 box scores is planned work — that one
- * answers "week 18" all summer, from a row belonging to a season the caller then
- * does not look the player up in.
+ * Season-scoped — as `currentWeek` now is too. This paragraph used to say
+ * `currentWeek` was not, and that sentence is what #105 was found from; it
+ * outlived the fix by being in the same file the fix edited and not being read.
+ *
+ * What still separates the two is **strictness, not season**: this one answers
+ * the week a transaction lands in and refuses to name a week whose games are
+ * over, while `currentWeek` keeps answering the most recent kickoff until the
+ * next one. A rule-enforcing caller wants this; a scoreboard wants that.
  *
  * `null` when the current cycle holds no games at all: before the schedule is
  * ingested, and after the season ends. A caller enforcing a rule must read that
