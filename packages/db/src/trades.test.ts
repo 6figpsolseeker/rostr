@@ -1553,6 +1553,144 @@ describe("a veto cast while the trade is being resolved — #134", () => {
     expect(rows).toHaveLength(0);
   });
 
+  it("does not execute a trade that crossed the threshold mid-swap", async () => {
+    /*
+      **The half of #134 the state predicate on the write cannot reach.**
+
+      `resolveTrade` takes its tally before the transaction opens and writes the
+      state as the last statement in it. Everything between — the asset read, two
+      statements per player, the commit — is time in which the trade is still
+      `ACCEPTED` to every other session, so a vote lands, passes the guard, is
+      written, and is discarded because the decision was already made. That is
+      the case the issue's own title names, and the guard is a *read*, so unlike
+      the `UPDATE … WHERE state = X` guards it was modelled on it never contends.
+
+      Here two votes land while the rosters are being swapped. The run must roll
+      back and leave the trade accepted, so the next one settles it as VETOED.
+
+      **What this proves and what it does not.** PGlite is one connection, so the
+      injected votes commit as part of the transaction under test rather than
+      beside it — which is exactly the isolation a second session would not have.
+      So this pins the **re-read**: that the decision is taken again, under the
+      trade's own lock, against whatever is there by then. It cannot pin the lock
+      itself, and no test in this repo can.
+    */
+    const fx = await setup();
+    const tradeId = await propose(fx);
+    await acceptTrade(fx.client, tradeId, fx.teams[1]!, MONDAY);
+
+    let fired = false;
+    const racing = new Proxy(fx.client, {
+      get(target, prop, receiver) {
+        if (prop !== "query") return Reflect.get(target, prop, receiver);
+        return async (sql: string, params?: unknown[]) => {
+          const run = (
+            target as unknown as { query: (q: string, p?: unknown[]) => Promise<unknown> }
+          ).query.bind(target);
+          if (!fired && sql.includes("UPDATE roster_entries")) {
+            fired = true;
+            for (const voter of [fx.teams[2]!, fx.teams[3]!]) {
+              await run(
+                `INSERT INTO trade_vetoes (trade_id, team_id, league_id, created_at)
+                   SELECT $1, $2, t.league_id, $3 FROM trades t WHERE t.id = $1`,
+                [tradeId, voter, MONDAY.toISOString()],
+              );
+            }
+          }
+          return run(sql, params);
+        };
+      },
+    }) as typeof fx.client;
+
+    await settle(racing, fx.leagueId, AFTER_WINDOW);
+
+    const [after] = await fx.client.query<{ state: string }>(
+      "SELECT state FROM trades WHERE id = $1",
+      [tradeId],
+    );
+    expect(after?.state).not.toBe("EXECUTED");
+  });
+
+  it("refuses a vote once the window has closed, before any cron has run", async () => {
+    /*
+      **The window's end was decided by the cron, not by the window.**
+
+      `vetoTrade` compared `now` to nothing at all: the only gate was the state,
+      and a trade stays ACCEPTED until `/api/cron/trades` next runs. So a vote
+      cast after the published deadline but before the top of the hour was
+      accepted, written, and counted — and the accepting party chooses the
+      minute, so they choose how much grace there is.
+
+      The comment justifying the whole design said "`RULES.md` §6 gives the veto
+      window a definite end, so a vote arriving after it closes is genuinely
+      late". Nothing implemented that end.
+    */
+    const fx = await setup();
+    const tradeId = await propose(fx);
+    await acceptTrade(fx.client, tradeId, fx.teams[1]!, MONDAY);
+
+    const [row] = await fx.client.query<{ veto_deadline: string }>(
+      "SELECT veto_deadline FROM trades WHERE id = $1",
+      [tradeId],
+    );
+    const late = new Date(new Date(row!.veto_deadline).getTime() + 60_000);
+
+    await expect(vetoTrade(fx.client, tradeId, fx.teams[2]!, late)).rejects.toSatisfy(
+      (e) => e instanceof TradeError && e.code === "WINDOW_CLOSED",
+    );
+
+    const votes = await fx.client.query(
+      "SELECT team_id FROM trade_vetoes WHERE trade_id = $1",
+      [tradeId],
+    );
+    expect(votes).toHaveLength(0);
+  });
+
+  it("accepts a vote at the last moment of the window", async () => {
+    // The other side of the same boundary. Refusing here would be the fix
+    // overshooting and taking a legitimate vote with it.
+    const fx = await setup();
+    const tradeId = await propose(fx);
+    await acceptTrade(fx.client, tradeId, fx.teams[1]!, MONDAY);
+
+    const [row] = await fx.client.query<{ veto_deadline: string }>(
+      "SELECT veto_deadline FROM trades WHERE id = $1",
+      [tradeId],
+    );
+
+    await expect(
+      vetoTrade(fx.client, tradeId, fx.teams[2]!, new Date(row!.veto_deadline)),
+    ).resolves.toBeDefined();
+  });
+
+  it("refuses a vote on a trade the cron vetoed, not only one it executed", async () => {
+    /*
+      `EXECUTED` was the only settled state any fixture staged, so narrowing the
+      guard from `= 'ACCEPTED'` to `<> 'EXECUTED'` was green — and `resolveTrade`
+      writes `VETOED` and `EXPIRED` as well, both by the same bare autocommit
+      UPDATE. That mutation restores #134 in full for two of the three outcomes.
+    */
+    const fx = await setup();
+    const tradeId = await propose(fx);
+    await acceptTrade(fx.client, tradeId, fx.teams[1]!, MONDAY);
+    await fx.client.query("UPDATE trades SET state = 'VETOED' WHERE id = $1", [tradeId]);
+
+    await expect(vetoTrade(fx.client, tradeId, fx.teams[2]!, MONDAY)).rejects.toSatisfy(
+      (e) => e instanceof TradeError && e.code === "WRONG_STATE",
+    );
+  });
+
+  it("refuses a vote on a trade the cron expired", async () => {
+    const fx = await setup();
+    const tradeId = await propose(fx);
+    await acceptTrade(fx.client, tradeId, fx.teams[1]!, MONDAY);
+    await fx.client.query("UPDATE trades SET state = 'EXPIRED' WHERE id = $1", [tradeId]);
+
+    await expect(vetoTrade(fx.client, tradeId, fx.teams[2]!, MONDAY)).rejects.toSatisfy(
+      (e) => e instanceof TradeError && e.code === "WRONG_STATE",
+    );
+  });
+
   it("still accepts a vote while the trade is genuinely open", async () => {
     // The control. Without it the refusal above passes just as well against a
     // rule that rejected every veto.

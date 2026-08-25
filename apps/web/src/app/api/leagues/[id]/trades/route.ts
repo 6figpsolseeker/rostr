@@ -29,6 +29,7 @@ const STATUS: Record<string, number> = {
   // WRONG_STATE beside it, and a separate code because the screen says something
   // different: "you were a moment late", not "you are looking at something old".
   TRADE_ALREADY_SETTLED: 409,
+  WINDOW_CLOSED: 409,
   PLAYER_IN_ANOTHER_TRADE: 409,
   ALREADY_VETOED: 409,
   ROSTER_WOULD_OVERFLOW: 409,
