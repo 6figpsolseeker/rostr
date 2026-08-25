@@ -93,9 +93,12 @@ Sunday by changing a number.
 > Check with `pnpm cron:status`. The deployment this waits on is an entry in
 > `docs/SETUP-REQUIRED.md`.
 >
-> Four of the six jobs below exist as code. Two do not exist at all. The **Exists?** column
-> says which — added because this table read as a description of production for months, and
-> `CLAUDE.md` names that mistake as how a false claim survived being repeated.
+> Five of the six jobs below exist as code. One does not exist at all. The **Exists?**
+> column says which — added because this table read as a description of production for
+> months, and `CLAUDE.md` names that mistake as how a false claim survived being repeated.
+>
+> Injury sync moved from ❌ to ✅ on 2026-08-25. **Inactives is the one still missing**, and
+> it is the one this document argues matters most.
 
 The NFL schedule is published in May, so **which teams play, and on what date, is known
 months ahead**. The _hour_ is not: late-December kickoffs are held back for flex
@@ -111,7 +114,7 @@ and it did: eight fixtures across weeks 16 and 17 of 2026. See `games.kickoff_tb
 | Job                | Fires                               | Does                                           | Exists? | Where                   |
 | ------------------ | ----------------------------------- | ---------------------------------------------- | ------- | ----------------------- |
 | **Season sync**    | Daily, 09:20 UTC                    | Players, byes, schedule, rankings, projections | ✅      | `/api/cron/season-sync` |
-| **Injury sync**    | Every 6h, and hourly on game days   | Injury designations                            | ❌      | —                       |
+| **Injury sync**    | **Hourly**                          | Injury designations                            | ✅      | `/api/cron/injuries`    |
 | **Inactives**      | **100 minutes before each kickoff** | Official inactive list — see below             | ❌      | —                       |
 | **Game watcher**   | Every 10 min, unconditionally       | Polls until status is `final`                  | 🟡      | `/api/cron/stats`       |
 | **Score finalise** | Same job, on `final`                | Box score → `stat_lines` → recompute → publish | ✅      | `syncBoxScores`         |
@@ -121,8 +124,20 @@ and it did: eight fixtures across weeks 16 and 17 of 2026. See `games.kickoff_tb
 rather than from 2.5 hours after a kickoff — simpler, and more provider calls. The
 2.5-hour window described below is the design, not the code.
 
-**Injuries and inactives have no code at all**, and inactives is the one this document
-argues matters most.
+**Injury sync exists** (`packages/db/src/injuries.ts`, `/api/cron/injuries`, hourly). It
+runs hourly rather than the 6h/game-day split described above, which is simpler and costs
+more calls — the same trade the game watcher makes, and noted here so the row is not read
+as conformance with the plan beside it.
+
+Two properties of it are load-bearing and easy to undo: it **refuses an empty provider
+list**, because "no injuries anywhere in the league" and "the feed returned nothing" are
+indistinguishable in the response and only one of them should clear every designation in
+the database; and it **reports `providerReturned`**, so a quiet run can be told from a
+broken one. A designation is shown and never enforced — `RULES.md` §6 locks a slot at that
+player's own kickoff and says nothing about fitness.
+
+**Inactives still has no code at all**, and it is the one this document argues matters
+most.
 
 ### Inactives matter more than live scoring
 
