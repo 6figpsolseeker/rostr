@@ -201,21 +201,42 @@ export async function syncBoxScores(
            OR (g.stats_error IS NOT NULL
                AND g.stats_attempted_at < now() - make_interval(mins => $4::int)
                AND g.final_at > now() - make_interval(hours => $5::int))
-           -- The NFL stat-correction sweep.
+           -- The NFL stat-correction sweep. Bounded on **both** columns, and the
+           -- attempt bound is the load-bearing one.
+           --
+           -- It read only the sync time until this change, which was the one
+           -- clause #227 left behind when it moved pacing onto the attempt. A
+           -- game that had synced and then began failing kept its old sync
+           -- stamp, so this predicate stayed true and re-selected it on every
+           -- tick: six calls an hour for the rest of the 168h window, roughly a
+           -- thousand for one game, against the quota the retry clause above
+           -- exists to protect. The retry clause could not restrain it — it is
+           -- an OR sibling, not a gate.
            OR (g.final_at > now() - make_interval(hours => $5::int)
-               AND g.stats_synced_at < now() - make_interval(hours => $6::int))
+               AND g.stats_synced_at < now() - make_interval(hours => $6::int)
+               AND g.stats_attempted_at < now() - make_interval(hours => $6::int))
         )
-      -- Never-read first, then live, then everything else oldest-first. The
-      -- order is doing real work now that there is a LIMIT: a game nobody has
-      -- read scores its players zero *right now*, where a re-read only refines a
-      -- number that already exists, and plain kickoff order would let a backlog
-      -- of old games starve today's.
-      -- Never-read first, and "never read" is now the honest column: a failed
-      -- game still has no stats and still scores its players zero, so it belongs
-      -- at the front with the untried ones rather than behind them.
+      -- Never-read first, then live, then **newest** first.
+      --
+      -- "Never read" is the honest column since #227: a failed game has no sync
+      -- stamp, still has no stats, and still scores its players zero, so it
+      -- belongs at the front with the untried ones rather than behind them.
+      --
+      -- But that promotion is what made the old kickoff_at ASC dangerous, and
+      -- the comment above it — "plain kickoff order would let a backlog of old
+      -- games starve today's" — became false at the moment it was written. A
+      -- provider outage fails a whole slate at once; twenty minutes later those
+      -- games sort into the front tier ahead of the live ones and, oldest-first,
+      -- consume the whole LIMIT before the current afternoon is reached. Live
+      -- scoring stops for every league while the newest failures are read last.
+      --
+      -- Newest-first inverts that. Within a tier the game closest to now is the
+      -- one whose zero is about to be seen on a scoreboard or frozen by a
+      -- finalisation; a week-old failure inside its correction window is real
+      -- but not urgent, and it is still reached once the fresh work is done.
       ORDER BY (g.stats_synced_at IS NULL) DESC,
                (g.status = 'IN_PROGRESS') DESC,
-               g.kickoff_at
+               g.kickoff_at DESC
       LIMIT $8`,
     [
       ids.sportId,

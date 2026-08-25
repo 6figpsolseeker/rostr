@@ -29,10 +29,12 @@ import { runStatsJob } from "@/lib/jobs/stats";
  * The bounds that make a ten-minute cadence affordable are all in
  * `syncBoxScores` and were sized for it — `LIVE_WINDOW_HOURS` stops a game whose
  * status never advances being re-read for the rest of the season,
- * `MAX_GAMES_PER_RUN` caps the spend of one run, and the query's `ORDER BY` puts
- * never-read games first so a backlog cannot starve today's. **Do not raise the
- * frequency here without reading those**; the job makes one provider call per
- * game and has no delay in it.
+ * `MAX_GAMES_PER_RUN` caps the spend of one run, and the query's `ORDER BY`
+ * puts games with no box score first, then live ones, then the newest — so a
+ * backlog of older failures cannot starve the current slate. (It ordered
+ * oldest-first until the #140 re-audit, at which point #227's promotion of
+ * failed games to the front tier had turned that into the starvation this
+ * sentence claimed to prevent.)
  */
 export async function GET(request: Request): Promise<NextResponse> {
   const forbidden = cronForbidden(request);

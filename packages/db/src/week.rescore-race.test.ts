@@ -253,11 +253,29 @@ async function score(
   );
 }
 
+/**
+ * A week whose games finished **and whose box scores were read.**
+ *
+ * The sync stamps are not decoration. Since #140 a FINAL game with no box score
+ * holds the week — and past the window settles it while reporting that our
+ * ingest, not the NFL, produced the zeroes. This helper marked only the status
+ * until the #140 re-audit, so every finalisation in this file had silently been
+ * running through that fallback rather than the clean path, and every outcome
+ * carried `finalizedWithUnfinishedGames` with nothing asserting its absence.
+ *
+ * Nothing here was testing what it read as testing. The rule the sibling
+ * `week.test.ts` already states: a fixture must stage a state the product
+ * actually produces.
+ */
 const finishGames = (fx: Fixture) =>
-  fx.client.query("UPDATE games SET status = 'FINAL' WHERE season = $1 AND week = $2", [
-    SEASON,
-    WEEK,
-  ]);
+  fx.client.query(
+    `UPDATE games SET status = 'FINAL',
+                      final_at = now() - interval '1 hour',
+                      stats_synced_at = now(),
+                      stats_attempted_at = now()
+      WHERE season = $1 AND week = $2`,
+    [SEASON, WEEK],
+  );
 
 const schedule = (fx: Fixture) =>
   persistSchedule(fx.client, fx.leagueId, generateSchedule(fx.teamIds, 14, "seed"));
@@ -380,7 +398,7 @@ describe("a finalised week survives a run that overlapped its finalisation", () 
     // is false. Its UPDATE used to take the `ELSE finalized_at` branch: points
     // replaced, timestamp preserved byte for byte, the row afterwards
     // indistinguishable from one finalised once and never touched. And it
-    // reported `finalized: false, holdReason: "waiting until…"` while doing it.
+    // reported `finalized: false` with a hold reason while doing it.
     const fx = await setup();
     await schedule(fx);
     await finishGames(fx);

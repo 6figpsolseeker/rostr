@@ -5,7 +5,12 @@ import type { ProviderBoxScore, StatsProvider } from "@rostr/stats";
 import { seedSport } from "./sports.js";
 import { createTestDatabase } from "./testing.js";
 import type { PGliteClient } from "./testing.js";
-import { syncBoxScores, unresolvedStatsProblems } from "./box-scores.js";
+import {
+  FAILED_RETRY_MINUTES,
+  FINAL_RECHECK_HOURS,
+  syncBoxScores,
+  unresolvedStatsProblems,
+} from "./box-scores.js";
 
 /**
  * The producer, against the real translator.
@@ -28,6 +33,35 @@ const SEASON = 2026;
 const WEEK = 1;
 
 const line = (statKey: string, value: number): StatLine => ({ statKey, value });
+
+/*
+  The refs a provider was asked for, in the order it was asked.
+
+  The work list's ORDER BY decides which games a run spends its budget on when
+  more are due than MAX_GAMES_PER_RUN allows, and nothing observed it: the test
+  that claimed to check the priority ran its own hand-written copy of the same
+  SQL and asserted the answer, which is a tautology about a query in this file.
+  Deleting both priority keys from the producer left it green.
+*/
+function recordingProvider(byRef: Map<string, ProviderBoxScore | Error>): {
+  provider: StatsProvider;
+  asked: string[];
+} {
+  const asked: string[] = [];
+  const inner = fakeProvider(byRef);
+  return {
+    asked,
+    provider: {
+      ...inner,
+      getBoxScore: (gameRef: string) => {
+        asked.push(gameRef);
+        return (
+          inner as { getBoxScore: (ref: string) => Promise<ProviderBoxScore> }
+        ).getBoxScore(gameRef);
+      },
+    } as unknown as StatsProvider,
+  };
+}
 
 function fakeProvider(byRef: Map<string, ProviderBoxScore | Error>): StatsProvider {
   return {
@@ -597,6 +631,10 @@ describe("the work list bounds what one run can spend", () => {
     await fx.client.query(
       `UPDATE games SET stats_error = 'fgMade disagrees with the parsed plays',
                        stats_synced_at = now() - interval '1 hour',
+                       -- Aged too, or clause one ("never attempted") selects this
+                       -- game and the retry clause this test is the control for
+                       -- never runs.
+                       stats_attempted_at = now() - interval '1 hour',
                        final_at = now() - interval '2 hours'`,
     );
 
@@ -732,6 +770,209 @@ describe("a game whose ingest failed — #227", () => {
 
     expect(row?.stats_synced_at).not.toBeNull();
     expect(row?.stats_attempted_at).not.toBeNull();
+  });
+
+  it("does re-read a failed game once the pacing interval has passed", async () => {
+    /*
+      **The control the pacing test had no partner for, and it was load-bearing.**
+
+      Its sibling below asserts a failed game is NOT re-read immediately. On its
+      own that assertion is satisfied by a game which is never re-read *again*,
+      which is the strictly worse outcome and exactly what one plausible edit
+      produces: point the retry clause back at "stats_synced_at" and a failed
+      game — whose sync stamp is NULL since #227 — matches no clause in the work
+      list, forever. The pacing test then passes harder, and the game silently
+      leaves the queue with its players scoring zero.
+
+      Recovery is the whole point of pacing a retry. A Sunday 429 that clears
+      twenty minutes later has to be picked up.
+    */
+    const fx = await setup();
+    const failing = fakeProvider(
+      new Map([["g1", new Error("Tank01 refused the request (HTTP 429)")]]),
+    );
+
+    expect((await syncBoxScores(fx.client, failing, NFL.key, SEASON)).games).toBe(1);
+    expect((await syncBoxScores(fx.client, failing, NFL.key, SEASON)).games).toBe(0);
+
+    // The provider recovers, and so must the queue.
+    await fx.client.query(
+      `UPDATE games SET stats_attempted_at = now() - make_interval(mins => $2::int)
+        WHERE id = $1`,
+      [fx.gameId, FAILED_RETRY_MINUTES + 5],
+    );
+
+    const provider = fakeProvider(
+      new Map([["g1", boxScore("g1", { qb1: [line("pass_yd", 300)] })]]),
+    );
+    const recovered = await syncBoxScores(fx.client, provider, NFL.key, SEASON);
+
+    expect(recovered.games).toBe(1);
+    expect(recovered.failures).toHaveLength(0);
+
+    const [row] = await fx.client.query<{ stats_synced_at: string | null }>(
+      "SELECT stats_synced_at FROM games WHERE id = $1",
+      [fx.gameId],
+    );
+    expect(row?.stats_synced_at).not.toBeNull();
+  });
+
+  it("does not erase an earlier successful sync when a later read fails", async () => {
+    /*
+      A game is re-read for the whole 168h correction window, so one transient
+      429 during that window lands on a row that has already ingested cleanly.
+      The failure path must record the attempt and the error and leave the sync
+      stamp exactly where it was.
+
+      Nothing pinned this: every failure staged in this file happens on a row
+      that had never synced, so nulling "stats_synced_at" on the failure path
+      was undetectable. The cost of the missing assertion is not a lost stat
+      line — the stats are already stored — it is that #140's hold reads that
+      column, so the week would report a game that ingested perfectly as
+      "never ingested, the cause is our stats pipeline", and hold or settle on
+      that basis.
+    */
+    const fx = await setup();
+
+    const good = fakeProvider(
+      new Map([["g1", boxScore("g1", { qb1: [line("pass_yd", 300)] })]]),
+    );
+    await syncBoxScores(fx.client, good, NFL.key, SEASON);
+
+    const [synced] = await fx.client.query<{ stats_synced_at: string }>(
+      "SELECT stats_synced_at FROM games WHERE id = $1",
+      [fx.gameId],
+    );
+    expect(synced?.stats_synced_at).not.toBeNull();
+
+    // Age both columns past the correction sweep so the game is due again.
+    await fx.client.query(
+      `UPDATE games SET stats_synced_at = now() - make_interval(hours => $2::int),
+                        stats_attempted_at = now() - make_interval(hours => $2::int)
+        WHERE id = $1`,
+      [fx.gameId, FINAL_RECHECK_HOURS + 1],
+    );
+    const [aged] = await fx.client.query<{ stats_synced_at: string }>(
+      "SELECT stats_synced_at FROM games WHERE id = $1",
+      [fx.gameId],
+    );
+
+    const failing = fakeProvider(
+      new Map([["g1", new Error("Tank01 refused the request (HTTP 429)")]]),
+    );
+    const result = await syncBoxScores(fx.client, failing, NFL.key, SEASON);
+    expect(result.failures).toHaveLength(1);
+
+    const [after] = await fx.client.query<{
+      stats_synced_at: string | null;
+      stats_error: string | null;
+    }>("SELECT stats_synced_at, stats_error FROM games WHERE id = $1", [fx.gameId]);
+
+    expect(after?.stats_error).toContain("429");
+    expect(after?.stats_synced_at).toEqual(aged?.stats_synced_at);
+  });
+
+  it("paces the correction sweep on the attempt, not only on the sync", async () => {
+    /*
+      **A hole this fix opened in the fix before it.**
+
+      #227 moved pacing onto "stats_attempted_at" and re-pointed three of the
+      four clauses that select a game for re-read. The fourth — the NFL
+      stat-correction sweep — kept reading the sync time, justified as "a game
+      being re-read for corrections has stats already". True at selection,
+      false at pacing: the failure path no longer touches the sync stamp, so
+      once a synced game starts failing that predicate is frozen true and
+      re-selects it on every tick. Six calls an hour, for up to 168 hours,
+      against a metered provider — roughly a thousand calls for one game, and
+      a rate limit fails a whole slate at once, so the loop feeds the outage
+      that caused it.
+
+      The retry clause could not restrain it: they are OR siblings.
+    */
+    const fx = await setup();
+
+    await syncBoxScores(
+      fx.client,
+      fakeProvider(new Map([["g1", boxScore("g1", { qb1: [line("pass_yd", 300)] })]])),
+      NFL.key,
+      SEASON,
+    );
+    await fx.client.query(
+      `UPDATE games SET stats_synced_at = now() - make_interval(hours => $2::int),
+                        stats_attempted_at = now() - make_interval(hours => $2::int)
+        WHERE id = $1`,
+      [fx.gameId, FINAL_RECHECK_HOURS + 1],
+    );
+
+    const failing = fakeProvider(
+      new Map([["g1", new Error("Tank01 refused the request (HTTP 429)")]]),
+    );
+
+    // The sweep legitimately picks it up once.
+    expect((await syncBoxScores(fx.client, failing, NFL.key, SEASON)).games).toBe(1);
+
+    // And must not pick it up again on the next tick, ten minutes later. The
+    // sync stamp is still hours old and always will be; only the attempt moved.
+    expect((await syncBoxScores(fx.client, failing, NFL.key, SEASON)).games).toBe(0);
+  });
+
+  it("reads the newest unread game first, so a backlog cannot starve the slate", async () => {
+    /*
+      **The ordering inverted meaning without a character changing.**
+
+      Before #227 a failed game carried a sync stamp, so it sorted into the last
+      tier — behind never-read games and behind live ones. #227 stopped stamping
+      the sync on failure, which is correct, and thereby promoted every failed
+      game into the *front* tier. The tie-break underneath was kickoff ascending.
+
+      So an outage that fails a whole slate at once leaves 16–32 games which, on
+      the next tick, sort ahead of the current afternoon's and consume the entire
+      LIMIT oldest-first. Live scoring stops for every league, and the newest
+      failures are read last. The comment directly above the clause promised the
+      opposite — "plain kickoff order would let a backlog of old games starve
+      today's" — and had become false at the moment it was written.
+
+      Newest-first within a tier is the fix: the game closest to now is the one
+      whose zero is about to be seen on a scoreboard or frozen by a finalisation.
+
+      This asserts the producer's own ordering by recording what the provider was
+      asked for, rather than re-running the query and agreeing with itself.
+    */
+    const fx = await setup();
+    const [sport] = await fx.client.query<{ id: string }>(
+      "SELECT id FROM sports WHERE key = $1",
+      [NFL.key],
+    );
+
+    // A five-day-old failure, still inside its 168h correction window, and today's unread game.
+    await fx.client.query(
+      `UPDATE games SET stats_attempted_at = now() - interval '2 hours',
+                        stats_error = 'Tank01 refused the request (HTTP 429)',
+                        kickoff_at = now() - interval '5 days',
+                        final_at = now() - interval '5 days'
+        WHERE id = $1`,
+      [fx.gameId],
+    );
+    await fx.client.query(
+      `INSERT INTO games (sport_id, external_ref, season, week, home_team_ref, away_team_ref,
+                          kickoff_at, status, final_at)
+       VALUES ($1, 'today', $2, $3, 'NYG', 'WAS', now() - interval '4 hours', 'FINAL',
+               now() - interval '1 hour')`,
+      [sport!.id, SEASON, WEEK],
+    );
+
+    const { provider, asked } = recordingProvider(
+      new Map([
+        ["g1", boxScore("g1", { qb1: [line("pass_yd", 100)] })],
+        ["today", boxScore("today", { qb1: [line("pass_yd", 200)] })],
+      ]),
+    );
+
+    const result = await syncBoxScores(fx.client, provider, NFL.key, SEASON);
+
+    // Both are due — the point is which one a budget-limited run reaches first.
+    expect(result.games).toBe(2);
+    expect(asked[0]).toBe("today");
   });
 
   it("does not re-read a failed game on the very next tick", async () => {

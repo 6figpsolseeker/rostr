@@ -157,7 +157,15 @@ async function score(
  */
 const finishGames = (fx: Fixture) =>
   fx.client.query(
-    "UPDATE games SET status = 'FINAL', stats_synced_at = now() WHERE season = $1 AND week = $2",
+    `UPDATE games SET status = 'FINAL',
+                      final_at = now() - interval '1 hour',
+                      -- Both columns, and after final_at. The producer writes all
+                      -- three together on a successful read, and the hold now asks
+                      -- whether the sync came *after* the whistle — a sync stamped
+                      -- before it is a mid-game read, not a final line.
+                      stats_synced_at = now(),
+                      stats_attempted_at = now()
+      WHERE season = $1 AND week = $2`,
     [SEASON, WEEK],
   );
 
@@ -169,7 +177,10 @@ const finishGames = (fx: Fixture) =>
  */
 const finishGamesUnread = (fx: Fixture) =>
   fx.client.query(
-    "UPDATE games SET status = 'FINAL', stats_synced_at = NULL WHERE season = $1 AND week = $2",
+    `UPDATE games SET status = 'FINAL',
+                      final_at = now() - interval '1 hour',
+                      stats_synced_at = NULL
+      WHERE season = $1 AND week = $2`,
     [SEASON, WEEK],
   );
 
@@ -184,9 +195,25 @@ async function addGame(fx: Fixture, ref: string, status: string, week = WEEK): P
     "SELECT id FROM sports WHERE key = $1",
     [NFL.key],
   );
+  /*
+    A FINAL game here is a **cleanly ingested** one, for the same reason
+    {@link finishGames} stamps the sync: a row that is FINAL with no box score is
+    the #140 failure state, and a fixture producing it by default would put every
+    §10 postponement test into that state instead.
+
+    It did, and it hid a real defect. The paying-week test below staged one
+    postponed game beside one FINAL game with no stats and asserted the §10
+    wording — which passed only because the postponement branch returned first,
+    swallowing the pipeline failure. Exactly the mistake this file's own
+    {@link finishGames} comment warns about, one function further down.
+  */
   await fx.client.query(
-    `INSERT INTO games (sport_id, external_ref, season, week, home_team_ref, away_team_ref, kickoff_at, status)
-     VALUES ($1, $2, $3, $4, 'BUF', 'CIN', $5, $6)`,
+    `INSERT INTO games (sport_id, external_ref, season, week, home_team_ref, away_team_ref,
+                        kickoff_at, status, final_at, stats_synced_at, stats_attempted_at)
+     VALUES ($1, $2, $3, $4, 'BUF', 'CIN', $5, $6,
+             CASE WHEN $6 = 'FINAL' THEN $5::timestamptz + interval '3 hours' END,
+             CASE WHEN $6 = 'FINAL' THEN $5::timestamptz + interval '4 hours' END,
+             CASE WHEN $6 = 'FINAL' THEN $5::timestamptz + interval '4 hours' END)`,
     [sport!.id, ref, SEASON, week, KICKOFF, status],
   );
 }
@@ -916,10 +943,131 @@ describe("a week whose box scores were never read — #140", () => {
 
     const outcome = await resolveLeagueWeek(fx.client, fx.leagueId, WEEK, AFTER_STANDARD);
 
-    expect(outcome.finalizedWithUnfinishedGames).toMatch(/never ingested/);
+    expect(outcome.finalizedWithUnfinishedGames).toMatch(/no box score/);
     expect(outcome.finalizedWithUnfinishedGames).toMatch(/stats pipeline/);
     // Not the postponement wording — the two must stay tellable apart.
     expect(outcome.finalizedWithUnfinishedGames).not.toMatch(/RULES.md §10/);
+  });
+
+  it("reports both reasons when both are true, not the first one found", async () => {
+    /*
+      **The branch order swallowed the pipeline failure, in the incident it was
+      written for.**
+
+      Past the window there were two ifs in a row and the postponement one
+      returned first — so a week carrying a postponed game *and* a FINAL game
+      whose box score never arrived reported only §10's "affected players score 0
+      for the week and the matchup stands". That sentence means "this is the
+      NFL's doing and the frozen rules cover it". Handed to an operator whose
+      ingest had just dropped a game, it is the wrong instruction.
+
+      And it is the *characteristic* shape of a provider outage rather than a
+      corner: when the provider is down syncGames cannot advance a status and
+      syncBoxScores cannot read a box score, so both fire together.
+
+      The test guarding this staged only the pure case, so it could not see it.
+    */
+    const fx = await setup();
+    await schedule(fx);
+    await finishGamesUnread(fx);
+    await addGame(fx, "postponed", "POSTPONED");
+
+    const outcome = await resolveLeagueWeek(fx.client, fx.leagueId, WEEK, AFTER_STANDARD);
+
+    expect(outcome.finalized).toBe(true);
+    expect(outcome.finalizedWithUnfinishedGames).toMatch(/RULES.md §10/);
+    expect(outcome.finalizedWithUnfinishedGames).toMatch(/stats pipeline/);
+  });
+
+  it("does not blame the NFL when nothing reached FINAL at all", async () => {
+    /*
+      The extreme of the same bug, and the one with no partial excuse.
+
+      unread counts only FINAL games, so when the status column freezes it is
+      structurally zero — there is nothing for the stats branch to notice. Every
+      matchup then settled 0–0 under §10's postponement sentence, blaming an
+      abandoned game for a week in which no game was abandoned.
+
+      Reachable from one place: games.status is written by syncGames alone, from
+      a single daily cron, and mapGameStatus answers SCHEDULED for any wording it
+      does not recognise — so one unfamiliar string turns a whole week's statuses
+      off at once.
+
+      §10 is written about *an* abandoned game. It is the right answer for one
+      fixture of sixteen and the wrong one for sixteen of sixteen, which is the
+      argument the "no games at all" branch above already makes.
+    */
+    const fx = await setup();
+    await schedule(fx);
+    // Kickoff has passed and the provider never moved the status.
+    await fx.client.query(
+      "UPDATE games SET status = 'SCHEDULED' WHERE season = $1 AND week = $2",
+      [SEASON, WEEK],
+    );
+
+    const outcome = await resolveLeagueWeek(fx.client, fx.leagueId, WEEK, AFTER_STANDARD);
+
+    expect(outcome.finalized).toBe(true);
+    expect(outcome.finalizedWithUnfinishedGames).toMatch(/not one of/);
+    expect(outcome.finalizedWithUnfinishedGames).toMatch(/our ingest/);
+    expect(outcome.finalizedWithUnfinishedGames).not.toMatch(/RULES.md §10/);
+  });
+
+  it("counts a box score read before the final whistle as no box score", async () => {
+    /*
+      stats_synced_at says a box score was read, never that the *final* one was.
+      syncBoxScores reads IN_PROGRESS games too and stamps the column on every
+      success, while the failure path leaves it alone — so a game read at half
+      time whose every post-final read then failed carries a sync stamp older
+      than the whistle, counts as ingested, and settles the week on third-quarter
+      numbers with no fallback reported at all.
+
+      Migration 0041 reasoned only about the never-succeeded direction.
+    */
+    const fx = await setup();
+    await schedule(fx);
+    await fx.client.query(
+      `UPDATE games SET status = 'FINAL',
+                       final_at = now() - interval '1 hour',
+                       stats_synced_at = now() - interval '3 hours',
+                       stats_attempted_at = now(),
+                       stats_error = 'Tank01 refused the request (HTTP 429)'
+        WHERE season = $1 AND week = $2`,
+      [SEASON, WEEK],
+    );
+
+    const outcome = await resolveLeagueWeek(fx.client, fx.leagueId, WEEK, DURING);
+
+    expect(outcome.finalized).toBe(false);
+    expect(outcome.holdReason).toMatch(/no box score/);
+  });
+
+  it("does not hold a game that ingested cleanly but raised a warning", async () => {
+    /*
+      The one-line version of this hold would have been stats_error IS NOT NULL,
+      and it is false: that column carries ordinary *warnings* from a successful
+      ingest — a field-goal count disagreeing with the plays parsed from it, a
+      defence missing from the box score — as much as failures. Roughly one real
+      game in seven raises one.
+
+      Holding on it would hold most weeks until the correction window expired,
+      making §10's fallback the normal path and destroying the distinction this
+      hold exists to draw. Asserted rather than argued, because the argument
+      lived only in a commit message.
+    */
+    const fx = await setup();
+    await schedule(fx);
+    await finishGames(fx);
+    await fx.client.query(
+      `UPDATE games SET stats_error = 'fgMade disagrees with the parsed plays'
+        WHERE season = $1 AND week = $2`,
+      [SEASON, WEEK],
+    );
+
+    const outcome = await resolveLeagueWeek(fx.client, fx.leagueId, WEEK, AFTER_STANDARD);
+
+    expect(outcome.finalized).toBe(true);
+    expect(outcome.finalizedWithUnfinishedGames).toBeUndefined();
   });
 
   it("reports nothing extra once the box scores are in", async () => {
