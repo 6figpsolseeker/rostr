@@ -43,9 +43,10 @@ const line = (statKey: string, value: number): StatLine => ({ statKey, value });
   SQL and asserted the answer, which is a tautology about a query in this file.
   Deleting both priority keys from the producer left it green.
 */
-function recordingProvider(
-  byRef: Map<string, ProviderBoxScore | Error>,
-): { provider: StatsProvider; asked: string[] } {
+function recordingProvider(byRef: Map<string, ProviderBoxScore | Error>): {
+  provider: StatsProvider;
+  asked: string[];
+} {
   const asked: string[] = [];
   const inner = fakeProvider(byRef);
   return {
@@ -54,9 +55,9 @@ function recordingProvider(
       ...inner,
       getBoxScore: (gameRef: string) => {
         asked.push(gameRef);
-        return (inner as { getBoxScore: (ref: string) => Promise<ProviderBoxScore> }).getBoxScore(
-          gameRef,
-        );
+        return (
+          inner as { getBoxScore: (ref: string) => Promise<ProviderBoxScore> }
+        ).getBoxScore(gameRef);
       },
     } as unknown as StatsProvider,
   };
