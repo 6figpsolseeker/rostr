@@ -33,7 +33,18 @@ export function whyClaimFailed(reason: string | null): string {
     case "PLAYER_TAKEN":
       return "a team with better priority claimed him first";
     case "ROSTER_FULL":
-      return "your roster was full and the claim named nobody to drop";
+      // **Not "named nobody to drop".** That was false in the case #237 created
+      // and stays false in one the fix leaves behind: a stashed player who
+      // recovers puts a team over the counted limit, so a claim naming a
+      // perfectly valid drop is still refused. The panel prints the drop two
+      // lines above this sentence, so the old wording denied, on one line, the
+      // fact rendered on the line before it.
+      return "your roster was still full, even after any drop the claim named";
+    case "DROP_ON_IR":
+      // The mistake this fix makes likely. Once claims start being awarded,
+      // "drop the injured one" is the natural way to make room — and it is the
+      // one drop that makes none, because he was not occupying a counted slot.
+      return "the player you dropped was on injured reserve, so dropping him freed no roster space";
     case "DROP_NOT_ON_ROSTER":
       return "the player you offered to drop was no longer on your roster";
     case "ALREADY_ROSTERED":

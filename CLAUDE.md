@@ -512,7 +512,12 @@ elsewhere. Now 60s. Suspect this before suspecting a test that fails only in a f
 did not exist. Nothing broke because nobody but the owner uses it. CI does not run
 migrations against Supabase and never will — see the database section.
 
-**IR enforcement is continuous, and nothing is forced off.** The owner's rule is that a
+**IR enforcement is continuous, and nothing is forced off** — continuous
+wherever the exemption is _read_, which until #237 was one of the two paths that
+apply a roster limit. `addFreeAgent` subtracted stashed players and the waiver
+resolver counted them, so the signed allowance worked in the first-come market
+and vanished in the priority-allocated one. Both read it now. **Trades read no
+roster limit at all**, which is a separate and larger gap. The owner's rule is that a
 player on IR must actually be injured. The safe shape is a **conditional exemption**: a
 recovered player is not moved or dropped, he stops being exempt and counts against the
 roster again. Forcing him off would make a display-only column drop somebody's roster spot

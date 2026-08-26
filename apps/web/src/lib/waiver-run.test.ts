@@ -6,7 +6,7 @@ describe("whyClaimFailed", () => {
     // The whole argument for storing the reason. One is the rules working, the
     // other is something the manager will repeat next Wednesday unless told.
     expect(whyClaimFailed("PLAYER_TAKEN")).toContain("better priority");
-    expect(whyClaimFailed("ROSTER_FULL")).toContain("roster was full");
+    expect(whyClaimFailed("ROSTER_FULL")).toContain("roster was still full");
     expect(whyClaimFailed("PLAYER_TAKEN")).not.toBe(whyClaimFailed("ROSTER_FULL"));
   });
 

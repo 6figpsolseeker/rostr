@@ -40,6 +40,7 @@ import {
   everyoneIsOnWaivers,
   buildRosterShape,
   countedRosterSize,
+  isIrEligible,
   dropDestination,
   initialWaiverPriority,
   NFL,
@@ -893,16 +894,50 @@ export async function processWaivers(
 
     const priority = await loadWaiverPriority(tx, leagueId);
 
-    const rosterRows = await tx.query<{ team_id: string; player_id: string }>(
-      `SELECT r.team_id, r.player_id FROM roster_entries r
+    /*
+      The same two IR columns `addFreeAgent` reads, and for the same reason.
+
+      Until #237 this query took `team_id, player_id` only, so the capacity
+      comparison downstream counted stashed players against the roster limit —
+      while `addFreeAgent`, three hundred lines up, subtracted them. A signed
+      `irSlots` allowance bought room in the first-come market and none in the
+      priority-allocated one, which is the market `RULES.md` §6 exists to make
+      fair.
+    */
+    const rosterRows = await tx.query<{
+      team_id: string;
+      player_id: string;
+      on_ir: boolean;
+      designation: string | null;
+    }>(
+      `SELECT r.team_id, r.player_id, r.on_ir, p.injury_designation AS designation
+         FROM roster_entries r
+         JOIN players p ON p.id = r.player_id
         WHERE r.league_id = $1 AND r.released_at IS NULL`,
       [leagueId],
     );
 
     const rosters = new Map<string, DraftablePlayer[]>(priority.map((teamId) => [teamId, []]));
+
+    /*
+      Built **inside the same filter** as `rosters`, and that is load-bearing.
+
+      A rostered player absent from the draft board is already missing from the
+      array the resolver counts. Exempting him as well would subtract him twice
+      and conjure a roster slot out of an unrelated gap, so an exemption is only
+      ever recorded for a player who was actually counted. One loop, one filter,
+      and the two cannot disagree.
+
+      The designation is read live, so a player who has recovered stops being
+      exempt at this run. Nothing is moved or dropped to enforce that; the team
+      simply finds itself at capacity again.
+    */
+    const irExempt = new Set<string>();
     for (const row of rosterRows) {
       const player = pool.get(row.player_id);
-      if (player) rosters.get(row.team_id)?.push(player);
+      if (!player) continue;
+      rosters.get(row.team_id)?.push(player);
+      if (row.on_ir && isIrEligible(row.designation)) irExempt.add(row.player_id);
     }
 
     /**
@@ -1014,6 +1049,7 @@ export async function processWaivers(
       rosters,
       pool,
       shape,
+      irExempt,
     });
 
     let awarded = 0;
