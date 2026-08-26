@@ -490,6 +490,28 @@ export class Tank01Provider implements StatsProvider {
       players.set(`${DST_REF_PREFIX}${teamAbv}`, lines);
     }
 
+    /*
+      The game's own status, read from the response we already paid for.
+
+      It was here all along and thrown away: every box-score fixture in this repo
+      carries `gameStatus`, `gameStatusCode`, `currentPeriod` and `gameClock`,
+      and `ProviderBoxScore` had nowhere to put any of them. That omission is
+      what left `games.status` with a single writer on a daily cron, which is
+      issue #256 — no box score was read while a game was being played, because
+      the work list waited for a column that only moved at 05:20 Eastern.
+
+      Read off the raw body rather than through `translateBoxScore`, deliberately.
+      The translator's output is pinned byte-for-byte by the thirteen-game
+      conformance corpus; routing a new field through it would make every ledger
+      in `packages/stats/src/corpus` need regenerating, and a corpus that has to
+      be regenerated to accept a change is one that has stopped checking it.
+    */
+    const body = (raw as { body?: { gameStatus?: unknown; gameStatusCode?: unknown } } | null)
+      ?.body;
+    const providerStatus = typeof body?.gameStatus === "string" ? body.gameStatus : null;
+    const providerStatusCode =
+      typeof body?.gameStatusCode === "string" ? body.gameStatusCode : null;
+
     return {
       gameRef: translated.gameRef,
       // The caller knows these; this method is handed a gameRef and does not.
@@ -499,6 +521,13 @@ export class Tank01Provider implements StatsProvider {
       week: 0,
       players,
       warnings: translated.warnings,
+      // `mapGameStatus` unchanged, and nothing here depends on the three live
+      // strings it guesses at. What is used downstream is "final or not", and
+      // the final wording is the one this provider has actually been observed
+      // to emit.
+      status: mapGameStatus(providerStatus ?? undefined),
+      providerStatus,
+      providerStatusCode,
     };
   }
 

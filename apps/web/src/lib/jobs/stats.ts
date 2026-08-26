@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { NFL } from "@rostr/core";
 import {
+  gamesUnderWay,
   recordCronRun,
   seasonsInPlay,
   syncBoxScores,
@@ -66,6 +67,8 @@ export async function runStatsJob(
   const runs: {
     season: number;
     games?: number;
+    /** Games being played at this instant. See the note above `problem`. */
+    underWay?: number;
     inserted?: number;
     revised?: number;
     retracted?: number;
@@ -79,9 +82,18 @@ export async function runStatsJob(
 
   for (const season of seasons) {
     try {
+      /*
+        Read **before** the ingest, so it describes the slate the run was about
+        to look at rather than the one it left behind. Asked first for the same
+        reason: if `syncBoxScores` throws, the season is already recorded as
+        broken and this number would be missing from exactly the run that most
+        needs it.
+      */
+      const underWay = await gamesUnderWay(client, NFL.key, season);
       const outcome = await syncBoxScores(client, provider, NFL.key, season);
       runs.push({
         season,
+        underWay,
         games: outcome.games,
         inserted: outcome.inserted,
         revised: outcome.revised,
@@ -105,6 +117,9 @@ export async function runStatsJob(
   const brokenSeasons = runs.filter((entry) => entry.error).length;
   const gameFailures = runs.reduce((total, entry) => total + (entry.failures?.length ?? 0), 0);
   const gameWarnings = runs.reduce((total, entry) => total + (entry.warnings?.length ?? 0), 0);
+  const starvedSeasons = runs.filter(
+    (entry) => (entry.underWay ?? 0) > 0 && entry.games === 0,
+  ).length;
 
   // Everything unresolved, not only what this run happened to touch. A run that
   // fetched nothing is the normal case on a Tuesday and would otherwise report
@@ -144,6 +159,31 @@ export async function runStatsJob(
     [
       brokenSeasons > 0 ? `${brokenSeasons} of ${seasons.length} seasons failed` : null,
       gameFailures > 0 ? `${gameFailures} game(s) failed to ingest` : null,
+      /*
+        **A slate was being played and the work list selected nothing.**
+
+        This is issue #256 itself, expressed as a health check. The work list
+        used to gate on `games.status`, which one daily cron wrote at an hour no
+        NFL game has ever been in progress — so on a Sunday it matched nothing,
+        no game *failed*, and `problem` was therefore null. `pnpm cron:status`
+        read green through sixteen hours of a pipeline that was not running, and
+        that is the reason the defect survived long enough to be found by reading
+        rather than by an alarm.
+
+        Not `games === 0` on its own, which is the normal Tuesday and would
+        leave the heartbeat permanently red between slates. And not a second copy
+        of the live predicate either: `gamesUnderWay` runs the same SQL fragment
+        the work list runs, because an alarm that asks a different question than
+        the selection it guards can fall silent for a reason the selection does
+        not have.
+
+        Self-limiting by construction — it can only be true while a game is
+        actually being played, so it cannot become the permanently-true signal
+        this file's own note above warns about.
+      */
+      starvedSeasons > 0
+        ? `${starvedSeasons} season(s) had games under way and read none`
+        : null,
     ]
       .filter((part) => part !== null)
       .join("; ") || null;

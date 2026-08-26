@@ -166,6 +166,11 @@ const healthy = (gameRef: string, warnings: readonly string[] = []): ProviderBox
     ["DST_DAL", [{ statKey: "def_pts_allowed", value: 24 }]],
   ]),
   warnings,
+  // A finished game, which is what these fixtures describe — both defenses
+  // carry a points-allowed total, and a live read would not.
+  status: "FINAL",
+  providerStatus: "Completed",
+  providerStatusCode: "2",
 });
 
 const lastOutcome = async (): Promise<string | null | undefined> =>
@@ -372,4 +377,125 @@ describe("the stats cron", () => {
    * had to be fixed. See `score-week/route.test.ts` for that property tested
    * where it can be.
    */
+});
+
+describe("a slate that was under way and read nothing — #256", () => {
+  /*
+    The check that would have caught the defect the ingest was fixed for.
+
+    `problem` was computed from failed seasons and failed games alone, so a
+    Sunday on which the work list matched *nothing at all* recorded
+    `last_outcome = null`. `pnpm cron:status` — the command CLAUDE.md tells every
+    arriving session to run first — read green through sixteen hours of a
+    pipeline that was not running, every ten minutes, for as long as it lasted.
+  */
+
+  /** A game being played: kicked off, inside the live window, not final. */
+  async function liveGame(season: number, ref: string): Promise<void> {
+    const [sport] = await db!.query<{ id: string }>("SELECT id FROM sports WHERE key = $1", [
+      NFL.key,
+    ]);
+    await db!.query(
+      `INSERT INTO games (sport_id, external_ref, season, week, home_team_ref, away_team_ref,
+                          kickoff_at, status, final_at)
+       VALUES ($1, $2, $3, 1, 'PHI', 'DAL', now() - interval '90 minutes', 'SCHEDULED', NULL)`,
+      [sport!.id, ref, season],
+    );
+  }
+
+  it("reports a slate the work list never selected", async () => {
+    db = await createTestDatabase();
+    await seedSport(db, NFL);
+    await league(2026);
+    await seedDefenses();
+    await liveGame(2026, "g1");
+    // The pacing stamp stands in for a work list that selected nothing: the
+    // observable shape is the same and it is the one that matters.
+    await db.query("UPDATE games SET stats_attempted_at = now(), stats_synced_at = now()");
+
+    const { provider, calls } = fakeProvider(healthy);
+    await runStatsJob(db, provider, NOW);
+
+    expect(calls).toEqual([]);
+    expect(await lastOutcome()).toMatch(/under way/);
+  });
+
+  it("stays quiet on a day with no games", async () => {
+    /*
+      The half that keeps this usable. A run over zero games genuinely is a
+      healthy run in June, and an alarm that cannot go quiet is one nobody reads
+      — a mistake this repo has already made twice, in `season-sync`'s undated
+      fixtures and in `outstanding.total`. The predicate is bounded at both ends
+      of `kickoff_at`, so it can only fire while a game is being played.
+    */
+    db = await createTestDatabase();
+    await seedSport(db, NFL);
+    await league(2026);
+    await seedDefenses();
+    await liveGame(2026, "g1");
+    await db.query("UPDATE games SET kickoff_at = now() + interval '3 days'");
+
+    const { provider } = fakeProvider(healthy);
+    await runStatsJob(db, provider, NOW);
+
+    expect(await lastOutcome()).toBeNull();
+  });
+
+  it("does not count a game whose kickoff time is only a stand-in", async () => {
+    /*
+      `kickoff_tbd` marks a fixture whose hour the NFL has not fixed — eight of
+      them across weeks 16 and 17, held back for flex scheduling — and the stored
+      time is the earliest it *could* start. Reading the clock passing a stand-in
+      as a game being played would raise this alarm for seven hours before a
+      week-17 game that has not kicked off.
+
+      This is also the only consumer that pins `kickoff_tbd` inside the shared
+      `UNDER_WAY_SQL` fragment. The work list carries the same bound on its outer
+      gate, so dropping it from the fragment is invisible there and visible here.
+    */
+    db = await createTestDatabase();
+    await seedSport(db, NFL);
+    await league(2026);
+    await seedDefenses();
+    await liveGame(2026, "g1");
+    await db.query(
+      "UPDATE games SET kickoff_tbd = true, stats_attempted_at = now(), stats_synced_at = now()",
+    );
+
+    const { provider } = fakeProvider(healthy);
+    await runStatsJob(db, provider, NOW);
+
+    expect(await lastOutcome()).toBeNull();
+  });
+
+  it("stays quiet when the slate was read", async () => {
+    /*
+      The control. Without it every test above passes against an alarm that never
+      fires at all.
+
+      The response carries a **player** line rather than only the two defenses
+      `healthy` describes, and that is not incidental. A live read withholds a
+      D/ST — zero points allowed is a shutout, not an absence — so a mid-game
+      response containing nothing else translates to no stat lines and correctly
+      throws. Which is what this fixture did on first writing, and it is the same
+      shape as #232's: a fixture staging a state the product does not produce.
+    */
+    db = await createTestDatabase();
+    await seedSport(db, NFL);
+    await league(2026);
+    await seedDefenses();
+    await liveGame(2026, "g1");
+
+    const { provider, calls } = fakeProvider((gameRef) => ({
+      ...healthy(gameRef),
+      players: new Map([["qb1", [{ statKey: "pass_yd", value: 120 }]]]),
+      status: "IN_PROGRESS" as const,
+      providerStatus: "In Progress",
+      providerStatusCode: "1",
+    }));
+    await runStatsJob(db, provider, NOW);
+
+    expect(calls).toEqual(["g1"]);
+    expect(await lastOutcome()).toBeNull();
+  });
 });

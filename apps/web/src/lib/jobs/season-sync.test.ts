@@ -136,9 +136,22 @@ describe("the season sync heartbeat", () => {
     expect(body.undatedGames).toBe(2);
   });
 
-  it("reports a season that genuinely failed", async () => {
-    // The field is not merely emptied — a real failure must still reach it, or
-    // the fix would trade a false alarm for a silent one.
+  it("reports a schedule sync that failed for every week", async () => {
+    /*
+      The field is not merely emptied — a real failure must still reach it, or
+      the fix would trade a false alarm for a silent one.
+
+      **This used to assert "1 of 1 seasons failed", and the wording changed
+      deliberately.** The eighteen `syncGames` calls sat inside the per-season
+      try, so the first throw aborted the season and every later week with it.
+      They are guarded individually now (issue #256, since this job is the
+      backstop for `games.status` rather than its primary writer), so the season
+      completes and the weeks are named.
+
+      The alarm still fires either way — `cronJobState` reads any non-null
+      outcome as FAILING — and it now says which weeks, which the season-level
+      message never did.
+    */
     const client = await seedLeague();
     const { provider } = fakeProvider([]);
     provider.listGames = async () => {
@@ -148,7 +161,56 @@ describe("the season sync heartbeat", () => {
     await runSeasonSyncJob(client, provider, NOW);
 
     const [run] = await listCronRuns(client);
-    expect(run?.lastOutcome).toMatch(/1 of 1 seasons failed/);
+    expect(run?.lastOutcome).toMatch(/18 week\(s\) failed/);
+    expect(run?.lastOutcome).toMatch(/provider exploded/);
+  });
+
+  it("groups the weeks by reason rather than repeating it eighteen times", async () => {
+    /*
+      The outcome is capped at 400 characters. Eighteen copies of one message
+      overflow it, and what scrolls off is the *end* of the list — weeks 15
+      through 18, the playoff and championship weeks. The truncation kept the
+      least interesting half.
+
+      A collapsed range also tells an operator at a glance that this is an outage
+      rather than particular fixtures being unreadable.
+    */
+    const client = await seedLeague();
+    const { provider } = fakeProvider([]);
+    provider.listGames = async () => {
+      throw new Error("provider exploded");
+    };
+
+    await runSeasonSyncJob(client, provider, NOW);
+
+    const [run] = await listCronRuns(client);
+    expect(run?.lastOutcome).toMatch(/weeks 1-18/);
+    // Said once, not eighteen times, so nothing is lost to the cap.
+    expect(run?.lastOutcome?.match(/provider exploded/g)).toHaveLength(1);
+    expect(run?.lastOutcome).not.toMatch(/…/);
+  });
+
+  it("syncs the rest of the season when one week throws", async () => {
+    // The whole point of the per-week guard: the loop runs in ascending order,
+    // so a transient fault on a week nobody is playing used to take out the live
+    // week at the end of it.
+    const client = await seedLeague();
+    const { provider } = fakeProvider([]);
+    const realListGames = provider.listGames.bind(provider);
+    provider.listGames = async (season: number, week: number) => {
+      if (week === 3) throw new Error("week 3 exploded");
+      return realListGames(season, week);
+    };
+
+    const response = await runSeasonSyncJob(client, provider, NOW);
+    const body = (await response.json()) as { runs: { error?: string }[] };
+
+    // The season did not fail — seventeen weeks synced.
+    expect(body.runs[0]?.error).toBeUndefined();
+
+    const [run] = await listCronRuns(client);
+    expect(run?.lastOutcome).toMatch(/1 week\(s\) failed/);
+    expect(run?.lastOutcome).toMatch(/weeks 3/);
   });
 
   it("reads every week of the season, not only the weeks ahead", async () => {

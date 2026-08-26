@@ -1267,3 +1267,73 @@ describe("currentWeek is scoped to one season — #105", () => {
     expect(await currentWeek(fx.client, NFL.key, 2026, preseason)).toBeNull();
   });
 });
+
+describe("a game we played and never marked final — #256", () => {
+  /*
+    A state that could not exist before box scores were read during play.
+
+    The ingest now writes `stat_lines` from a game that is still under way, so a
+    game can carry a complete set of stats while `games.status` is whatever the
+    daily schedule sync last said. Reported as §10 — the **abandoned game** rule
+    — that would blame the NFL for our own status feed being hours behind, and
+    the sentence a settled week leaves behind is permanent.
+  */
+  it("blames our own status feed rather than an abandoned game", async () => {
+    const fx = await setup();
+    await schedule(fx);
+    await finishGames(fx);
+    // Played and scored: stats written after its own kickoff. Not marked FINAL.
+    await addGame(fx, "g1-played", "SCHEDULED");
+    await fx.client.query(
+      `UPDATE games SET stats_synced_at = kickoff_at + interval '3 hours'
+        WHERE external_ref = $1`,
+      ["g1-played"],
+    );
+
+    const outcome = await resolveLeagueWeek(fx.client, fx.leagueId, WEEK, AFTER_STANDARD);
+
+    expect(outcome.finalizedWithUnfinishedGames).toMatch(/played and scored/);
+    expect(outcome.finalizedWithUnfinishedGames).toMatch(/status feed is behind/);
+    // The abandoned-game sentence must not appear: nothing here was abandoned.
+    expect(outcome.finalizedWithUnfinishedGames).not.toMatch(/RULES\.md §10/);
+  });
+
+  it("still says §10 for a game that genuinely never kicked off", async () => {
+    /*
+      The control, and the reason this is a split rather than a reword. The two
+      call for different responses: an abandoned game is a fact about the season
+      and nobody need do anything, while a played game we failed to mark final is
+      an operational fault somebody can go and look at.
+    */
+    const fx = await setup();
+    await schedule(fx);
+    await finishGames(fx);
+    await addGame(fx, "g1-postponed", "POSTPONED");
+
+    const outcome = await resolveLeagueWeek(fx.client, fx.leagueId, WEEK, AFTER_STANDARD);
+
+    expect(outcome.finalizedWithUnfinishedGames).toMatch(/RULES\.md §10/);
+    expect(outcome.finalizedWithUnfinishedGames).not.toMatch(/played and scored/);
+  });
+
+  it("reports both when a week holds one of each", async () => {
+    // The mixed state is reachable and the branch order used to swallow the
+    // second reason — the same defect this function's own comment records about
+    // `finished < total` returning before the stats fallback could be reached.
+    const fx = await setup();
+    await schedule(fx);
+    await finishGames(fx);
+    await addGame(fx, "g1-postponed", "POSTPONED");
+    await addGame(fx, "g1-played", "SCHEDULED");
+    await fx.client.query(
+      `UPDATE games SET stats_synced_at = kickoff_at + interval '3 hours'
+        WHERE external_ref = $1`,
+      ["g1-played"],
+    );
+
+    const outcome = await resolveLeagueWeek(fx.client, fx.leagueId, WEEK, AFTER_STANDARD);
+
+    expect(outcome.finalizedWithUnfinishedGames).toMatch(/played and scored/);
+    expect(outcome.finalizedWithUnfinishedGames).toMatch(/RULES\.md §10/);
+  });
+});

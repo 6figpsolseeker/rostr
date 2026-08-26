@@ -87,11 +87,18 @@ Sunday by changing a number.
 
 > **This section is the design. Read it in the future tense.**
 >
-> The intent is full automation with no human in the loop. As of **2026-08-17 the loop is
-> entirely human**: `cron_runs` holds no rows, so no scheduled job has ever executed
-> against the deployed database, and every sync so far was somebody running `pnpm db:sync`.
-> Check with `pnpm cron:status`. The deployment this waits on is an entry in
-> `docs/SETUP-REQUIRED.md`.
+> The intent is full automation with no human in the loop.
+>
+> **This paragraph said "as of 2026-08-17 the loop is entirely human — `cron_runs` holds no
+> rows, so no scheduled job has ever executed" and stopped being true when somebody
+> deployed.** All seven scheduled jobs fire; `cron_runs` proves it. It went on telling every
+> reader to discount every claim in this table, which is the exact failure the **Exists?**
+> column was added to prevent, one row up.
+>
+> **Do not hand-maintain a claim about what is running.** `pnpm cron:status` reads the
+> expected jobs out of `vercel.json`, so it cannot be stale; anything written here is a
+> snapshot with a date on it. A green result means the routes ran, not that they did any
+> work — a run over zero games is a healthy run.
 >
 > Five of the six jobs below exist as code. One does not exist at all. The **Exists?**
 > column says which — added because this table read as a description of production for
@@ -116,13 +123,31 @@ and it did: eight fixtures across weeks 16 and 17 of 2026. See `games.kickoff_tb
 | **Season sync**    | Daily, 09:20 UTC                    | Players, byes, schedule, rankings, projections | ✅      | `/api/cron/season-sync` |
 | **Injury sync**    | **Hourly**                          | Injury designations                            | ✅      | `/api/cron/injuries`    |
 | **Inactives**      | **100 minutes before each kickoff** | Official inactive list — see below             | ❌      | —                       |
-| **Game watcher**   | Every 10 min, unconditionally       | Polls until status is `final`                  | 🟡      | `/api/cron/stats`       |
+| **Game watcher**   | Every 20 min per live game          | Reads box scores from kickoff+20m to +5h       | ✅      | `/api/cron/stats`       |
 | **Score finalise** | Same job, on `final`                | Box score → `stat_lines` → recompute → publish | ✅      | `syncBoxScores`         |
 | **Week finalise**  | T+48h, or T+7d for Weeks 14 and 17  | Locks the week for settlement                  | ✅      | `/api/cron/score-week`  |
 
-**The game watcher is 🟡 because it does not watch.** It polls every ten minutes all week
-rather than from 2.5 hours after a kickoff — simpler, and more provider calls. The
-2.5-hour window described below is the design, not the code.
+**The game watcher was 🟡 for the wrong reason, and the reason was reassuring.** This row
+read _"it does not watch — it polls every ten minutes all week rather than from 2.5 hours
+after a kickoff — simpler, and more provider calls."_ The deviation it described was
+**over**-polling, a deliberate trade of calls for simplicity.
+
+The truth was the opposite. It polled **zero** games during a game. The box-score work
+list gated on `games.status IN ('IN_PROGRESS','FINAL')`, and that column had exactly one
+writer — `syncGames`, from the daily 09:20 UTC season sync, which is 05:20 Eastern, an
+hour at which no NFL game has ever been in progress. So the status went `SCHEDULED` to
+`FINAL` and never through anything in between, the work list matched nothing all Sunday,
+and the first stat line for a Sunday slate was written **Monday morning** — 16h30m after
+the first kickoff, and 20h for the London games.
+
+Issue #256. Fixed by keying selection on `kickoff_at`, a fact we already hold and every
+lineup lock already uses, and by writing `games.status` from the box score's own
+`gameStatus` — which the adapter had been discarding. Zero extra provider calls.
+
+The note is kept rather than deleted because of what it cost: it was the one place in the
+repo flagging this row as imperfect, it named a cost we were not paying, and it set the
+expectation that any fix would _increase_ calls. Anyone reading it would have concluded
+the watcher was working and merely inelegant.
 
 **Injury sync exists** (`packages/db/src/injuries.ts`, `/api/cron/injuries`, hourly). It
 runs hourly rather than the 6h/game-day split described above, which is simpler and costs
@@ -230,14 +255,34 @@ from growth.
 
 Per week, in season:
 
-| Job                           | Calls/week                |
-| ----------------------------- | ------------------------- |
-| Game watcher polling          | ~70                       |
-| Box score fetch (16 games)    | 16                        |
-| Inactives (4 kickoff windows) | ~48                       |
-| Injury sync                   | ~30                       |
-| Season/roster sync            | 7                         |
-| **Total**                     | **~170/week ≈ 700/month** |
+**The table below was stale by roughly 3× and this note is the correction.** It predates
+the 168-hour stat-correction sweep, which alone is the largest line in the budget: a
+168-hour window holds two slates, so ~32 games are re-read on the sweep cadence at any
+time. It also priced a "game watcher" separately from a "box score fetch", and there is
+only one — the watcher _is_ the box-score read, since #256 made the box score the source
+of a game's status as well as its stats.
+
+**The binding number is a Sunday, not a week.** The quota is daily (1,000 on Tank01 Pro,
+read off a live response header on 2026-08-22, not the free tier's 1,000/month), and the
+week's calls are not evenly spread.
+
+| Job                                | Calls, worst Sunday   |
+| ---------------------------------- | --------------------- |
+| Live box scores (14 games × ~9)    | ~126                  |
+| Post-final read (1 per game)       | ~14                   |
+| Correction sweep (~32 games @ 12h) | ~64                   |
+| Injury sync (hourly)               | 24                    |
+| Season sync (daily, 18 weeks + 5)  | 23                    |
+| **Total**                          | **~250 of 1,000/day** |
+
+The dial is `LIVE_POLL_MINUTES` in `packages/db/src/box-scores.ts`. At 20 it gives about
+nine reads a game; at 180 it gives strictly per-game semantics — one read early, one after
+the whistle — at roughly a third of the calls. It governs **freshness only**: the whistle
+is observed in-band and the post-final read follows within `FAILED_RETRY_MINUTES`, so the
+settled score is right within about twenty minutes of a game ending whatever it is set to.
+
+Every other clause carries its own ceiling and the arithmetic is in that file's comments.
+Re-derive them there rather than trusting this table, which has now been wrong once.
 
 ### Providers
 

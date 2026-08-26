@@ -200,11 +200,16 @@ export {
 } from "./identity.js";
 
 export {
+  CLOSING_READ_HOURS,
   CORRECTION_WINDOW_HOURS,
   FAILED_RETRY_MINUTES,
   FINAL_RECHECK_HOURS,
+  LIVE_POLL_MINUTES,
+  LIVE_START_MINUTES,
   LIVE_WINDOW_HOURS,
   MAX_GAMES_PER_RUN,
+  MIN_GAME_MINUTES,
+  gamesUnderWay,
   syncBoxScores,
   unresolvedStatsProblems,
   type BoxScoreSyncResult,

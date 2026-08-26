@@ -154,6 +154,48 @@ that scores and one that does not. Its table carries an "Exists?" column so the 
 the code can be told apart at a glance. Reading a plan as a description is how the claim
 above got written, twice.
 
+**And the "game watcher" existed without watching anything until 2026-08-26 — issue #256.**
+`games.status` had exactly one writer, `syncGames`, from the daily 09:20 UTC season sync;
+that is 05:20 Eastern, and the earliest kickoff in the whole synced season is 09:30 Eastern
+while the latest whistle is around 03:35 UTC. So there was **no instant at which that job
+could observe a game in play**: the column went `SCHEDULED` straight to `FINAL`, always.
+The box-score work list gated on it, matched nothing all Sunday, and the first stat line
+for a slate landed **Monday morning** — 16h30m after the first kickoff, 20h for the London
+games. The scoreboard read 0-0 all day while labelling every starter "playing", and the
+standings showed a tie for every team.
+
+**The note that flagged this row as imperfect described the deviation backwards**, which is
+why it survived: it said the watcher over-polls, "every ten minutes all week… simpler, and
+more provider calls". It polled zero games during a game, and the fix adds none. A reader
+would have concluded the thing was working and merely inelegant. That is this file's named
+failure class — the confident sentence that stops anyone looking — in the one document
+whose job is to describe the pipeline.
+
+Selection now keys on `kickoff_at`, a fact we hold and every lineup lock already uses, and
+`games.status` is written from the box score's own `gameStatus`, which the adapter had been
+discarding. **Do not put a status gate back on that work list.** The whole defect was a
+fast job waiting on a column only a slow job wrote.
+
+Three things in that change are load-bearing and easy to undo:
+
+- **`LIVE_POLL_MINUTES` is what keeps `LIVE_WINDOW_HOURS` a bound rather than a budget.**
+  Unpaced, the live clause fires every tick and the window's width becomes a multiplier —
+  fourteen concurrent games at 47 reads each is more than the day's quota.
+- **A team defense is never written from an unfinished game.** Both tiered D/ST ladders top
+  out at zero, so a first-quarter read is not a defense that has conceded nothing _yet_ —
+  it is a **shutout**, ten points before a sack, for every unit in every game, decaying all
+  afternoon. Withholding must be expressed as _not covered by this read_: the retraction
+  pass zeroes any covered-but-absent key, so a naive omission has it manufacture the
+  shutout itself.
+- **`final_at` is only stamped `MIN_GAME_MINUTES` after kickoff.** No mid-game box score has
+  ever been fetched from this provider — every fixture in the repo is a completed game — so
+  if `gameStatus` turns out to read "Completed" from the moment the row exists, an ungated
+  stamp would open the correction window three hours early and settle the week on a
+  first-quarter box score, silently. Requiring a prior successful read does **not** close
+  that; the second read is twenty minutes in. `provider_status` records what actually
+  arrives, so the Thursday 10 September opener answers the question without anyone
+  remembering to run a probe.
+
 **Corrected 2026-08-17, and this passage was the stale one.** It said `syncBoxScores` did
 not exist and that every player therefore scores zero. Both halves are now false, and the
 second was false in a way that reads as urgent — which is how it survived being repeated.
