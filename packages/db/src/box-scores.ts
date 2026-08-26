@@ -86,6 +86,54 @@ export const LIVE_WINDOW_HOURS = 8;
  */
 export const MAX_GAMES_PER_RUN = 20;
 
+/*
+ * How many refs carrying stat lines a game must hold before its join rate means
+ * anything.
+ *
+ * **A floor on the denominator, never on the matched count.** A floor on matches
+ * is circular — a wholly broken player map produces two matched refs, which is
+ * below any floor, so the guard would abstain in precisely the case it exists
+ * for.
+ *
+ * The size is derived rather than chosen. The threshold below is a quarter, so
+ * its reciprocal is four: the floor has to exceed four times the largest number
+ * of *innocent* unmatched scoring refs a game can hold, or one of them alone
+ * trips it. Across the thirteen corpus games the worst is two, giving a floor of
+ * eight; twelve carries half again on top of that and still sits below the
+ * twenty a finished game carries, so no completed game is ever exempted.
+ *
+ * The gate is load-bearing and not a formality. A return touchdown is as likely
+ * on the opening kickoff as in the fourth quarter, and the work list takes
+ * IN_PROGRESS games — so a returner who cannot be rostered, plus the two D/ST
+ * units, is one unmatched of three at 13:01 on a Sunday. That is 33% and
+ * entirely healthy.
+ */
+export const MIN_SCORING_REFS_TO_JUDGE = 12;
+
+/*
+ * The share of stat-bearing refs that may fail to join before the read is
+ * treated as unusable. Basis points, because this repo does not put a float
+ * anywhere near a decision about scoring.
+ *
+ * **Measured, not picked.** Across the thirteen corpus games checked against the
+ * live player table, 5 of 277 refs that produced a stat line failed to join —
+ * 1.81%, worst game 2 of 22 — and every one was a defensive or special-teams
+ * player credited with a return touchdown. Nobody can roster those, so they cost
+ * no points. A stale map gives ~100%.
+ *
+ * 2500 is 2.75x the worst healthy game. The looser 3333 was considered and
+ * rejected on a nameable break rather than a preference: losing the running
+ * backs from the pool is 23-27% of a game's scoring refs, which 2500 catches and
+ * 3333 does not.
+ *
+ * **The denominator is deliberately stat-bearing refs and not all refs.** Sixty
+ * to seventy percent of a real box score never joins and never should: it
+ * carries everyone who took a snap, and `players` holds the six positions a
+ * fantasy roster can field. Over all refs the healthy rate is 67-71% and no
+ * threshold in that band means anything.
+ */
+export const MAX_UNJOINED_SCORING_BPS = 2500;
+
 export interface BoxScoreSyncResult {
   readonly games: number;
   /** Stat lines seen for the first time — revision 0. */
@@ -269,14 +317,56 @@ export async function syncBoxScores(
       )
     ).map((row) => [row.key, row.id]),
   );
-  const playerIds = new Map(
-    (
-      await db.query<{ id: string; external_ref: string }>(
-        "SELECT id, external_ref FROM players WHERE sport_id = $1",
-        [ids.sportId],
-      )
-    ).map((row) => [row.external_ref, row.id]),
+  const playerRows = await db.query<{
+    id: string;
+    external_ref: string;
+    position_id: string | null;
+  }>(
+    "SELECT id, external_ref, primary_position_id AS position_id FROM players WHERE sport_id = $1",
+    [ids.sportId],
   );
+  const playerIds = new Map(playerRows.map((row) => [row.external_ref, row.id]));
+
+  /*
+    **The pool is checked before a box score is fetched, not inferred from one.**
+
+    This map is built once and serves the whole slate, so a hole in it is a
+    property of the run rather than of any game. That makes it checkable here,
+    for free, against our own database — and checking it here aborts before
+    spending up to `MAX_GAMES_PER_RUN` metered calls on a run that can only
+    produce garbage.
+
+    The predicate is position **coverage**, not pool size. A size floor would be
+    a sport-size assumption, and invariant 3 says sports are data and never
+    structure. Every position the registry declares must have somebody behind it,
+    which needs no threshold: it fires only at zero, and for a synced pool the
+    smallest group is in the dozens.
+
+    **It catches the failure the per-game ratio is structurally blind to.**
+    Kickers are roughly two of twenty scoring refs, so losing every kicker in the
+    league moves that ratio to about 9% — under every threshold, on every game,
+    forever, while every kicker scores zero permanently. Because that damage is
+    uniform across teams the standings look plausible too, so nothing downstream
+    notices either. This file has paid for that lesson once already: a bare count
+    of unmatched players once hid exactly that.
+
+    Throwing is the established shape here rather than a new convention —
+    `loadSportIds` above throws `SportNotSeededError` for the same class of
+    whole-run precondition. `runStatsJob` wraps each season in its own catch, so
+    other seasons still run and the heartbeat goes red.
+  */
+  const populated = new Set(playerRows.map((row) => row.position_id).filter(Boolean));
+  const emptyPositions = [...ids.positionIds]
+    .filter(([, positionId]) => !populated.has(positionId))
+    .map(([key]) => key)
+    .sort();
+  if (emptyPositions.length > 0) {
+    throw new Error(
+      `The player pool has no ${emptyPositions.join(", ")} for ${sportKey}. ` +
+        `Every box score would score those positions zero, so no game was read. ` +
+        `Run the players sync before retrying.`,
+    );
+  }
 
   let inserted = 0;
   let revised = 0;
@@ -475,10 +565,24 @@ async function ingestOneGame(
   const rowStatKey: string[] = [];
   const rowValue: number[] = [];
 
+  /*
+    Two tallies, and only one of them is evidence.
+
+    A ref carrying no stat line and no `players` row costs nothing: it writes
+    nothing and covers nothing. A ref carrying lines is a score that went
+    somewhere and did not arrive. The guard below counts only the second.
+  */
+  let scoringRefs = 0;
+  const unmatchedScoring: string[] = [];
+
   for (const [ref, lines] of usable) {
+    const scoring = lines.length > 0;
+    if (scoring) scoringRefs++;
+
     const playerId = playerIds.get(ref);
     if (!playerId) {
       unmatched.push(ref);
+      if (scoring) unmatchedScoring.push(ref);
       continue;
     }
 
@@ -508,6 +612,63 @@ async function ingestOneGame(
   // Retracting against it would zero the week.
   if (rowValue.length === 0) {
     throw new Error(`Box score ${game.external_ref} translated to no stat lines`);
+  }
+
+  /*
+    The same guard as the one above with its threshold raised off zero. Issue
+    #232.
+
+    That one asks whether *anything* joined; this asks whether the players who
+    **scored** joined. The gap between them was the whole defect: two synthesised
+    `DST_<abv>` refs match thirty-two stable rows and carry a `def_pts_allowed`
+    written even at nought, so they clear the empty check on their own while
+    every skill player in the game fails to join. The read then recorded itself
+    as a clean success.
+
+    **Throwing rather than recording a warning is the load-bearing choice**, and
+    the reason is one column. A warning reaches `stats_error`, and the statement
+    that writes it also stamps `stats_synced_at` — which is what the week's
+    finalisation hold reads, not `stats_error`. So a flagged game would still
+    claim to have synced, the week would still settle at zero, and the flag would
+    sit on a page nobody was watching. The per-game catch already withholds that
+    stamp, sets the error, records a failure and writes nothing, which is all
+    four things this needs; it also sits above the transaction, so `failures`'
+    promise that nothing was written stays literally true.
+
+    **Writing the joined rows and withholding the stamp was considered and
+    rejected.** Those rows are right-and-incomplete rather than wrong, and in
+    every branch where the pool is repaired inside the window the two designs end
+    byte-identical — there are roughly a hundred and forty retries in a
+    forty-eight hour window. They differ only where the pool stays broken *and*
+    nobody reads a red heartbeat for two days. There, a partial week settles at
+    around forty percent of normal scoring with each team penalised in proportion
+    to how many of its own starters were missing from our table, which is a
+    permanent win-loss record distributed by an artifact of our database — and
+    biased, because the players missing are disproportionately rookies and recent
+    signings. All-zero settles as ties, which is uniform, obvious on the
+    scoreboard, and already what `RULES.md` §10 prescribes for a game whose stats
+    never arrive. There is no rule anywhere for a game we half-read.
+
+    This does not prevent the bad outcome. It delays it and makes it loud: the
+    hold is bounded, and past the correction window the week finalises regardless
+    with the reason named. That is the correct ceiling — a week that can never
+    settle is worse than the defect being fixed.
+  */
+  if (
+    scoringRefs >= MIN_SCORING_REFS_TO_JUDGE &&
+    unmatchedScoring.length * 10_000 > scoringRefs * MAX_UNJOINED_SCORING_BPS
+  ) {
+    // Named, not counted — the idiom this file already uses for `unmatched`, and
+    // for the reason recorded there: a bare count once hid every kicker in the
+    // league. The scoring list is five names across thirteen real games, so it
+    // is short enough to print.
+    const named = unmatchedScoring.slice(0, 8).join(", ");
+    throw new Error(
+      `Box score ${game.external_ref}: ${unmatchedScoring.length} of ${scoringRefs} ` +
+        `players carrying stats did not match the player pool ` +
+        `(${named}${unmatchedScoring.length > 8 ? ", …" : ""}). ` +
+        `The pool is stale, or the provider changed its refs.`,
+    );
   }
 
   const ptsAllowedId = statKeyIds.get("def_pts_allowed") ?? null;

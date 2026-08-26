@@ -127,9 +127,28 @@ async function setup(status = "FINAL"): Promise<Fixture> {
   );
 
   const players = new Map<string, string>();
+  /*
+    Every position the sport registry declares, not only the ones a test uses.
+
+    A real pool always carries all six — the live table holds hundreds of each —
+    and #232 added a check that refuses a run whose pool has a position group at
+    zero, because a vanished group is invisible to any per-game join ratio. A
+    fixture seeding three of six was staging a pool the product cannot produce,
+    and the check caught it the moment it was written.
+
+    `wr1`, `te1` and `k1` exist to make the pool real. No test needs to reference
+    them.
+  */
   const roster: [string, string][] = [
     ["qb1", "QB"],
     ["rb1", "RB"],
+    ["wr1", "WR"],
+    ["wr2", "WR"],
+    ["wr3", "WR"],
+    ["rb2", "RB"],
+    ["te1", "TE"],
+    ["te2", "TE"],
+    ["k1", "K"],
     ["DST_PHI", "DEF"],
     ["DST_DAL", "DEF"],
   ];
@@ -994,5 +1013,228 @@ describe("a game whose ingest failed — #227", () => {
 
     const second = await syncBoxScores(fx.client, provider, NFL.key, SEASON);
     expect(second.games).toBe(0);
+  });
+});
+
+describe("a box score whose players do not join — #232", () => {
+  /*
+    The defect: unresolvable refs went into their own array and never reached
+    `problems`, so a game where almost nothing joined recorded a clean success —
+    `stats_error` NULL (clearing any prior error), `stats_synced_at` stamped, the
+    week finalising at zero, and nothing on any of nine surfaces showing it.
+
+    The two D/ST refs are what let it through: they are synthesised
+    `DST_<abv>` names matched against thirty-two stable rows, carrying a
+    `def_pts_allowed` written even at nought, so they clear the "translated to no
+    stat lines" guard on their own while every skill player fails.
+  */
+
+  it("refuses a game where most scoring players did not join", async () => {
+    const fx = await setup();
+
+    // 14 scoring refs: 2 D/ST that join, 12 ghosts that do not. 12 of 14 is
+    // 8571 bps, far past the 2500 threshold, and 14 clears the floor of 12.
+    const players: Record<string, ReturnType<typeof line>[]> = { ...bothDefenses };
+    for (let i = 0; i < 12; i++) players[`ghost-${i}`] = [line("pass_yd", 10)];
+
+    const provider = fakeProvider(new Map([["g1", boxScore("g1", players)]]));
+    const result = await syncBoxScores(fx.client, provider, NFL.key, SEASON);
+
+    expect(result.failures).toHaveLength(1);
+    expect(result.failures[0]?.reason).toMatch(/did not match the player pool/);
+
+    /*
+      The assertion that makes this issue #232 rather than a nicety.
+
+      `stats_synced_at` is what the week's finalisation hold reads. Left unset,
+      the game counts as unread, the week holds for its correction window, and
+      the twenty-minute retry runs — all of which the existing per-game catch
+      already provides, which is why this throws rather than recording a warning.
+    */
+    const [row] = await fx.client.query<{
+      stats_synced_at: string | null;
+      stats_error: string | null;
+    }>("SELECT stats_synced_at, stats_error FROM games WHERE id = $1", [fx.gameId]);
+
+    expect(row?.stats_synced_at).toBeNull();
+    expect(row?.stats_error).toMatch(/did not match the player pool/);
+
+    // Nothing was written, so `failures`' promise stays literally true.
+    const [lines] = await fx.client.query<{ n: number }>(
+      "SELECT count(*)::int AS n FROM stat_lines",
+    );
+    expect(lines?.n).toBe(0);
+  });
+
+  it("stays silent on the healthy shape, where most refs never join", async () => {
+    /*
+      **The regression test for the measurement this fix is built on.**
+
+      Sixty to seventy percent of a real box score never joins and never should:
+      it carries everyone who took a snap, and `players` holds the six positions
+      a fantasy roster can field. Across thirteen corpus games the unmatched rate
+      over *all* refs is 67-71%.
+
+      So a guard on the wrong denominator fires on every game ever ingested. This
+      stages that shape — two joining scorers, sixty non-scoring strangers — and
+      must stay green forever.
+    */
+    const fx = await setup();
+
+    const players: Record<string, ReturnType<typeof line>[]> = {
+      qb1: [line("pass_yd", 300)],
+      rb1: [line("rush_yd", 80)],
+      ...bothDefenses,
+    };
+    for (let i = 0; i < 60; i++) players[`lineman-${i}`] = [];
+
+    const provider = fakeProvider(new Map([["g1", boxScore("g1", players)]]));
+    const result = await syncBoxScores(fx.client, provider, NFL.key, SEASON);
+
+    expect(result.failures).toHaveLength(0);
+    expect(result.unmatched).toHaveLength(60);
+
+    const [row] = await fx.client.query<{
+      stats_synced_at: string | null;
+      stats_error: string | null;
+    }>("SELECT stats_synced_at, stats_error FROM games WHERE id = $1", [fx.gameId]);
+    expect(row?.stats_synced_at).not.toBeNull();
+    expect(row?.stats_error).toBeNull();
+  });
+
+  it("tolerates the innocent misses a real game carries", async () => {
+    /*
+      Five of 277 scoring refs across thirteen real games fail to join, and every
+      one is a defensive or special-teams player credited with a return
+      touchdown — nobody can roster them, so they cost no points. The worst
+      single game is two of twenty-two, which is 909 bps against a 2500
+      threshold.
+
+      Two unjoinable scorers among fourteen is 1428 bps: past the worst observed
+      game and still comfortably silent.
+    */
+    const fx = await setup();
+
+    const players: Record<string, ReturnType<typeof line>[]> = {
+      qb1: [line("pass_yd", 300)],
+      rb1: [line("rush_yd", 80)],
+      wr1: [line("rec_yd", 40)],
+      te1: [line("rec_yd", 20)],
+      k1: [line("fg_0_39", 1)],
+      "returner-a": [line("ret_td", 1)],
+      "returner-b": [line("ret_td", 1)],
+      ...bothDefenses,
+    };
+    for (let i = 0; i < 5; i++) players[`extra-${i}`] = [];
+
+    const provider = fakeProvider(new Map([["g1", boxScore("g1", players)]]));
+    const result = await syncBoxScores(fx.client, provider, NFL.key, SEASON);
+
+    expect(result.failures).toHaveLength(0);
+    expect(result.unmatched).toContain("returner-a");
+  });
+
+  it("catches a single position group vanishing from the box score", async () => {
+    /*
+      **The break that decides the constant, rather than a preference.**
+
+      Running backs are roughly a fifth of a pool and five or six of a games
+      twenty-odd scoring refs, so losing them is 23-27 percent. At 2500 bps that
+      fires; at the looser 3333 it does not, and every rostered running back in
+      every league scores zero permanently while the guard reads green.
+
+      Four unmatched of fourteen is 2857 bps, which sits between the two — so
+      this test is what makes the threshold a decision rather than a number
+      nobody can move.
+
+      Note this is the case layer one cannot help with: the pool still has
+      running backs, it is the box scores refs for them that stopped matching.
+    */
+    const fx = await setup();
+
+    const players: Record<string, ReturnType<typeof line>[]> = {
+      qb1: [line("pass_yd", 300)],
+      wr1: [line("rec_yd", 90)],
+      te1: [line("rec_yd", 30)],
+      k1: [line("fg_0_39", 1)],
+      ...bothDefenses,
+    };
+    // Eleven refs that join, four that do not: 4 of 15 is 2666 bps — above 2500
+    // and below 3333. The band is the whole point of the test.
+    for (const ref of ["rb2", "wr2", "wr3", "te2"]) players[ref] = [line("rec_yd", 15)];
+    for (let i = 0; i < 4; i++) players[`rb-unmatched-${i}`] = [line("rush_yd", 40)];
+
+    const provider = fakeProvider(new Map([["g1", boxScore("g1", players)]]));
+    const result = await syncBoxScores(fx.client, provider, NFL.key, SEASON);
+
+    expect(result.failures).toHaveLength(1);
+  });
+
+  it("abstains below the denominator floor, so a live read is not judged", async () => {
+    /*
+      The floor is on the **denominator** — refs carrying stat lines — and never
+      on the matched count. A floor on matches is circular: a wholly broken pool
+      produces two matched refs, below any floor, so the guard would abstain
+      exactly when it must fire.
+
+      A return touchdown is as likely on the opening kickoff as in the fourth
+      quarter, and the work list takes IN_PROGRESS games — so one unrosterable
+      returner plus the two D/ST units is one unmatched of three at 13:01 on a
+      Sunday. That is 33% and entirely healthy.
+    */
+    const fx = await setup("IN_PROGRESS");
+
+    const provider = fakeProvider(
+      new Map([["g1", boxScore("g1", { returner: [line("ret_td", 1)], ...bothDefenses })]]),
+    );
+    const result = await syncBoxScores(fx.client, provider, NFL.key, SEASON);
+
+    expect(result.failures).toHaveLength(0);
+  });
+
+  it("refuses the whole run when a position group has vanished", async () => {
+    /*
+      The failure no per-game ratio can see, and the reason this layer exists.
+
+      Kickers are roughly two of twenty scoring refs, so losing every kicker in
+      the league moves the per-game ratio to about 9% — under the threshold, on
+      every game, forever, while every kicker scores zero permanently. The damage
+      is uniform across teams, so the standings look plausible and nothing
+      downstream notices either.
+
+      Checked once per run against our own database, before a single metered call
+      is spent. No threshold: it fires only at zero.
+    */
+    const fx = await setup();
+    await fx.client.query(
+      `DELETE FROM players WHERE primary_position_id =
+         (SELECT id FROM positions WHERE sport_id = $1 AND key = 'K')`,
+      [fx.sportId],
+    );
+
+    const provider = fakeProvider(
+      new Map([["g1", boxScore("g1", { qb1: [line("pass_yd", 300)], ...bothDefenses })]]),
+    );
+
+    await expect(syncBoxScores(fx.client, provider, NFL.key, SEASON)).rejects.toThrow(
+      /player pool has no K/,
+    );
+  });
+
+  it("names the empty groups rather than counting them", async () => {
+    // The idiom this file already uses, and for the reason recorded there: a
+    // bare count once hid every kicker in the league.
+    const fx = await setup();
+    await fx.client.query(
+      `DELETE FROM players WHERE primary_position_id IN
+         (SELECT id FROM positions WHERE sport_id = $1 AND key IN ('K', 'TE'))`,
+      [fx.sportId],
+    );
+
+    const provider = fakeProvider(new Map([["g1", boxScore("g1", bothDefenses)]]));
+
+    await expect(syncBoxScores(fx.client, provider, NFL.key, SEASON)).rejects.toThrow(
+      /no K, TE/,
+    );
   });
 });

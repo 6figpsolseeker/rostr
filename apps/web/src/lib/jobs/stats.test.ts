@@ -108,16 +108,48 @@ async function seedDefenses(): Promise<void> {
   const [sport] = await db!.query<{ id: string }>("SELECT id FROM sports WHERE key = $1", [
     NFL.key,
   ]);
-  const [def] = await db!.query<{ id: string }>(
-    "SELECT id FROM positions WHERE sport_id = $1 AND key = 'DEF'",
-    [sport!.id],
+  const positions = new Map(
+    (
+      await db!.query<{ id: string; key: string }>(
+        "SELECT id, key FROM positions WHERE sport_id = $1",
+        [sport!.id],
+      )
+    ).map((row) => [row.key, row.id]),
   );
 
   for (const abv of ["PHI", "DAL"]) {
     await db!.query(
       `INSERT INTO players (sport_id, external_ref, full_name, primary_position_id, team_ref)
        VALUES ($1, $2, $2, $3, $4)`,
-      [sport!.id, `DST_${abv}`, def!.id, abv],
+      [sport!.id, `DST_${abv}`, positions.get("DEF")!, abv],
+    );
+  }
+
+  /*
+    One player for every other position the registry declares, which no test here
+    references.
+
+    They are here because #232 added a check that refuses a run whose player pool
+    has any declared position at zero — a vanished position group is invisible to
+    any per-game join ratio, and it zeroes every player in that group
+    permanently. A pool holding only defences is a state a synced database never
+    reaches, and the check caught this fixture the moment it was written.
+
+    The same widening was needed in `box-scores.test.ts`. Both were staging a
+    pool the product cannot produce, which is the failure this repo keeps paying
+    for in the other direction.
+  */
+  for (const [ref, key] of [
+    ["qb1", "QB"],
+    ["rb1", "RB"],
+    ["wr1", "WR"],
+    ["te1", "TE"],
+    ["k1", "K"],
+  ] as const) {
+    await db!.query(
+      `INSERT INTO players (sport_id, external_ref, full_name, primary_position_id, team_ref)
+       VALUES ($1, $2, $2, $3, 'PHI')`,
+      [sport!.id, ref, positions.get(key)!],
     );
   }
 }
@@ -175,6 +207,9 @@ describe("the stats cron", () => {
     await seedSport(db, NFL);
     await league(2026);
     await finishedGame(2026, "g1");
+    // A real pool, or #232 layer one refuses the run before the provider is
+    // called and this becomes a broken *season* rather than a failed game.
+    await seedDefenses();
 
     // `syncBoxScores` catches a per-game failure and returns it rather than
     // throwing, which is right — one bad game must not stop the others. The
