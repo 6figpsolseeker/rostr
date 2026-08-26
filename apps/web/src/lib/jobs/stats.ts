@@ -69,6 +69,8 @@ export async function runStatsJob(
     games?: number;
     /** Games being played at this instant. See the note above `problem`. */
     underWay?: number;
+    /** Games the breaker stopped short of. Not failures — see the push below. */
+    deferred?: readonly string[];
     inserted?: number;
     revised?: number;
     retracted?: number;
@@ -95,6 +97,22 @@ export async function runStatsJob(
         season,
         underWay,
         games: outcome.games,
+        /*
+          Games the run stopped short of, because the provider had failed
+          CONSECUTIVE_FAILURE_LIMIT times in a row.
+
+          **Reported, and it was not.** `syncBoxScores` has returned this since
+          the breaker was added and nothing read it, so a breaker trip was
+          invisible in both the response body and the heartbeat — the same shape
+          as the column written by something and read by nothing that this whole
+          area keeps producing.
+
+          It is not a failure and must not reach `problem`: nothing was
+          attempted for these and nothing was stamped, so the next tick picks
+          them up. A heartbeat that went red for the breaker working would be an
+          alarm nobody trusts.
+        */
+        deferred: outcome.deferred,
         inserted: outcome.inserted,
         revised: outcome.revised,
         retracted: outcome.retracted,
@@ -125,6 +143,11 @@ export async function runStatsJob(
   // fetched nothing is the normal case on a Tuesday and would otherwise report
   // itself clean over a game that has been failing since Sunday.
   const outstanding = await unresolvedStatsProblems(client, NFL.key);
+
+  // Read once for the alarm, from the same query the operator screen uses, so
+  // the number in the heartbeat and the rows on the page cannot disagree about
+  // what is wrong.
+  const blocking = outstanding.blockingRecent;
 
   // **Every reason, joined — not the first one.** This was a chain of ternaries,
   // so a run with a broken season announced only that and said nothing about the
@@ -183,6 +206,24 @@ export async function runStatsJob(
       */
       starvedSeasons > 0
         ? `${starvedSeasons} season(s) had games under way and read none`
+        : null,
+      /*
+        **A week is being held open by a game with no usable box score.**
+
+        The one condition on this page's subject that is worth waking somebody
+        for: those players are all scoring zero, the week cannot settle, and once
+        it does the result is permanent because a finalised week is never
+        rescored.
+
+        Bounded to the window in which the outcome could still change —
+        `ALARM_WINDOW_HOURS` from the week's last kickoff, not the full 168h the
+        screen keeps reporting for. An alarm's job is to fire once and be acted
+        on; one latched red for seven days over a fact nobody can act on any more
+        is a status board wearing an alarm's colours, and that is exactly how the
+        count this file already removed stopped being read.
+      */
+      blocking > 0
+        ? `${blocking} game(s) have no usable box score in a week that can still be corrected`
         : null,
     ]
       .filter((part) => part !== null)

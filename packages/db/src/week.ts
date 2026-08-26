@@ -50,6 +50,7 @@ import {
 } from "@rostr/core";
 import type { LeagueRules, MatchupResult, ScheduledMatchup } from "@rostr/core";
 import type { SqlClient } from "./client.js";
+import { UNREAD_SQL } from "./box-scores.js";
 import { getLeagueRules } from "./leagues.js";
 import { ensureLineups, loadWeekLineups, loadWeekStats } from "./lineups.js";
 import { withTransaction } from "./transaction.js";
@@ -593,16 +594,18 @@ async function finalizationHold(
             -- ingested and settled the week on third-quarter numbers. The sync
             -- has to be newer than the final whistle to be the final line.
             --
-            -- A null final_at on a FINAL game means the provider called it
-            -- final without saying when. There is nothing to compare against,
-            -- so the presence of any sync is the best answer available and this
-            -- does not hold on it.
+            -- The null-final_at carve-out that used to be described here now
+            -- lives with the predicate itself, along with the writer contract it
+            -- depends on. Two descriptions of one rule is how they drift.
+            --
+            -- The predicate itself lives in box-scores.ts and is shared with
+            -- the work list's post-final clause and the operator screen. It was
+            -- three hand-written copies, and the work list's own comment forbids
+            -- exactly that: the thing that stops a week settling must be the
+            -- thing the producer goes and fetches, and the thing an operator is
+            -- shown. Three spellings could disagree; one cannot.
             count(*) FILTER (
-              WHERE g.status = 'FINAL'
-                AND (
-                  g.stats_synced_at IS NULL
-                  OR (g.final_at IS NOT NULL AND g.stats_synced_at < g.final_at)
-                )
+              WHERE g.status = 'FINAL' AND ${UNREAD_SQL("g")}
             )::int AS unread,
             max(g.kickoff_at) AS last_kickoff
        FROM games g

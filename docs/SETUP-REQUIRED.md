@@ -268,6 +268,40 @@ blocked kicks are both obtainable, from the play-by-play. See
 
 ---
 
+### ⬜ Operator console access (`OPERATOR_EMAILS`)
+
+**Blocks:** the whole of `/ops/stats`, and with it any human reading of
+`games.stats_error` — the column that records a box score the provider
+contradicted itself on, or one that could not be read at all.
+
+**Needed by:** **9 September**. The first real ingest is the first thing anyone
+would want to look at, and a stat correction that arrives late is only actionable
+inside the week's correction window.
+
+Set it to your own address:
+
+```
+OPERATOR_EMAILS=6figpsolseeker@gmail.com
+```
+
+Comma-separate for more than one. It is matched against the signed-in session's
+email, so signing in is a precondition.
+
+**It fails closed in every environment, including development**, and that is
+deliberate — an operator screen that defaults open in dev is one that ships open.
+The cost is that an unset value looks exactly like not being an operator: the
+page returns 404, with no error and no hint, because a 403 would confirm the page
+exists to anyone who asked.
+
+**This was set nowhere, and had been since the screen was built.** Not in `.env`,
+not in `.env.example`, and not in any document including this one — the variable
+appeared in three places in the repository, all of them code. So the console
+404'd for everybody, the owner included, and nine defects accumulated in a page
+nobody could open. Issue #233 was a bug in the rendering of a screen that had
+never been rendered.
+
+---
+
 ### 🟡 Security review — escrow program
 
 **Decided 2026-08-05:** no commercial audit firm **for the 2026 season**. The owner has a

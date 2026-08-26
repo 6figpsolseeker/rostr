@@ -227,7 +227,15 @@ describe("the stats cron", () => {
     const body = (await response.json()) as { runs: { failures: unknown[] }[] };
 
     expect(body.runs[0]?.failures).toHaveLength(1);
-    expect(await lastOutcome()).toBe("1 game(s) failed to ingest");
+    /*
+      Contains, not equals. A game that failed to ingest is also a game with no
+      usable box score in a week that can still be corrected, so the blocking
+      clause fires alongside this one — correctly, and it is the more urgent of
+      the two. Pinning the exact string asserted that no other reason could ever
+      be true at the same time, which is the opposite of what a heartbeat that
+      reports every reason is for.
+    */
+    expect(await lastOutcome()).toContain("1 game(s) failed to ingest");
   });
 
   it("moves on to the next season after one season's game fails", async () => {
@@ -249,7 +257,15 @@ describe("the stats cron", () => {
     expect(body.seasons).toBe(2);
     expect(calls).toEqual(["g1", "g2"]);
     expect(body.runs.map((entry) => entry.season)).toEqual([2026, 2027]);
-    expect(await lastOutcome()).toBe("1 game(s) failed to ingest");
+    /*
+      Contains, not equals. A game that failed to ingest is also a game with no
+      usable box score in a week that can still be corrected, so the blocking
+      clause fires alongside this one — correctly, and it is the more urgent of
+      the two. Pinning the exact string asserted that no other reason could ever
+      be true at the same time, which is the opposite of what a heartbeat that
+      reports every reason is for.
+    */
+    expect(await lastOutcome()).toContain("1 game(s) failed to ingest");
   });
 
   /**
@@ -319,7 +335,15 @@ describe("the stats cron", () => {
 
     // The failure still reaches the heartbeat — the narrowing must not have
     // traded a false alarm for a silent one — and the warning no longer does.
-    expect(await lastOutcome()).toBe("1 game(s) failed to ingest");
+    /*
+      Contains, not equals. A game that failed to ingest is also a game with no
+      usable box score in a week that can still be corrected, so the blocking
+      clause fires alongside this one — correctly, and it is the more urgent of
+      the two. Pinning the exact string asserted that no other reason could ever
+      be true at the same time, which is the opposite of what a heartbeat that
+      reports every reason is for.
+    */
+    expect(await lastOutcome()).toContain("1 game(s) failed to ingest");
     expect(body.gameWarnings).toBe(1);
   });
 
