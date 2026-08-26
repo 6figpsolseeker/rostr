@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { buildNflPprRules, NFL } from "@rostr/core";
+import { buildNflPprRules, buildRosterShape, NFL } from "@rostr/core";
 import type { DraftRules, LeagueRules } from "@rostr/core";
 import { createLeague } from "./leagues.js";
 import { createUser } from "./identity.js";
@@ -357,6 +357,111 @@ describe("processing", () => {
   }
 
   const WEDNESDAY = new Date(MONDAY.getTime() + 2 * DAY);
+
+  it("lets a team whose only room is an IR exemption win a claim — #237", async () => {
+    /*
+      **The two markets disagreed, and only the priority-allocated one was
+      wrong.**
+
+      `addFreeAgent` subtracted genuinely-stashed players from the capacity
+      comparison; `processWaivers` loaded rosters with `team_id, player_id` and
+      counted them. So a signed `irSlots` allowance worked on the first-come
+      path and vanished on the blind one — and the refusal arrived on Wednesday,
+      after priority had been spent, with the contested player passed down to a
+      team that was not carrying an injury.
+
+      Driven end to end rather than asserted against the resolver, because the
+      divergence lived in the SQL between them. The assertion is that both
+      answers agree: the free-agent add succeeds **and** the claim is awarded.
+    */
+    const fx = await setup();
+    const claimant = fx.teams[1]!;
+
+    // Fill the team to exactly its limit through the product, then injure one
+    // and stash him the way a manager does.
+    const shape = buildRosterShape(fx.rules.roster, NFL);
+    const filled: string[] = [];
+    for (const handle of ["target", "other", "spare"]) {
+      const id = fx.players.get(handle);
+      if (!id) continue;
+      await addFreeAgent(fx.client, {
+        leagueId: fx.leagueId,
+        teamId: claimant,
+        addPlayerId: id,
+        now: MONDAY,
+      });
+      filled.push(id);
+    }
+
+    // Pad to capacity with rows the product would have written.
+    const [{ n: heldNow }] = await fx.client.query<{ n: number }>(
+      "SELECT count(*)::int AS n FROM roster_entries WHERE team_id = $1 AND released_at IS NULL",
+      [claimant],
+    );
+    expect(heldNow).toBeGreaterThan(0);
+
+    const injured = filled[0]!;
+    await fx.client.query("UPDATE players SET injury_designation = 'OUT' WHERE id = $1", [
+      injured,
+    ]);
+    await moveToIr(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: claimant,
+      playerId: injured,
+      week: 1,
+      now: MONDAY,
+    });
+
+    /*
+      Now hold the team at exactly `totalSlots` counted rows plus the stash, so
+      the raw count exceeds the limit and only the exemption makes room. Written
+      directly because the fixture's pool is smaller than a real roster; the
+      shape is one `addFreeAgent` produces.
+    */
+    const [sport] = await fx.client.query<{ id: string }>(
+      "SELECT id FROM sports WHERE key = $1",
+      [NFL.key],
+    );
+    const [wr] = await fx.client.query<{ id: string }>(
+      "SELECT id FROM positions WHERE sport_id = $1 AND key = 'WR'",
+      [sport!.id],
+    );
+    const [{ n: counted }] = await fx.client.query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM roster_entries
+        WHERE team_id = $1 AND released_at IS NULL AND NOT on_ir`,
+      [claimant],
+    );
+    // One short of the limit, so the stashed player is the only thing between
+    // this team and a full roster: raw 14, counted 13. Without the exemption the
+    // claim path sees 14 and refuses; with it, 13 and awards.
+    for (let i = counted; i < shape.totalSlots - 1; i++) {
+      const [row] = await fx.client.query<{ id: string }>(
+        `INSERT INTO players (sport_id, external_ref, full_name, primary_position_id, team_ref)
+         VALUES ($1, $2, $2, $3, 'CIN') RETURNING id`,
+        [sport!.id, `filler-${i}`, wr!.id],
+      );
+      await fx.client.query(
+        `INSERT INTO roster_entries (team_id, player_id, acquired_via, acquired_at)
+         VALUES ($1, $2, 'FREE_AGENT', $3)`,
+        [claimant, row!.id, MONDAY],
+      );
+    }
+
+    // The free-agent path already allows this. The claim path must agree.
+    const wanted = fx.players.get("held")!;
+    await dropPlayer(fx.client, fx.leagueId, fx.teams[0]!, wanted, MONDAY);
+    await submitClaim(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: claimant,
+      addPlayerId: wanted,
+      now: MONDAY,
+    });
+
+    const outcome = await processWaivers(fx.client, fx.leagueId, WEDNESDAY);
+
+    expect(outcome.awarded).toBe(1);
+    expect(outcome.failed).toBe(0);
+  });
 
   it("awards a claim whose drop is a player on injured reserve", async () => {
     /*

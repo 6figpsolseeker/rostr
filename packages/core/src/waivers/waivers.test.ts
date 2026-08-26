@@ -15,6 +15,9 @@ import {
 import { initialWaiverPriority, resolveWaiverClaims } from "./claims.js";
 import type { WaiverClaim, WaiverResolution } from "./claims.js";
 
+/** No stashed players. Every case here is about priority and capacity, not IR. */
+const NO_IR: ReadonlySet<string> = new Set();
+
 const RULES = NFL_DEFAULT_WAIVERS;
 const SHAPE = buildRosterShape(NFL_PPR_ROSTER, NFL);
 
@@ -331,6 +334,7 @@ describe("resolveWaiverClaims", () => {
       rosters: emptyRosters,
       pool: POOL,
       shape: SHAPE,
+      irExempt: NO_IR,
     });
 
     const winner = result.outcomes.find((o) => o.awarded);
@@ -344,6 +348,7 @@ describe("resolveWaiverClaims", () => {
       rosters: emptyRosters,
       pool: POOL,
       shape: SHAPE,
+      irExempt: NO_IR,
     });
 
     const loser = result.outcomes.find((o) => o.teamId === "team-b");
@@ -358,6 +363,7 @@ describe("resolveWaiverClaims", () => {
       rosters: emptyRosters,
       pool: POOL,
       shape: SHAPE,
+      irExempt: NO_IR,
     });
 
     expect(result.priorityAfter).toEqual(["team-b", "team-c", "team-a"]);
@@ -371,6 +377,7 @@ describe("resolveWaiverClaims", () => {
       rosters: emptyRosters,
       pool: POOL,
       shape: SHAPE,
+      irExempt: NO_IR,
     });
 
     expect(result.priorityAfter.indexOf("team-b")).toBe(0);
@@ -383,6 +390,7 @@ describe("resolveWaiverClaims", () => {
       rosters: emptyRosters,
       pool: POOL,
       shape: SHAPE,
+      irExempt: NO_IR,
     });
 
     expect(result.outcomes.filter((o) => o.awarded)).toHaveLength(2);
@@ -396,6 +404,7 @@ describe("resolveWaiverClaims", () => {
       rosters: emptyRosters,
       pool: POOL,
       shape: SHAPE,
+      irExempt: NO_IR,
     });
 
     expect(result.priorityAfter).toEqual(["team-c", "team-a", "team-b"]);
@@ -411,6 +420,7 @@ describe("resolveWaiverClaims", () => {
       rosters,
       pool: POOL,
       shape: SHAPE,
+      irExempt: NO_IR,
     });
 
     expect(result.outcomes[0]?.awarded).toBe(true);
@@ -425,6 +435,7 @@ describe("resolveWaiverClaims", () => {
       rosters: new Map([["team-a", full]]),
       pool: POOL,
       shape: SHAPE,
+      irExempt: NO_IR,
     });
 
     expect(result.outcomes[0]).toMatchObject({ awarded: false, reason: "ROSTER_FULL" });
@@ -437,6 +448,7 @@ describe("resolveWaiverClaims", () => {
       rosters: emptyRosters,
       pool: POOL,
       shape: SHAPE,
+      irExempt: NO_IR,
     });
 
     expect(result.outcomes[0]).toMatchObject({
@@ -460,6 +472,7 @@ describe("resolveWaiverClaims", () => {
       rosters: new Map([["team-a", nearlyFull]]),
       pool: POOL,
       shape: SHAPE,
+      irExempt: NO_IR,
     });
 
     expect(result.outcomes.filter((o) => o.awarded).map((o) => o.addPlayerId)).toEqual([
@@ -489,6 +502,7 @@ describe("resolveWaiverClaims", () => {
       rosters: new Map([...emptyRosters, ["team-a", nearlyFull]]),
       pool: POOL,
       shape: SHAPE,
+      irExempt: NO_IR,
     });
 
     const awarded = new Map(
@@ -513,7 +527,7 @@ describe("resolveWaiverClaims", () => {
       claim("c3", "team-a", "other", null, AT(1)),
       claim("c4", "team-b", "third", null, AT(4)),
     ];
-    const args = { priority, rosters: emptyRosters, pool: POOL, shape: SHAPE };
+    const args = { priority, rosters: emptyRosters, pool: POOL, shape: SHAPE, irExempt: NO_IR };
 
     const forwards = resolveWaiverClaims({ ...args, claims });
     const backwards = resolveWaiverClaims({ ...args, claims: [...claims].reverse() });
@@ -539,6 +553,7 @@ describe("resolveWaiverClaims", () => {
       rosters: new Map([["team-a", nearlyFull]]),
       pool: POOL,
       shape: SHAPE,
+      irExempt: NO_IR,
     };
 
     const forwards = resolveWaiverClaims({ ...args, claims });
@@ -558,6 +573,7 @@ describe("resolveWaiverClaims", () => {
       rosters: emptyRosters,
       pool: POOL,
       shape: SHAPE,
+      irExempt: NO_IR,
     });
 
     expect(result.outcomes).toEqual([]);
@@ -570,5 +586,145 @@ describe("initialWaiverPriority", () => {
     // Whoever picked last claims first — the same balancing instinct the snake
     // applies within a round.
     expect(initialWaiverPriority(["a", "b", "c"])).toEqual(["c", "b", "a"]);
+  });
+});
+
+describe("injured reserve and the roster limit — #237", () => {
+  /*
+    `addFreeAgent` subtracted genuinely-stashed players from the capacity
+    comparison and this resolver did not, so a signed `irSlots` allowance bought
+    room in the first-come market and none in the priority-allocated one — the
+    market `RULES.md` §6 exists to make fair.
+
+    The shape below is the one the fix turns on: the exemption is counted
+    against the roster the drop would leave, never decided in advance.
+  */
+
+  /** `n` players, ids `p0…`, all WR so nothing about matching is in play. */
+  const held = (n: number): DraftablePlayer[] =>
+    Array.from({ length: n }, (_, i) => ({
+      playerId: `p${i}`,
+      positions: ["WR"],
+      rank: i + 1,
+    }));
+
+  const shapeOf = (totalSlots: number, irSlots: number): RosterShape => ({
+    starters: [],
+    benchSlots: totalSlots,
+    irSlots,
+    totalSlots,
+  });
+
+  function run(
+    roster: DraftablePlayer[],
+    irExempt: ReadonlySet<string>,
+    shape: RosterShape,
+    dropPlayerId: string | null = null,
+  ) {
+    const target: DraftablePlayer = { playerId: "wanted", positions: ["WR"], rank: 99 };
+    return resolveWaiverClaims({
+      claims: [
+        {
+          claimId: "c1",
+          teamId: "team-a",
+          addPlayerId: "wanted",
+          dropPlayerId,
+          submittedAt: new Date("2026-09-15T12:00:00Z"),
+        },
+      ],
+      priority: ["team-a"],
+      rosters: new Map([["team-a", roster]]),
+      pool: new Map([...roster, target].map((p) => [p.playerId, p])),
+      shape,
+      irExempt,
+    }).outcomes[0];
+  }
+
+  it("awards a claim to a team whose only spare room is an IR exemption", () => {
+    /*
+      The defect, at its smallest. Fourteen rows, one genuinely stashed, so the
+      team counts thirteen of fourteen — `addFreeAgent` allows the pickup and
+      this refused the claim.
+    */
+    const outcome = run(held(14), new Set(["p0"]), shapeOf(14, 2));
+
+    expect(outcome?.awarded).toBe(true);
+  });
+
+  it("still refuses a team that is genuinely full", () => {
+    // No stash, no exemption, no change. The fix must not widen the limit.
+    const outcome = run(held(14), new Set(), shapeOf(14, 2));
+
+    expect(outcome).toMatchObject({ awarded: false, reason: "ROSTER_FULL" });
+  });
+
+  it("counts the exemption against the roster the drop would leave", () => {
+    /*
+      **The case a precomputed count gets backwards.**
+
+      Sixteen rows: fourteen counted plus two stashed, which is the maximal legal
+      roster. The claim drops one of the stashed pair. Deciding the exemption
+      before the drop leaves it at two, so fifteen minus two reads thirteen and
+      the claim is awarded — putting a fifteenth counted player into fourteen
+      slots.
+
+      Dropping a stashed player frees an IR slot, not a roster slot. Recomputing
+      after the drop gives one exemption, fifteen minus one is fourteen, and the
+      claim is correctly refused.
+    */
+    const outcome = run(held(16), new Set(["p0", "p1"]), shapeOf(14, 2), "p0");
+
+    expect(outcome?.awarded).toBe(false);
+  });
+
+  it("says so when the drop was the stashed player", () => {
+    // The mistake the fix makes likely: once claims start working, "drop the
+    // injured one" is the natural move and the one that frees nothing.
+    const outcome = run(held(16), new Set(["p0", "p1"]), shapeOf(14, 2), "p0");
+
+    expect(outcome?.reason).toBe("DROP_ON_IR");
+  });
+
+  it("awards the same claim when the drop is a counted player", () => {
+    // The other half of the pair: dropping somebody who was occupying a counted
+    // slot does free one.
+    const outcome = run(held(16), new Set(["p0", "p1"]), shapeOf(14, 2), "p5");
+
+    expect(outcome?.awarded).toBe(true);
+  });
+
+  it("caps the exemption at the slots the rules grant", () => {
+    /*
+      Three stashed against two slots. Being injured is a condition of occupying
+      a slot, not a way to conjure more of them — so the team counts fifteen of
+      fourteen and is refused, rather than counting thirteen.
+    */
+    // Sixteen rows, three stashed against two slots. Capped: two exempt, so
+    // fourteen counted and the claim is refused. Uncapped: three exempt reads
+    // thirteen and it is awarded. Seventeen rows would refuse either way, which
+    // is why the numbers here are what they are.
+    const outcome = run(held(16), new Set(["p0", "p1", "p2"]), shapeOf(14, 2));
+
+    expect(outcome?.awarded).toBe(false);
+  });
+
+  it("exempts nobody for a player who is not on the roster it is counting", () => {
+    /*
+      The set is league-wide and the count intersects it with the array being
+      counted. A stashed player who is missing from that array — absent from the
+      draft board, say — must not be subtracted, or an unrelated gap conjures a
+      roster slot.
+    */
+    const outcome = run(held(14), new Set(["somebody-else"]), shapeOf(14, 2));
+
+    expect(outcome).toMatchObject({ awarded: false, reason: "ROSTER_FULL" });
+  });
+
+  it("changes nothing for a league whose rules grant no IR", () => {
+    // `irSlots: 0` must be byte-identical to the behaviour before the fix, even
+    // if somebody is flagged.
+    const outcome = run(held(14), new Set(["p0"]), shapeOf(14, 0));
+
+    expect(outcome).toMatchObject({ awarded: false, reason: "ROSTER_FULL" });
   });
 });

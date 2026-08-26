@@ -42,13 +42,14 @@ export async function GET(
     const available = await availablePlayers(client, id, now);
     const roster = await client.query<{
       player_id: string;
+      on_ir: boolean;
       full_name: string;
       key: string;
       image_url: string | null;
       team_ref: string | null;
       injury_designation: string | null;
     }>(
-      `SELECT r.player_id, p.full_name, pos.key,
+      `SELECT r.player_id, r.on_ir, p.full_name, pos.key,
               p.image_url, p.team_ref, p.injury_designation
          FROM roster_entries r
          JOIN players p ON p.id = r.player_id
@@ -69,8 +70,16 @@ export async function GET(
         teamRef: player.teamRef,
         injuryDesignation: player.injuryDesignation,
       })),
+      /*
+        `onIr` is here so the drop selector can say so.
+
+        Without it a stashed player sits in that dropdown looking exactly like a
+        droppable bench player — and dropping him frees no roster space, which
+        is the one mistake #237's fix makes likely rather than rare.
+      */
       roster: roster.map((row) => ({
         playerId: row.player_id,
+        onIr: row.on_ir,
         name: row.full_name,
         position: row.key,
         imageUrl: row.image_url,

@@ -38,6 +38,7 @@ interface Rostered {
   imageUrl: string | null;
   teamRef: string | null;
   injuryDesignation: string | null;
+  onIr: boolean;
 }
 
 interface Claim {
@@ -221,6 +222,7 @@ export function PlayerMarket({ leagueId }: { leagueId: string }) {
             {data.roster.map((player) => (
               <option key={player.playerId} value={player.playerId}>
                 {player.position} {player.name}
+                {player.onIr ? " (IR — dropping him frees no space)" : ""}
               </option>
             ))}
           </select>

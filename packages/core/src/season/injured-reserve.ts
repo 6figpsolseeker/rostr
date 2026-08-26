@@ -10,6 +10,28 @@
  * Pure, and in `@rostr/core` rather than in the database layer, because it is a
  * rule rather than a query: the same answer has to govern a manager's own
  * placement, an add that needs the room, and whatever screen explains why.
+ *
+ * ## Which paths apply the roster limit
+ *
+ * `RULES.md` §2 promises IR slots "do not count against the roster limit",
+ * unqualified, so every path that applies that limit must subtract them. There
+ * are two, and until #237 only one did:
+ *
+ * - `addFreeAgent` — has always used `countedRosterSize`.
+ * - `resolveWaiverClaims`, through `processWaivers` — loaded rosters without
+ *   the IR columns and counted stashed players against the limit, so a signed
+ *   allowance bought room in the first-come market and none in the
+ *   priority-allocated one. Fixed by passing an exempt set and counting it
+ *   against the roster a claim's drop would leave.
+ *
+ * **Trades apply no roster limit at all**, so there is nothing there for this to
+ * be subtracted from — a trade can leave a team over `totalSlots` and nothing
+ * refuses or reports it. That is a separate gap, and a larger one.
+ *
+ * Migration `0038` says the stash count is what "both the capacity rule and the
+ * IR limit consult on every transaction". That was never true and cannot be
+ * corrected in place — the runner compares a checksum over the file and the
+ * deployed database is past it — so the correction lives here.
  */
 
 /**
@@ -79,12 +101,47 @@ export interface IrRosterEntry {
  * Capped at `irSlots` regardless. Being injured is a condition of occupying the
  * slot, not a way to conjure more of them.
  */
-export function irExemptCount(roster: readonly IrRosterEntry[], irSlots: number): number {
-  const genuine = roster.filter(
-    (entry) => entry.onIr && isIrEligible(entry.injuryDesignation),
-  ).length;
-
+/*
+ * The cap, in one place, because two entry points now apply it.
+ *
+ * Being injured is a condition of occupying a slot, not a way to conjure more
+ * of them — so however many genuinely-injured players a roster holds, only
+ * `irSlots` of them are exempt.
+ */
+function capped(genuine: number, irSlots: number): number {
   return Math.min(genuine, Math.max(0, irSlots));
+}
+
+export function irExemptCount(roster: readonly IrRosterEntry[], irSlots: number): number {
+  return capped(
+    roster.filter((entry) => entry.onIr && isIrEligible(entry.injuryDesignation)).length,
+    irSlots,
+  );
+}
+
+/*
+ * The same cap, for a caller that already knows which players qualify.
+ *
+ * **Counts against the array it is given, never against the set.** A player in
+ * the set who is not in this array exempts nothing, and that is the whole
+ * reason this shape was chosen over carrying a per-team count: the waiver
+ * resolver applies it to a *hypothetical* roster — the one a claim's drop would
+ * leave behind — so the answer has to be recomputed there rather than decided
+ * in advance.
+ *
+ * Dropping an exempt player frees an IR slot, not a roster slot. A precomputed
+ * count gets that backwards and awards a claim that should be refused, because
+ * it keeps subtracting for somebody who has just left.
+ *
+ * It also makes the count immune to a roster array that is short of rows for an
+ * unrelated reason: intersecting cannot subtract a player who is not there.
+ */
+export function irExemptOnRoster(
+  roster: readonly { readonly playerId: string }[],
+  exempt: ReadonlySet<string>,
+  irSlots: number,
+): number {
+  return capped(roster.filter((entry) => exempt.has(entry.playerId)).length, irSlots);
 }
 
 /**

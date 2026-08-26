@@ -208,24 +208,24 @@ describe("roster legality", () => {
   });
 
   it("permits a legal pick", () => {
-    expect(canDraft([], player("rb1", ["RB"]), SHAPE).legal).toBe(true);
+    expect(canDraft([], player("rb1", ["RB"]), SHAPE, 0).legal).toBe(true);
   });
 
   it("refuses a player already rostered", () => {
     const rb = player("rb1", ["RB"]);
-    expect(canDraft([rb], rb, SHAPE).reason).toBe("ALREADY_ROSTERED");
+    expect(canDraft([rb], rb, SHAPE, 0).reason).toBe("ALREADY_ROSTERED");
   });
 
   it("refuses when the roster is full", () => {
     const full = Array.from({ length: SHAPE.totalSlots }, (_, i) => player(`p${i}`, ["WR"], i));
-    expect(canDraft(full, player("new", ["WR"]), SHAPE).reason).toBe("ROSTER_FULL");
+    expect(canDraft(full, player("new", ["WR"]), SHAPE, 0).reason).toBe("ROSTER_FULL");
   });
 
   it("permits a deliberately terrible draft", () => {
     // Nothing but wide receivers is a decision, not an error. The manager owns
     // it, the same as on ESPN and Sleeper.
     const allWr = Array.from({ length: 10 }, (_, i) => player(`wr${i}`, ["WR"], i));
-    expect(canDraft(allWr, player("wr-more", ["WR"]), SHAPE).legal).toBe(true);
+    expect(canDraft(allWr, player("wr-more", ["WR"]), SHAPE, 0).legal).toBe(true);
   });
 });
 

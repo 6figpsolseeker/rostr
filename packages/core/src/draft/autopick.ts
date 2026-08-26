@@ -86,7 +86,9 @@ export function autoPick(context: AutoPickContext): AutoPickResult | null {
 
   const byId = new Map(available.map((player) => [player.playerId, player]));
 
-  const isLegal = (player: DraftablePlayer): boolean => canDraft(roster, player, shape).legal;
+  // Zero exempt — see the note in `state.ts`. Nobody is on IR during a draft.
+  const isLegal = (player: DraftablePlayer): boolean =>
+    canDraft(roster, player, shape, 0).legal;
 
   /**
    * Legal *and* leaves a fillable lineup.

@@ -151,7 +151,10 @@ export function makePick(state: DraftState, input: MakePickInput): DraftState {
     throw new DraftError(`Player ${input.playerId} is not available`, "PLAYER_UNAVAILABLE");
   }
 
-  const legality = canDraft(rosterFor(state, input.teamId, input.pool), player, input.shape);
+  // Zero exempt: a drafting roster holds nobody on injured reserve. Picks
+  // insert `on_ir` false, and `moveToIr` requires a live injury designation,
+  // so no stash exists before the season and none can buy an extra pick.
+  const legality = canDraft(rosterFor(state, input.teamId, input.pool), player, input.shape, 0);
   if (!legality.legal) {
     throw new DraftError(
       `Cannot draft ${input.playerId}: ${legality.reason}`,

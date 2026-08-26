@@ -230,8 +230,31 @@ export function canDraft(
   roster: readonly DraftablePlayer[],
   player: DraftablePlayer,
   shape: RosterShape,
+  /*
+    How many of `roster` do not count against `totalSlots` — injured reserve,
+    per the league's signed `roster.irSlots`.
+
+    They stay in the array. This function's identity check needs them, and so do
+    its callers' drop lookups; only the count moves. Handing a filtered array
+    instead would silently disable the `ALREADY_ROSTERED` branch below, and a
+    caller that happens to duplicate that check today would become the only
+    thing performing it.
+
+    **Required, not defaulted**, and the argument for that is issue #237
+    itself. A default of zero fails *closed* — it counts injured players against
+    the limit — which sounds safe and is exactly the bug: the waiver resolver
+    omitted this subtraction and refused claims a signed allowance entitled
+    members to win. "A capacity rule that is right unless somebody remembers" is
+    the shape that produced the defect, and this repo has paid for it once
+    before, where an optional source filter defaulting to "all" was not a
+    filter. Two call sites in the draft pass an explicit zero.
+
+    Deliberately a bare count rather than an injury concept: this file decides
+    roster legality and should not learn what an injury is.
+  */
+  exemptFromCount: number,
 ): PickLegality {
-  if (roster.length >= shape.totalSlots) {
+  if (roster.length - exemptFromCount >= shape.totalSlots) {
     return { legal: false, reason: "ROSTER_FULL" };
   }
   if (roster.some((p) => p.playerId === player.playerId)) {

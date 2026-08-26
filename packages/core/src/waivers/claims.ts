@@ -32,6 +32,7 @@
  */
 
 import type { DraftablePlayer, RosterShape } from "../draft/roster.js";
+import { irExemptOnRoster } from "../season/injured-reserve.js";
 import { canDraft } from "../draft/roster.js";
 
 export interface WaiverClaim {
@@ -52,7 +53,7 @@ export interface WaiverClaim {
 }
 
 export type ClaimFailure =
-  "PLAYER_TAKEN" | "ROSTER_FULL" | "ALREADY_ROSTERED" | "DROP_NOT_ON_ROSTER";
+  "PLAYER_TAKEN" | "ROSTER_FULL" | "ALREADY_ROSTERED" | "DROP_NOT_ON_ROSTER" | "DROP_ON_IR";
 
 export interface ClaimOutcome {
   readonly claimId: string;
@@ -81,6 +82,23 @@ export interface ResolveInput {
   readonly rosters: ReadonlyMap<string, readonly DraftablePlayer[]>;
   readonly pool: ReadonlyMap<string, DraftablePlayer>;
   readonly shape: RosterShape;
+  /*
+    Players stashed on injured reserve who currently qualify for it — the flag
+    **and** a live eligible designation, decided by the caller.
+
+    League-wide and unkeyed by team: a player is on one roster at a time, so the
+    team is already unambiguous, and a set applied to the array being counted
+    cannot disagree with that array about who is on it.
+
+    **Uncapped here.** `irSlots` binds per claim, against the roster the drop
+    would actually leave behind — see the count below.
+
+    **Required, so a caller cannot forget it.** An empty set is the honest answer
+    for a league whose signed rules grant no IR; defaulting to one would be the
+    same shape as an optional filter defaulting to "all", which this repo has
+    already established is not a filter. Forgetting it here reinstates #237.
+  */
+  readonly irExempt: ReadonlySet<string>;
 }
 
 /**
@@ -92,7 +110,7 @@ export interface ResolveInput {
  * exactly.
  */
 export function resolveWaiverClaims(input: ResolveInput): WaiverResolution {
-  const { claims, priority, rosters, pool, shape } = input;
+  const { claims, priority, rosters, pool, shape, irExempt } = input;
 
   const rank = new Map(priority.map((teamId, index) => [teamId, index]));
 
@@ -160,7 +178,38 @@ export function resolveWaiverClaims(input: ResolveInput): WaiverResolution {
       afterDrop = roster.filter((p) => p.playerId !== claim.dropPlayerId);
     }
 
-    const legality = canDraft(afterDrop, player, shape);
+    /*
+      The exemption is counted against `afterDrop`, not against the roster as it
+      stands. Issue #237.
+
+      Dropping a stashed player frees an **IR** slot, not a roster slot — he was
+      not occupying counted room to begin with. So a count decided before the
+      drop keeps subtracting for somebody who has just left, and awards a claim
+      that should be refused: at fourteen counted plus two stashed, dropping one
+      of the stashed pair would read as thirteen and let a fifteenth counted
+      player in.
+
+      Intersecting with `afterDrop` also means a player in the set who is not in
+      this array exempts nothing, which keeps the arithmetic right when the array
+      is short of rows for reasons of its own.
+    */
+    const exempt = irExemptOnRoster(afterDrop, irExempt, shape.irSlots);
+
+    /*
+      Dropping the stashed player is the natural move once claims start working,
+      and it is the one drop that frees nothing. Saying so is the difference
+      between a mistake made once and a mistake made every Wednesday.
+    */
+    if (
+      claim.dropPlayerId !== null &&
+      irExempt.has(claim.dropPlayerId) &&
+      afterDrop.length - exempt >= shape.totalSlots
+    ) {
+      outcomes.push({ ...base, awarded: false, reason: "DROP_ON_IR" });
+      continue;
+    }
+
+    const legality = canDraft(afterDrop, player, shape, exempt);
     if (!legality.legal) {
       outcomes.push({ ...base, awarded: false, reason: legality.reason ?? "ROSTER_FULL" });
       continue;
