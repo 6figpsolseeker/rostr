@@ -31,7 +31,7 @@
  *      not move at all.
  */
 
-import type { DraftablePlayer, RosterShape } from "../draft/roster.js";
+import type { DraftablePlayer, RosterMember, RosterShape } from "../draft/roster.js";
 import { irExemptOnRoster } from "../season/injured-reserve.js";
 import { canDraft } from "../draft/roster.js";
 
@@ -53,7 +53,12 @@ export interface WaiverClaim {
 }
 
 export type ClaimFailure =
-  "PLAYER_TAKEN" | "ROSTER_FULL" | "ALREADY_ROSTERED" | "DROP_NOT_ON_ROSTER" | "DROP_ON_IR";
+  | "PLAYER_TAKEN"
+  | "ROSTER_FULL"
+  | "ALREADY_ROSTERED"
+  | "DROP_NOT_ON_ROSTER"
+  | "DROP_ON_IR"
+  | "PLAYER_UNAVAILABLE";
 
 export interface ClaimOutcome {
   readonly claimId: string;
@@ -79,7 +84,11 @@ export interface ResolveInput {
   /** Team IDs in waiver priority order, best first. */
   readonly priority: readonly string[];
   /** Current rosters by team ID. */
-  readonly rosters: ReadonlyMap<string, readonly DraftablePlayer[]>;
+  /*
+    Identity only — see `RosterMember`. The array this resolver counts must come
+    from `roster_entries`, not from a board filtered for draftability.
+  */
+  readonly rosters: ReadonlyMap<string, readonly RosterMember[]>;
   readonly pool: ReadonlyMap<string, DraftablePlayer>;
   readonly shape: RosterShape;
   /*
@@ -147,7 +156,7 @@ export function resolveWaiverClaims(input: ResolveInput): WaiverResolution {
     return byTime !== 0 ? byTime : a.claimId.localeCompare(b.claimId);
   });
 
-  const working = new Map<string, DraftablePlayer[]>(
+  const working = new Map<string, RosterMember[]>(
     [...rosters].map(([teamId, roster]) => [teamId, [...roster]]),
   );
   const taken = new Set<string>();
@@ -163,8 +172,34 @@ export function resolveWaiverClaims(input: ResolveInput): WaiverResolution {
     const player = pool.get(claim.addPlayerId);
     const roster = working.get(claim.teamId) ?? [];
 
-    if (!player || taken.has(claim.addPlayerId)) {
+    /*
+      Two different facts, and they used to share a message.
+
+      `taken` means a better-priority team won him earlier in this same run —
+      the system working exactly as the rules describe. Absent from the pool
+      means he is not a player this league can acquire at all: the board filters
+      on `players.active`, which the daily sync clears for anyone the provider
+      reports as an NFL free agent.
+
+      Collapsed, the second was reported as "a team with better priority claimed
+      him first" — a statement about other managers that is simply false, told to
+      somebody who cannot check it, about a player nobody holds.
+
+      `taken` is tested first so the branch below means strictly "not in the
+      pool": a player awarded earlier in this run is necessarily in it.
+
+      **A reason, not a filter.** Whether a cut player should be claimable at all
+      is a rules question nobody has decided, and adding a pre-resolution filter
+      would decide it here. Reporting the outcome honestly does not — and it
+      makes the question countable, since `failure_reason` is permanent and the
+      answer becomes a `SELECT count(*)` rather than an extrapolation.
+    */
+    if (taken.has(claim.addPlayerId)) {
       outcomes.push({ ...base, awarded: false, reason: "PLAYER_TAKEN" });
+      continue;
+    }
+    if (!player) {
+      outcomes.push({ ...base, awarded: false, reason: "PLAYER_UNAVAILABLE" });
       continue;
     }
 
@@ -190,8 +225,10 @@ export function resolveWaiverClaims(input: ResolveInput): WaiverResolution {
       player in.
 
       Intersecting with `afterDrop` also means a player in the set who is not in
-      this array exempts nothing, which keeps the arithmetic right when the array
-      is short of rows for reasons of its own.
+      this array exempts nothing. That was a live correction while the array could
+      be short of rows for reasons of its own (#238); it is defence in depth now
+      that ownership is read straight from `roster_entries`, and it should stay —
+      it is what makes the arithmetic right rather than the shape of any caller.
     */
     const exempt = irExemptOnRoster(afterDrop, irExempt, shape.irSlots);
 

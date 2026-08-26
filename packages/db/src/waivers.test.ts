@@ -358,6 +358,162 @@ describe("processing", () => {
 
   const WEDNESDAY = new Date(MONDAY.getTime() + 2 * DAY);
 
+  /*
+    A rostered player his NFL club has cut. Issue #238.
+
+    `season-sync` writes `active = false` for anyone the provider reports as an
+    NFL free agent — 562 of 1,586 players carry it today, and roughly thirteen a
+    day arrive. Nothing releases such a player from a fantasy roster: he stays
+    until his manager drops him.
+
+    Set directly because no fixture can reach this through the product — the
+    column defaults true and only the daily sync writes it. Same pattern
+    `league-read.test.ts` uses to rewrite `leagues.visibility` and assert the
+    answer does not move.
+  */
+  const deactivate = (fx: Fixture, playerId: string) =>
+    fx.client.query("UPDATE players SET active = false WHERE id = $1", [playerId]);
+
+  it("counts a rostered player his club has cut — #238", async () => {
+    /*
+      **The silent direction.** The resolver built each roster by looking every
+      row up in the draft-board pool, and that board filters on `active` — so a
+      cut player fell out of the array, the team read one short of its true size,
+      and a claim with no drop was awarded past the roster limit members signed.
+
+      Nothing would have caught it afterwards: there is no capacity constraint in
+      the schema, no trigger, and nothing trims. The team simply holds one more
+      player than its rules allow, for the rest of the season.
+    */
+    const fx = await setup();
+    const claimant = fx.teams[1]!;
+    const shape = buildRosterShape(fx.rules.roster, NFL);
+
+    const [sport] = await fx.client.query<{ id: string }>(
+      "SELECT id FROM sports WHERE key = $1",
+      [NFL.key],
+    );
+    const [wr] = await fx.client.query<{ id: string }>(
+      "SELECT id FROM positions WHERE sport_id = $1 AND key = 'WR'",
+      [sport!.id],
+    );
+
+    // Fill to exactly the limit, then have the provider cut one of them.
+    const roster: string[] = [];
+    for (let i = 0; i < shape.totalSlots; i++) {
+      const [row] = await fx.client.query<{ id: string }>(
+        `INSERT INTO players (sport_id, external_ref, full_name, primary_position_id, team_ref)
+         VALUES ($1, $2, $2, $3, 'CIN') RETURNING id`,
+        [sport!.id, `roster-${i}`, wr!.id],
+      );
+      await fx.client.query(
+        `INSERT INTO roster_entries (team_id, player_id, acquired_via, acquired_at)
+         VALUES ($1, $2, 'FREE_AGENT', $3)`,
+        [claimant, row!.id, MONDAY],
+      );
+      roster.push(row!.id);
+    }
+    await deactivate(fx, roster[0]!);
+
+    const wanted = fx.players.get("held")!;
+    await dropPlayer(fx.client, fx.leagueId, fx.teams[0]!, wanted, MONDAY);
+    await submitClaim(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: claimant,
+      addPlayerId: wanted,
+      now: MONDAY,
+    });
+
+    const outcome = await processWaivers(fx.client, fx.leagueId, WEDNESDAY);
+
+    expect(outcome.awarded).toBe(0);
+
+    /*
+      The row count, not just the outcome. Asserting `ROSTER_FULL` alone would
+      still pass against a resolver that refused for the wrong reason, and the
+      breach this test exists for is a roster one player too long.
+    */
+    const [after] = await fx.client.query<{ n: number }>(
+      "SELECT count(*)::int AS n FROM roster_entries WHERE team_id = $1 AND released_at IS NULL",
+      [claimant],
+    );
+    expect(after?.n).toBe(shape.totalSlots);
+  });
+
+  it("lets a manager drop a player his club has cut — #238", async () => {
+    /*
+      **The loud direction, wrongly explained.** The claim named a drop that
+      `roster_entries` says is held, and the run answered "the player you offered
+      to drop was no longer on your roster" — while the market screen, which
+      reads the roster table directly, was still showing him and still offering
+      him in the drop selector. Two panels, opposite answers, and the false one
+      decided the claim.
+    */
+    const fx = await setup();
+    const claimant = fx.teams[1]!;
+
+    const spare = fx.players.get("spare")!;
+    await addFreeAgent(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: claimant,
+      addPlayerId: spare,
+      now: MONDAY,
+    });
+    await deactivate(fx, spare);
+
+    const wanted = fx.players.get("held")!;
+    await dropPlayer(fx.client, fx.leagueId, fx.teams[0]!, wanted, MONDAY);
+    await submitClaim(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: claimant,
+      addPlayerId: wanted,
+      dropPlayerId: spare,
+      now: MONDAY,
+    });
+
+    const outcome = await processWaivers(fx.client, fx.leagueId, WEDNESDAY);
+
+    expect(outcome.awarded).toBe(1);
+
+    const [row] = await fx.client.query<{ released_at: string | null }>(
+      "SELECT released_at FROM roster_entries WHERE team_id = $1 AND player_id = $2",
+      [claimant, spare],
+    );
+    expect(row?.released_at).not.toBeNull();
+  });
+
+  it("says the add player is unavailable rather than blaming another team — #238", async () => {
+    /*
+      `PLAYER_TAKEN` reads "a team with better priority claimed him first". When
+      the add player is simply absent from the board, nobody claimed him at all —
+      a false statement about other managers, told to somebody who cannot check
+      it.
+
+      A reason, not a filter: the claim is still resolved, still recorded, and
+      whether such a player should be claimable stays an open question this does
+      not answer.
+    */
+    const fx = await setup();
+
+    const wanted = fx.players.get("held")!;
+    await dropPlayer(fx.client, fx.leagueId, fx.teams[0]!, wanted, MONDAY);
+    await submitClaim(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: fx.teams[1]!,
+      addPlayerId: wanted,
+      now: MONDAY,
+    });
+    await deactivate(fx, wanted);
+
+    await processWaivers(fx.client, fx.leagueId, WEDNESDAY);
+
+    const [claim] = await fx.client.query<{ failure_reason: string | null }>(
+      "SELECT failure_reason FROM waiver_claims WHERE add_player_id = $1",
+      [wanted],
+    );
+    expect(claim?.failure_reason).toBe("PLAYER_UNAVAILABLE");
+  });
+
   it("lets a team whose only room is an IR exemption win a claim — #237", async () => {
     /*
       **The two markets disagreed, and only the priority-allocated one was

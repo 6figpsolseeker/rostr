@@ -120,6 +120,7 @@ export {
   unfilledStarterSlots,
   wouldStrandStarters,
   type DraftablePlayer,
+  type RosterMember,
   type IllegalPickReason,
   type PickLegality,
   type RosterShape,

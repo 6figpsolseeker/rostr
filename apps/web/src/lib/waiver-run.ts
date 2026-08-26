@@ -30,6 +30,11 @@
  */
 export function whyClaimFailed(reason: string | null): string {
   switch (reason) {
+    case "PLAYER_UNAVAILABLE":
+      // States the observable fact and implies no permanence. Whether such a
+      // player should be claimable is undecided, so this must not read as a
+      // rule — no "cannot be claimed", no advice to stop trying.
+      return "he is no longer on an NFL roster, so the run could not award him";
     case "PLAYER_TAKEN":
       return "a team with better priority claimed him first";
     case "ROSTER_FULL":

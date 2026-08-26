@@ -48,7 +48,7 @@ import {
   resolveWaiverClaims,
   waiverClearsAt,
 } from "@rostr/core";
-import type { DraftablePlayer, LeagueRules, WaiverClaim } from "@rostr/core";
+import type { RosterMember, DraftablePlayer, LeagueRules, WaiverClaim } from "@rostr/core";
 import type { SqlClient } from "./client.js";
 import { getLeagueRules } from "./leagues.js";
 import { isUniqueViolation } from "./pg-errors.js";
@@ -917,16 +917,27 @@ export async function processWaivers(
       [leagueId],
     );
 
-    const rosters = new Map<string, DraftablePlayer[]>(priority.map((teamId) => [teamId, []]));
+    const rosters = new Map<string, RosterMember[]>(priority.map((teamId) => [teamId, []]));
 
     /*
-      Built **inside the same filter** as `rosters`, and that is load-bearing.
+      Ownership comes from `rosterRows` and from nothing else.
 
-      A rostered player absent from the draft board is already missing from the
-      array the resolver counts. Exempting him as well would subtract him twice
-      and conjure a roster slot out of an unrelated gap, so an exemption is only
-      ever recorded for a player who was actually counted. One loop, one filter,
-      and the two cannot disagree.
+      This loop used to look each row up in the draft-board pool and drop it when
+      the lookup missed — and `loadDraftBoard` filters on `players.active`, which
+      the daily sync clears for anyone the provider reports as an NFL free agent.
+      So a rostered player cut by his club vanished from his own fantasy roster:
+      a valid drop was refused as `DROP_NOT_ON_ROSTER`, and a claim with no drop
+      was counted against a roster one short of its true size and awarded past
+      `totalSlots`. Issue #238. Ownership is a `roster_entries` question; the
+      pool answers availability, and they are not the same map.
+
+      **An earlier note here credited the exemption's safety to this loop's
+      shape**, claiming that exempting a pool-absent player would subtract him
+      twice. That was never what provided it: `irExemptOnRoster` intersects with
+      the array it is handed, so a set entry absent from that array exempts
+      nothing however this loop is written. The set is built from the same rows
+      as the array for a simpler reason — one source, so the two cannot disagree
+      about who is on the roster.
 
       The designation is read live, so a player who has recovered stops being
       exempt at this run. Nothing is moved or dropped to enforce that; the team
@@ -934,9 +945,7 @@ export async function processWaivers(
     */
     const irExempt = new Set<string>();
     for (const row of rosterRows) {
-      const player = pool.get(row.player_id);
-      if (!player) continue;
-      rosters.get(row.team_id)?.push(player);
+      rosters.get(row.team_id)?.push({ playerId: row.player_id });
       if (row.on_ir && isIrEligible(row.designation)) irExempt.add(row.player_id);
     }
 

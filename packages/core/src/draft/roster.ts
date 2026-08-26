@@ -21,6 +21,29 @@
 import type { SportDef } from "../sports/types.js";
 import type { RosterRules } from "../rules/types.js";
 
+/*
+ * A player a team currently holds. Identity, and deliberately nothing else.
+ *
+ * Roster legality asks two questions — does this team hold him, and how many
+ * does it hold — and neither needs to know what he plays.
+ *
+ * **It is a separate type from `DraftablePlayer` because sharing that one made
+ * the draft board the only convenient way to build a roster**, and the board is
+ * filtered on `players.active`, which the daily sync clears for anyone the
+ * provider reports as an NFL free agent. So a rostered player his club had cut
+ * fell out of the array and off his own roster: a valid drop was refused, and a
+ * claim with no drop was counted against a roster one short of its true size
+ * and awarded past the limit. Issue #238.
+ *
+ * Ownership is a `roster_entries` question; the board answers availability. A
+ * type narrow enough to be satisfied from the roster table is what keeps them
+ * apart — and a type with no `positions` field cannot be wrong about positions,
+ * which is the failure a synthesised empty array would have introduced instead.
+ */
+export interface RosterMember {
+  readonly playerId: string;
+}
+
 export interface DraftablePlayer {
   readonly playerId: string;
   /** Every position this player may fill. */
@@ -227,7 +250,17 @@ export interface PickLegality {
  * {@link wouldStrandStarters}.
  */
 export function canDraft(
-  roster: readonly DraftablePlayer[],
+  /*
+    `RosterMember`, because this function reads identity and count only —
+    `roster.length` and one `playerId` comparison.
+
+    If a check here ever needs `positions`, that is a change of contract: widen
+    it deliberately and say so, rather than letting a caller hand over a
+    `DraftablePlayer[]` and assume the field behind it is real. The draft's
+    callers do pass one; the waiver resolver cannot, and that difference is the
+    point.
+  */
+  roster: readonly RosterMember[],
   player: DraftablePlayer,
   shape: RosterShape,
   /*
