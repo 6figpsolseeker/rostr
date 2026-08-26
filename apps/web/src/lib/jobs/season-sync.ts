@@ -44,6 +44,32 @@ import type {
  * change. Naming the concrete class here would put that back.
  */
 /**
+ * "1-18" rather than "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18".
+ *
+ * Whole-season outages are the common case for the schedule sync, and a reader
+ * seeing a contiguous range knows immediately that this is the provider being
+ * down rather than particular fixtures being unreadable. Assumes ascending
+ * input, which the loop that builds it guarantees.
+ */
+function collapse(weeks: readonly number[]): string {
+  const parts: string[] = [];
+  let start = weeks[0];
+  let previous = weeks[0];
+  if (start === undefined || previous === undefined) return "";
+  for (const week of weeks.slice(1)) {
+    if (week === previous + 1) {
+      previous = week;
+      continue;
+    }
+    parts.push(start === previous ? `${start}` : `${start}-${previous}`);
+    start = week;
+    previous = week;
+  }
+  parts.push(start === previous ? `${start}` : `${start}-${previous}`);
+  return parts.join(", ");
+}
+
+/**
  * Cap a recorded outcome, keeping the front.
  *
  * The useful half of a provider error is its first sentence; the rest is a
@@ -71,6 +97,14 @@ export async function runSeasonSyncJob(
     ranked?: number;
     projections?: number;
     error?: string;
+    /**
+     * Weeks whose schedule sync threw, named rather than counted.
+     *
+     * A season is not "failed" because one week's fixtures could not be read —
+     * the other seventeen are still ingested, and this job is idempotent, so
+     * tomorrow completes what today did not. It is still worth saying which.
+     */
+    weekFailures?: readonly { week: number; reason: string }[];
   }[] = [];
 
   for (const season of seasons) {
@@ -105,10 +139,38 @@ export async function runSeasonSyncJob(
       // week, is a broken ingest.
       let games = 0;
       let undated = 0;
+      /*
+        **Each week guarded on its own**, so a provider fault in week 3 does not
+        cost weeks 4 through 18 their sync.
+
+        The eighteen calls used to sit inside the per-season try alone, so one
+        throw anywhere in the loop abandoned every later week — and the loop runs
+        in ascending order, which puts the live week at the end. A transient
+        failure on a week nobody is playing took out the one that mattered.
+
+        It matters differently since issue #256. This job is no longer the
+        primary writer of `games.status` — the ten-minute box-score read is — so
+        this is the **backstop**, the thing that catches a game which never
+        produced a readable box score at all. A backstop that loses fifteen weeks
+        to one bad call is not one.
+
+        Named, never counted. `runSeasonSyncJob` has already been through this
+        once: `1 of 1 seasons failed` was recorded with no indication of what
+        failed, and the cause of that run is unrecoverable because nothing wrote
+        it down.
+      */
+      const weekFailures: { week: number; reason: string }[] = [];
       for (let week = 1; week <= NFL.seasonWeeks; week++) {
-        const result = await syncGames(client, provider, NFL.key, season, week);
-        games += result.inserted + result.updated;
-        undated += result.skipped;
+        try {
+          const result = await syncGames(client, provider, NFL.key, season, week);
+          games += result.inserted + result.updated;
+          undated += result.skipped;
+        } catch (error) {
+          weekFailures.push({
+            week,
+            reason: error instanceof Error ? error.message : String(error),
+          });
+        }
       }
 
       const rankings = await syncRankings(client, provider, NFL.key, season);
@@ -120,6 +182,7 @@ export async function runSeasonSyncJob(
         byeWeeks,
         games,
         undatedGames: undated,
+        weekFailures,
         ranked: rankings.inserted,
         projections: projections.inserted,
       });
@@ -178,12 +241,61 @@ export async function runSeasonSyncJob(
     .map((entry) => `${entry.season}: ${entry.error}`)
     .join("; ");
 
+  /*
+    A week that failed inside an otherwise healthy season.
+
+    Reported, because this job is now the **backstop** for `games.status` rather
+    than its primary writer — the ten-minute box-score read is that. A week whose
+    fixtures never arrived is a week whose games can never be marked FINAL by
+    anything except a box score, and if that box score is also unreadable the
+    week holds open with no other signal that anything is wrong.
+
+    It does not count as a failed season: seventeen weeks did sync, and the job
+    is idempotent, so tomorrow's run completes it. Overstating it would make the
+    heartbeat red for a condition that heals itself, which this file has already
+    been fixed for once.
+  */
+  const weekProblems = runs.flatMap((entry) => entry.weekFailures ?? []);
+
+  /*
+    Grouped by reason, because the common shape is *every* week failing for the
+    same cause.
+
+    Naming each one individually is right when the reasons differ and useless
+    when they do not: eighteen copies of "provider exploded" overflow the 400
+    character cap, so the weeks that scroll off are the late ones — 15 through
+    18, which are the playoff and championship weeks. The truncation kept the
+    least interesting half.
+
+    One line per distinct reason, with the weeks it hit, says strictly more in
+    less space. "1-18" is also the shape that tells an operator this is an outage
+    rather than a fixture problem, which the flat list buried.
+  */
+  const byReason = new Map<string, number[]>();
+  for (const failure of weekProblems) {
+    const weeks = byReason.get(failure.reason);
+    if (weeks) weeks.push(failure.week);
+    else byReason.set(failure.reason, [failure.week]);
+  }
+  const weekSummary = [...byReason]
+    .map(([reason, weeks]) => `weeks ${collapse(weeks)}: ${reason}`)
+    .join("; ");
+
+  const outcome =
+    [
+      failed > 0 ? `${failed} of ${seasons.length} seasons failed — ${problems}` : null,
+      weekProblems.length > 0 ? `${weekProblems.length} week(s) failed — ${weekSummary}` : null,
+    ]
+      .filter((part) => part !== null)
+      .join("; ") || null;
+
   await recordCronRun(
     client,
     "season-sync",
-    failed > 0
-      ? truncate(`${failed} of ${seasons.length} seasons failed — ${problems}`, 400)
-      : null,
+    // Truncated only when there is something to truncate — `null` is the healthy
+    // value and must stay null, not become an empty string, which `cronJobState`
+    // would read as FAILING.
+    outcome === null ? null : truncate(outcome, 400),
   );
 
   return NextResponse.json({

@@ -560,11 +560,29 @@ async function finalizationHold(
   const rows = await db.query<{
     total: number;
     finished: number;
+    played_unfinal: number;
     unread: number;
     last_kickoff: string | null;
   }>(
     `SELECT count(*)::int AS total,
             count(*) FILTER (WHERE g.status = 'FINAL')::int AS finished,
+            -- Played, but our status feed has not caught up. Issue #256.
+            --
+            -- A state that could not exist before box scores were read during
+            -- play: a game with real stat lines written after its kickoff, whose
+            -- status is still whatever the daily schedule sync last said.
+            --
+            -- Without this the branch below reports RULES.md section 10 — the
+            -- **abandoned game** rule — for a game that was played and scored.
+            -- That is our ingest being slow, not the NFL calling a game off, and
+            -- the distinction is the difference between an operational fault
+            -- somebody can fix and a permanent misattribution in the record a
+            -- settled week leaves behind.
+            count(*) FILTER (
+              WHERE g.status <> 'FINAL'
+                AND g.stats_synced_at IS NOT NULL
+                AND g.stats_synced_at > g.kickoff_at
+            )::int AS played_unfinal,
             -- No box score for this game as it finally stood. Migration 0027
             -- added both columns for exactly this question and nothing had
             -- asked it; the stats hold below is what asks.
@@ -606,6 +624,7 @@ async function finalizationHold(
   if (!row?.last_kickoff) return { hold: "no kickoff times are known" };
 
   const finished = Number(row?.finished ?? 0);
+  const playedUnfinal = Number(row?.played_unfinal ?? 0);
   const unread = Number(row?.unread ?? 0);
   const hours = finalizationHours(rules, week);
   const clearsAt = new Date(new Date(row.last_kickoff).getTime() + hours * 3600 * 1000);
@@ -682,10 +701,34 @@ async function finalizationHold(
         `advanced any status, so this is our ingest rather than an abandoned game`,
     );
   } else if (finished < total) {
-    reasons.push(
-      `${total - finished} of ${total} games are not marked FINAL — ` +
-        `docs/RULES.md §10: affected players score 0 for the week and the matchup stands`,
-    );
+    /*
+      §10 is about an **abandoned** game, and a game we scored is not one.
+
+      Issue #256 created a state that could not exist before: box scores are read
+      during play, so a game can carry a full set of stat lines while its status
+      is still whatever the daily schedule sync last said. Reporting §10 for it
+      would blame the NFL for our own feed being a few hours behind — and this
+      sentence is what a settled week leaves behind as its explanation, so the
+      misattribution is permanent.
+
+      Split rather than reworded, because the two call for different responses.
+      An abandoned game is a fact about the season and nobody need do anything.
+      A played game we failed to mark final is an operational fault, it is ours,
+      and somebody can go and look at why.
+    */
+    if (playedUnfinal > 0) {
+      reasons.push(
+        `${playedUnfinal} of ${total} games were played and scored but never marked FINAL — ` +
+          `our status feed is behind, not an abandoned game`,
+      );
+    }
+    const abandoned = total - finished - playedUnfinal;
+    if (abandoned > 0) {
+      reasons.push(
+        `${abandoned} of ${total} games are not marked FINAL — ` +
+          `docs/RULES.md §10: affected players score 0 for the week and the matchup stands`,
+      );
+    }
   }
 
   if (unread > 0) {

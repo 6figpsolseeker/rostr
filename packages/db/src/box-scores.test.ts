@@ -6,6 +6,7 @@ import { seedSport } from "./sports.js";
 import { createTestDatabase } from "./testing.js";
 import type { PGliteClient } from "./testing.js";
 import {
+  CONSECUTIVE_FAILURE_LIMIT,
   FAILED_RETRY_MINUTES,
   FINAL_RECHECK_HOURS,
   syncBoxScores,
@@ -83,6 +84,7 @@ const boxScore = (
   gameRef: string,
   players: Record<string, readonly StatLine[]>,
   warnings: readonly string[] = [],
+  status: ProviderBoxScore["status"] = "FINAL",
 ): ProviderBoxScore => ({
   gameRef,
   // Deliberately zero, exactly as the real adapter returns them. If the producer
@@ -91,7 +93,26 @@ const boxScore = (
   week: 0,
   players: new Map(Object.entries(players)),
   warnings,
+  /*
+    The game's own status, which the real adapter now reads out of the response.
+
+    Defaulting to FINAL keeps every existing test describing what it always
+    described — a finished game — and `liveBoxScore` below is the deliberate
+    opposite. The distinction is not cosmetic: a read the payload does not call
+    final must not write a D/ST's allowed totals, because zero there is a
+    shutout rather than an absence.
+  */
+  status,
+  providerStatus: status === "FINAL" ? "Completed" : "In Progress",
+  providerStatusCode: status === "FINAL" ? "2" : "1",
 });
+
+/** The same shape, mid-game. See `boxScore`. */
+const liveBoxScore = (
+  gameRef: string,
+  players: Record<string, readonly StatLine[]>,
+  warnings: readonly string[] = [],
+): ProviderBoxScore => boxScore(gameRef, players, warnings, "IN_PROGRESS");
 
 interface Fixture {
   client: PGliteClient;
@@ -540,8 +561,69 @@ describe("syncBoxScores", () => {
     expect(result.unmatched).toContain("nobody-we-know");
   });
 
-  it("leaves a scheduled game alone", async () => {
+  /*
+    This test used to be "leaves a scheduled game alone" and it asserted the
+    defect. Issue #256.
+
+    `setup` kicks its game off four hours ago, so the old assertion was: a game
+    that has been under way all afternoon must not be read, because a job that
+    runs once a day at 05:20 Eastern has not got round to relabelling it. It
+    passed, it would have gone on passing forever, and it was the only test
+    standing between the work list and live scoring.
+
+    The pair below replaces it, and the second is what the first is really
+    claiming: SCHEDULED was never the interesting fact. The clock is.
+  */
+  it("reads a game the daily sync still calls SCHEDULED, once it has kicked off", async () => {
     const fx = await setup("SCHEDULED");
+    const box = boxScore("g1", { qb1: [line("pass_yd", 120)], ...bothDefenses });
+
+    const result = await syncBoxScores(
+      fx.client,
+      fakeProvider(new Map([["g1", box]])),
+      NFL.key,
+      SEASON,
+    );
+
+    expect(result.games).toBe(1);
+  });
+
+  it("leaves a scheduled game alone until it has kicked off", async () => {
+    // The bound that keeps `stats_attempted_at IS NULL` finite. Without it the
+    // first tick of the season selects all 256 fixtures.
+    const fx = await setup("SCHEDULED");
+    await fx.client.query("UPDATE games SET kickoff_at = now() + interval '2 hours'");
+
+    const result = await syncBoxScores(fx.client, fakeProvider(new Map()), NFL.key, SEASON);
+
+    expect(result.games).toBe(0);
+  });
+
+  it("does not read a game in the first minutes after kickoff", async () => {
+    // There is nothing to read yet. An empty response costs a metered call and
+    // then throws, so without the offset every healthy game on every Sunday
+    // records a failure on its first tick and is paced as though broken.
+    const fx = await setup("SCHEDULED");
+    await fx.client.query("UPDATE games SET kickoff_at = now() - interval '5 minutes'");
+
+    const result = await syncBoxScores(fx.client, fakeProvider(new Map()), NFL.key, SEASON);
+
+    expect(result.games).toBe(0);
+  });
+
+  it("ignores a game whose kickoff time is only a stand-in", async () => {
+    /*
+      Migration 0030: `kickoff_tbd` marks a fixture whose hour the NFL has not
+      fixed, and the stored time is the earliest it *could* start. Eight of them
+      sit in weeks 16 and 17 — the playoff and championship weeks — because those
+      hours are held back for flex scheduling.
+
+      Reading the clock passing a stand-in as the game having started polls a
+      20:20 game from 13:00 and gives up forty minutes into the real one.
+    */
+    const fx = await setup("SCHEDULED");
+    await fx.client.query("UPDATE games SET kickoff_tbd = true");
+
     const result = await syncBoxScores(fx.client, fakeProvider(new Map()), NFL.key, SEASON);
 
     expect(result.games).toBe(0);
@@ -609,9 +691,15 @@ describe("the work list bounds what one run can spend", () => {
   it("still reads a game that is genuinely in progress", async () => {
     // The control. Without it the test above passes just as well against a rule
     // that never treats anything as live.
+    //
+    // The attempt stamp is deliberately older than LIVE_POLL_MINUTES: the live
+    // clause is paced now, so a game read a moment ago is correctly skipped and
+    // this test would otherwise assert against the pacing rather than the window.
     const fx = await setup("IN_PROGRESS");
     await fx.client.query(
-      "UPDATE games SET kickoff_at = now() - interval '2 hours', stats_synced_at = now(), stats_attempted_at = now()",
+      `UPDATE games SET kickoff_at = now() - interval '2 hours',
+                       stats_synced_at = now() - interval '31 minutes',
+                       stats_attempted_at = now() - interval '31 minutes'`,
     );
 
     const box = boxScore("g1", { qb1: [line("pass_yd", 120)], ...bothDefenses });
@@ -631,12 +719,70 @@ describe("the work list bounds what one run can spend", () => {
     // missing from the box score. Those do not resolve on a re-read, so without
     // a window bound one such game was fetched seventy-two times a day for the
     // rest of the season, and sixteen of them would exceed the daily quota.
+    //
+    // The bound is `kickoff_at` rather than `final_at` — see the clause. So the
+    // kickoff moves here too; a game whose `final_at` is nine days old but which
+    // supposedly kicked off four hours ago is not a state the season produces,
+    // and pinning the expiry against it would pin the wrong column.
     const fx = await setup();
     await fx.client.query(
       `UPDATE games SET stats_error = 'fgMade disagrees with the parsed plays',
                        stats_synced_at = now() - interval '1 hour',
                        stats_attempted_at = now() - interval '1 hour',
+                       kickoff_at = now() - interval '9 days',
                        final_at = now() - interval '9 days'`,
+    );
+
+    const result = await syncBoxScores(fx.client, fakeProvider(new Map()), NFL.key, SEASON);
+
+    expect(result.games).toBe(0);
+  });
+
+  it("keeps retrying a warning-bearing game whose whistle was never observed", async () => {
+    /*
+      The hole the kickoff bound closes.
+
+      A game read cleanly at 19:50 whose provider then fails for the rest of the
+      window carries `stats_error` and **no `final_at`** — nothing observed the
+      whistle. Bounded on `final_at`, this clause compared against NULL, was
+      false, and the sweep was false for the same reason: the game fell out of
+      the work list entirely until the daily sync stamped `final_at` the next
+      morning, and the week's numbers were a thirteen-hour-old third-quarter
+      snapshot.
+    */
+    const fx = await setup("IN_PROGRESS");
+    await fx.client.query(
+      `UPDATE games SET stats_error = 'Tank01 returned HTTP 503',
+                       stats_synced_at = now() - interval '9 hours',
+                       stats_attempted_at = now() - interval '1 hour',
+                       kickoff_at = now() - interval '9 hours',
+                       final_at = NULL`,
+    );
+
+    const box = boxScore("g1", { qb1: [line("pass_yd", 300)], ...bothDefenses });
+    const result = await syncBoxScores(
+      fx.client,
+      fakeProvider(new Map([["g1", box]])),
+      NFL.key,
+      SEASON,
+    );
+
+    expect(result.games).toBe(1);
+  });
+
+  it("does not read a live game twice inside its polling interval", async () => {
+    /*
+      The constant that keeps LIVE_WINDOW_HOURS a ceiling rather than a budget.
+
+      Unpaced, the live clause fires on every tick — six an hour, times a
+      five-hour window, times fourteen concurrent games on a Sunday. That is the
+      753-call afternoon the work list's own comment rejects.
+    */
+    const fx = await setup("SCHEDULED");
+    await fx.client.query(
+      `UPDATE games SET kickoff_at = now() - interval '2 hours',
+                       stats_synced_at = now() - interval '5 minutes',
+                       stats_attempted_at = now() - interval '5 minutes'`,
     );
 
     const result = await syncBoxScores(fx.client, fakeProvider(new Map()), NFL.key, SEASON);
@@ -1236,5 +1382,326 @@ describe("a box score whose players do not join — #232", () => {
     await expect(syncBoxScores(fx.client, provider, NFL.key, SEASON)).rejects.toThrow(
       /no K, TE/,
     );
+  });
+});
+
+describe("the box score reports the game's own status — #256", () => {
+  afterEach(async () => {
+    await db?.close();
+    db = undefined;
+  });
+
+  const statusOf = async (fx: Fixture) =>
+    (
+      await fx.client.query<{
+        status: string;
+        final_at: string | null;
+        provider_status: string | null;
+        provider_status_code: string | null;
+      }>(
+        "SELECT status, final_at, provider_status, provider_status_code FROM games WHERE id = $1",
+        [fx.gameId],
+      )
+    )[0]!;
+
+  it("marks a game final from the box score, not from the daily schedule sync", async () => {
+    /*
+      The half of #256 that makes everything downstream true. `games.status` had
+      one writer, on a cron at 09:20 UTC, so a game that ended at 16:15 Eastern
+      stayed SCHEDULED until the following morning — and the scoreboard went on
+      reporting its starters as "playing" for seventeen hours.
+    */
+    const fx = await setup("SCHEDULED");
+    const box = boxScore("g1", { qb1: [line("pass_yd", 300)], ...bothDefenses });
+
+    await syncBoxScores(fx.client, fakeProvider(new Map([["g1", box]])), NFL.key, SEASON);
+
+    const row = await statusOf(fx);
+    expect(row.status).toBe("FINAL");
+    expect(row.final_at).not.toBeNull();
+  });
+
+  it("records the vendor's verbatim wording, so a live Sunday settles what it says", async () => {
+    // Evidence, not control flow. IN_PROGRESS has never been observed from this
+    // provider and `mapGameStatus`'s three live spellings are guesses; there is
+    // one live Sunday before the season in which to find out.
+    const fx = await setup("SCHEDULED");
+    const box = boxScore("g1", { qb1: [line("pass_yd", 300)], ...bothDefenses });
+
+    await syncBoxScores(fx.client, fakeProvider(new Map([["g1", box]])), NFL.key, SEASON);
+
+    const row = await statusOf(fx);
+    expect(row.provider_status).toBe("Completed");
+    expect(row.provider_status_code).toBe("2");
+  });
+
+  it("refuses to call a game final before one could possibly have finished", async () => {
+    /*
+      The guard for the one risk this design carries: no mid-game box score has
+      ever been fetched from this provider, so if `gameStatus` reads "Completed"
+      from the moment the row exists, an ungated stamp would set `final_at` at
+      kickoff, open the 168h correction window three hours early, and settle the
+      week on a first-quarter box score. Silently.
+
+      Requiring a previous successful read does not close it — the second read is
+      twenty minutes in. The clock does.
+    */
+    const fx = await setup("SCHEDULED");
+    await fx.client.query("UPDATE games SET kickoff_at = now() - interval '40 minutes'");
+    const box = boxScore("g1", { qb1: [line("pass_yd", 40)], ...bothDefenses });
+
+    await syncBoxScores(fx.client, fakeProvider(new Map([["g1", box]])), NFL.key, SEASON);
+
+    const row = await statusOf(fx);
+    expect(row.status).toBe("SCHEDULED");
+    expect(row.final_at).toBeNull();
+    // Still recorded, which is how we find out the vendor does this at all.
+    expect(row.provider_status).toBe("Completed");
+  });
+
+  it("never moves final_at once it is set", async () => {
+    // The 168h correction window keys on it. A later read restarting it would
+    // hold a settled week open for another week.
+    const fx = await setup();
+    const first = (await statusOf(fx)).final_at;
+    const box = boxScore("g1", { qb1: [line("pass_yd", 300)], ...bothDefenses });
+
+    await syncBoxScores(fx.client, fakeProvider(new Map([["g1", box]])), NFL.key, SEASON);
+
+    expect((await statusOf(fx)).final_at).toEqual(first);
+  });
+
+  it("does not walk a final game backwards, whichever writer asks", async () => {
+    /*
+      Migration 0043. `syncGames` writes `status = EXCLUDED.status`
+      unconditionally and `mapGameStatus` answers SCHEDULED for wording it does
+      not recognise, so a settled game could be un-finalled by one unfamiliar
+      string — and `finalizationHold` counts a game as unread only when it reads
+      FINAL, so the week would then settle blaming section 10 for our own ingest.
+
+      The trigger clamps rather than raising: a throw here would take the
+      ten-minute ingest down on a Sunday, which is when it must not stop.
+    */
+    const fx = await setup();
+    await fx.client.query("UPDATE games SET status = 'SCHEDULED', final_at = NULL");
+
+    const row = await statusOf(fx);
+    expect(row.status).toBe("FINAL");
+    expect(row.final_at).not.toBeNull();
+  });
+});
+
+describe("a team defense is never scored from an unfinished game — #256", () => {
+  afterEach(async () => {
+    await db?.close();
+    db = undefined;
+  });
+
+  /** A live read: kicked off, inside the window, paced so it is selectable. */
+  const midGame = async (fx: Fixture) =>
+    fx.client.query(
+      `UPDATE games SET status = 'SCHEDULED', final_at = NULL,
+                       kickoff_at = now() - interval '75 minutes'`,
+    );
+
+  it("writes no team defense while the game is still being played", async () => {
+    /*
+      Both tiered ladders top out at zero — def_pts_allowed at 0 pays 5, and
+      def_yds_allowed at 0-99 pays 5 — so a first-quarter read does not describe
+      a defense that has conceded nothing yet. It describes a **shutout**, ten
+      points before a single sack, for every unit in every game, counting down
+      all afternoon as real yards land.
+
+      This is the only new wrongness reading during play introduces, and it
+      exists only because of the fix.
+    */
+    const fx = await setup("SCHEDULED");
+    await midGame(fx);
+    const box = liveBoxScore("g1", {
+      qb1: [line("pass_yd", 80)],
+      DST_PHI: [line("def_pts_allowed", 0)],
+      DST_DAL: [line("def_pts_allowed", 0)],
+    });
+
+    await syncBoxScores(fx.client, fakeProvider(new Map([["g1", box]])), NFL.key, SEASON);
+
+    expect(await currentValue(fx, "DST_PHI", "def_pts_allowed")).toBeNull();
+    expect(await currentValue(fx, "DST_DAL", "def_pts_allowed")).toBeNull();
+    // The players in the same response are written as normal — this withholds a
+    // defense, it does not discard the read.
+    expect(await currentValue(fx, "qb1", "pass_yd")).toBe(80);
+  });
+
+  it("does not report a withheld defense as a problem", async () => {
+    /*
+      The trap. Both `problems.push` sites below the skip would fire on every
+      live read, `stats_error` would be set on a perfectly healthy Sunday, and
+      the retry clause would then pace the game at three reads an hour on top of
+      the live clause, all afternoon, every week.
+    */
+    const fx = await setup("SCHEDULED");
+    await midGame(fx);
+    const box = liveBoxScore("g1", {
+      qb1: [line("pass_yd", 80)],
+      DST_PHI: [line("def_pts_allowed", 0)],
+      DST_DAL: [line("def_pts_allowed", 0)],
+    });
+
+    const result = await syncBoxScores(
+      fx.client,
+      fakeProvider(new Map([["g1", box]])),
+      NFL.key,
+      SEASON,
+    );
+
+    expect(result.warnings).toEqual([]);
+    const [row] = await fx.client.query<{ stats_error: string | null }>(
+      "SELECT stats_error FROM games WHERE id = $1",
+      [fx.gameId],
+    );
+    expect(row?.stats_error).toBeNull();
+  });
+
+  it("does not retract a defense it withheld", async () => {
+    /*
+      The sharpest edge in this change. The retraction pass writes an explicit
+      zero for any non-zero key belonging to a ref the response **covered** and
+      did not carry — so a withheld unit that still counted as covered would have
+      the retraction machinery *manufacture* the shutout it was withheld to
+      prevent.
+
+      Withholding is expressed as "not covered by this read", never as "carried
+      as absent".
+    */
+    const fx = await setup();
+    const final = boxScore("g1", { qb1: [line("pass_yd", 300)], ...bothDefenses });
+    await syncBoxScores(fx.client, fakeProvider(new Map([["g1", final]])), NFL.key, SEASON);
+    expect(await currentValue(fx, "DST_PHI", "def_pts_allowed")).toBe(20);
+
+    await midGame(fx);
+    const live = liveBoxScore("g1", { qb1: [line("pass_yd", 80)] });
+    await syncBoxScores(fx.client, fakeProvider(new Map([["g1", live]])), NFL.key, SEASON);
+
+    expect(await currentValue(fx, "DST_PHI", "def_pts_allowed")).toBe(20);
+  });
+
+  it("writes the defense as soon as the game is final", async () => {
+    // The control. Without it every test above passes against a rule that never
+    // writes a team defense at all.
+    const fx = await setup();
+    const box = boxScore("g1", { qb1: [line("pass_yd", 300)], ...bothDefenses });
+
+    await syncBoxScores(fx.client, fakeProvider(new Map([["g1", box]])), NFL.key, SEASON);
+
+    expect(await currentValue(fx, "DST_PHI", "def_pts_allowed")).toBe(20);
+  });
+});
+
+describe("a run gives up on a provider that has stopped answering — #256", () => {
+  afterEach(async () => {
+    await db?.close();
+    db = undefined;
+  });
+
+  /** N finished games, none of them read yet, newest first in the work list. */
+  async function slate(fx: Fixture, count: number): Promise<string[]> {
+    const refs: string[] = [];
+    for (let i = 0; i < count; i++) {
+      const ref = `slate-${i}`;
+      await fx.client.query(
+        `INSERT INTO games (sport_id, external_ref, season, week, home_team_ref, away_team_ref,
+                            kickoff_at, status, final_at)
+         VALUES ($1, $2, $3, $4, 'PHI', 'DAL',
+                 now() - interval '4 hours', 'FINAL', now() - interval '1 hour')`,
+        [fx.sportId, ref, SEASON, WEEK],
+      );
+      refs.push(ref);
+    }
+    return refs;
+  }
+
+  it("stops after four games in a row fail, rather than spending the whole limit", async () => {
+    /*
+      One bad game must not cost the other fifteen their read — that is the catch
+      inside the loop, and it is right. Fifteen failing in a row is a different
+      thing: one outage, and every call after the first few is spend against a
+      provider that has already answered.
+
+      It matters more now that selection is clock-keyed. A slate the provider
+      cannot serve is fourteen games selected on every tick at up to three HTTP
+      attempts each; unbroken, one bad Sunday exceeds the day's quota and leaves
+      nothing for the recovery.
+    */
+    const fx = await setup();
+    await slate(fx, 9);
+    const { provider, asked } = recordingProvider(new Map());
+
+    const result = await syncBoxScores(fx.client, provider, NFL.key, SEASON);
+
+    expect(asked).toHaveLength(CONSECUTIVE_FAILURE_LIMIT);
+    expect(result.failures).toHaveLength(CONSECUTIVE_FAILURE_LIMIT);
+    expect(result.deferred.length).toBeGreaterThan(0);
+  });
+
+  it("does not stamp the games it deferred", async () => {
+    /*
+      Deferred is not failed. Nothing was attempted for these, so nothing is
+      recorded against them — and that is what lets the next tick reach them once
+      the games that genuinely failed are paced out by `FAILED_RETRY_MINUTES`.
+
+      Stamping them would make four unreadable games block the slate for as long
+      as the outage lasted, which is worse than the spend the breaker exists to
+      prevent.
+    */
+    const fx = await setup();
+    await slate(fx, 9);
+    const { provider } = recordingProvider(new Map());
+
+    const result = await syncBoxScores(fx.client, provider, NFL.key, SEASON);
+
+    for (const ref of result.deferred) {
+      const [row] = await fx.client.query<{ n: number }>(
+        `SELECT count(*)::int AS n FROM games
+          WHERE external_ref = $1 AND stats_attempted_at IS NULL AND stats_error IS NULL`,
+        [ref],
+      );
+      expect(row?.n).toBe(1);
+    }
+  });
+
+  it("resets the count on a success, so one bad game never stops the slate", async () => {
+    /*
+      Consecutive, not cumulative. A single unreadable game among healthy ones is
+      the ordinary case — a novel play type, a defence missing from one response
+      — and a running total would let three of those across an afternoon shut the
+      run down.
+    */
+    const fx = await setup();
+    const refs = await slate(fx, 8);
+    const total = refs.length + 1; // `setup` seeds one game of its own.
+
+    /*
+      Alternating on **call order**, not on the ref.
+
+      Every game here shares a kickoff, so the work list's `kickoff_at DESC` tier
+      leaves their relative order unspecified — an alternation keyed on the ref
+      would depend on which order the database happened to return, and would pass
+      or fail by luck.
+    */
+    const asked: string[] = [];
+    const provider = {
+      ...fakeProvider(new Map()),
+      getBoxScore: (gameRef: string) => {
+        asked.push(gameRef);
+        return asked.length % 2 === 0
+          ? Promise.resolve(boxScore(gameRef, { qb1: [line("pass_yd", 100)], ...bothDefenses }))
+          : Promise.reject(new Error("bad game"));
+      },
+    } as unknown as StatsProvider;
+
+    const result = await syncBoxScores(fx.client, provider, NFL.key, SEASON);
+
+    expect(asked).toHaveLength(total);
+    expect(result.deferred).toEqual([]);
   });
 });

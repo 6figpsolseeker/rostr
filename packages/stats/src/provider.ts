@@ -152,6 +152,43 @@ export interface ProviderBoxScore {
    * the game so a stat that quietly went missing is visible afterwards.
    */
   readonly warnings: readonly string[];
+  /**
+   * The game's own state, as this box score reports it.
+   *
+   * `season` and `week` above are 0 because a provider handed a game reference
+   * cannot know them. This one it *can*, and it is the only status signal in the
+   * system that arrives on the cadence a game is actually played at.
+   *
+   * Without it, `games.status` is written solely by the daily schedule sync — at
+   * 09:20 UTC, which is 05:20 Eastern, an hour at which no NFL game has ever
+   * been in progress. So the column moved SCHEDULED to FINAL and never through
+   * anything else, and a box-score work list gated on it selected nothing while
+   * games were being played. Issue #256.
+   *
+   * **A caller may trust `FINAL` and must not depend on `IN_PROGRESS`.** The
+   * "final"/"completed" wording is observed on all three Tank01 endpoints;
+   * `IN_PROGRESS` has never been observed from any of them, and `mapGameStatus`
+   * answers `SCHEDULED` for anything it does not recognise. So "not FINAL" is
+   * the only reliable live signal, and it is the one the work list uses.
+   */
+  readonly status: ProviderGame["status"];
+  /**
+   * The vendor's verbatim wording, unmapped.
+   *
+   * Evidence, not control flow — nothing may key on it. It exists because the
+   * mid-game vocabulary has never been seen: every box-score fixture in this
+   * repo is a completed game, and `docs/TANK01.md` says to switch to the numeric
+   * code "once the in-progress and postponed codes are seen". The only place to
+   * see them is a live Sunday, of which there is one before the season, so this
+   * records the answer rather than relying on somebody remembering a probe.
+   *
+   * The code is carried alongside the string because the claim that it is "the
+   * stable half" has been checked against two values out of an unknown
+   * vocabulary. Recording only the string cannot settle the question the column
+   * exists to settle.
+   */
+  readonly providerStatus: string | null;
+  readonly providerStatusCode: string | null;
 }
 
 export interface ProviderInjury {

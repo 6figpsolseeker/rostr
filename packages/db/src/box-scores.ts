@@ -38,8 +38,45 @@ import { withTransaction } from "./transaction.js";
  */
 export const CORRECTION_WINDOW_HOURS = 168;
 
-/** How often a FINAL game inside that window is re-read. */
-export const FINAL_RECHECK_HOURS = 6;
+/**
+ * How often a FINAL game inside that window is re-read.
+ *
+ * **Halved in cadence when the post-final read became an invariant.** This used
+ * to be six hours because the sweep was doing double duty: it was the corrections
+ * poller *and* it was how a box score eventually reached a game whose only read
+ * predated the whistle. The second job now belongs to the post-final clause
+ * below, which fires within `FAILED_RETRY_MINUTES` of `final_at` being stamped,
+ * so what is left here is polling a feed that publishes corrections in daily
+ * batches. Fourteen reads across seven days is ample for that.
+ *
+ * The residual is the trailing edge — a correction arriving in the last hours
+ * before a paying week finalises — and a cadence is a poor way to buy that,
+ * because it is a poller that happens to be running rather than a read placed
+ * where the corrections arrive. `CLOSING_READ_HOURS` buys it directly, at one
+ * read per game instead of a uniform smear.
+ */
+export const FINAL_RECHECK_HOURS = 12;
+
+/**
+ * A single re-read in the closing hours of a game's correction window.
+ *
+ * The sweep above is uniform across seven days; this is not. A correction that
+ * changes a *paid* result is the one that lands late, and `RULES.md` §7 gives
+ * weeks 14 and 17 a 168h window precisely because official NFL stat corrections
+ * arrive for up to a week. Without this, widening the sweep would leave a
+ * twelve-hour blind spot immediately before the two weeks that decide money.
+ *
+ * **It needs no league rules and asks no question this file cannot answer.**
+ * `CORRECTION_WINDOW_HOURS` is a constant here already, and the header above
+ * records that `payingFinalizationHours` was derived *from* it rather than the
+ * reverse — so a band measured against the game's own `final_at` is league-blind
+ * by construction. It fires for every week and is merely redundant on the
+ * fourteen that do not pay, which is the correct direction for a guard.
+ *
+ * Ceiling: exactly one read per game. The band is this wide, and the pacing
+ * conditions are the same width, so a successful read inside it cannot repeat.
+ */
+export const CLOSING_READ_HOURS = 12;
 
 /** How soon a game whose last read did not fully succeed is tried again. */
 export const FAILED_RETRY_MINUTES = 20;
@@ -47,21 +84,111 @@ export const FAILED_RETRY_MINUTES = 20;
 /**
  * How long after kickoff a game may still be treated as live.
  *
- * An in-progress game is re-read on **every** run, which is the point — that is
- * what live scoring is. What it must not do is run forever. A game whose status
- * never advances past `IN_PROGRESS` would otherwise be fetched every ten minutes
- * for the rest of the season, and that is not hypothetical: `mapGameStatus`
- * answers `SCHEDULED` for wording it does not recognise, the three endpoints
- * disagree about how they spell a finished game, and only two of the five
- * statuses have ever been observed live.
+ * A runaway bound, and it has to stay one. The live clause below keys on
+ * `kickoff_at` rather than on a status, so nothing external ends the window: if
+ * the provider never tells us the game is over, this constant is the only thing
+ * that does. `mapGameStatus` answers `SCHEDULED` for wording it does not
+ * recognise, and `IN_PROGRESS` has never been observed from this provider at
+ * all, so "the status will advance" is not something to rely on.
  *
- * Eight hours is roughly two and a half times a real game, so it cannot end a
- * game that is genuinely being played — including overtime and a weather delay
- * — and it bounds the runaway at one afternoon instead of one season. Past it
- * the game is still re-read by the correction sweep below, just on a six-hour
- * cadence rather than a ten-minute one.
+ * **Eight was safe as a bound and ruinous as a budget**, which is the trap that
+ * needed naming rather than trimming. While selection waited on the provider to
+ * move a status, the window was almost never entered; keyed on the clock it is
+ * entered by every game, every week, so its width became a steady-state
+ * multiplier. Eight hours at one read per tick is 47 reads a game — fourteen
+ * concurrent games on a Sunday, and the afternoon costs more than the day's
+ * quota. What keeps it a ceiling is `LIVE_POLL_MINUTES`: the cost is
+ * `window / interval`, not `window × cadence`.
+ *
+ * Five hours is still comfortably longer than any real game including overtime
+ * and a weather delay — the longest NFL game on record is a little over five,
+ * and this measures from kickoff rather than from the end of regulation. Past
+ * it the game is picked up by the post-final clause the moment a whistle is
+ * observed, and by the correction sweep regardless.
  */
-export const LIVE_WINDOW_HOURS = 8;
+export const LIVE_WINDOW_HOURS = 5;
+
+/**
+ * How long after kickoff the first box score is fetched.
+ *
+ * There is nothing to read at kickoff. An empty response costs a metered call
+ * and then throws `translated to no stat lines` — so without this the first
+ * tick of every game on every Sunday records a failure, `stats_error` is set on
+ * a perfectly healthy game, and the retry clause starts pacing it as though
+ * something were wrong.
+ *
+ * Twenty minutes puts the first read after the opening drive, when there is a
+ * score to show.
+ */
+export const LIVE_START_MINUTES = 20;
+
+/**
+ * How often a game inside its live window is re-read.
+ *
+ * **The single largest lever in this file's call budget**, and the reason
+ * `LIVE_WINDOW_HOURS` is still a bound rather than a multiplier. Unpaced, the
+ * live clause fires on every tick: six reads an hour, times the window, times
+ * every game on the slate. Paced, a game costs `window / interval` reads no
+ * matter how the cron is scheduled.
+ *
+ * **It governs freshness, never correctness.** The whistle is observed in-band
+ * — the box score carries the game's own status — and the post-final clause
+ * then reads within `FAILED_RETRY_MINUTES`, so the settled score is right within
+ * about twenty minutes of the game ending whatever this constant says. That is
+ * what makes it a dial rather than a risk: `docs/LIVE-SCORING.md` calls the
+ * fetch interval "a config value, not an architecture", and this is that value.
+ *
+ * Twenty gives roughly nine reads across a game. 180 would give strictly
+ * per-game semantics — one read early, one after the whistle — at about a third
+ * of the calls.
+ */
+export const LIVE_POLL_MINUTES = 20;
+
+/**
+ * The shortest a real NFL game can take, kickoff to final whistle.
+ *
+ * A guard on **stamping final**, not on reading. The box score reports its own
+ * status and nobody here has ever seen what that field says while a game is
+ * being played — every fixture in this repo is a completed game. If it turns out
+ * to read "Completed" from the moment the row exists, an ungated stamp would set
+ * `final_at` at kickoff, open the 168h correction window three hours early, and
+ * settle the week on a first-quarter box score. Silently, and in the direction
+ * of a wrong result rather than a late one.
+ *
+ * **Requiring a prior successful read does not close that**, which is worth
+ * saying because it is the obvious fix: the second read is twenty minutes in,
+ * so the window would still open two and a half hours early.
+ *
+ * This trusts no vendor string. Two and a half hours is `0003`'s own figure for
+ * when the game watcher should start looking, and no NFL game has finished
+ * faster. `provider_status` records what actually arrived either way, so if the
+ * feed really does say "Completed" at kickoff we learn it from a column rather
+ * than from a settled week.
+ */
+export const MIN_GAME_MINUTES = 150;
+
+/**
+ * How many games in a row may fail before a run gives up.
+ *
+ * The per-game catch below is right that one bad game must not stop the other
+ * fifteen. What it has no answer for is fifteen failing in a row, which is one
+ * provider outage rather than fifteen faults — and every call after the first
+ * few is spend against a provider that has already answered.
+ *
+ * That matters more now that selection is clock-keyed. A slate the provider
+ * cannot serve is fourteen games selected on every tick, at up to three HTTP
+ * attempts each; unbroken, one bad Sunday afternoon exceeds the day's quota and
+ * leaves nothing for the recovery.
+ *
+ * **Applied to the retry clause only.** A breaker that stopped every read would
+ * be worse than the outage: it would keep a game from ever being read, which is
+ * a permanent zero, which is the defect this whole file exists to prevent.
+ *
+ * Consecutive, and reset by any success, so a single unreadable game never costs
+ * the slate a tick. The games that did fail are stamped, so the next run paces
+ * past them and reaches the healthy ones.
+ */
+export const CONSECUTIVE_FAILURE_LIMIT = 4;
 
 /**
  * The most games one run will fetch.
@@ -134,6 +261,31 @@ export const MIN_SCORING_REFS_TO_JUDGE = 12;
  */
 export const MAX_UNJOINED_SCORING_BPS = 2500;
 
+/**
+ * "Under way, by our own clock" — the predicate that replaced the status gate.
+ *
+ * A function rather than a string only because the two callers number their
+ * bind parameters differently. It is deliberately **one** definition with more
+ * than one consumer: the work list selects on it, and the stats job's heartbeat
+ * counts on it to decide whether a Sunday went unread.
+ *
+ * That sharing is the point. An alarm that asks a different question than the
+ * selection it guards can go quiet for a reason the selection does not have —
+ * which is precisely how issue #256 survived: `runStatsJob` reported no problem
+ * because no game *failed*, while the work list was selecting nothing at all.
+ * Two copies of this predicate would rebuild that gap one layer up.
+ *
+ * Note it does not include pacing. Pacing is about how often we may re-read a
+ * game; this is about whether the game is being played, and the heartbeat wants
+ * the second question without the first.
+ */
+export function UNDER_WAY_SQL(startMinutesParam: string, windowHoursParam: string): string {
+  return `g.kickoff_tbd = false
+                AND g.status <> 'FINAL'
+                AND g.kickoff_at <= now() - make_interval(mins  => ${startMinutesParam}::int)
+                AND g.kickoff_at >  now() - make_interval(hours => ${windowHoursParam}::int)`;
+}
+
 export interface BoxScoreSyncResult {
   readonly games: number;
   /** Stat lines seen for the first time — revision 0. */
@@ -170,11 +322,26 @@ export interface BoxScoreSyncResult {
    * season by hand.
    */
   readonly warnings: readonly { readonly gameRef: string; readonly warning: string }[];
+  /**
+   * Games this run stopped short of, because the provider had failed
+   * `CONSECUTIVE_FAILURE_LIMIT` times in a row.
+   *
+   * **Not a failure, and it must not be reported as one.** Nothing was attempted
+   * for these and nothing was stamped, so the next run reaches them. A breaker
+   * that read as a fault would turn a provider hiccup into a red heartbeat, and
+   * a heartbeat that goes red for working behaviour stops being read — which is
+   * the failure this whole change is about, one layer up.
+   *
+   * Named rather than counted, like {@link unmatched}: "four games deferred" and
+   * "the whole 16:00 slate deferred" are different Sundays.
+   */
+  readonly deferred: readonly string[];
 }
 
 interface DueGame {
   readonly id: string;
   readonly external_ref: string;
+  readonly kickoff_at: string;
   readonly season: number;
   readonly week: number;
   readonly home_team_ref: string;
@@ -222,15 +389,55 @@ export async function syncBoxScores(
   const ids = await loadSportIds(db, sportKey);
 
   const due = await db.query<DueGame>(
-    `SELECT g.id, g.external_ref, g.season, g.week, g.home_team_ref, g.away_team_ref
+    `SELECT g.id, g.external_ref, g.kickoff_at, g.season, g.week, g.home_team_ref, g.away_team_ref
        FROM games g
       WHERE g.sport_id = $1
         AND g.season = $2
         AND ($3::int IS NULL OR g.week = $3)
-        -- A SCHEDULED game has no box score. POSTPONED and CANCELLED have none
-        -- either, and RULES.md section 10 already scores those players 0 through
-        -- the absence of a stat line.
-        AND g.status IN ('IN_PROGRESS', 'FINAL')
+        -- POSTPONED and CANCELLED have no box score, and RULES.md section 10
+        -- already scores those players 0 through the absence of a stat line.
+        --
+        -- **Stated explicitly now, because it used to be free.** It fell out of
+        -- the old status IN ('IN_PROGRESS','FINAL') gate, and that gate is
+        -- gone — so without this line the two statuses that genuinely never
+        -- produce a box score would be fetched for as long as their clock
+        -- allowed.
+        AND g.status NOT IN ('POSTPONED', 'CANCELLED')
+        -- **SCHEDULED is no longer excluded, and its exclusion was issue #256.**
+        --
+        -- games.status is written by syncGames and by nothing else, and
+        -- syncGames runs from one cron at 09:20 UTC — 05:20 Eastern. The
+        -- earliest kickoff in the synced season is 09:30 Eastern and the latest
+        -- whistle is around 03:35 UTC, so there is no instant at which that job
+        -- can observe a game in play: the column went SCHEDULED to FINAL,
+        -- always, and this query therefore selected nothing at all while games
+        -- were being played. Sunday's slate was first read on Monday morning,
+        -- sixteen and a half hours after the first kickoff.
+        --
+        -- What replaces it is the clock. Whether a game has started is a fact we
+        -- hold — kickoff_at is NOT NULL, written months ahead, and is what
+        -- every lineup lock already keys on. Whether the provider has got round
+        -- to saying so is a different question, and not one a box-score fetch
+        -- should wait on.
+        --
+        -- This outer bound is what keeps stats_attempted_at IS NULL below
+        -- finite: without it, every unplayed fixture of the season is selected
+        -- on the first tick.
+        --
+        -- **The start offset lives here rather than only on the live clause**,
+        -- and putting it there alone was wrong. "Never attempted" is an OR
+        -- sibling that fires first, so a game five minutes into its first
+        -- quarter was selected by it and read immediately -- which is the exact
+        -- call the offset exists to prevent: nothing to translate, a metered
+        -- call spent, a throw, and stats_error set on a perfectly healthy game.
+        -- A test caught it; the clause alone did not.
+        --
+        -- A FINAL game is exempt because the offset is about whether there is
+        -- anything to read yet, and a finished game has a complete box score
+        -- however long ago it kicked off.
+        AND (g.status = 'FINAL'
+             OR (g.kickoff_at <= now() - make_interval(mins => $9::int)
+                 AND g.kickoff_tbd = false))
         -- **Every clause here needs a ceiling.** This query is the main thing
         -- pacing a metered provider, so a clause that can stay true indefinitely
         -- is a call every ten minutes until the season ends.
@@ -244,20 +451,78 @@ export async function syncBoxScores(
               -- on that would re-read it every tick — the hammering the retry
               -- clause below exists to prevent.
               g.stats_attempted_at IS NULL
-           -- Live, and bounded by the clock rather than by the provider
-           -- agreeing to move the status on.
-           OR (g.status = 'IN_PROGRESS'
-               AND g.kickoff_at > now() - make_interval(hours => $7::int))
-           -- Retry, bounded by the same window as the sweep below. Without the
-           -- final_at bound this never expired: stats_error is set by
-           -- ordinary *warnings* as well as failures — a field-goal count that
-           -- disagrees with the plays parsed from it, a defence missing from the
-           -- box score — so one game with a permanent discrepancy was re-read
-           -- seventy-two times a day for the rest of the season, and sixteen of
-           -- them would have exceeded the daily quota outright.
+           -- Live. This is the clause that makes live scoring exist, and the
+           -- comment that used to sit here claimed it already did — "bounded by
+           -- the clock rather than by the provider agreeing to move the status
+           -- on" described the opposite of what the code did, since it selected
+           -- on IN_PROGRESS, a value this provider has never once emitted.
+           --
+           -- Four bounds, and each closes a different runaway:
+           --
+           --   kickoff_tbd    the stored hour is the earliest the game *could*
+           --                  start, not the hour it did. Eight fixtures across
+           --                  weeks 16 and 17 carry it, because the NFL holds
+           --                  those hours back for flex scheduling — so reading
+           --                  the clock passing a stand-in as the game starting
+           --                  polls a 20:20 game from 13:00 and stops forty
+           --                  minutes into the real one, in the playoff and
+           --                  championship weeks. Migration 0030 says this about
+           --                  the column in its own words.
+           --   status         once the whistle is observed the post-final clause
+           --                  owns the game; without this a finished game keeps
+           --                  paying for its live window.
+           --   +LIVE_START    there is nothing to read at kickoff, and an empty
+           --                  response costs a call and records a false failure.
+           --   -LIVE_WINDOW   the runaway bound. Nothing external ends this
+           --                  window, so it must end itself.
+           --
+           -- And paced, which is the difference between a bound and a budget.
+           OR (${UNDER_WAY_SQL("$9", "$7")}
+               AND (g.stats_attempted_at IS NULL
+                    OR g.stats_attempted_at < now() - make_interval(mins => $10::int)))
+           -- Read once more after the whistle, whoever stamped it.
+           --
+           -- This is finalizationHold's own unread predicate, deliberately:
+           -- the thing that stops a week settling is the thing the producer must
+           -- go and fetch, and two spellings of it would let a week hold on a
+           -- game this query has no reason to select.
+           --
+           -- **It existed nowhere before, because it was not needed.** The first
+           -- read of any game was necessarily *after* the whistle — nothing was
+           -- fetched during play — so stats_synced_at < final_at was satisfied
+           -- by accident. Reading live breaks that accident: the last live read
+           -- predates final_at, and without this clause the week would hold on
+           -- a game the sweep will not revisit for FINAL_RECHECK_HOURS. Reading
+           -- during play would have made finalisation *worse* than not reading.
+           --
+           -- Self-extinguishing: one success puts the sync stamp past final_at.
+           OR (g.final_at IS NOT NULL
+               AND g.final_at > now() - make_interval(hours => $5::int)
+               AND (g.stats_synced_at IS NULL OR g.stats_synced_at < g.final_at)
+               AND (g.stats_attempted_at IS NULL
+                    OR g.stats_attempted_at < now() - make_interval(mins => $4::int)))
+           -- Retry. Bounded on **kickoff_at**, not final_at, and that is a fix
+           -- rather than a tidy-up: final_at is nullable, and the state where
+           -- it is null is exactly the state this clause is needed in. A game
+           -- read cleanly at 19:50 whose provider then fails for the rest of the
+           -- window has stats_error set and no final_at — so a bound of
+           -- final_at > now() - 168h is NULL, false, and the sweep below is
+           -- false for the same reason. Nothing selected that game again until
+           -- the daily sync stamped final_at the next morning, leaving a
+           -- thirteen-hour-old third-quarter box score as the week's numbers.
+           --
+           -- kickoff_at is NOT NULL and ours. Same 168h ceiling, shifted three
+           -- hours earlier, and true in the state that matters.
+           --
+           -- The bound must stay: stats_error is set by ordinary *warnings* as
+           -- well as failures — a field-goal count that disagrees with the plays
+           -- parsed from it, a defence missing from the box score — so one game
+           -- with a permanent discrepancy was re-read seventy-two times a day
+           -- for the rest of the season, and sixteen of them would have exceeded
+           -- the daily quota outright.
            OR (g.stats_error IS NOT NULL
                AND g.stats_attempted_at < now() - make_interval(mins => $4::int)
-               AND g.final_at > now() - make_interval(hours => $5::int))
+               AND g.kickoff_at > now() - make_interval(hours => $5::int))
            -- The NFL stat-correction sweep. Bounded on **both** columns, and the
            -- attempt bound is the load-bearing one.
            --
@@ -272,6 +537,22 @@ export async function syncBoxScores(
            OR (g.final_at > now() - make_interval(hours => $5::int)
                AND g.stats_synced_at < now() - make_interval(hours => $6::int)
                AND g.stats_attempted_at < now() - make_interval(hours => $6::int))
+           -- One last look before the correction window closes.
+           --
+           -- The sweep above is a uniform smear across seven days. A correction
+           -- that changes a *paid* result is not uniformly distributed — it is
+           -- the one that lands late, which is why RULES.md section 7 gives
+           -- weeks 14 and 17 a 168h window in the first place. A cadence buys
+           -- that badly: it is a poller that happens to be running rather than a
+           -- read placed where the corrections arrive.
+           --
+           -- Ceiling: exactly one read per game. The band is CLOSING_READ_HOURS
+           -- wide and both pacing conditions are the same width, so a success
+           -- inside it cannot repeat.
+           OR (g.final_at > now() - make_interval(hours => $5::int)
+               AND g.final_at < now() - make_interval(hours => $5::int - $11::int)
+               AND g.stats_synced_at < now() - make_interval(hours => $11::int)
+               AND g.stats_attempted_at < now() - make_interval(hours => $11::int))
         )
       -- Never-read first, then live, then **newest** first.
       --
@@ -291,8 +572,20 @@ export async function syncBoxScores(
       -- one whose zero is about to be seen on a scoreboard or frozen by a
       -- finalisation; a week-old failure inside its correction window is real
       -- but not urgent, and it is still reached once the fresh work is done.
+      --
+      -- The second tier is money before screens, and it is new. A whistle that
+      -- has already blown decides a settled score; a live read decides a screen.
+      -- When a Sunday selects more than the LIMIT, the game whose absence would
+      -- hold a week open goes first.
+      --
+      -- The tier it replaces read (g.status = 'IN_PROGRESS') DESC and sorted
+      -- nothing whatsoever, because that value is never written — so a live game
+      -- and a week-old correction re-read competed on kickoff order alone.
       ORDER BY (g.stats_synced_at IS NULL) DESC,
-               (g.status = 'IN_PROGRESS') DESC,
+               (g.final_at IS NOT NULL
+                AND (g.stats_synced_at IS NULL
+                     OR g.stats_synced_at < g.final_at)) DESC,
+               (${UNDER_WAY_SQL("$9", "$7")}) DESC,
                g.kickoff_at DESC
       LIMIT $8`,
     [
@@ -304,6 +597,9 @@ export async function syncBoxScores(
       FINAL_RECHECK_HOURS,
       LIVE_WINDOW_HOURS,
       MAX_GAMES_PER_RUN,
+      LIVE_START_MINUTES,
+      LIVE_POLL_MINUTES,
+      CLOSING_READ_HOURS,
     ],
   );
 
@@ -376,7 +672,32 @@ export async function syncBoxScores(
   const failures: { gameRef: string; reason: string }[] = [];
   const warnings: { gameRef: string; warning: string }[] = [];
 
+  const deferred: string[] = [];
+  let consecutiveFailures = 0;
+
   for (const game of due) {
+    /*
+      **A run stops when the provider is refusing; it does not stop for one bad
+      game.** The catch below is right that one failure must not cost the other
+      fifteen their read. What it has no answer for is fifteen failing in a row,
+      which is one outage rather than fifteen faults — and every call after the
+      first few is spend against a provider that has already answered.
+
+      That matters more now that selection is clock-keyed. A slate the provider
+      cannot serve is fourteen games selected on every tick at up to three HTTP
+      attempts each; unbroken, one bad afternoon exceeds the day's quota and
+      leaves nothing for the recovery. Broken, a run costs at most four games.
+
+      Deferred, not failed. These games are **not** stamped: we did not attempt
+      them, and `stats_attempted_at` means what 0042's comment says it means. So
+      the next tick reaches them once the games that did fail are paced out, and
+      four permanently-unreadable games cost the slate one tick rather than
+      blocking it.
+    */
+    if (consecutiveFailures >= CONSECUTIVE_FAILURE_LIMIT) {
+      deferred.push(game.external_ref);
+      continue;
+    }
     try {
       const box = await provider.getBoxScore(game.external_ref);
       const outcome = await ingestOneGame(db, provider.name, game, box, statKeyIds, playerIds);
@@ -392,6 +713,10 @@ export async function syncBoxScores(
       for (const warning of outcome.warnings) {
         warnings.push({ gameRef: game.external_ref, warning });
       }
+
+      // Reset on any success: the breaker is about a provider that has stopped
+      // answering, not about a running total of bad games.
+      consecutiveFailures = 0;
     } catch (error) {
       // **One game's failure never stops the other fifteen.** The shape every
       // cron loop in this repo uses — and note the unit here is a *game*, not a
@@ -413,11 +738,14 @@ export async function syncBoxScores(
         [game.id, reason],
       );
       failures.push({ gameRef: game.external_ref, reason });
+      consecutiveFailures++;
     }
   }
 
   return {
+    // Selected, not necessarily read — see `deferred`.
     games: due.length,
+    deferred,
     inserted,
     revised,
     retracted,
@@ -426,6 +754,52 @@ export async function syncBoxScores(
     failures,
     warnings,
   };
+}
+
+/**
+ * How many of this season's games are being played right now.
+ *
+ * **The check that would have caught issue #256, and the one that catches the
+ * next version of it.** `runStatsJob` computed its health from failed seasons
+ * and failed games alone, so a Sunday on which the work list matched *nothing*
+ * recorded `last_outcome = null` and `pnpm cron:status` read green — through the
+ * entire failure, every ten minutes, for as long as it lasted. A run over zero
+ * games genuinely is healthy on a Tuesday in June; what nothing could tell was
+ * the difference between that and a slate the pipeline never looked at.
+ *
+ * Two properties make it a usable signal rather than a permanent alarm:
+ *
+ * - It asks **the same question the work list asks** — literally the same SQL
+ *   fragment, not a second copy of it. An alarm that can drift from the
+ *   selection it guards is one that can go quiet for a reason the selection does
+ *   not have, which is the shape of the bug it exists to catch.
+ * - It is **self-limiting**. `UNDER_WAY_SQL` is bounded at both ends of
+ *   `kickoff_at`, so this can only be non-zero while games are actually being
+ *   played. It cannot become permanently true the way an unbounded backlog count
+ *   does — a mistake this repo has already paid for twice, in `season-sync`'s
+ *   undated fixtures and in `outstanding.total`.
+ *
+ * Deliberately no pacing condition. Pacing is about how often a game may be
+ * re-read; this is about whether one is being played. A job that read every live
+ * game five minutes ago is healthy, and would report zero if this asked the
+ * narrower question.
+ */
+export async function gamesUnderWay(
+  db: SqlClient,
+  sportKey: string,
+  season: number,
+): Promise<number> {
+  const ids = await loadSportIds(db, sportKey);
+  const [row] = await db.query<{ n: number }>(
+    `SELECT count(*)::int AS n
+       FROM games g
+      WHERE g.sport_id = $1
+        AND g.season = $2
+        AND g.status NOT IN ('POSTPONED', 'CANCELLED')
+        AND ${UNDER_WAY_SQL("$3", "$4")}`,
+    [ids.sportId, season, LIVE_START_MINUTES, LIVE_WINDOW_HOURS],
+  );
+  return row?.n ?? 0;
 }
 
 /**
@@ -548,16 +922,69 @@ async function ingestOneGame(
   //
   // The *game* is not discarded over it. The player lines are still written and
   // `stats_error` is left set, so it is re-read shortly.
+  /*
+    Is this read of a genuinely finished game?
+
+    Two conditions, and the second trusts no vendor string. The provider says so
+    — the box score carries its own `gameStatus` — and the clock agrees that
+    enough time has passed for a game to have been played.
+
+    The clock half exists because **nobody has ever fetched a mid-game box score
+    from this provider.** Every fixture in this repo is a completed game, so if
+    `gameStatus` turns out to read "Completed" from the moment the row exists, an
+    unguarded stamp would set `final_at` at kickoff, open the 168h correction
+    window three hours early, and settle the week on a first-quarter box score.
+    Silently, and toward a wrong result rather than a late one.
+
+    Requiring a *previous* successful read does not close that — the second read
+    is twenty minutes in — which is why the guard is the clock. See
+    `MIN_GAME_MINUTES`.
+  */
+  const kickedOffMinutesAgo = (Date.now() - new Date(game.kickoff_at).getTime()) / 60_000;
+  const finishedGame = box.status === "FINAL" && kickedOffMinutesAgo >= MIN_GAME_MINUTES;
+
   const usable = new Map<string, readonly StatLine[]>();
   for (const [ref, lines] of box.players) {
+    /*
+      **A team defense is written only from a finished game.**
+
+      Both of the sport's tiered ladders top out at zero — `def_pts_allowed` at 0
+      pays 5, and `def_yds_allowed` at 0-99 pays 5 — so a first-quarter read does
+      not report a defense that has conceded nothing *yet*. It reports a shutout,
+      worth ten points before a single sack, for every unit in every game, and
+      then counts down all afternoon as real yards land.
+
+      `scorePlayer` treats absent as nothing and an explicit zero as the top
+      rung, which is exactly the distinction the guard below already draws for a
+      unit missing its points-allowed line. This is the same argument one step
+      earlier: a partial D/ST scores wrongly and looks right.
+
+      The unit's countable events — sacks, interceptions, defensive touchdowns —
+      are withheld with it rather than written alone, because they arrive on the
+      same ref and splitting the line would leave a half-written unit, which is
+      the state this whole block exists to prevent. Everything lands within
+      `FAILED_RETRY_MINUTES` of the whistle, via the post-final clause.
+
+      Understated is the safe direction here. Overstated is not.
+    */
+    if (ref.startsWith("DST_") && !finishedGame) continue;
     if (ref.startsWith("DST_") && !lines.some((line) => line.statKey === "def_pts_allowed")) {
       problems.push(`${ref} has no def_pts_allowed and was not written`);
       continue;
     }
     usable.set(ref, lines);
   }
-  for (const abv of [game.home_team_ref, game.away_team_ref]) {
-    if (!usable.has(`DST_${abv}`)) problems.push(`DST_${abv} is missing from the box score`);
+  /*
+    Only meaningful for a finished game, and that gating is load-bearing rather
+    than tidy. Left ungated, every live read of every game would push two
+    warnings, `stats_error` would be set on a perfectly healthy Sunday, and the
+    retry clause would then pace the game at three reads an hour on top of the
+    live clause — for the whole afternoon, every week.
+  */
+  if (finishedGame) {
+    for (const abv of [game.home_team_ref, game.away_team_ref]) {
+      if (!usable.has(`DST_${abv}`)) problems.push(`DST_${abv} is missing from the box score`);
+    }
   }
 
   const covered: string[] = [];
@@ -734,11 +1161,43 @@ async function ingestOneGame(
     // re-read. The column's own comment says it is set by warnings too. What the
     // *caller* is handed is the list, unjoined — see `GameOutcome.warnings`.
     const problem = problems.length > 0 ? problems.join("; ") : null;
-    // Both, on the success path. The attempt column paces the retry and must not
-    // lose its pacing just because the read worked.
+    /*
+      Both stamps on the success path — the attempt column paces the retry and
+      must not lose its pacing just because the read worked.
+
+      And the game's own status, which is the second half of issue #256's fix.
+      Until now `games.status` had exactly one writer, `syncGames`, on a daily
+      cron; the box score has been carrying the answer all along and it was
+      discarded at the adapter. Writing it here is what makes the scoreboard stop
+      calling a finished game "playing" for seventeen hours, and what lets
+      `finalizationHold` see a whistle within ten minutes instead of overnight.
+
+      Three properties, each of which has a way to go wrong:
+
+      - **Only a successful read writes it.** The failure path below stamps the
+        attempt and the error and leaves status alone: a game we could not read
+        is not a game we know anything new about.
+      - **`finishedGame`, not `box.status`.** The clock guard is included, so a
+        provider that reports "Completed" from kickoff cannot open the correction
+        window early. See where it is computed.
+      - **`final_at` is COALESCEd**, so a later read cannot restart the 168h
+        window. `syncGames` has always done the same; a second writer must not be
+        the one that breaks it.
+
+      `provider_status` is recorded on every successful read, final or not,
+      because the mid-game wording is the thing nobody has ever seen.
+    */
     await tx.query(
-      "UPDATE games SET stats_synced_at = now(), stats_attempted_at = now(), stats_error = $2 WHERE id = $1",
-      [game.id, problem],
+      `UPDATE games
+          SET stats_synced_at = now(),
+              stats_attempted_at = now(),
+              stats_error = $2,
+              provider_status = $4,
+              provider_status_code = $5,
+              status = CASE WHEN $3 THEN 'FINAL' ELSE status END,
+              final_at = CASE WHEN $3 THEN COALESCE(final_at, now()) ELSE final_at END
+        WHERE id = $1`,
+      [game.id, problem, finishedGame, box.providerStatus, box.providerStatusCode],
     );
 
     let inserted = 0;
