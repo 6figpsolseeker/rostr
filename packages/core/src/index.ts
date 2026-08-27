@@ -279,6 +279,7 @@ export {
 
 export {
   countedRosterSize,
+  projectedRosterSize,
   irExemptCount,
   irExemptOnRoster,
   MAY_STILL_PLAY,

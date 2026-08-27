@@ -39,7 +39,7 @@ import {
   availabilityAt,
   everyoneIsOnWaivers,
   buildRosterShape,
-  countedRosterSize,
+  projectedRosterSize,
   isIrEligible,
   dropDestination,
   initialWaiverPriority,
@@ -53,7 +53,7 @@ import type { SqlClient } from "./client.js";
 import { getLeagueRules } from "./leagues.js";
 import { isUniqueViolation } from "./pg-errors.js";
 import { loadDraftBoard } from "./sync.js";
-import { lockedByTrade } from "./trades.js";
+import { committedTradeMoves, lockedByTrade } from "./trades.js";
 import { withTransaction } from "./transaction.js";
 import { transactionWeek } from "./week.js";
 
@@ -68,6 +68,8 @@ export class WaiverError extends Error {
       | "NOT_A_FREE_AGENT"
       | "NOT_ON_WAIVERS"
       | "ROSTER_FULL"
+      /** A slot is being held for a trade this team accepted but that has not executed. */
+      | "SLOT_HELD_FOR_TRADE"
       | "DUPLICATE_CLAIM"
       | "IN_A_TRADE"
       | "GAME_STARTED",
@@ -617,16 +619,44 @@ export async function addFreeAgent(db: SqlClient, input: AddInput): Promise<void
       [input.teamId],
     );
     const shape = buildRosterShape(stored.rules.roster, NFL);
-    const counted = countedRosterSize(
-      held.map((row) => ({
+
+    /*
+      Counted against what accepted trades have already committed this team to,
+      not only what it holds right now.
+
+      A trade's rows do not move until it executes, so without this a manager
+      accepts a trade they have room for, signs a free agent inside the veto
+      window, and the trade lands them over the limit. Neither move is illegal
+      alone. Holding the room from acceptance means this add is refused instead —
+      which is the recoverable half of the pair, because the trade is a decision
+      two managers already made and this is one nobody has made yet.
+    */
+    const moves = await committedTradeMoves(tx, input.leagueId);
+    const committed = moves.get(input.teamId);
+    const projected = projectedRosterSize({
+      roster: held.map((row) => ({
         playerId: row.player_id,
         onIr: row.on_ir,
         injuryDesignation: row.designation,
       })),
-      shape.irSlots,
-    );
-    if (counted >= shape.totalSlots) {
-      throw new WaiverError("This roster is full — drop someone first", "ROSTER_FULL");
+      leaving: committed?.leaving ?? new Set<string>(),
+      arriving: committed?.arriving ?? 0,
+      irSlots: shape.irSlots,
+    });
+
+    if (projected >= shape.totalSlots) {
+      // Named apart from a plain full roster, because the manager is looking at
+      // an empty slot. `whyClaimFailed` says a full roster stayed full "even
+      // after any drop the claim named", which would be untrue here and would
+      // send them dropping players that will not help.
+      const held = committed !== undefined && committed.arriving > 0;
+      throw new WaiverError(
+        held
+          ? "A roster spot is being held for a trade you accepted, so there is no room " +
+              "for this add until that trade executes or is vetoed"
+          : "This roster is full — drop someone first",
+        held ? "SLOT_HELD_FOR_TRADE" : "ROSTER_FULL",
+      );
     }
 
     // The arbitration, and the only part of it that holds under concurrency.
@@ -1036,6 +1066,29 @@ export async function processWaivers(
     const dropIsFrozen = (row: { drop_player_id: string | null }): boolean =>
       row.drop_player_id !== null && frozen.has(row.drop_player_id);
 
+    /*
+      Room already committed to accepted trades, per team and net of departures.
+
+      `frozen` above stops a claim *dropping* a player a trade is waiting on.
+      This stops a claim *filling* a slot a trade is waiting to arrive into —
+      the same hazard from the other direction, and the one that would otherwise
+      make the trade fail for something the trade did not do.
+
+      Departures are netted off using the same live designations everything else
+      here reads: a player leaving who was stashed on IR was not counting, so his
+      going frees nothing and must not be credited as though it did.
+    */
+    const moves = await committedTradeMoves(tx, leagueId);
+    const reserved = new Map<string, number>();
+    for (const [teamId, move] of moves) {
+      const roster = rosters.get(teamId) ?? [];
+      const countedLeaving = roster.filter(
+        (member) => move.leaving.has(member.playerId) && !irExempt.has(member.playerId),
+      ).length;
+      const net = move.arriving - countedLeaving;
+      if (net > 0) reserved.set(teamId, net);
+    }
+
     const resolution = resolveWaiverClaims({
       claims: claims
         .filter(
@@ -1058,6 +1111,7 @@ export async function processWaivers(
       rosters,
       pool,
       shape,
+      reserved,
       irExempt,
     });
 

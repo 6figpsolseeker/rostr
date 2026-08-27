@@ -174,6 +174,48 @@ export function countedRosterSize(roster: readonly IrRosterEntry[], irSlots: num
   return roster.length - irExemptCount(roster, irSlots);
 }
 
+/**
+ * How many players a team will count as holding once its accepted trades land.
+ *
+ * A trade's rows do not move when it is accepted — they move when it executes,
+ * up to the end of the veto window. So a team can accept a trade it has room
+ * for, sign a free agent in the meantime, and be over the limit by the time the
+ * trade lands. Neither acquisition is illegal alone; only the pair is, and
+ * nothing looking at one of them can see the other.
+ *
+ * This is what lets the room be held. An accepted trade reserves the space it
+ * needs from the moment it is accepted, so the intervening add is refused
+ * instead of the trade dying later for something nobody did wrong.
+ *
+ * **Incoming players always count.** A trade never carries the IR flag across —
+ * a player arrives on the receiving roster active, whatever he was on the
+ * sending one — so there is no exemption arithmetic on the inbound side.
+ *
+ * **Outgoing exempt players free nothing.** They were not being counted, so
+ * their departure returns no space. That asymmetry is why counted size does not
+ * conserve across a trade the way row count does, and it is why a one-for-one
+ * of two stashed players can put **both** teams over at once.
+ */
+export function projectedRosterSize(input: {
+  /** Every unreleased row the team holds now. */
+  readonly roster: readonly IrRosterEntry[];
+  /** Players accepted trades have committed this team to give up. */
+  readonly leaving: ReadonlySet<string>;
+  /** How many players accepted trades have committed this team to receive. */
+  readonly arriving: number;
+  readonly irSlots: number;
+}): number {
+  /*
+    Recomputed against the roster the departures leave behind, never against a
+    cached count, for the reason `irExemptOnRoster` gives two functions up: a
+    stashed player who is sent away frees an IR slot rather than a roster slot,
+    and a stashed player who recovers while the trade is pending starts counting
+    where he did not before.
+  */
+  const staying = input.roster.filter((entry) => !input.leaving.has(entry.playerId));
+  return countedRosterSize(staying, input.irSlots) + input.arriving;
+}
+
 export type IrPlacementRefusal =
   /** The player is healthy, or carries a designation that does not qualify. */
   | "NOT_INJURED"
