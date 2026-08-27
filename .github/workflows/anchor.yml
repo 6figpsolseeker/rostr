@@ -9,6 +9,12 @@ name: Anchor
 # rule must re-run cargo test, or the kernel silently drifts from the spec it
 # exists to mirror while nothing goes red.
 #
+# `vitest.bankrun.config.ts` and `vitest.alias.ts` are listed because this
+# workflow runs `pnpm test:bankrun`, which reads the first, and both program
+# configs import the second. Only `vitest.program.config.ts` was listed, so an
+# edit to either of the other two changed what this job runs without triggering
+# the job.
+#
 # The two path lists are duplicated rather than shared through a YAML anchor:
 # GitHub Actions' workflow parser does not support anchors or aliases, and a
 # workflow using them fails to parse rather than degrading to running always.
@@ -21,6 +27,8 @@ on:
       - "Cargo.toml"
       - "Cargo.lock"
       - "vitest.program.config.ts"
+      - "vitest.bankrun.config.ts"
+      - "vitest.alias.ts"
       - "packages/core/src/season/conformance/**"
       - ".github/workflows/anchor.yml"
   pull_request:
@@ -30,6 +38,8 @@ on:
       - "Cargo.toml"
       - "Cargo.lock"
       - "vitest.program.config.ts"
+      - "vitest.bankrun.config.ts"
+      - "vitest.alias.ts"
       - "packages/core/src/season/conformance/**"
       - ".github/workflows/anchor.yml"
 
