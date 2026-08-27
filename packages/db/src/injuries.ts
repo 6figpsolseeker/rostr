@@ -1,6 +1,51 @@
-import type { StatsProvider } from "@rostr/stats";
+import type { ProviderInjury, StatsProvider } from "@rostr/stats";
 import type { SqlClient } from "./client.js";
 
+/**
+ * Designations recorded in `docs/TANK01.md`, with counts and a capture date.
+ *
+ * Not a rule — `isIrEligible` is a deny-list and admits anything not in its own
+ * small set, deliberately. This is the evidence register: a value absent here
+ * is one nobody has written down, and the warning below is how the next one
+ * gets noticed.
+ */
+const RECORDED_DESIGNATIONS = new Set(["QUESTIONABLE", "INJURED RESERVE", "OUT", "DOUBTFUL"]);
+
+/**
+ * Report designations this project has not seen before.
+ *
+ * The vocabulary decides a rule and belongs to somebody else. It was guessed
+ * once — seven short codes against a column holding `"Injured Reserve"` — and the
+ * guess refused the players injured reserve exists for, silently, for as long
+ * as it took an agent to read the code. Issue 251.
+ *
+ * So the deny-list is deliberately permissive and this is the other half: an
+ * unfamiliar designation is admitted, and said out loud. Aggregated by distinct
+ * value rather than per player, because a new word on 200 rosters is one fact.
+ *
+ * Mirrors `mapGameStatus`'s warning in the Tank01 adapter, for the same reason:
+ * an operator gets told, rather than a wrong answer being written every hour
+ * without comment.
+ */
+function reportUnrecordedDesignations(injuries: readonly ProviderInjury[]): void {
+  const unrecorded = new Map<string, number>();
+  for (const injury of injuries) {
+    const value = injury.designation.trim();
+    if (value === "") continue;
+    if (RECORDED_DESIGNATIONS.has(value.toUpperCase())) continue;
+    unrecorded.set(value, (unrecorded.get(value) ?? 0) + 1);
+  }
+
+  for (const [value, count] of unrecorded) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[injuries] unrecorded injury designation ${JSON.stringify(value)} on ${count} ` +
+        `player(s). It is being treated as injured, which is this rule's safe ` +
+        `direction. Record it verbatim in docs/TANK01.md, and add it to ` +
+        `MAY_STILL_PLAY in packages/core if it means the player may still appear.`,
+    );
+  }
+}
 /**
  * Keep injury designations current between player syncs.
  *
@@ -95,6 +140,7 @@ export async function syncInjuries(
   if (injuries.length === 0) {
     return { designated: 0, cleared: 0, providerReturned: 0 };
   }
+  reportUnrecordedDesignations(injuries);
 
   const designated = await db.query<{ external_ref: string }>(
     `UPDATE players AS p

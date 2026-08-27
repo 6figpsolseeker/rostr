@@ -35,38 +35,58 @@
  */
 
 /**
- * Designations that mean a player is genuinely unavailable.
+ * Designations that mean a player may still take the field.
  *
- * The same set the autofill treats as unavailable, restated here rather than
- * imported from `@rostr/db` — this package must not depend on that one, and the
- * two are the same list for the same reason rather than by coincidence. If they
- * drift, the symptom is a player the autofill benches but IR refuses to hold.
+ * **A deny-list, and the inversion is the point.** This was an allow-list of
+ * seven short codes — OUT, IR, INACTIVE, SUSPENDED, DOUBTFUL, PUP, NFI — and
+ * the column it matches against holds the provider's wording verbatim. Tank01
+ * writes `"Injured Reserve"`, which is in none of them, so the players the
+ * feature exists for were the ones it refused. Issue 251.
  *
- * `DOUBTFUL` is included, and is the debatable one. It is kept because the whole
- * set answers "will not appear this week", and a manager should not have to
- * re-litigate a designation the provider already made.
+ * An allow-list is correct only if the enumeration is complete, and nobody can
+ * complete this one: it is another company's vocabulary and it can change
+ * mid-season. A deny-list is correct if no unlisted designation means "may
+ * still play", which is a far smaller claim — and `docs/TANK01.md` records the
+ * evidence for it: of 383 designated players on 2026-08-27, the field held
+ * exactly four values, and `"Questionable"` was the only one of them meaning a
+ * player might appear.
+ *
+ * **The failure directions are not symmetric, which is what licenses this.**
+ * Refusing wrongly strands a player who is genuinely on injured reserve, with
+ * no bound and no recourse. Admitting wrongly lets a manager spend an IR slot
+ * on somebody who might play — and {@link capped} holds the exemption to
+ * `roster.irSlots` however many are stashed, while `onIr` means he stashed the
+ * player deliberately. So the cost is bounded by a number in the signed rules
+ * and paid by the manager who chose it. That is the same trade `DOUBTFUL` has
+ * always carried here, described two paragraphs down.
+ *
+ * `syncInjuries` warns on any designation not yet recorded in `docs/TANK01.md`,
+ * so a new value arrives in the logs rather than silently changing a rule.
  */
-export const IR_ELIGIBLE_DESIGNATIONS = new Set([
-  "OUT",
-  "IR",
-  "INACTIVE",
-  "SUSPENDED",
-  "DOUBTFUL",
-  "PUP",
-  "NFI",
-]);
+export const MAY_STILL_PLAY = new Set(["QUESTIONABLE"]);
 
 /**
  * Whether this designation permits a player to occupy an IR slot.
  *
  * **Decided by the owner, 2026-08-23: "whenever a player is on IR they need to
  * be actually injured."** So this is asked continuously rather than only at the
- * moment somebody is placed there.
+ * moment somebody is placed there — which is also why a designation that gets
+ * *worse* must never cost a manager the slot. Before issue 251 it did: a player
+ * stashed as `"Out"` who progressed to `"Injured Reserve"` stopped being exempt,
+ * had his waiver claims refused for a full roster, and was labelled as no longer
+ * out. One predicate, five faces.
+ *
+ * `DOUBTFUL` remains eligible, and is the debatable one. It is kept because the
+ * question is "will he appear this week", and a manager should not have to
+ * re-litigate a designation the provider already made.
  *
  * A null or empty designation is a healthy player. Note this reads the
  * designation column, which `CLAUDE.md` records as *shown and never enforced* —
  * that rule exists so a designation arriving on a Sunday cannot invalidate a
  * lineup that was legal when it was set, and nothing here touches a lineup.
+ * **Do not reuse this predicate for the autofill.** It reads as the same
+ * question and is not: that path writes starting slots from a cron with nobody
+ * watching, and is exactly what the invariant forbids.
  * See {@link irExemptCount} for how the continuous check avoids doing anything
  * destructive when a player recovers.
  */
@@ -74,9 +94,8 @@ export function isIrEligible(designation: string | null | undefined): boolean {
   if (designation === null || designation === undefined) return false;
   const normalised = designation.trim().toUpperCase();
   if (normalised === "") return false;
-  return IR_ELIGIBLE_DESIGNATIONS.has(normalised);
+  return !MAY_STILL_PLAY.has(normalised);
 }
-
 export interface IrRosterEntry {
   readonly playerId: string;
   readonly onIr: boolean;

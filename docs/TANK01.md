@@ -203,6 +203,60 @@ curl --url 'https://tank01-nfl-live-in-game-real-time-statistics-nfl.p.rapidapi.
 
 ---
 
+## `injury.designation` — four values, and a rule reads this field
+
+Captured live on 2026-08-27 from `getNFLPlayerList`, verbatim. **383 of 3,870**
+**players carried a designation.**
+
+| `injury.designation` | players |
+| -------------------- | ------- |
+| `"Questionable"`     | 240     |
+| `"Injured Reserve"`  | 101     |
+| `"Out"`              | 40      |
+| `"Doubtful"`         | 2       |
+
+**These are the only four values in the field.** Nothing else appears — no
+practice-report wording, no `"None"` or `"N/A"` sentinel on a fit player, and none
+of the short codes the rule layer was written against.
+
+**The wording is the whole point.** `players.injury_designation` holds this string
+verbatim — the adapter trims and nothing normalises — and `isIrEligible` matches
+against it to decide whether a player may be stashed on injured reserve. That rule
+was written from a guessed vocabulary of short codes, so `"Injured Reserve"` — the
+second most common value in the field, and the one the feature exists for — did not
+match it. See issue 251.
+
+**Exactly one value means “may still play”:** `"Questionable"`. That is what makes a
+deny-list expressible at all: the eligible side of this vocabulary is open-ended
+and the ineligible side is one word.
+
+**The sample is unusually rich, and that is worth knowing.** The NFL cutdown
+deadline was 2026-08-26, the day before this capture — rosters had just been cut to
+53 and injured players moved to reserve. Compare the survey of the same endpoint
+recorded in `packages/stats/src/tank01/adapter.ts` on 2026-08-18: 4,202 entries, 185
+designated. Fewer players and more than twice the designations, a week apart, from
+one roster deadline. Do not read these counts as a season-typical distribution.
+
+**Not yet observed, and honestly outstanding:** `"Physically Unable To Perform"`,
+`"Suspension"`, and any in-season wording an August snapshot cannot reach.
+`injuryBadge` (`apps/web/src/lib/player.ts`) maps the first two, and this capture is
+evidence that somebody believed in them rather than evidence they exist — late
+August is when PUP and suspensions would be most likely to appear, and they did
+not. Treat those two entries as unattested until a capture shows them.
+
+`syncInjuries` warns on any designation absent from this table, so the next value
+arrives in the logs rather than in a rule.
+
+Reproduce with `pnpm stats:probe` — the histogram reuses the `getNFLPlayerList`
+response the probe already fetches, so it costs no extra call. Or:
+
+```
+curl --url 'https://tank01-nfl-live-in-game-real-time-statistics-nfl.p.rapidapi.com/getNFLPlayerList' \
+     --header 'x-rapidapi-key: <key>'
+```
+
+---
+
 ## The shape of a box score
 
 `getNFLBoxScore` returns one object with these parts:
