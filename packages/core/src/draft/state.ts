@@ -137,6 +137,19 @@ export interface MakePickInput {
  * either way — a manager who wants nothing but wide receivers may have them —
  * but the consequence has to be visible before they confirm, not discovered in
  * Week 1 when the lineup will not validate.
+ *
+ * **The pool must contain this draft's own picks.** `rosterFor` throws
+ * `POOL_INCOMPLETE` on one it cannot rebuild a roster from, and the only pool a
+ * route holds is `draftBoard(...).pool` — filtered on `players.active`, so it
+ * loses anyone cut since he was drafted. `recordPick` widens inside its own
+ * transaction (issue #253); nothing widens for a read. Wiring this to the draft
+ * room as it stands would turn a cut player into a 500 in a room that polls
+ * every second, which is the failure that throw is meant to prevent, not cause.
+ *
+ * Note the asymmetry directly below: a pool missing the *subject* of the pick
+ * is tolerated, and a pool missing an *earlier* pick is not. The first is a
+ * player who has gone off the board while the manager was looking at him, which
+ * is ordinary; the second means the caller is holding the wrong pool.
  */
 export function pickWouldStrandStarters(state: DraftState, input: MakePickInput): boolean {
   const player = input.pool.get(input.playerId);
