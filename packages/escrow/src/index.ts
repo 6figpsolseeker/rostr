@@ -7,6 +7,7 @@
  */
 
 export { ESCROW_IDL, type EscrowIdl } from "./idl.js";
+export type { RostrEscrow } from "./types.js";
 export {
   GENESIS_HASHES,
   POT_MINTS,

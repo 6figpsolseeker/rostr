@@ -12,6 +12,7 @@ import {
 } from "@solana/spl-token";
 import { Clock, start, type ProgramTestContext } from "solana-bankrun";
 import { beforeAll, describe, expect, it } from "vitest";
+import type { EscrowProgram } from "./helpers.js";
 
 /**
  * The payout, actually happening.
@@ -63,7 +64,7 @@ const FEE_BPS = 100;
 const DAY = 24 * 60 * 60;
 
 let programId: anchor.web3.PublicKey;
-let program: anchor.Program;
+let program: EscrowProgram;
 
 beforeAll(() => {
   const idl = JSON.parse(readFileSync(IDL_PATH, "utf8")) as anchor.Idl;
@@ -97,7 +98,13 @@ async function send(
   tx.add(...ixs);
   // A fresh blockhash each time. Reusing one makes every transaction after the
   // first a duplicate, which reads as a program failure and is not one.
-  const [blockhash] = await ctx.banksClient.getLatestBlockhash();
+  // Non-null rather than a guard, and the shape matters: binding the result to a
+  // local that outlives this line deadlocks the banks client after a few sends.
+  // It is a native object, and holding it alive appears to hold something Rust
+  // side — the guarded version passed four sends and then hung for the full
+  // three-minute timeout, every run. Destructure and drop, as this always did.
+  // A null here throws a TypeError on the next line, which is what it did before.
+  const [blockhash] = (await ctx.banksClient.getLatestBlockhash())!;
   tx.recentBlockhash = blockhash;
   tx.feePayer = payer.publicKey;
   tx.sign(payer, ...extra);
