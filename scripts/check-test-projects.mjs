@@ -75,6 +75,27 @@ const stripJsonc = (text) => {
 };
 
 const read = (p) => JSON.parse(stripJsonc(readFileSync(p, "utf8")));
+
+/**
+ * Whether a project's own `include` can still reach a test file.
+ *
+ * The assertions below check that a test project exists, emits nothing, and is
+ * referenced. None of that is worth anything if its `include` no longer
+ * matches a test: the project compiles zero files, every check here passes, and
+ * `pnpm typecheck` goes green over code nobody is reading — which is the exact
+ * shape of the defect this script was written for (#257), one level up.
+ *
+ * Most test configs omit `include` entirely and inherit the package's, which
+ * already reaches the tests once `exclude` is reset — that case is fine. Only a
+ * config that overrides it has to prove the override still covers them.
+ * `packages/stats` does override it, to add the Tank01 JSON fixtures, so this is
+ * reachable by an ordinary edit rather than hypothetical.
+ */
+const reachesTests = (config) => {
+  const include = config.include;
+  if (include === undefined) return true; // Inherited from the build config.
+  return include.some((pattern) => pattern.includes("*") && pattern.endsWith(".ts"));
+};
 const paths = (refs) => (refs ?? []).map((r) => r.path).sort();
 
 const problems = [];
@@ -117,6 +138,14 @@ for (const name of packages) {
         `into dist/.`,
     );
   }
+  if (!reachesTests(test)) {
+    problems.push(
+      `packages/${name}/tsconfig.test.json overrides "include" with a list that cannot ` +
+        `reach a test file, so it compiles none of them and every other check here still ` +
+        `passes. If you are narrowing it deliberately, the project has no reason to exist.`,
+    );
+  }
+
   if ((test.exclude ?? null) === null || test.exclude.length > 0) {
     problems.push(
       `packages/${name}/tsconfig.test.json must set "exclude": [], or it inherits the build ` +
@@ -196,6 +225,13 @@ for (const name of programs) {
     problems.push(
       `programs/${name}/tsconfig.test.json must set "noEmit": true. Nothing under programs/ ` +
         `should produce a dist/ — the shippable artefact here is a .so built by cargo.`,
+    );
+  }
+
+  if (!reachesTests(test)) {
+    problems.push(
+      `programs/${name}/tsconfig.test.json overrides "include" with a list that cannot ` +
+        `reach a test file, so it compiles none of them while every other check passes.`,
     );
   }
 
