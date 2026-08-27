@@ -80,8 +80,6 @@ export interface OpsView {
   readonly stale: readonly ProblemRow[];
   /** Ingested, with something that did not reconcile. Roughly one game in seven. */
   readonly discrepancies: readonly ProblemRow[];
-  /** How many `noStats` rows are still inside their window. See `buildOpsView`. */
-  readonly blockingOpen: number;
 }
 
 /**
@@ -221,7 +219,15 @@ export function ingestSentence(row: ProblemRow): string {
  * Grouped by **what we hold** rather than split by recoverability, which is the
  * change #233 asked for: the old two-way split answered "can I act" for a list
  * whose rows differed by an order of magnitude in what they cost. Recoverability
- * survives as a chip on every row, and as `blockingOpen`.
+ * survives as a chip on every row.
+ *
+ * There was a `blockingOpen` count here too — `noStats` rows still inside their
+ * window — computed, documented and unit-tested, and read by nothing. The page
+ * renders recoverability per row, so no header wanted it. A field written by
+ * something and read by nothing is the shape this screen exists to correct, and
+ * shipping one inside the fix would have been the joke telling itself. If a
+ * banner ever needs the number, it is one `filter` and it should arrive with
+ * its reader.
  */
 export function buildOpsView(
   input: {
@@ -265,14 +271,6 @@ export function buildOpsView(
     noStats: of("NO_STATS"),
     stale: of("STALE"),
     discrepancies: of("DISCREPANCY"),
-    /*
-      How many of the worst rows can still be acted on.
-
-      Separate from `noStats.length` because that number cannot fall to zero — a
-      game past its window stays on the page forever, correctly, as evidence.
-      This one can, which is what makes it fit to drive a banner.
-    */
-    blockingOpen: of("NO_STATS").filter((row) => row.status !== "CLOSED").length,
   };
 }
 

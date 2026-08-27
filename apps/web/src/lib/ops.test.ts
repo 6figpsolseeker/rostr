@@ -214,29 +214,6 @@ describe("buildOpsView", () => {
     );
   });
 
-  it("counts only the no-stats rows that can still be acted on", () => {
-    /*
-      `blockingOpen` must be able to reach zero; `noStats.length` cannot. A game
-      past its window stays on the page forever — correctly, as evidence — so a
-      banner driven by the raw count would be permanently lit, which is the
-      broken-health-signal failure this repo has paid for twice.
-    */
-    const view = buildOpsView(
-      {
-        total: 2,
-        blockingRecent: 1,
-        games: [
-          game({ gameRef: "open", ingest: "NO_STATS", weekLastKickoff: hoursBefore(10) }),
-          game({ gameRef: "shut", ingest: "NO_STATS", weekLastKickoff: hoursBefore(100) }),
-        ],
-      },
-      NOW,
-    );
-
-    expect(view.noStats).toHaveLength(2);
-    expect(view.blockingOpen).toBe(1);
-  });
-
   it("carries the alarm count from the query rather than from the rows", () => {
     // The rows are truncated by the LIMIT. A count derived from them and
     // presented as a total is the same lie one layer down.
