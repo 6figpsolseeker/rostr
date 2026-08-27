@@ -1701,3 +1701,201 @@ describe("the draw refuses a pot league whose season has not started", () => {
     ).resolves.toBeDefined();
   });
 });
+
+describe("a player cut by his club stays on the roster he was drafted to", () => {
+  /*
+    Issue #253. The engine rebuilt a drafting roster by looking each pick up in
+    the draft board, and the board filters on `players.active` — a flag the daily
+    sync clears for anyone the provider reports as an NFL free agent. So a player
+    drafted in round 2 and cut overnight fell out of his own team's roster: the
+    count went on without him, letting the team take one more than the limit, and
+    letting a bot double up at a position it had already filled.
+
+    Deleting him from the fixture's `pool` is exactly what the sync produces —
+    the board is rebuilt from a query he no longer matches.
+  */
+
+  it("keeps drafting when its own earlier pick has left the board", async () => {
+    /*
+      A lock on the throw, not on the bug — and worth being exact about which,
+      because it reads like the latter.
+
+      This passes against fully reverted code: the roster rows are written from
+      `input`, not from the count, so a team whose roster rebuilt one player
+      short still ends up with both rows in the database. What it does catch is
+      the intermediate state — throw added, widening removed — where the fourth
+      pick fails with POOL_INCOMPLETE instead of quietly counting wrong. That
+      state is one careless revert away, and this is the test that stops it.
+
+      The consequence of the miscount is asserted below, in the cap test.
+
+      Two teams, so the snake turns straight back: A takes pick 1, B takes 2 and
+      3, A takes 4 — A's next pick being the first moment its own roster is
+      rebuilt, since `rosterFor` is per-team.
+    */
+    const fx = await setup(2);
+    const order = await scheduled(fx);
+    await startDraft(fx.client, fx.leagueId, SCHEDULED);
+
+    const taken = new Set<string>();
+    const take = async (teamId: string, board: ReadonlyMap<string, DraftablePlayer>) => {
+      const playerId = anyAvailable(fx, taken);
+      taken.add(playerId);
+      await recordPick(fx.client, {
+        leagueId: fx.leagueId,
+        teamId,
+        playerId,
+        pool: board,
+        shape: SHAPE,
+        now: SCHEDULED,
+      });
+      return playerId;
+    };
+
+    const first = await take(order[0]!, fx.pool);
+
+    // Overnight, his club cuts him: the board is rebuilt without him.
+    const cutBoard = new Map(fx.pool);
+    cutBoard.delete(first);
+
+    await take(order[1]!, cutBoard);
+    await take(order[1]!, cutBoard);
+
+    // A picks again, and this is the call that rebuilds A's roster.
+    const fourth = await take(order[0]!, cutBoard);
+
+    const roster = await fx.client.query<{ player_id: string }>(
+      `SELECT player_id FROM roster_entries
+        WHERE team_id = $1 AND released_at IS NULL`,
+      [order[0]!],
+    );
+
+    // Compared as a set: every pick here is stamped at `SCHEDULED`, so
+    // `acquired_at` ties and any ORDER BY over it is unspecified.
+    expect(new Set(roster.map((row) => row.player_id))).toEqual(new Set([first, fourth]));
+  });
+  it("still refuses to draft him twice once he is back on the board", async () => {
+    /*
+      The widening puts him back in the pool, and the pool is what `available`
+      is derived from — so the guard that matters is that he is still in
+      `draftedPlayerIds`, which is what refuses a second pick of him.
+
+      The second call must be handed a board he has fallen off. Given an intact
+      one, `poolWithDraftedPlayers` finds nothing missing and returns at its
+      guard, and this asserts against the un-widened path — the one case it
+      exists to rule out.
+    */
+    const fx = await setup();
+    const order = await scheduled(fx);
+    await startDraft(fx.client, fx.leagueId, SCHEDULED);
+
+    const first = anyAvailable(fx, new Set());
+    await recordPick(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: order[0]!,
+      playerId: first,
+      pool: fx.pool,
+      shape: SHAPE,
+      now: SCHEDULED,
+    });
+
+    const cutBoard = new Map(fx.pool);
+    cutBoard.delete(first);
+
+    await expect(
+      recordPick(fx.client, {
+        leagueId: fx.leagueId,
+        teamId: order[1]!,
+        playerId: first,
+        pool: cutBoard,
+        shape: SHAPE,
+        now: SCHEDULED,
+      }),
+    ).rejects.toMatchObject({ code: "PLAYER_UNAVAILABLE" });
+  });
+
+  it("counts him against the position cap, so a bot is not handed a second quarterback", async () => {
+    /*
+      The consequence, and the reason the miscount was worth fixing.
+
+      `canDraft` reads `roster.length` only, so an undercount cannot be caught
+      by the roster limit — with fourteen rounds and fourteen slots a team never
+      reaches it anyway. The cap is where it bites: `isAtPositionCap` reads
+      `positions` off the roster the engine rebuilds, and `defaultPositionCaps`
+      puts QB at one (one starting slot, and `floor(5 * 1 / 9)` of the bench).
+
+      So a bot that already holds the only quarterback it drafted must never be
+      given a second — and before the fix it was, because his club had cut him
+      and he had fallen out of his own roster.
+
+      The board handed to the auto-pick is narrowed to two players, which is the
+      fixture doing deliberately what a real board does by accident: it makes the
+      cap the only thing that can decide between them. Widen it and the bot picks
+      by rank and the cap is never consulted.
+    */
+    const fx = await setup(2);
+    const order = await scheduled(fx);
+    await startDraft(fx.client, fx.leagueId, SCHEDULED);
+
+    const players = [...fx.pool.values()];
+    const quarterbacks = players.filter((player) => player.positions.includes("QB"));
+    const [ownQb, otherQb] = [quarterbacks[0]!, quarterbacks[1]!];
+    // Not the first back in the pool: that one goes to the other team below.
+    const back = players.filter((player) => player.positions.includes("RB"))[1]!;
+
+    await recordPick(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: order[0]!,
+      playerId: ownQb.playerId,
+      pool: fx.pool,
+      shape: SHAPE,
+      now: SCHEDULED,
+    });
+
+    // Overnight his club cuts him, and the sync rebuilds a board without him.
+    const cutBoard = new Map(fx.pool);
+    cutBoard.delete(ownQb.playerId);
+
+    // The other team takes both picks at the turn.
+    for (const player of [players[0]!, players[1]!]) {
+      await recordPick(fx.client, {
+        leagueId: fx.leagueId,
+        teamId: order[1]!,
+        playerId: player.playerId,
+        pool: cutBoard,
+        shape: SHAPE,
+        now: SCHEDULED,
+      });
+    }
+
+    // Back to the first team, and nobody is there to pick: the bot decides,
+    // against its own roster, from a board of one quarterback and one back.
+    const narrowed = new Map<string, DraftablePlayer>([
+      [otherQb.playerId, { ...otherQb, rank: 1 }],
+      [back.playerId, { ...back, rank: 2 }],
+    ]);
+
+    await recordPick(fx.client, {
+      leagueId: fx.leagueId,
+      pool: narrowed,
+      shape: SHAPE,
+      // Ninety seconds after the pick before it, so the clock has genuinely run
+      // out — `recordPick` refuses an auto-pick whose timer is still running.
+      now: new Date(SCHEDULED.getTime() + 91_000),
+    });
+
+    const roster = await fx.client.query<{ player_id: string }>(
+      `SELECT player_id FROM roster_entries
+        WHERE team_id = $1 AND released_at IS NULL`,
+      [order[0]!],
+    );
+    const held = new Set(roster.map((row) => row.player_id));
+
+    // He is still there, he was counted, and the bot took the back instead.
+    expect(held.has(ownQb.playerId)).toBe(true);
+    expect(held.has(back.playerId)).toBe(true);
+    expect(
+      [...held].filter((id) => quarterbacks.some((qb) => qb.playerId === id)),
+    ).toHaveLength(1);
+  });
+});

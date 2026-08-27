@@ -13,6 +13,11 @@ const STATUS: Record<string, number> = {
   ROSTER_FULL: 409,
   ALREADY_ROSTERED: 409,
   ORDER_NOT_DRAWN: 409,
+  // Both mean the engine was handed a pool that does not contain this draft's
+  // own picks. Not a conflict a manager can retry out of, so not the 409 the
+  // fallback below would give it.
+  POOL_INCOMPLETE: 500,
+  PICK_PLAYER_MISSING: 500,
 };
 
 /**
