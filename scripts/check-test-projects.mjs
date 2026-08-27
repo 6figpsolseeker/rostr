@@ -149,6 +149,64 @@ for (const name of packages) {
   }
 }
 
+/*
+  `programs/` is not a package, and the pair check above does not apply to it.
+  There is no `dist/` to fill, no build project, and therefore nothing excluding
+  these tests — so "the build config excludes them" and "the test config
+  un-excludes them" are both meaningless here, and there is no build
+  `references` array for a test one to match.
+
+  The hole is the same one, though. `programs/rostr-escrow/tests` — 105 tests
+  over the program that holds the pot — was in no tsconfig at all for the
+  program's entire life (#261), for the same reason `packages/` was: nothing
+  asserted that it should be. So it is asserted, in the shape that fits. One
+  program is not a loop worth generalising over, but the next `tests/` directory
+  is the one nobody will remember.
+*/
+const programsDir = join(root, "programs");
+const programs = existsSync(programsDir)
+  ? readdirSync(programsDir, { withFileTypes: true })
+      .filter((e) => e.isDirectory())
+      .map((e) => e.name)
+      .sort()
+  : [];
+
+let programSuites = 0;
+
+for (const name of programs) {
+  const testsDir = join(programsDir, name, "tests");
+  if (!existsSync(testsDir)) continue;
+  if (!readdirSync(testsDir).some((f) => f.endsWith(".ts"))) continue;
+
+  programSuites++;
+  const rel = `./programs/${name}/tsconfig.test.json`;
+  const testPath = join(programsDir, name, "tsconfig.test.json");
+
+  if (!existsSync(testPath)) {
+    problems.push(
+      `programs/${name}/tests contains TypeScript but programs/${name}/tsconfig.test.json ` +
+        `is missing, so every one of those files is typechecked by nothing — the same hole ` +
+        `#257 closed for packages/ and #261 closed here.`,
+    );
+    continue;
+  }
+
+  const test = read(testPath);
+  if (test.compilerOptions?.noEmit !== true) {
+    problems.push(
+      `programs/${name}/tsconfig.test.json must set "noEmit": true. Nothing under programs/ ` +
+        `should produce a dist/ — the shippable artefact here is a .so built by cargo.`,
+    );
+  }
+
+  if (!referenced.has(rel)) {
+    problems.push(
+      `tsconfig.json does not reference "${rel}". pnpm typecheck runs "tsc --build" against ` +
+        `that file and nothing else, so the program test suite for ${name} is not checked.`,
+    );
+  }
+}
+
 if (problems.length > 0) {
   console.error(`\n${problems.length} problem(s) with the TypeScript project graph:\n`);
   for (const p of problems) console.error(`  - ${p}`);
@@ -156,4 +214,7 @@ if (problems.length > 0) {
   process.exit(1);
 }
 
-console.log(`TypeScript project graph OK: ${packages.length} packages, both halves each.`);
+console.log(
+  `TypeScript project graph OK: ${packages.length} packages, both halves each; ` +
+    `${programSuites} program test suite(s).`,
+);
