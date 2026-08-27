@@ -30,7 +30,8 @@ import {
   validArgs,
   validFreeArgs,
   vaultPda,
-} from "./helpers";
+  type EscrowProgram,
+} from "./helpers.js";
 
 /**
  * D2 — the league account and the terms frozen into it.
@@ -42,7 +43,7 @@ import {
  * calling the program directly.
  */
 
-let program: anchor.Program;
+let program: EscrowProgram;
 let provider: anchor.AnchorProvider;
 let mint: anchor.web3.PublicKey;
 
@@ -50,7 +51,7 @@ const initialize = async (args: InitArgs) => {
   const league = leaguePda(program, args.leagueId);
   return program.methods
     .initializeLeague(args)
-    .accounts({
+    .accountsPartial({
       league,
       mint,
       vault: vaultPda(program, league),
@@ -64,7 +65,7 @@ const initialize = async (args: InitArgs) => {
 const initializeFree = async (args: FreeLeagueArgs) =>
   program.methods
     .initializeFreeLeague(args)
-    .accounts({
+    .accountsPartial({
       league: leaguePda(program, args.leagueId),
       payer: provider.wallet.publicKey,
       systemProgram: anchor.web3.SystemProgram.programId,
@@ -278,7 +279,7 @@ describe("initialize_league", () => {
     await expectError(
       program.methods
         .initializeLeague(args)
-        .accounts({
+        .accountsPartial({
           league,
           mint: nineDecimals,
           vault: vaultPda(program, league),

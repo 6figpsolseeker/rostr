@@ -8,6 +8,7 @@ import {
   mintTo,
 } from "@solana/spl-token";
 import { expect } from "vitest";
+import type { escrowProgram } from "@rostr/escrow";
 import {
   earliestRefundUnlock,
   NFL_DEFAULT_SCHEDULE,
@@ -20,6 +21,9 @@ import {
  * Not a `*.test.ts`, so vitest does not collect it — see the include pattern in
  * `vitest.program.config.ts`.
  */
+
+/** The program, typed by its generated IDL. See the note on `getProgram`. */
+export type EscrowProgram = ReturnType<typeof escrowProgram>;
 
 export const PRIZE = {
   CHAMPION: 0,
@@ -74,7 +78,7 @@ export const getProvider = (): anchor.AnchorProvider => {
  * program names differently across Anchor versions. The address travels in the
  * IDL itself, so this cannot disagree with what was just deployed.
  */
-export const getProgram = (provider: anchor.AnchorProvider): anchor.Program => {
+export const getProgram = (provider: anchor.AnchorProvider): EscrowProgram => {
   const idl = JSON.parse(
     readFileSync(join(process.cwd(), "target", "idl", "rostr_escrow.json"), "utf8"),
   ) as anchor.Idl;
@@ -86,14 +90,14 @@ export const freshLeagueId = (): number[] => [
   ...anchor.web3.Keypair.generate().publicKey.toBytes().slice(0, 16),
 ];
 
-export const leaguePda = (program: anchor.Program, leagueId: number[]): anchor.web3.PublicKey =>
+export const leaguePda = (program: EscrowProgram, leagueId: number[]): anchor.web3.PublicKey =>
   anchor.web3.PublicKey.findProgramAddressSync(
     [Buffer.from("league"), Buffer.from(leagueId)],
     program.programId,
   )[0];
 
 export const vaultPda = (
-  program: anchor.Program,
+  program: EscrowProgram,
   league: anchor.web3.PublicKey,
 ): anchor.web3.PublicKey =>
   anchor.web3.PublicKey.findProgramAddressSync(
@@ -102,7 +106,7 @@ export const vaultPda = (
   )[0];
 
 export const membershipPda = (
-  program: anchor.Program,
+  program: EscrowProgram,
   league: anchor.web3.PublicKey,
   member: anchor.web3.PublicKey,
 ): anchor.web3.PublicKey =>
@@ -155,13 +159,15 @@ export const validArgs = (overrides: Partial<InitArgs> = {}): InitArgs => {
  * therefore the league's recorded commissioner.
  */
 export const startSeason = async (
-  program: anchor.Program,
+  program: EscrowProgram,
   league: anchor.web3.PublicKey,
   commissioner?: anchor.web3.Keypair,
 ): Promise<string> => {
-  const method = program.methods.startSeason().accounts({
+  const signer = commissioner?.publicKey ?? program.provider.publicKey;
+  if (!signer) throw new Error("provider has no wallet; ANCHOR_WALLET not set?");
+  const method = program.methods.startSeason().accountsPartial({
     league,
-    commissioner: commissioner?.publicKey ?? program.provider.publicKey,
+    commissioner: signer,
   });
   return commissioner ? method.signers([commissioner]).rpc() : method.rpc();
 };

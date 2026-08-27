@@ -33,7 +33,8 @@ import {
   getProvider,
   membershipPda,
   refundUnlockFor,
-} from "./helpers";
+  type EscrowProgram,
+} from "./helpers.js";
 
 /**
  * Proof that issue #26 is fixed: the on-chain join now has a real caller.
@@ -46,7 +47,7 @@ import {
  * exists and the db record persists.
  */
 
-let program: anchor.Program;
+let program: EscrowProgram;
 let provider: anchor.AnchorProvider;
 let mint: anchor.web3.PublicKey;
 let db: PGliteClient;

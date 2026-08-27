@@ -14,6 +14,7 @@ import {
   tokenBalance,
   validArgs,
   vaultPda,
+  type EscrowProgram,
 } from "./helpers.js";
 
 /**
@@ -53,7 +54,7 @@ import {
 const BUY_IN = 5_000_000;
 
 let provider: anchor.AnchorProvider;
-let program: anchor.Program;
+let program: EscrowProgram;
 let mint: anchor.web3.PublicKey;
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
@@ -68,7 +69,7 @@ const initialize = async (args: InitArgs): Promise<anchor.web3.PublicKey> => {
   const league = leaguePda(program, args.leagueId);
   await program.methods
     .initializeLeague(args)
-    .accounts({
+    .accountsPartial({
       league,
       mint,
       vault: vaultPda(program, league),
@@ -83,7 +84,7 @@ const initialize = async (args: InitArgs): Promise<anchor.web3.PublicKey> => {
 const join = async (league: anchor.web3.PublicKey, member: Member, rulesHash: number[]) =>
   program.methods
     .joinLeague(rulesHash)
-    .accounts({
+    .accountsPartial({
       league,
       membership: membershipPda(program, league, member.keypair.publicKey),
       member: member.keypair.publicKey,
@@ -95,11 +96,10 @@ const join = async (league: anchor.web3.PublicKey, member: Member, rulesHash: nu
 const deposit = async (league: anchor.web3.PublicKey, member: Member) =>
   program.methods
     .deposit()
-    .accounts({
+    .accountsPartial({
       league,
       membership: membershipPda(program, league, member.keypair.publicKey),
       vault: vaultPda(program, league),
-      mint,
       memberTokenAccount: member.tokenAccount,
       member: member.keypair.publicKey,
       tokenProgram: anchor.utils.token.TOKEN_PROGRAM_ID,
@@ -110,7 +110,7 @@ const deposit = async (league: anchor.web3.PublicKey, member: Member) =>
 const refund = async (league: anchor.web3.PublicKey, member: Member) =>
   program.methods
     .refundStake()
-    .accounts({
+    .accountsPartial({
       league,
       membership: membershipPda(program, league, member.keypair.publicKey),
       vault: vaultPda(program, league),
