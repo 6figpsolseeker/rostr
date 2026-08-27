@@ -1526,10 +1526,10 @@ describe("a veto cast while the trade is being resolved — #134", () => {
     const fx = await setupWithSecondLeague();
 
     const tradeId = await propose(fx);
-    await acceptTrade(fx.client, tradeId, fx.teams[1], MONDAY);
+    await acceptTrade(fx.client, tradeId, fx.teams[1]!, MONDAY);
 
     await expect(
-      vetoTrade(settlingBeforeTheVote(fx), tradeId, fx.teams[2], MONDAY),
+      vetoTrade(settlingBeforeTheVote(fx), tradeId, fx.teams[2]!, MONDAY),
     ).rejects.toSatisfy((e) => e instanceof TradeError && e.code === "TRADE_ALREADY_SETTLED");
   });
 
@@ -1542,9 +1542,9 @@ describe("a veto cast while the trade is being resolved — #134", () => {
     const fx = await setupWithSecondLeague();
 
     const tradeId = await propose(fx);
-    await acceptTrade(fx.client, tradeId, fx.teams[1], MONDAY);
+    await acceptTrade(fx.client, tradeId, fx.teams[1]!, MONDAY);
     await expect(
-      vetoTrade(settlingBeforeTheVote(fx), tradeId, fx.teams[2], MONDAY),
+      vetoTrade(settlingBeforeTheVote(fx), tradeId, fx.teams[2]!, MONDAY),
     ).rejects.toThrow();
 
     const rows = await fx.client.query("SELECT team_id FROM trade_vetoes WHERE trade_id = $1", [
@@ -1697,9 +1697,9 @@ describe("a veto cast while the trade is being resolved — #134", () => {
     const fx = await setupWithSecondLeague();
 
     const tradeId = await propose(fx);
-    await acceptTrade(fx.client, tradeId, fx.teams[1], MONDAY);
+    await acceptTrade(fx.client, tradeId, fx.teams[1]!, MONDAY);
 
-    await expect(vetoTrade(fx.client, tradeId, fx.teams[2], MONDAY)).resolves.toBeDefined();
+    await expect(vetoTrade(fx.client, tradeId, fx.teams[2]!, MONDAY)).resolves.toBeDefined();
 
     const rows = await fx.client.query("SELECT team_id FROM trade_vetoes WHERE trade_id = $1", [
       tradeId,

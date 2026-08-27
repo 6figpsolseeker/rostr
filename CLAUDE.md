@@ -3379,6 +3379,15 @@ pnpm lint
   everything wrong at once.
 - **Commits are conventional and explain _why_.** The what is visible in the diff.
 - Tests live beside their source as `*.test.ts`.
+- **Test files are typechecked by `packages/*/tsconfig.test.json`, not by the package's
+  own `tsconfig.json`**, which excludes them so `dist/` holds only shippable source.
+  Your editor will not know this: the language server looks for the nearest
+  `tsconfig.json`, finds the one that excludes the file, and falls back to an inferred
+  project with `noUncheckedIndexedAccess` off — so a test file can look clean in the
+  editor and fail CI. `pnpm typecheck` is the authority. Both halves of every package
+  are asserted by `scripts/check-test-projects.mjs`; if you add a package, copy both
+  configs. See #257 — for a year these files were checked by nothing at all, and one of
+  them referenced a type it never imported.
 
 ---
 

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { assert, describe, expect, it } from "vitest";
 import { indexScoringRules, NFL_PPR_SCORING, scorePlayer } from "@rostr/core";
 import type { StatLine } from "@rostr/core";
 import { translateBoxScore } from "./box-score.js";
@@ -409,7 +409,8 @@ describe("return touchdowns are credited from the main clause", () => {
   it("gives the returner six points and the quarterback none for it", () => {
     // Stated in points rather than counts, because the count is not the harm.
     const ret = NFL_PPR_SCORING.find((rule) => rule.statKey === "ret_td");
-    expect(ret?.milliPointsPerUnit).toBe(6000);
+    assert(ret?.kind === "LINEAR", "ret_td must be a linear rule");
+    expect(ret.milliPointsPerUnit).toBe(6000);
 
     const shaheed = returnGame.players.get(SHAHEED) ?? [];
     expect(scorePlayer(shaheed, RULES)).toBeGreaterThanOrEqual(6000);

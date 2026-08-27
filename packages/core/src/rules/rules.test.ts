@@ -11,7 +11,7 @@ import {
   NFL_PPR_SCORING,
   NFL_WINNER_TAKE_ALL_PAYOUT,
 } from "./nfl-ppr.js";
-import type { LeagueRules, PotRules } from "./types.js";
+import type { LeagueRules, PotRules, Weekday } from "./types.js";
 import {
   draftDateProblem,
   earliestRefundUnlock,
@@ -174,9 +174,40 @@ describe("NFL PPR defaults", () => {
   });
 });
 
+/**
+ * A deeply mutable view of a rules document.
+ *
+ * `LeagueRules` is deeply `readonly`, so every test below that stages an invalid
+ * document had to cast its way past that — eight of them invented a structural
+ * subset (`d.schedule as { playoffWeeks: number[] }`) purely to get a writable
+ * property. Those casts re-declared the shape they were writing to, so a rename
+ * would have left them writing a field that no longer exists while
+ * `validateLeagueRules` returned no problems and the failure surfaced as a
+ * baffling assertion message — in the file CI pins the rules hash with.
+ *
+ * Stripping the modifier once, here, deletes all eight. It is not a widening:
+ * property types are preserved exactly, so a typo'd key, a wrong element type
+ * and an invalid enum member are all still errors. `structuredClone` below is
+ * the proof this is sound — a value it can clone is plain data, with no
+ * functions or class instances for the mapped type to mangle.
+ */
+type Mutable<T> = { -readonly [K in keyof T]: Mutable<T[K]> };
+
+/**
+ * A value the type system forbids, staged on purpose.
+ *
+ * A rules document arrives from the database and the wire as JSON, so the
+ * compiler's guarantee stops at that boundary and `validateLeagueRules` is what
+ * stands behind it. These casts are the subject of the tests that use them, not
+ * a workaround for them — which is exactly why they are named rather than
+ * written inline as `as unknown as`. In the file that pins what members sign,
+ * every deliberate lie should be greppable, and an anonymous cast is not.
+ */
+const poison = <T>(value: unknown): T => value as T;
+
 describe("validateLeagueRules", () => {
-  const mutate = (fn: (draft: LeagueRules) => void): LeagueRules => {
-    const draft = structuredClone(FIXTURE) as LeagueRules;
+  const mutate = (fn: (draft: Mutable<LeagueRules>) => void): LeagueRules => {
+    const draft = structuredClone(FIXTURE) as Mutable<LeagueRules>;
     fn(draft);
     return draft;
   };
@@ -245,7 +276,7 @@ describe("validateLeagueRules", () => {
 
   it("rejects an unknown stat key", () => {
     const bad = mutate((d) => {
-      (d.scoring as { statKey: string }[])[0]!.statKey = "touchdowns_probably";
+      d.scoring[0]!.statKey = "touchdowns_probably";
     });
     expect(validateLeagueRules(bad, NFL)).toContainEqual(
       expect.stringContaining("unknown stat key"),
@@ -255,7 +286,7 @@ describe("validateLeagueRules", () => {
   it("rejects a gap between tiers", () => {
     const bad = mutate((d) => {
       const rule = d.scoring.find((r) => r.statKey === "def_pts_allowed");
-      if (rule?.kind === "TIERED") (rule.tiers as { max: number | null }[])[0]!.max = 2;
+      if (rule?.kind === "TIERED") rule.tiers[0]!.max = 2;
     });
     expect(validateLeagueRules(bad, NFL)).toContainEqual(
       expect.stringContaining("gap or overlap"),
@@ -266,7 +297,7 @@ describe("validateLeagueRules", () => {
     const bad = mutate((d) => {
       const rule = d.scoring.find((r) => r.statKey === "def_pts_allowed");
       if (rule?.kind === "TIERED") {
-        (rule.tiers as { max: number | null }[]).at(-1)!.max = 99;
+        rule.tiers.at(-1)!.max = 99;
       }
     });
     expect(validateLeagueRules(bad, NFL)).toContainEqual(
@@ -532,7 +563,7 @@ describe("validateLeagueRules", () => {
 
   it("rejects payout shares that do not sum to 100%", () => {
     const bad = mutate((d) => {
-      (d.pot!.payout as { basisPoints: number }[])[0]!.basisPoints = 5000;
+      d.pot!.payout[0]!.basisPoints = 5000;
     });
     expect(validateLeagueRules(bad, NFL)).toContainEqual(
       expect.stringContaining("must be exactly 10000"),
@@ -693,9 +724,8 @@ describe("validateLeagueRules", () => {
     // The cap holds it at draft + 365 days regardless, and the honest answer is
     // that the schedule is the problem rather than the date.
     const inflated = mutate((d) => {
-      (d.schedule as { playoffWeeks: number[] }).playoffWeeks = [15, 16, 900];
-      (d.pot as { refundUnlockAt: number }).refundUnlockAt =
-        d.draft.scheduledAt + 3000 * 86_400;
+      d.schedule.playoffWeeks = [15, 16, 900];
+      d.pot!.refundUnlockAt = d.draft.scheduledAt + 3000 * 86_400;
     });
     expect(validateLeagueRules(inflated, NFL)).toContainEqual(
       expect.stringContaining("no legal value exists"),
@@ -707,8 +737,8 @@ describe("validateLeagueRules", () => {
     // its refund shut three weeks longer than one ending at 17 — and the
     // fixture's date, legal by six days at week 17, stops being legal.
     const longer = mutate((d) => {
-      (d.schedule as { regularSeasonWeeks: number }).regularSeasonWeeks = 17;
-      (d.schedule as { playoffWeeks: number[] }).playoffWeeks = [18, 19, 20];
+      d.schedule.regularSeasonWeeks = 17;
+      d.schedule.playoffWeeks = [18, 19, 20];
     });
     expect(validateLeagueRules(longer, NFL)).toContainEqual(
       expect.stringContaining("too early"),
@@ -724,7 +754,7 @@ describe("validateLeagueRules", () => {
 
   it("rejects a non-deterministic final tiebreaker", () => {
     const bad = mutate((d) => {
-      (d.schedule as { tiebreakers: string[] }).tiebreakers = ["WIN_PCT", "POINTS_FOR"];
+      d.schedule.tiebreakers = ["WIN_PCT", "POINTS_FOR"];
     });
     expect(validateLeagueRules(bad, NFL)).toContainEqual(
       expect.stringContaining("must be LOWEST_TEAM_ID"),
@@ -742,7 +772,7 @@ describe("validateLeagueRules", () => {
 
   it("rejects a bracket whose rounds do not match its playoff weeks", () => {
     const bad = mutate((d) => {
-      (d.schedule as { playoffWeeks: number[] }).playoffWeeks = [15, 16];
+      d.schedule.playoffWeeks = [15, 16];
     });
     expect(validateLeagueRules(bad, NFL)).toContainEqual(expect.stringContaining("rounds"));
   });
@@ -985,9 +1015,9 @@ describe("the waiver weekday is checked against the union — #132", () => {
       ...rules,
       waivers: {
         ...rules.waivers,
-        processing: { ...rules.waivers.processing, day: "WENSDAY" },
+        processing: { ...rules.waivers.processing, day: poison<Weekday>("WENSDAY") },
       },
-    } as LeagueRules;
+    };
 
     const problems = validateLeagueRules(broken, NFL);
     expect(problems.some((p) => p.includes("WENSDAY"))).toBe(true);
@@ -999,8 +1029,11 @@ describe("the waiver weekday is checked against the union — #132", () => {
     const rules = FIXTURE;
     const broken = {
       ...rules,
-      waivers: { ...rules.waivers, weeklyLock: { ...rules.waivers.weeklyLock, day: "funday" } },
-    } as LeagueRules;
+      waivers: {
+        ...rules.waivers,
+        weeklyLock: { ...rules.waivers.weeklyLock, day: poison<Weekday>("funday") },
+      },
+    };
 
     /*
       Matched against the problem for **this** field, not against the whole
@@ -1035,9 +1068,9 @@ describe("the waiver weekday is checked against the union — #132", () => {
       ...rules,
       waivers: {
         ...rules.waivers,
-        processing: { ...rules.waivers.processing, day: "wednesday" },
+        processing: { ...rules.waivers.processing, day: poison<Weekday>("wednesday") },
       },
-    } as LeagueRules;
+    };
 
     expect(validateLeagueRules(broken, NFL).length).toBeGreaterThan(0);
   });

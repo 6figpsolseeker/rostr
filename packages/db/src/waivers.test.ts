@@ -40,6 +40,24 @@ const MONDAY = new Date("2026-09-14T18:00:00Z");
 const HOUR = 3600 * 1000;
 const DAY = 24 * HOUR;
 
+/**
+ * The single row an aggregate always returns.
+ *
+ * `count(*)` produces a row even over an empty table, so the index is total —
+ * but `noUncheckedIndexedAccess` cannot know that, and a non-null assertion is
+ * not expressible inside a destructuring pattern anyway. Stated once here rather
+ * than at each call site, so the claim is wrong in one place if it is ever wrong.
+ */
+const countOf = async (
+  client: PGliteClient,
+  sql: string,
+  params: readonly unknown[],
+): Promise<number> => {
+  const [row] = await client.query<{ n: number }>(sql, params);
+  if (row === undefined) throw new Error(`aggregate returned no row: ${sql}`);
+  return row.n;
+};
+
 interface Fixture {
   client: PGliteClient;
   leagueId: string;
@@ -550,7 +568,8 @@ describe("processing", () => {
     }
 
     // Pad to capacity with rows the product would have written.
-    const [{ n: heldNow }] = await fx.client.query<{ n: number }>(
+    const heldNow = await countOf(
+      fx.client,
       "SELECT count(*)::int AS n FROM roster_entries WHERE team_id = $1 AND released_at IS NULL",
       [claimant],
     );
@@ -582,7 +601,8 @@ describe("processing", () => {
       "SELECT id FROM positions WHERE sport_id = $1 AND key = 'WR'",
       [sport!.id],
     );
-    const [{ n: counted }] = await fx.client.query<{ n: number }>(
+    const counted = await countOf(
+      fx.client,
       `SELECT count(*)::int AS n FROM roster_entries
         WHERE team_id = $1 AND released_at IS NULL AND NOT on_ir`,
       [claimant],
@@ -1667,7 +1687,7 @@ describe("choosing which leagues are due — #131", () => {
     await client.query(
       "INSERT INTO waiver_claims (league_id, team_id, add_player_id, state, created_at) " +
         "VALUES ($1, $2, $3, 'PENDING', $4)",
-      [league.id, team.teamId, player.id, MONDAY],
+      [league.id, team.teamId, player!.id, MONDAY],
     );
     return league.id;
   }

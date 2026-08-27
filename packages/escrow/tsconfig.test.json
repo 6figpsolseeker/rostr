@@ -1,0 +1,9 @@
+{
+  // See packages/core/tsconfig.test.json for why this file exists.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "tsBuildInfoFile": "./dist/tsconfig.test.tsbuildinfo"
+  },
+  "exclude": []
+}

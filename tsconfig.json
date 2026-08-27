@@ -1,10 +1,25 @@
 {
+  // Both halves of every package: the build project that fills `dist/`, and the
+  // `noEmit` project that checks the test files the build project excludes.
+  // `pnpm typecheck` runs `tsc --build --force` against this file and nothing
+  // else, so a project listed here is checked and a project that is not, is not.
+  // `scripts/check-test-projects.mjs` fails CI if the two lists diverge.
+  //
+  // Nothing on the emit path reads this file: each package's `build` script is
+  // `tsc --build` against its own `tsconfig.json`, and `vercel-build` is
+  // `pnpm --filter "@rostr/web..." build`. Test projects hung here therefore
+  // cannot reach `dist/`.
   "files": [],
   "references": [
     { "path": "./packages/core" },
+    { "path": "./packages/core/tsconfig.test.json" },
     { "path": "./packages/db" },
+    { "path": "./packages/db/tsconfig.test.json" },
     { "path": "./packages/escrow" },
+    { "path": "./packages/escrow/tsconfig.test.json" },
     { "path": "./packages/pinning" },
-    { "path": "./packages/stats" }
+    { "path": "./packages/pinning/tsconfig.test.json" },
+    { "path": "./packages/stats" },
+    { "path": "./packages/stats/tsconfig.test.json" }
   ]
 }

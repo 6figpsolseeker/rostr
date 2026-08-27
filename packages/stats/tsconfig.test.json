@@ -1,0 +1,18 @@
+{
+  // See packages/core/tsconfig.test.json for why this file exists.
+  //
+  // `resolveJsonModule` and the `.json` glob are here and NOT in
+  // `./tsconfig.json`, which is the point of the split. The Tank01 tests import
+  // `./__fixtures__/*.json` directly; putting these in the build config instead
+  // would make tsc copy the fixture corpus into `dist/`, changing emit in order
+  // to fix a typecheck. Under `noEmit` they cost nothing.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "resolveJsonModule": true,
+    "tsBuildInfoFile": "./dist/tsconfig.test.tsbuildinfo"
+  },
+  "include": ["src/**/*.ts", "src/**/*.json"],
+  "exclude": [],
+  "references": [{ "path": "../core" }]
+}

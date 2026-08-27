@@ -3,7 +3,7 @@ import { buildRosterShape } from "../draft/roster.js";
 import { NFL } from "../sports/nfl.js";
 import { NFL_PPR_ROSTER } from "../rules/nfl-ppr.js";
 import { autolineup, autolineupChoices } from "./autolineup.js";
-import type { AutolineupCandidate } from "./autolineup.js";
+import type { AutolineupCandidate, AutolineupChoice } from "./autolineup.js";
 
 const SHAPE = buildRosterShape(NFL_PPR_ROSTER, NFL);
 const SUNDAY = 1_757_782_800;
@@ -37,9 +37,11 @@ const ROSTER: AutolineupCandidate[] = [
   candidate("dst1", ["DST"], 6_000),
 ];
 
-function choiceFor(choices: readonly { slotType: string; slotIndex: number }[], slot: string) {
+function choiceFor(choices: readonly AutolineupChoice[], slot: string): AutolineupChoice {
   const [slotType, index] = slot.split("#");
-  return choices.find((c) => c.slotType === slotType && c.slotIndex === Number(index));
+  const found = choices.find((c) => c.slotType === slotType && c.slotIndex === Number(index));
+  if (found === undefined) throw new Error(`no choice for slot ${slot}`);
+  return found;
 }
 
 describe("autolineupChoices", () => {
@@ -57,7 +59,7 @@ describe("autolineupChoices", () => {
 
   it("names the runner-up it passed over", () => {
     const choices = autolineupChoices({ shape: SHAPE, roster: ROSTER });
-    const qb = choiceFor(choices, "QB#0") as { playerId: string; runnerUpId: string | null };
+    const qb = choiceFor(choices, "QB#0");
 
     expect(qb.playerId).toBe("qb-good");
     expect(qb.runnerUpId).toBe("qb-bad");
@@ -132,8 +134,8 @@ describe("autolineupChoices", () => {
     // offered the manager somebody already in their own lineup, described as an
     // alternative to it.
     const choices = autolineupChoices({ shape: SHAPE, roster: ROSTER });
-    const rb0 = choiceFor(choices, "RB#0") as { playerId: string; runnerUpId: string | null };
-    const rb1 = choiceFor(choices, "RB#1") as { playerId: string };
+    const rb0 = choiceFor(choices, "RB#0");
+    const rb1 = choiceFor(choices, "RB#1");
 
     expect(rb0.playerId).toBe("rb1");
     expect(rb1.playerId).toBe("rb2");
