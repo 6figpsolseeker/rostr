@@ -69,6 +69,8 @@ export async function runStatsJob(
     games?: number;
     /** Games being played at this instant. See the note above `problem`. */
     underWay?: number;
+    /** Games the breaker stopped short of. Not failures — see the push below. */
+    deferred?: readonly string[];
     inserted?: number;
     revised?: number;
     retracted?: number;
@@ -95,6 +97,22 @@ export async function runStatsJob(
         season,
         underWay,
         games: outcome.games,
+        /*
+          Games the run stopped short of, because the provider had failed
+          CONSECUTIVE_FAILURE_LIMIT times in a row.
+
+          **Reported, and it was not.** `syncBoxScores` has returned this since
+          the breaker was added and nothing read it, so a breaker trip was
+          invisible in both the response body and the heartbeat — the same shape
+          as the column written by something and read by nothing that this whole
+          area keeps producing.
+
+          It is not a failure and must not reach `problem`: nothing was
+          attempted for these and nothing was stamped, so the next tick picks
+          them up. A heartbeat that went red for the breaker working would be an
+          alarm nobody trusts.
+        */
+        deferred: outcome.deferred,
         inserted: outcome.inserted,
         revised: outcome.revised,
         retracted: outcome.retracted,
@@ -152,8 +170,21 @@ export async function runStatsJob(
     `season-sync` reported FAILING daily for the four week-16 and four week-17
     fixtures the NFL deliberately leaves undated. Same table, same shape.
 
-    Nothing is lost. Both counts are in the response body below, `games.stats_error`
-    still holds the text per game, and `/ops/stats` renders it.
+    `outstanding.blockingRecent` belongs to the same rule and was briefly on the
+    wrong side of it. It counts games the *provider* has not given us a complete
+    box score for — a real thing to act on, and not a fault in this job. Because
+    `unresolvedStatsProblems` reports everything unresolved rather than what this
+    run touched, a run that fetched nothing, failed at nothing and skipped
+    nothing still reported `FAILING` while one game anywhere was outstanding:
+    exactly the permanently-true health signal this note argues against, and the
+    one `pnpm cron:status` reads first.
+
+    Nothing is lost. Every count is in the response body below,
+    `games.stats_error` still holds the text per game, and `/ops/stats` renders
+    each of them with the severity that belongs to it — which is what #233 was
+    filed to make possible. What is still missing is a channel for "the provider
+    owes us a box score" that is neither a job failure nor silence; that needs a
+    severity axis `cronJobState` does not have.
   */
   const problem =
     [

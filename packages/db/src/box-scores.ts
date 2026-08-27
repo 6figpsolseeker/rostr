@@ -191,6 +191,25 @@ export const MIN_GAME_MINUTES = 150;
 export const CONSECUTIVE_FAILURE_LIMIT = 4;
 
 /**
+ * How long after a week's last kickoff a missing box score still raises an alarm.
+ *
+ * **Shorter than the correction window on purpose, and the difference is what an
+ * alarm is for.** The screen keeps reporting a game for the full 168 hours,
+ * because a permanent zero is worth seeing. A heartbeat must not: an alarm's job
+ * is to fire once and be acted on, and one latched red for seven days is a
+ * status board wearing an alarm's colours. That is the failure this file's own
+ * note about a permanently-true signal already records, twice.
+ *
+ * Flat, rather than 48/168 by week. A per-week split here would be a second copy
+ * of the paying-week rule, and the weeks it would extend are the ones that get
+ * roughly five hundred work-list ticks and seven daily syncs inside their window
+ * — a game still unread at hour 48 has already raised this and been seen.
+ * Re-raising it for five more days adds nothing and costs the channel its
+ * credibility.
+ */
+export const ALARM_WINDOW_HOURS = 48;
+
+/**
  * The most games one run will fetch.
  *
  * A bound on *spend*, not on work: the provider is metered and nothing else in
@@ -285,6 +304,70 @@ export function UNDER_WAY_SQL(startMinutesParam: string, windowHoursParam: strin
                 AND g.kickoff_at <= now() - make_interval(mins  => ${startMinutesParam}::int)
                 AND g.kickoff_at >  now() - make_interval(hours => ${windowHoursParam}::int)`;
 }
+
+/**
+ * "No box score from after the whistle" — the core of `finalizationHold`'s hold.
+ *
+ * One definition, three consumers, and it was three hand-written copies before
+ * this: the hold (`week.ts`), the work list's post-final clause above, and the
+ * operator view. The post-final clause carries a comment forbidding exactly that
+ * — *"two spellings of it would let a week hold on a game this query has no
+ * reason to select"* — while being the second spelling. This is the last cheap
+ * moment to close it.
+ *
+ * Each consumer ANDs its own gate on, because those genuinely differ: the hold
+ * and the view want `status = 'FINAL'`, the work list wants a 168h bound and
+ * pacing. The *question* does not differ, and that is what lives here.
+ *
+ * **A null `final_at` on a FINAL game means the provider called it final without
+ * saying when.** There is nothing to compare against, so any sync counts and
+ * this does not hold on it. That asymmetry is `week.ts`'s and it is deliberate;
+ * inverting it would make every such game hold forever.
+ *
+ * ## The contract this rests on, which nobody had written down
+ *
+ * `stats_synced_at < final_at` is false on a healthy game **only because the
+ * read that observes the whistle writes both columns in one transaction** —
+ * `ingestOneGame`'s success `UPDATE` assigns `stats_synced_at = now()` and
+ * `final_at = COALESCE(final_at, now())` together, and `now()` is transaction
+ * time, so they are equal rather than ordered.
+ *
+ * Move either assignment out of that transaction — a repair script, a writer
+ * that stamps the sync separately — and every healthy game in the league reads
+ * as unread here. That holds a week that should settle, and it turns the whole
+ * operator screen amber, which is the noise floor that stops a screen being
+ * read at all.
+ *
+ * `box-scores.test.ts` pins it directly: after a clean final read, the two
+ * stamps are equal. Strictly equal, with no tolerance — a window would let a
+ * genuine failure a moment later read as success, which is the direction that
+ * costs a settled week.
+ */
+export function UNREAD_SQL(alias = "g"): string {
+  return `(${alias}.stats_synced_at IS NULL
+            OR (${alias}.final_at IS NOT NULL
+                AND ${alias}.stats_synced_at < ${alias}.final_at))`;
+}
+
+/**
+ * How long a game whose whistle was observed by a *different* writer is given
+ * before the operator screen calls it unread.
+ *
+ * **Nearly dead code, kept as defence in depth, and the reasoning matters more
+ * than the number.** On the healthy path this state cannot arise at all: the
+ * read that observes the whistle stamps the sync in the same transaction, so
+ * the two are equal. It becomes reachable only when the *daily* schedule sync
+ * stamps `final_at` on a game whose newest successful read was a live one —
+ * which means the stats cron was down, the breaker deferred it, or every
+ * post-final read failed. All three are hours stale by construction, so this
+ * window delays nothing real.
+ *
+ * What it does suppress is the case where the contract in `UNREAD_SQL` has
+ * broken. An arm whose safety rests on an unwritten invariant should not be the
+ * thing that discovers the invariant moved, and forty minutes costs nothing to
+ * an operator while covering two full retry cycles.
+ */
+export const STALE_GRACE_MINUTES = 40;
 
 export interface BoxScoreSyncResult {
   readonly games: number;
@@ -498,7 +581,7 @@ export async function syncBoxScores(
            -- Self-extinguishing: one success puts the sync stamp past final_at.
            OR (g.final_at IS NOT NULL
                AND g.final_at > now() - make_interval(hours => $5::int)
-               AND (g.stats_synced_at IS NULL OR g.stats_synced_at < g.final_at)
+               AND ${UNREAD_SQL("g")}
                AND (g.stats_attempted_at IS NULL
                     OR g.stats_attempted_at < now() - make_interval(mins => $4::int)))
            -- Retry. Bounded on **kickoff_at**, not final_at, and that is a fix
@@ -803,79 +886,262 @@ export async function gamesUnderWay(
 }
 
 /**
- * Games still carrying an unresolved ingest problem.
+ * Every ingest state worth an operator's attention, with what it costs.
  *
- * **The reader `games.stats_error` never had.** The column has been written
- * since `0027` — by warnings as much as by failures, which is exactly what paces
- * the retry — and nothing anywhere read it back. So a discrepancy survived the
- * run that found it, survived the week finalising around it, and was visible to
- * nobody: `cron_runs.last_outcome` holds one row per job and the next clean run
- * overwrites it, so a warning raised at noon is gone by ten past.
+ * **The screen this feeds could not tell "no stats at all" from "ingested with a
+ * warning".** Both rendered identically, because the only thing selected on was
+ * `stats_error IS NOT NULL` — a column set by ordinary warnings as much as by
+ * failures. A field-goal count disagreeing with itself and a game whose every
+ * player scores zero looked the same, and the page said in its own prose that
+ * every row had been ingested and scored. Issue #233.
  *
- * Ordered most recent first and bounded, because this is read on a ten-minute
- * cadence and the interesting thing is that there are problems rather than the
- * full list of them. The count is returned alongside so a truncated list cannot
- * read as the whole of it.
+ * ## Three states, because the operator has three responses
  *
- * Not scoped to a season on purpose. A game inside its correction window is
- * still being re-read, and one past it never will be again — that second case is
- * the one worth surfacing, because whatever it says is now permanent.
+ * `NO_STATS`     — nothing usable was written. Every player in this game scores
+ *                  zero, in every league, and once the week finalises that is
+ *                  permanent.
+ * `STALE`        — stats exist from an earlier read and the latest read failed,
+ *                  so the scoreboard is older than the game.
+ * `DISCREPANCY`  — ingested, latest read succeeded, a translator check
+ *                  disagreed. The routine one, roughly one game in seven.
+ *
+ * The severity is computed **once, here in SQL**, and drives both the label and
+ * the `ORDER BY` tier. Two spellings would let a row sort into one bucket and
+ * wear another, which is issue #233's own defect one layer up.
+ *
+ * ## A played game with no stats is found by the clock, not by an error
+ *
+ * The first arm keys on `kickoff_at` rather than on an error or a status, and
+ * that is the lesson of #256 applied one layer up. A game starved by
+ * `MAX_GAMES_PER_RUN` on a fourteen-game slate, or skipped by the consecutive
+ * failure breaker — which deliberately stamps nothing, because it did not
+ * attempt them — carries **no error, no sync stamp, and whatever status the
+ * daily sync last wrote**. That is exactly the class this screen exists for, and
+ * every predicate keyed on `stats_error` misses it until the next morning.
+ *
+ * ## What it deliberately does not report
+ *
+ * A **discrepancy on a game still being played** is a partial box score
+ * disagreeing with itself, which is not a defect. The translator's warnings are
+ * ungated, so without the suppression below a slate's worth of transient noise
+ * lands here every Sunday — and a page that is amber every Sunday is a page
+ * nobody opens. `STALE` is *not* suppressed while live: that is the state in
+ * which the scoreboard is showing managers numbers that will never move.
+ *
+ * ## Two counts, because a screen and an alarm want different things
+ *
+ * `total` is unbounded, as it always was — a game past its correction window can
+ * never be re-read, so its problem is permanent and worth keeping visible.
+ * `blockingRecent` is bounded to the window in which somebody could still change
+ * the outcome, and it is the only one fit to reach a heartbeat. A count that
+ * only ever grows is a permanently-true health signal, which this repo has
+ * already paid for twice.
  */
+export type IngestState = "NO_STATS" | "STALE" | "DISCREPANCY";
+
 export async function unresolvedStatsProblems(
   db: SqlClient,
   sportKey: string,
   limit = 20,
 ): Promise<{
+  /** Everything flagged, however old. The screen's number. */
   readonly total: number;
+  /**
+   * Games whose box score is missing or behind the game, in a week that can
+   * still be corrected.
+   *
+   * Both severities, deliberately: the operator's question is "are these numbers
+   * final", and NO_STATS and STALE answer it the same way. It must not be called
+   * "no usable box score" — a STALE game has one, and saying otherwise is the
+   * class of false claim this screen exists to stop.
+   *
+   * The alarm's number, and the only one of the two that can fall to zero.
+   * Bounded at `ALARM_WINDOW_HOURS` from the week's last kickoff rather than at
+   * the full correction window: an alarm's job is to fire once and be acted on,
+   * and one latched red for seven days is a status board wearing an alarm's
+   * colours.
+   */
+  readonly blockingRecent: number;
   readonly games: readonly {
     readonly gameRef: string;
     readonly season: number;
     readonly week: number;
-    readonly problem: string;
+    readonly ingest: IngestState;
     /**
-     * When the game went final, or `null` if it has not.
+     * The provider's complaint, when there is one.
      *
-     * Carried because the only useful question about a flagged game is whether
-     * anything can still be done about it: a correction after the window has
-     * closed writes a revision no finalised matchup will ever read. The window
-     * itself is a league rule — 48h normally, 168h for weeks 14 and 17 — so the
-     * instant is reported here and the judgement is left to the caller.
+     * **Nullable, which it was not before.** A game selected by the clock rather
+     * than by an error carries nothing here, and a caller that assumes a string
+     * renders an empty card — which is how the state this screen was fixed to
+     * show would stay invisible after all of it.
      */
+    readonly problem: string | null;
+    readonly kickoffAt: Date;
     readonly finalAt: Date | null;
+    readonly syncedAt: Date | null;
+    readonly isFinal: boolean;
+    /**
+     * The last kickoff of this game's week — the instant `finalizationHold`
+     * measures its correction window from.
+     *
+     * Carried because the screen measured from the game's own `final_at` and the
+     * hold measures from here, so the two disagreed by about 28 hours on an
+     * early Sunday game: the screen reported a week uncorrectable while it was
+     * still fully correctable. A schedule fact, not a league rule, so carrying
+     * it keeps this function league-blind exactly as it was.
+     */
+    readonly weekLastKickoff: Date;
   }[];
 }> {
   const ids = await loadSportIds(db, sportKey);
 
-  const [counted] = await db.query<{ total: string }>(
-    `SELECT count(*)::text AS total
-       FROM games
-      WHERE sport_id = $1 AND stats_error IS NOT NULL`,
-    [ids.sportId],
+  /*
+    Passed as an instant rather than as an hour count, because the bound sits
+    inside an aggregate FILTER and Postgres declines to infer a parameter's type
+    there even through an explicit cast. Clock skew between this process and the
+    database is irrelevant against a 48-hour window.
+  */
+  const alarmSince = new Date(Date.now() - ALARM_WINDOW_HOURS * 3_600_000).toISOString();
+
+  /*
+    The selection, written once and used by both queries.
+
+    `status NOT IN (...)` first: a postponed or cancelled game never produces a
+    box score, RULES.md section 10 already scores its players zero, and without
+    this the first arm would report every one of them forever.
+  */
+  const selection = `
+        g.sport_id = $1
+    AND g.status NOT IN ('POSTPONED', 'CANCELLED')
+    AND (
+          -- Played by our own clock, and nothing written.
+          (g.stats_synced_at IS NULL
+           AND g.kickoff_tbd = false
+           AND g.kickoff_at < now() - ($2::int * interval '1 minute'))
+          -- Read, but not after the whistle. See STALE_GRACE_MINUTES.
+       OR (g.status = 'FINAL'
+           AND ${UNREAD_SQL("g")}
+           AND g.final_at < now() - ($3::int * interval '1 minute'))
+          -- Flagged, and settled enough to judge.
+       OR (g.stats_error IS NOT NULL
+           AND (g.status = 'FINAL'
+                OR g.kickoff_at < now() - ($4::int * interval '1 hour')))
+        )`;
+
+  /*
+    Order matters, and the first arm is what makes the rest of them legible.
+
+    NO_STATS means exactly one thing: **nothing was ever written**. A game with
+    no sync stamp has no `final_at` to compare against, so it is claimed first
+    rather than falling through to DISCREPANCY — the calmest tier, for the worst
+    state, which is issue #233's own shape.
+
+    Every arm below it therefore describes a game that **does** have stat lines,
+    and none of them may say otherwise. The second arm used to say NO_STATS for a
+    FINAL game read before the whistle — unreachable for a game with nothing
+    written, since the first arm has already taken those, so it could only ever
+    fire on one that had been read during play and had real numbers in it. The
+    screen drew that as "No box score … every player scores zero" over a
+    quarterback with 287 passing yards: #233's own defect, one layer down, inside
+    the fix for it.
+
+    Both remaining unread shapes are STALE, and the reason they are one tier is
+    that an operator can do nothing different about them — what we hold is behind
+    the game, whether the last read failed or no read has been attempted since.
+  */
+  const severity = `
+        CASE
+          WHEN g.stats_synced_at IS NULL THEN 'NO_STATS'
+          WHEN g.status = 'FINAL' AND ${UNREAD_SQL("g")} THEN 'STALE'
+          WHEN g.stats_attempted_at > g.stats_synced_at THEN 'STALE'
+          ELSE 'DISCREPANCY'
+        END`;
+
+  /*
+    The week's last kickoff, as a join rather than a window function.
+
+    A window function evaluates **after** WHERE, so `max(kickoff_at) OVER
+    (PARTITION BY season, week)` would see only the rows that survived the
+    filter and return the last *flagged* kickoff. On a week where only the
+    Thursday game is flagged that lands almost five days early, and in the
+    dangerous direction: the screen would report a week closed to corrections
+    while it was still fully open. Measured, not reasoned.
+  */
+  const weekEnd = `
+      JOIN (SELECT season, week, max(kickoff_at) AS week_last_kickoff
+              FROM games
+             WHERE sport_id = $1
+             GROUP BY season, week) w
+        ON w.season = g.season AND w.week = g.week`;
+
+  const [counted] = await db.query<{ total: string; blocking_recent: string }>(
+    `WITH flagged AS (
+       SELECT ${severity} AS severity,
+              -- Evaluated here rather than in the FILTER below: Postgres will
+              -- not infer a parameter's type inside an aggregate FILTER, even
+              -- through an explicit cast.
+              (w.week_last_kickoff > $5::timestamptz) AS recent
+         FROM games g ${weekEnd}
+        WHERE ${selection}
+     )
+     SELECT count(*)::text AS total,
+            count(*) FILTER (
+              WHERE severity IN ('NO_STATS', 'STALE') AND recent
+            )::text AS blocking_recent
+       FROM flagged`,
+    [ids.sportId, MIN_GAME_MINUTES, STALE_GRACE_MINUTES, LIVE_WINDOW_HOURS, alarmSince],
   );
 
   const games = await db.query<{
     external_ref: string;
     season: number;
     week: number;
-    stats_error: string;
+    ingest: IngestState;
+    stats_error: string | null;
+    kickoff_at: Date;
     final_at: Date | null;
+    stats_synced_at: Date | null;
+    is_final: boolean;
+    week_last_kickoff: Date;
   }>(
-    `SELECT external_ref, season, week, stats_error, final_at
-       FROM games
-      WHERE sport_id = $1 AND stats_error IS NOT NULL
-      ORDER BY kickoff_at DESC
-      LIMIT $2`,
-    [ids.sportId, limit],
+    `SELECT g.external_ref, g.season, g.week, g.stats_error, g.kickoff_at,
+            g.final_at, g.stats_synced_at,
+            (g.status = 'FINAL') AS is_final,
+            w.week_last_kickoff,
+            ${severity} AS ingest
+       FROM games g ${weekEnd}
+      WHERE ${selection}
+      -- Severity before recency, and before the LIMIT.
+      --
+      -- This used to be kickoff_at DESC alone, which meant a page of routine
+      -- warnings from last week pushed the one game whose players all score
+      -- zero off the end of the list. The same argument the work list already
+      -- makes for its own tiers: under truncation, the row that decides money
+      -- goes first.
+      ORDER BY CASE ${severity}
+                 WHEN 'NO_STATS' THEN 0
+                 WHEN 'STALE' THEN 1
+                 ELSE 2
+               END,
+               g.kickoff_at DESC
+      LIMIT $5`,
+    [ids.sportId, MIN_GAME_MINUTES, STALE_GRACE_MINUTES, LIVE_WINDOW_HOURS, limit],
   );
 
   return {
     total: Number(counted?.total ?? 0),
+    blockingRecent: Number(counted?.blocking_recent ?? 0),
     games: games.map((row) => ({
       gameRef: row.external_ref,
       season: Number(row.season),
       week: Number(row.week),
+      ingest: row.ingest,
       problem: row.stats_error,
+      kickoffAt: new Date(row.kickoff_at),
       finalAt: row.final_at === null ? null : new Date(row.final_at),
+      syncedAt: row.stats_synced_at === null ? null : new Date(row.stats_synced_at),
+      isFinal: row.is_final,
+      weekLastKickoff: new Date(row.week_last_kickoff),
     })),
   };
 }

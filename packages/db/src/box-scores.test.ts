@@ -458,18 +458,31 @@ describe("syncBoxScores", () => {
     const outstanding = await unresolvedStatsProblems(fx.client, NFL.key);
 
     expect(outstanding.total).toBe(1);
-    // `finalAt` rides along because the only useful question about a flagged
-    // game is whether anything can still be done about it — a correction after
-    // the window writes a revision no finalised matchup will ever read. The
-    // fixture's game is FINAL, so this is a date rather than null; the operator
-    // view turns it into "still correctable" or "past the window".
+    /*
+      The row carries more than it did, and the additions are the whole of #233.
+
+      `finalAt` alone answered "can this still be corrected" and nothing else —
+      so a game with no box score at all and a field-goal count disagreeing with
+      itself came back identical, and the screen drew them identically under a
+      sentence claiming both had been ingested and scored.
+
+      `ingest` is the fact that was missing. `syncedAt`, `isFinal` and
+      `kickoffAt` are the evidence behind it, and `weekLastKickoff` is the
+      instant `finalizationHold` measures from — which this screen did not, and
+      so disagreed with by about a day.
+    */
     expect(outstanding.games).toEqual([
       {
         gameRef: "g1",
         season: SEASON,
         week: WEEK,
+        ingest: "DISCREPANCY",
         problem: "odd",
+        kickoffAt: expect.any(Date),
         finalAt: expect.any(Date),
+        syncedAt: expect.any(Date),
+        isFinal: true,
+        weekLastKickoff: expect.any(Date),
       },
     ]);
   });
@@ -1703,5 +1716,362 @@ describe("a run gives up on a provider that has stopped answering — #256", () 
 
     expect(asked).toHaveLength(total);
     expect(result.deferred).toEqual([]);
+  });
+});
+
+describe("what the operator screen can tell apart — #233", () => {
+  afterEach(async () => {
+    await db?.close();
+    db = undefined;
+  });
+
+  const problems = (fx: Fixture) => unresolvedStatsProblems(fx.client, NFL.key, 50);
+
+  /** A second game in the same week, so the week's clock is not this game's. */
+  const addGame = async (fx: Fixture, ref: string, kickoff: string) =>
+    fx.client.query(
+      `INSERT INTO games (sport_id, external_ref, season, week, home_team_ref, away_team_ref,
+                          kickoff_at, status, final_at)
+       VALUES ($1, $2, $3, $4, 'NYG', 'WAS', now() + ($5)::interval, 'SCHEDULED', NULL)`,
+      [fx.sportId, ref, SEASON, WEEK, kickoff],
+    );
+
+  it("reports a game whose every read failed as having no stats", async () => {
+    // The headline. This and a field-goal count disagreeing with itself were the
+    // same row on the screen, under a sentence claiming both had been ingested
+    // and scored.
+    const fx = await setup();
+    await fx.client.query(
+      `UPDATE games SET stats_error = 'Tank01 returned HTTP 503',
+                       stats_attempted_at = now() - interval '1 hour',
+                       stats_synced_at = NULL`,
+    );
+
+    const { games } = await problems(fx);
+
+    expect(games).toHaveLength(1);
+    expect(games[0]?.ingest).toBe("NO_STATS");
+  });
+
+  it("reports an ingested game carrying a warning as a discrepancy", async () => {
+    const fx = await setup();
+    const box = boxScore("g1", { qb1: [line("pass_yd", 300)], ...bothDefenses }, [
+      "fgMade disagrees with the parsed plays",
+    ]);
+    await syncBoxScores(fx.client, fakeProvider(new Map([["g1", box]])), NFL.key, SEASON);
+
+    const { games } = await problems(fx);
+
+    expect(games).toHaveLength(1);
+    expect(games[0]?.ingest).toBe("DISCREPANCY");
+  });
+
+  it("reports a game read cleanly and then failing as stale", async () => {
+    /*
+      **The state #256 created, which #233's own filed predicate cannot reach.**
+
+      Before live reads existed, the first read of any game was necessarily after
+      the whistle — so a game either had a sync stamp or it did not, and the
+      issue's two-row table was complete. Now a game can carry stats *and* a
+      failing latest attempt. The discriminator is the ordering of the two
+      stamps, not the nullness of one.
+    */
+    const fx = await setup();
+    const box = boxScore("g1", { qb1: [line("pass_yd", 120)], ...bothDefenses });
+    await syncBoxScores(fx.client, fakeProvider(new Map([["g1", box]])), NFL.key, SEASON);
+    await fx.client.query(
+      `UPDATE games SET stats_error = 'Tank01 returned HTTP 503',
+                       stats_attempted_at = stats_synced_at + interval '20 minutes'`,
+    );
+
+    const { games } = await problems(fx);
+
+    expect(games[0]?.ingest).toBe("STALE");
+  });
+
+  it("finds a played game with no stats and no error at all", async () => {
+    /*
+      **The largest gap, and every design missed it before it was pointed out.**
+
+      A game starved by MAX_GAMES_PER_RUN on a fourteen-game slate, or skipped by
+      the consecutive-failure breaker — which deliberately stamps nothing,
+      because it did not attempt them — carries no error, no sync stamp, and
+      whatever status the daily sync last wrote. That is exactly the class this
+      screen exists for, and every predicate keyed on `stats_error` misses it.
+
+      Found by the clock instead, which is #256's lesson one layer up.
+    */
+    const fx = await setup("SCHEDULED");
+    await fx.client.query(
+      "UPDATE games SET stats_error = NULL, stats_attempted_at = NULL, stats_synced_at = NULL",
+    );
+
+    const { games } = await problems(fx);
+
+    expect(games).toHaveLength(1);
+    expect(games[0]?.ingest).toBe("NO_STATS");
+    expect(games[0]?.problem).toBeNull();
+  });
+
+  it("does not report a game that has not plausibly been played yet", async () => {
+    // The floor. Without it every unplayed fixture of the season is a problem.
+    const fx = await setup("SCHEDULED");
+    await fx.client.query(
+      `UPDATE games SET stats_error = NULL, stats_attempted_at = NULL, stats_synced_at = NULL,
+                       kickoff_at = now() - interval '40 minutes'`,
+    );
+
+    expect((await problems(fx)).games).toEqual([]);
+  });
+
+  it("does not report a fixture whose kickoff time is only a stand-in", async () => {
+    // Eight week-16 and week-17 fixtures carry a provisional hour. A blank row
+    // for one is a false alarm in the playoff and championship weeks.
+    const fx = await setup("SCHEDULED");
+    await fx.client.query(
+      `UPDATE games SET stats_error = NULL, stats_attempted_at = NULL, stats_synced_at = NULL,
+                       kickoff_tbd = true`,
+    );
+
+    expect((await problems(fx)).games).toEqual([]);
+  });
+
+  it("does not report a discrepancy on a game still being played", async () => {
+    /*
+      A partial box score disagreeing with itself is not a defect. The
+      translator's warnings are ungated, so without this a slate's worth of
+      transient noise lands here every Sunday — and a page that is amber every
+      Sunday is a page nobody opens.
+    */
+    const fx = await setup("SCHEDULED");
+    await fx.client.query(
+      `UPDATE games SET stats_error = 'fgMade disagrees with the parsed plays',
+                       stats_synced_at = now(), stats_attempted_at = now(),
+                       final_at = NULL, kickoff_at = now() - interval '90 minutes'`,
+    );
+
+    expect((await problems(fx)).games).toEqual([]);
+  });
+
+  it("never reports a postponed game as having no stats", async () => {
+    // RULES.md §10 already scores those players zero, and no box score is ever
+    // coming. Without the exclusion it would sit here for the rest of the season.
+    const fx = await setup("POSTPONED");
+    await fx.client.query(
+      "UPDATE games SET stats_error = NULL, stats_attempted_at = NULL, stats_synced_at = NULL",
+    );
+
+    expect((await problems(fx)).games).toEqual([]);
+  });
+
+  it("says nothing at all about a healthy game", async () => {
+    const fx = await setup();
+    const box = boxScore("g1", { qb1: [line("pass_yd", 300)], ...bothDefenses });
+    await syncBoxScores(fx.client, fakeProvider(new Map([["g1", box]])), NFL.key, SEASON);
+
+    expect((await problems(fx)).games).toEqual([]);
+  });
+
+  it("carries the week's last kickoff, not the game's own", async () => {
+    /*
+      Issue #233, finding 8. `finalizationHold` measures the correction window
+      from the week's last kickoff; this screen measured from the game's own
+      `final_at`, which is a different clock rather than a different latency — so
+      an early Sunday game read CLOSED about 28 hours before its week settled.
+    */
+    const fx = await setup();
+    await fx.client.query(
+      "UPDATE games SET stats_error = 'fgMade disagrees with the parsed plays'",
+    );
+    await addGame(fx, "g1-monday", "50 hours");
+
+    const { games } = await problems(fx);
+
+    expect(games[0]?.weekLastKickoff.getTime()).toBeGreaterThan(Date.now() + 40 * 3_600_000);
+  });
+
+  it("does not let the week's anchor be computed from the flagged games alone", async () => {
+    /*
+      **The trap in the obvious implementation, and it was in two of the three
+      designs.** A window function evaluates *after* WHERE, so
+      `max(kickoff_at) OVER (PARTITION BY season, week)` sees only the rows that
+      survived the filter and returns the last *flagged* kickoff.
+
+      On a week where only the Thursday game is flagged that lands almost five
+      days early — and in the dangerous direction, reporting a week closed to
+      corrections while it is still fully open. Measured against PGlite, not
+      reasoned about.
+    */
+    const fx = await setup();
+    await fx.client.query(
+      `UPDATE games SET stats_error = 'boom', kickoff_at = now() - interval '96 hours'`,
+    );
+    await addGame(fx, "g1-later", "2 hours");
+
+    const { games } = await problems(fx);
+
+    // The later fixture is unflagged, so a window function would never see it.
+    expect(games[0]?.weekLastKickoff.getTime()).toBeGreaterThan(Date.now());
+  });
+
+  it("puts a game with no stats ahead of a newer discrepancy under truncation", async () => {
+    /*
+      This used to be `ORDER BY kickoff_at DESC` alone, so a page of routine
+      warnings pushed the one game whose players all score zero off the end. The
+      same argument the work list already makes for its own tiers: under
+      truncation, the row that decides money goes first.
+    */
+    const fx = await setup();
+    await fx.client.query(
+      `UPDATE games SET stats_error = 'no stats here', stats_synced_at = NULL,
+                       stats_attempted_at = now(), kickoff_at = now() - interval '30 hours'`,
+    );
+    await fx.client.query(
+      `INSERT INTO games (sport_id, external_ref, season, week, home_team_ref, away_team_ref,
+                          kickoff_at, status, final_at, stats_error,
+                          stats_synced_at, stats_attempted_at)
+       VALUES ($1, 'g1-fresh', $2, $3, 'NYG', 'WAS', now() - interval '4 hours', 'FINAL',
+               now() - interval '1 hour', 'a field goal disagrees', now(), now())`,
+      [fx.sportId, SEASON, WEEK],
+    );
+
+    const { games } = await unresolvedStatsProblems(fx.client, NFL.key, 1);
+
+    expect(games).toHaveLength(1);
+    expect(games[0]?.ingest).toBe("NO_STATS");
+  });
+
+  it("names the same games the finalisation hold is waiting on", async () => {
+    /*
+      **The test that would have caught #233 in the first place**, and it is only
+      writable because the predicate is now one shared SQL fragment rather than
+      three hand-written copies.
+
+      The thing that stops a week settling must be the thing the producer goes
+      and fetches, and the thing an operator is shown. Three spellings could
+      disagree; one cannot.
+
+      **STALE, not NO_STATS.** This game was read two hours before the whistle,
+      so it has stat lines — real ones, from real play. It asserted NO_STATS
+      until a review pointed out that the screen then tells the operator "no box
+      score has been read … every player in it currently scores zero" over a
+      game whose quarterback has 287 passing yards. What is true of it is that
+      what we hold is behind the game, which is what STALE says.
+
+      The correspondence being tested is unchanged: one game unread by the
+      hold's own predicate, one game the screen shows as not yet final.
+    */
+    const fx = await setup();
+    await fx.client.query(
+      `UPDATE games SET stats_synced_at = final_at - interval '2 hours',
+                       stats_attempted_at = final_at - interval '2 hours',
+                       final_at = now() - interval '3 hours'`,
+    );
+
+    const [held] = await fx.client.query<{ unread: number }>(
+      `SELECT count(*) FILTER (
+                WHERE g.status = 'FINAL'
+                  AND (g.stats_synced_at IS NULL
+                       OR (g.final_at IS NOT NULL AND g.stats_synced_at < g.final_at))
+              )::int AS unread
+         FROM games g WHERE g.sport_id = $1`,
+      [fx.sportId],
+    );
+
+    const { games } = await problems(fx);
+
+    expect(held?.unread).toBe(1);
+    expect(games.filter((g) => g.ingest === "STALE")).toHaveLength(1);
+    // And nothing claims the stat lines are absent.
+    expect(games.filter((g) => g.ingest === "NO_STATS")).toHaveLength(0);
+  });
+
+  it("keeps the alarm count bounded while the screen's total is not", async () => {
+    /*
+      A screen may grow; an alarm may not. A game past its window stays listed
+      forever — correctly, as evidence that the provider failed — but a heartbeat
+      that latches red for a fact nobody can act on stops being read, which is
+      the failure this whole page is about.
+    */
+    const fx = await setup();
+    await fx.client.query(
+      `UPDATE games SET stats_error = 'Tank01 returned HTTP 503', stats_synced_at = NULL,
+                       stats_attempted_at = now(),
+                       kickoff_at = now() - interval '200 hours',
+                       final_at = now() - interval '199 hours'`,
+    );
+
+    const { total, blockingRecent } = await problems(fx);
+
+    expect(total).toBe(1);
+    expect(blockingRecent).toBe(0);
+  });
+
+  it("raises the alarm while the week can still be corrected", async () => {
+    // The control for the bound above.
+    const fx = await setup();
+    await fx.client.query(
+      `UPDATE games SET stats_error = 'Tank01 returned HTTP 503', stats_synced_at = NULL,
+                       stats_attempted_at = now(),
+                       kickoff_at = now() - interval '10 hours',
+                       final_at = now() - interval '7 hours'`,
+    );
+
+    expect((await problems(fx)).blockingRecent).toBe(1);
+  });
+});
+
+describe("the two stamps are one instant — #233", () => {
+  afterEach(async () => {
+    await db?.close();
+    db = undefined;
+  });
+
+  it("writes the sync, the attempt and the whistle from a single now()", async () => {
+    /*
+      **The contract three readers depend on and nobody had written down.**
+
+      `finalizationHold`, the work list's post-final clause and the operator
+      screen all compare `stats_synced_at` against `final_at`, and all three read
+      "equal" as "this read saw the whistle". That holds only because
+      `ingestOneGame`'s success UPDATE assigns them together and Postgres `now()`
+      is transaction time.
+
+      Split that statement — a repair script, a writer that stamps the sync
+      separately — and every healthy game in the league reads as unread: weeks
+      hold that should settle, and the operator screen turns amber for the whole
+      slate, which is the noise floor that stops a screen being read at all.
+
+      Strictly equal, with no tolerance. A window would let a genuine failure a
+      moment later read as success, and that is the direction that costs a
+      settled week.
+    */
+    const fx = await setup("SCHEDULED");
+    const box = boxScore("g1", { qb1: [line("pass_yd", 300)], ...bothDefenses });
+
+    await syncBoxScores(fx.client, fakeProvider(new Map([["g1", box]])), NFL.key, SEASON);
+
+    const [row] = await fx.client.query<{
+      stats_synced_at: string;
+      stats_attempted_at: string;
+      final_at: string;
+    }>("SELECT stats_synced_at, stats_attempted_at, final_at FROM games WHERE id = $1", [
+      fx.gameId,
+    ]);
+
+    expect(row?.stats_attempted_at).toEqual(row?.stats_synced_at);
+    expect(row?.final_at).toEqual(row?.stats_synced_at);
+  });
+
+  it("leaves a clean ingest out of the stale tier", async () => {
+    // The same contract, seen from the reader. If the UPDATE is ever split, this
+    // is where it surfaces — as every healthy game on the page going amber.
+    const fx = await setup("SCHEDULED");
+    const box = boxScore("g1", { qb1: [line("pass_yd", 300)], ...bothDefenses });
+
+    await syncBoxScores(fx.client, fakeProvider(new Map([["g1", box]])), NFL.key, SEASON);
+
+    const { games } = await unresolvedStatsProblems(fx.client, NFL.key, 50);
+    expect(games.filter((g) => g.ingest === "STALE")).toEqual([]);
   });
 });

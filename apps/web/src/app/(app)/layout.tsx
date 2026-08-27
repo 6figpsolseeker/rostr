@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { HeaderControls } from "@/components/HeaderControls";
 import { UrgentStrip } from "@/components/UrgentStrip";
+import { isOperator } from "@/lib/operator";
 import { currentUser } from "@/lib/session";
 
 /**
@@ -41,6 +42,30 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
           </Link>
 
           <div className="flex items-center gap-6">
+            {/*
+              The operator console, for the handful of addresses in
+              OPERATOR_EMAILS.
+
+              **Rendered server-side, and that is load-bearing.** A client-side
+              conditional would ship the href to every visitor, which undoes the
+              reason /ops/stats answers 404 rather than 403: an unguessable page
+              that advertises itself in the markup is not unguessable. What
+              crosses to the browser here is a decision already made, not the
+              allowlist that made it.
+
+              It existed with **no inbound link from anywhere** until now —
+              reachable only by typing the URL, and only by somebody who
+              remembered it was there. Issue #209 is the same defect on the
+              draft lobby; this is the operator half of it.
+            */}
+            {isOperator(user?.email) ? (
+              <Link
+                href="/ops/stats"
+                className="font-mono text-[12px] tracking-wide text-nocturne-neutral-500 transition-colors hover:text-nocturne-text"
+              >
+                ops
+              </Link>
+            ) : null}
             <Link
               href="/scoring"
               className="text-[13.5px] text-nocturne-neutral-400 transition-colors hover:text-nocturne-text"
