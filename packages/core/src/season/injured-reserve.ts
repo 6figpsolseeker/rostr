@@ -174,6 +174,102 @@ export function countedRosterSize(roster: readonly IrRosterEntry[], irSlots: num
   return roster.length - irExemptCount(roster, irSlots);
 }
 
+/**
+ * How many players a team will count as holding once its accepted trades land.
+ *
+ * A trade's rows do not move when it is accepted — they move when it executes,
+ * up to the end of the veto window. So a team can accept a trade it has room
+ * for, sign a free agent in the meantime, and be over the limit by the time the
+ * trade lands. Neither acquisition is illegal alone; only the pair is, and
+ * nothing looking at one of them can see the other.
+ *
+ * This is what lets the room be held. An accepted trade reserves the space it
+ * needs from the moment it is accepted, so the intervening add is refused
+ * instead of the trade dying later for something nobody did wrong.
+ *
+ * **Incoming players always count.** A trade never carries the IR flag across —
+ * a player arrives on the receiving roster active, whatever he was on the
+ * sending one — so there is no exemption arithmetic on the inbound side.
+ *
+ * **Outgoing exempt players free nothing.** They were not being counted, so
+ * their departure returns no space. That asymmetry is why counted size does not
+ * conserve across a trade the way row count does, and it is why a one-for-one
+ * of two stashed players can put **both** teams over at once.
+ */
+export function projectedRosterSize(input: {
+  /** Every unreleased row the team holds now. */
+  readonly roster: readonly IrRosterEntry[];
+  /** Players accepted trades have committed this team to give up. */
+  readonly leaving: ReadonlySet<string>;
+  /** How many players accepted trades have committed this team to receive. */
+  readonly arriving: number;
+  readonly irSlots: number;
+}): number {
+  /*
+    Recomputed against the roster the departures leave behind, never against a
+    cached count, for the reason `irExemptOnRoster` gives two functions up: a
+    stashed player who is sent away frees an IR slot rather than a roster slot,
+    and a stashed player who recovers while the trade is pending starts counting
+    where he did not before.
+  */
+  const staying = input.roster.filter((entry) => !input.leaving.has(entry.playerId));
+  return countedRosterSize(staying, input.irSlots) + input.arriving;
+}
+
+/** One accepted trade, from the point of view of one of its two teams. */
+export interface CommittedTrade {
+  /** How many players this team is due to receive. Each one will count. */
+  readonly arriving: number;
+  /** The players this team is due to give up. */
+  readonly leaving: ReadonlySet<string>;
+}
+
+/**
+ * How much room this team's accepted trades have already spoken for.
+ *
+ * **Worst case per trade, never netted across them.** Every trade that would
+ * raise this team's count is assumed to land; every trade that would relieve it
+ * is assumed not to. That is not pessimism for its own sake — acceptance is not
+ * execution, and a trade can still be vetoed or expire, so relief that has not
+ * happened cannot be spent. A trade whose departures outnumber its arrivals
+ * reserves nothing; it does not hand back space it has not yet freed.
+ *
+ * Netting is the mistake this exists to prevent, and it has two shapes:
+ *
+ * - **Netting a departure against today's roster.** Those players are still on
+ *   it. Subtracting them makes a full team look like it has room, and the add
+ *   that follows puts it over the limit *now* — permanently, if the trade is
+ *   then vetoed. There is no state in which that team is asked to drop anyone.
+ * - **Netting one trade against another.** A team holding a give-two-get-one
+ *   and a give-one-get-two nets to zero and reserves nothing. Veto the first,
+ *   execute the second, and it is over by one. Summing `max(0, …)` per trade
+ *   holds a slot for the second regardless of what happens to the first.
+ *
+ * Zero when a team has no accepted trades, which is the ordinary case.
+ */
+export function reservedByTrades(
+  roster: readonly IrRosterEntry[],
+  trades: readonly CommittedTrade[],
+  irSlots: number,
+): number {
+  const now = countedRosterSize(roster, irSlots);
+
+  return trades.reduce((total, trade) => {
+    /*
+      Per trade against the *current* roster, so the IR arithmetic is the one
+      `projectedRosterSize` documents: an outgoing stashed player frees an IR
+      slot rather than a roster slot, and frees nothing here either.
+    */
+    const after = projectedRosterSize({
+      roster,
+      leaving: trade.leaving,
+      arriving: trade.arriving,
+      irSlots,
+    });
+    return total + Math.max(0, after - now);
+  }, 0);
+}
+
 export type IrPlacementRefusal =
   /** The player is healthy, or carries a designation that does not qualify. */
   | "NOT_INJURED"
