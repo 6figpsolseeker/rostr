@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { buildNflPprRules, NFL } from "@rostr/core";
+import { buildNflPprRules, buildRosterShape, countedRosterSize, NFL } from "@rostr/core";
 import type { DraftRules, LeagueRules } from "@rostr/core";
 import { createLeague } from "./leagues.js";
 import { createUser } from "./identity.js";
@@ -1380,8 +1380,11 @@ describe("resolution", () => {
 
   it("executes an uneven trade", async () => {
     // Two for one. Team 1 starts with two players and ends with one; team 2
-    // starts with one and ends with two. Rosters changing size is legal — a
-    // roster limit is a lineup concern, not a trade one.
+    // starts with one and ends with two.
+    //
+    // An uneven trade is legal — no proposal is refused for its shape. What is
+    // refused is one that would leave a team holding more than `totalSlots`,
+    // and this fixture is far below it, so the shape is all this exercises.
     const fx = await setup();
     const { tradeId } = await proposeTrade(fx.client, {
       leagueId: fx.leagueId,
@@ -1705,5 +1708,354 @@ describe("a veto cast while the trade is being resolved — #134", () => {
       tradeId,
     ]);
     expect(rows).toHaveLength(1);
+  });
+});
+
+describe("a trade may never leave a team over the roster limit", () => {
+  /*
+    Issue #250. Trades applied no capacity check at all, so a two-for-one put a
+    team over `totalSlots` and nothing refused, reported or repaired it.
+
+    Two things about this are easy to get wrong, and both are exercised below.
+
+    **The check is on counted size, not row count.** Rows conserve across a
+    trade — one side's loss is the other's gain — but counted size does not,
+    because an outgoing player stashed on IR was never being counted while every
+    incoming player is. So a plain one-for-one can raise *both* teams.
+
+    **It has to hold at execution, not acceptance.** The rows move when the veto
+    window closes, so a team can accept with room, acquire somebody meanwhile,
+    and land over. Neither move is illegal alone. The room is held from
+    acceptance instead, so the later acquisition is what gets refused.
+  */
+
+  /** Top a team up to `count` rows, beyond whatever `setup` gave it. */
+  const fillTo = async (fx: Fixture, teamId: string, count: number): Promise<void> => {
+    const [sport] = await fx.client.query<{ id: string }>(
+      "SELECT id FROM sports WHERE key = $1",
+      [NFL.key],
+    );
+    const [position] = await fx.client.query<{ id: string }>(
+      "SELECT id FROM positions WHERE sport_id = $1 AND key = 'RB'",
+      [sport!.id],
+    );
+    const [held] = await fx.client.query<{ n: number }>(
+      "SELECT count(*)::int AS n FROM roster_entries WHERE team_id = $1 AND released_at IS NULL",
+      [teamId],
+    );
+
+    for (let i = held!.n; i < count; i++) {
+      const handle = `filler-${teamId.slice(0, 8)}-${i}`;
+      const [player] = await fx.client.query<{ id: string }>(
+        `INSERT INTO players (sport_id, external_ref, full_name, primary_position_id, team_ref)
+         VALUES ($1, $2, $3, $4, 'CIN') RETURNING id`,
+        [sport!.id, handle, handle, position!.id],
+      );
+      await fx.client.query(
+        `INSERT INTO roster_entries (team_id, player_id, acquired_via, acquired_at)
+         VALUES ($1, $2, 'DRAFT', $3)`,
+        [teamId, player!.id, new Date(MONDAY.getTime() - 30 * 24 * HOUR)],
+      );
+    }
+  };
+
+  const rosterIds = async (fx: Fixture, teamId: string): Promise<readonly string[]> => {
+    const rows = await fx.client.query<{ player_id: string }>(
+      `SELECT player_id FROM roster_entries
+        WHERE team_id = $1 AND released_at IS NULL ORDER BY player_id`,
+      [teamId],
+    );
+    return rows.map((row) => row.player_id);
+  };
+
+  const rowsHeldBy = async (fx: Fixture, teamId: string): Promise<number> => {
+    const [row] = await fx.client.query<{ n: number }>(
+      "SELECT count(*)::int AS n FROM roster_entries WHERE team_id = $1 AND released_at IS NULL",
+      [teamId],
+    );
+    return row!.n;
+  };
+
+  /** A free agent nobody holds, for the add tests below. */
+  const freeAgent = async (fx: Fixture, handle: string): Promise<string> => {
+    const [sport] = await fx.client.query<{ id: string }>(
+      "SELECT id FROM sports WHERE key = $1",
+      [NFL.key],
+    );
+    const [position] = await fx.client.query<{ id: string }>(
+      "SELECT id FROM positions WHERE sport_id = $1 AND key = 'RB'",
+      [sport!.id],
+    );
+    const [player] = await fx.client.query<{ id: string }>(
+      `INSERT INTO players (sport_id, external_ref, full_name, primary_position_id, team_ref)
+       VALUES ($1, $2, $3, $4, 'CIN') RETURNING id`,
+      [sport!.id, handle, handle, position!.id],
+    );
+    return player!.id;
+  };
+
+  const countedFor = async (fx: Fixture, teamId: string): Promise<number> => {
+    const rows = await fx.client.query<{ on_ir: boolean; designation: string | null }>(
+      `SELECT r.on_ir, p.injury_designation AS designation
+         FROM roster_entries r JOIN players p ON p.id = r.player_id
+        WHERE r.team_id = $1 AND r.released_at IS NULL`,
+      [teamId],
+    );
+    return countedRosterSize(
+      rows.map((row, index) => ({
+        playerId: String(index),
+        onIr: row.on_ir,
+        injuryDesignation: row.designation,
+      })),
+      buildRosterShape(fx.rules.roster, NFL).irSlots,
+    );
+  };
+
+  it("refuses an acceptance that would put the accepting team over", async () => {
+    const fx = await setup();
+    const shape = buildRosterShape(fx.rules.roster, NFL);
+    await fillTo(fx, fx.teams[1]!, shape.totalSlots);
+
+    const { tradeId } = await proposeTrade(fx.client, {
+      leagueId: fx.leagueId,
+      proposerTeamId: fx.teams[0]!,
+      proposerGives: [fx.players.get("p1")!, fx.players.get("spare")!],
+      receiverTeamId: fx.teams[1]!,
+      receiverGives: [fx.players.get("p2")!],
+      now: MONDAY,
+    });
+
+    // Says how many, because "full" without a number is not actionable.
+    await expect(acceptTrade(fx.client, tradeId, fx.teams[1]!, MONDAY)).rejects.toMatchObject({
+      code: "ROSTER_WOULD_OVERFLOW",
+    });
+    await expect(acceptTrade(fx.client, tradeId, fx.teams[1]!, MONDAY)).rejects.toThrow(
+      /release 1 more/,
+    );
+  });
+
+  it("accepts once the receiving team has made room", async () => {
+    const fx = await setup();
+    const shape = buildRosterShape(fx.rules.roster, NFL);
+    await fillTo(fx, fx.teams[1]!, shape.totalSlots - 1);
+
+    const { tradeId } = await proposeTrade(fx.client, {
+      leagueId: fx.leagueId,
+      proposerTeamId: fx.teams[0]!,
+      proposerGives: [fx.players.get("p1")!, fx.players.get("spare")!],
+      receiverTeamId: fx.teams[1]!,
+      receiverGives: [fx.players.get("p2")!],
+      now: MONDAY,
+    });
+
+    const accepted = await acceptTrade(fx.client, tradeId, fx.teams[1]!, MONDAY);
+    expect(accepted.state).toBe("ACCEPTED");
+
+    await resolveDueTrades(fx.client, fx.leagueId, AFTER_WINDOW);
+    expect(await countedFor(fx, fx.teams[1]!)).toBe(shape.totalSlots);
+  });
+
+  it("refuses a one-for-one that would put BOTH teams over", async () => {
+    /*
+      The case a row-count check passes silently, and the reason this one is
+      written against counted size.
+
+      Each team sits at the limit with one player stashed on IR, so each holds
+      one more row than it counts. They swap those two stashed players: no row
+      moves on net, and both teams rise by one counted, because an arriving
+      player never carries the IR flag across.
+    */
+    const fx = await setup();
+    const shape = buildRosterShape(fx.rules.roster, NFL);
+
+    const stashed: string[] = [];
+    for (const teamId of [fx.teams[0]!, fx.teams[1]!]) {
+      await fillTo(fx, teamId, shape.totalSlots + 1);
+
+      const [row] = await fx.client.query<{ player_id: string }>(
+        `SELECT player_id FROM roster_entries
+          WHERE team_id = $1 AND released_at IS NULL ORDER BY player_id LIMIT 1`,
+        [teamId],
+      );
+      await fx.client.query(
+        "UPDATE players SET injury_designation = 'Injured Reserve' WHERE id = $1",
+        [row!.player_id],
+      );
+      await fx.client.query(
+        "UPDATE roster_entries SET on_ir = true WHERE team_id = $1 AND player_id = $2",
+        [teamId, row!.player_id],
+      );
+      stashed.push(row!.player_id);
+    }
+
+    expect(await countedFor(fx, fx.teams[0]!)).toBe(shape.totalSlots);
+    expect(await countedFor(fx, fx.teams[1]!)).toBe(shape.totalSlots);
+
+    const { tradeId } = await proposeTrade(fx.client, {
+      leagueId: fx.leagueId,
+      proposerTeamId: fx.teams[0]!,
+      proposerGives: [stashed[0]!],
+      receiverTeamId: fx.teams[1]!,
+      receiverGives: [stashed[1]!],
+      now: MONDAY,
+    });
+
+    await expect(acceptTrade(fx.client, tradeId, fx.teams[1]!, MONDAY)).rejects.toMatchObject({
+      code: "ROSTER_WOULD_OVERFLOW",
+    });
+  });
+
+  it("holds the room, so an add inside the veto window is refused", async () => {
+    /*
+      The half acceptance alone cannot cover. The team accepts with exactly
+      enough room, then tries to sign a free agent before the trade executes.
+      Both moves are legal alone; only the pair is not, and the add is the one
+      nobody has committed to yet.
+    */
+    const fx = await setup();
+    const shape = buildRosterShape(fx.rules.roster, NFL);
+    await fillTo(fx, fx.teams[1]!, shape.totalSlots - 1);
+
+    const { tradeId } = await proposeTrade(fx.client, {
+      leagueId: fx.leagueId,
+      proposerTeamId: fx.teams[0]!,
+      // Two for one: the receiving team nets one player, so one slot is held.
+      // A one-for-one would hold nothing, because it is net zero — and an add
+      // during its window is legitimately fine.
+      proposerGives: [fx.players.get("p1")!, fx.players.get("spare")!],
+      receiverTeamId: fx.teams[1]!,
+      receiverGives: [fx.players.get("p2")!],
+      now: MONDAY,
+    });
+    await acceptTrade(fx.client, tradeId, fx.teams[1]!, MONDAY);
+
+    const [sport] = await fx.client.query<{ id: string }>(
+      "SELECT id FROM sports WHERE key = $1",
+      [NFL.key],
+    );
+    const [position] = await fx.client.query<{ id: string }>(
+      "SELECT id FROM positions WHERE sport_id = $1 AND key = 'RB'",
+      [sport!.id],
+    );
+    const [agent] = await fx.client.query<{ id: string }>(
+      `INSERT INTO players (sport_id, external_ref, full_name, primary_position_id, team_ref)
+       VALUES ($1, 'free-agent', 'Free Agent', $2, 'CIN') RETURNING id`,
+      [sport!.id, position!.id],
+    );
+
+    await expect(
+      addFreeAgent(fx.client, {
+        leagueId: fx.leagueId,
+        teamId: fx.teams[1]!,
+        addPlayerId: agent!.id,
+        // Wednesday midday: no game in progress, so the kickoff guard is not
+        // what refuses this. The sibling freeze tests use the same instant.
+        now: new Date("2026-10-14T12:00:00Z"),
+      }),
+    ).rejects.toMatchObject({ code: "SLOT_HELD_FOR_TRADE" });
+
+    // And the trade the room was held for still lands, at exactly the limit.
+    await resolveDueTrades(fx.client, fx.leagueId, AFTER_WINDOW);
+    expect(await countedFor(fx, fx.teams[1]!)).toBe(shape.totalSlots);
+  });
+
+  it("does not credit a departure that has not happened, so a full team still cannot add", async () => {
+    /*
+      The direction the sibling test above does not cover, and the one that
+      matters most: the team gives away *more* than it receives.
+
+      Holding the room for an accepted trade means projecting forward, and the
+      obvious projection subtracts the players the trade will take away. Those
+      players are still on the roster. Subtract them and a team at exactly the
+      limit reads as having room, the add is waved through, and it holds one
+      more than `totalSlots` from that moment — not when the trade lands, now.
+
+      Then veto the trade and the rows never move at all. There is no state
+      afterwards in which anybody is asked to drop, so the team simply stays
+      over. "A team can never have over the amount of players" is the owner's
+      rule and this is the path that breaks it.
+    */
+    const fx = await setup();
+    const shape = buildRosterShape(fx.rules.roster, NFL);
+    await fillTo(fx, fx.teams[1]!, shape.totalSlots);
+
+    // Two out, one in: a trade this team has room for either way.
+    const gives = (await rosterIds(fx, fx.teams[1]!)).slice(0, 2);
+    const { tradeId } = await proposeTrade(fx.client, {
+      leagueId: fx.leagueId,
+      proposerTeamId: fx.teams[0]!,
+      proposerGives: [fx.players.get("p1")!],
+      receiverTeamId: fx.teams[1]!,
+      receiverGives: [...gives],
+      now: MONDAY,
+    });
+    await acceptTrade(fx.client, tradeId, fx.teams[1]!, MONDAY);
+
+    const agent = await freeAgent(fx, "surplus-agent");
+
+    // Full is full. Not `SLOT_HELD_FOR_TRADE`: there is no spare slot being
+    // held, the roster is at the limit today, and dropping somebody is exactly
+    // what would let this through — which is what `ROSTER_FULL` tells them and
+    // the other code does not.
+    await expect(
+      addFreeAgent(fx.client, {
+        leagueId: fx.leagueId,
+        teamId: fx.teams[1]!,
+        addPlayerId: agent,
+        now: new Date("2026-10-14T12:00:00Z"),
+      }),
+    ).rejects.toMatchObject({ code: "ROSTER_FULL" });
+
+    expect(await rowsHeldBy(fx, fx.teams[1]!)).toBe(shape.totalSlots);
+  });
+
+  it("does not let one accepted trade pay for another, since only one may land", async () => {
+    /*
+      Two accepted trades are not one bigger trade. Each is all-or-nothing, and
+      either can be vetoed independently, so a projection that merges them
+      assumes an outcome nobody has agreed to.
+
+      Here the first trade sends two away for one, and the second brings two in
+      for one. Merged, they cancel: three out, three in, and the second is
+      accepted. Veto the first — an ordinary thing for a league to do — and the
+      second executes against a roster that never shrank, one over the limit,
+      with both trades having passed every check that was made.
+
+      Counting the worst case per trade refuses the second at acceptance, which
+      is the recoverable moment: nothing has moved, and the team can accept it
+      again once the first has landed.
+    */
+    const fx = await setup();
+    const shape = buildRosterShape(fx.rules.roster, NFL);
+    await fillTo(fx, fx.teams[0]!, 5);
+    await fillTo(fx, fx.teams[1]!, shape.totalSlots);
+
+    const held = await rosterIds(fx, fx.teams[1]!);
+    const mine = await rosterIds(fx, fx.teams[0]!);
+
+    // Two out, one in. Accepted, and correctly so.
+    const first = await proposeTrade(fx.client, {
+      leagueId: fx.leagueId,
+      proposerTeamId: fx.teams[0]!,
+      proposerGives: [mine[0]!],
+      receiverTeamId: fx.teams[1]!,
+      receiverGives: [held[0]!, held[1]!],
+      now: MONDAY,
+    });
+    await acceptTrade(fx.client, first.tradeId, fx.teams[1]!, MONDAY);
+
+    // One out, two in — against a roster still holding all fourteen.
+    const second = await proposeTrade(fx.client, {
+      leagueId: fx.leagueId,
+      proposerTeamId: fx.teams[0]!,
+      proposerGives: [mine[1]!, mine[2]!],
+      receiverTeamId: fx.teams[1]!,
+      receiverGives: [held[2]!],
+      now: MONDAY,
+    });
+
+    await expect(
+      acceptTrade(fx.client, second.tradeId, fx.teams[1]!, MONDAY),
+    ).rejects.toMatchObject({ code: "ROSTER_WOULD_OVERFLOW" });
   });
 });

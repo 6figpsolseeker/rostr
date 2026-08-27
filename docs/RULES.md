@@ -471,9 +471,25 @@ accept a trade and cut the player they promised, and execution would find a hole
 roster spot used to be. This is the database half of "both NFTs move to the escrow PDA",
 and it holds whether or not the league has a pot.
 
-**Rosters may change size.** A two-for-one is a normal trade; roster limits are a lineup
-concern. Only a trade where one side gives nothing is refused, because a gift is how an
-eliminated team hands its roster to a friend without anyone calling it a trade.
+**A trade may change the shape of a roster, never its size past the limit.** A two-for-one
+is a normal trade and no proposal is refused for being uneven — only one where a side gives
+nothing, because a gift is how an eliminated team hands its roster to a friend without
+anyone calling it a trade.
+
+**But a roster may never hold more than the limit.** If accepting would leave you over, the
+trade cannot be accepted until you have made room, and it says how many players you need to
+release. The same is true for the team that proposed it: a trade neither side can hold is
+not one anybody can accept.
+
+Room is held from the moment you accept, not from the moment the trade executes. Between
+those is the veto window, and during it nothing may be added into the space the trade is
+coming into — not a free agent, not a waiver claim. Otherwise two moves that are each
+legal — accepting a trade you have room for, then signing somebody — would put you over
+together, and the trade would be the thing that broke.
+
+**The one exception is injured reserve, and § 2 describes it.** A stashed player who
+recovers stops being exempt and can leave you over the limit. He is never forced off, and
+until you resolve it you cannot acquire anyone. Nothing else may ever put a team over.
 
 ---
 

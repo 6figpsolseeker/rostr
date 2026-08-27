@@ -279,11 +279,14 @@ export {
 
 export {
   countedRosterSize,
+  projectedRosterSize,
+  reservedByTrades,
   irExemptCount,
   irExemptOnRoster,
   MAY_STILL_PLAY,
   isIrEligible,
   refuseIrPlacement,
+  type CommittedTrade,
   type IrPlacementRefusal,
   type IrRosterEntry,
 } from "./season/injured-reserve.js";

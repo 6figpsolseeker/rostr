@@ -45,6 +45,17 @@ export function whyClaimFailed(reason: string | null): string {
       // lines above this sentence, so the old wording denied, on one line, the
       // fact rendered on the line before it.
       return "your roster was still full, even after any drop the claim named";
+    case "SLOT_HELD_FOR_TRADE":
+      // The empty slot is real and the claim still lost, which without this
+      // sentence is the panel's least explicable outcome: `default:` says only
+      // "this claim did not succeed" beside a roster the manager can see has
+      // room. Says which trade nothing — the panel has no trade to name — but
+      // says the shape of it, so they know to look at the trade and not at
+      // their roster.
+      return (
+        "a roster spot was being held for a trade you had accepted, so the run " +
+        "could not award him"
+      );
     case "DROP_ON_IR":
       // The mistake this fix makes likely. Once claims start being awarded,
       // "drop the injured one" is the natural way to make room — and it is the

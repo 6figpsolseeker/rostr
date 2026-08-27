@@ -58,6 +58,8 @@ export type ClaimFailure =
   | "ALREADY_ROSTERED"
   | "DROP_NOT_ON_ROSTER"
   | "DROP_ON_IR"
+  /** The team's remaining room is committed to a trade it has already accepted. */
+  | "SLOT_HELD_FOR_TRADE"
   | "PLAYER_UNAVAILABLE";
 
 export interface ClaimOutcome {
@@ -91,6 +93,20 @@ export interface ResolveInput {
   readonly rosters: ReadonlyMap<string, readonly RosterMember[]>;
   readonly pool: ReadonlyMap<string, DraftablePlayer>;
   readonly shape: RosterShape;
+  /**
+   * Slots each team has already committed to an accepted trade, net.
+   *
+   * A trade's rows do not move until it executes, so between acceptance and
+   * execution a team's roster understates what it is about to hold. Without this
+   * a claim awarded on Wednesday morning and a trade executing Wednesday night
+   * are each legal and together put the team over the limit — and the run cannot
+   * refuse by throwing, so the trade would be the thing that broke.
+   *
+   * Net of departures: a trade sending two and receiving one commits −1, which
+   * frees room rather than holding it. Computed by the caller, which is the only
+   * layer that can see both the accepted trades and the live IR designations.
+   */
+  readonly reserved?: ReadonlyMap<string, number>;
   /*
     Players stashed on injured reserve who currently qualify for it — the flag
     **and** a live eligible designation, decided by the caller.
@@ -119,7 +135,7 @@ export interface ResolveInput {
  * exactly.
  */
 export function resolveWaiverClaims(input: ResolveInput): WaiverResolution {
-  const { claims, priority, rosters, pool, shape, irExempt } = input;
+  const { claims, priority, rosters, pool, shape, irExempt, reserved } = input;
 
   const rank = new Map(priority.map((teamId, index) => [teamId, index]));
 
@@ -243,6 +259,21 @@ export function resolveWaiverClaims(input: ResolveInput): WaiverResolution {
       afterDrop.length - exempt >= shape.totalSlots
     ) {
       outcomes.push({ ...base, awarded: false, reason: "DROP_ON_IR" });
+      continue;
+    }
+
+    /*
+      Room held for a trade this team already accepted.
+
+      Checked here rather than folded into `exempt`, because `exempt` means
+      "how many of this array do not count" and these players are not in the
+      array at all — they are arriving later. Passing it through that parameter
+      would be arithmetically equivalent and would make the next reader wrong
+      about what the number means.
+    */
+    const held = reserved?.get(claim.teamId) ?? 0;
+    if (held > 0 && afterDrop.length - exempt + held >= shape.totalSlots) {
+      outcomes.push({ ...base, awarded: false, reason: "SLOT_HELD_FOR_TRADE" });
       continue;
     }
 

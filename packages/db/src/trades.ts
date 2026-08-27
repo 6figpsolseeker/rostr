@@ -25,14 +25,18 @@
  */
 
 import {
+  buildRosterShape,
   isVetoed,
+  NFL,
   pastTradeDeadline,
+  projectedRosterSize,
+  reservedByTrades,
   tradeBlockedBecause,
   vetoWindowEndsAt,
   vetoWindowHasClosed,
   vetoesRequired,
 } from "@rostr/core";
-import type { LeagueRules } from "@rostr/core";
+import type { CommittedTrade, LeagueRules } from "@rostr/core";
 import type { SqlClient } from "./client.js";
 import { getLeagueRules } from "./leagues.js";
 import { withTransaction } from "./transaction.js";
@@ -281,6 +285,81 @@ export async function lockedByTrade(
   return new Set(rows.map((row) => row.player_id));
 }
 
+/**
+ * Every accepted trade a team is party to, **one entry each**.
+ *
+ * Kept apart rather than merged into a single arriving/leaving pair, because
+ * merging them loses the fact that a trade is all-or-nothing: two trades that
+ * cancel out on paper reserve nothing once merged, and the team ends up over
+ * the limit when one is vetoed and the other executes. `reservedByTrades`
+ * takes the worst case across them, which it can only do if it can still see
+ * where one trade ends and the next begins.
+ */
+export type CommittedTradeMoves = readonly CommittedTrade[];
+
+/**
+ * The roster moves every accepted trade in this league is committed to make.
+ *
+ * Derived from `trades.state = 'ACCEPTED'`, not stored. A second table would be a
+ * copy free to disagree with the original, which is the argument
+ * `notifications.ts` makes for deriving rather than recording.
+ *
+ * This exists because a trade's rows do not move until it executes. Between
+ * acceptance and execution a team can legally acquire somebody, and the pair —
+ * legal add plus legal trade — lands them over the roster limit with nothing
+ * having looked at both. Counting the committed moves against a team from the
+ * moment it accepts holds the room, so the add is refused rather than the trade
+ * failing later for a reason neither side caused.
+ *
+ * Same query as {@link lockedByTrade}, one column wider: that one asks which
+ * players are frozen, this one asks which way they are going.
+ */
+export async function committedTradeMoves(
+  db: SqlClient,
+  leagueId: string,
+): Promise<ReadonlyMap<string, CommittedTradeMoves>> {
+  const rows = await db.query<{
+    trade_id: string;
+    proposer_team_id: string;
+    receiver_team_id: string;
+    from_team_id: string;
+    player_id: string;
+  }>(
+    `SELECT t.id AS trade_id, t.proposer_team_id, t.receiver_team_id,
+            a.from_team_id, a.player_id
+       FROM trade_assets a
+       JOIN trades t ON t.id = a.trade_id
+      WHERE t.league_id = $1 AND t.state = 'ACCEPTED'`,
+    [leagueId],
+  );
+
+  const moves = new Map<string, Map<string, { arriving: number; leaving: Set<string> }>>();
+  const forTeam = (teamId: string, tradeId: string) => {
+    let byTrade = moves.get(teamId);
+    if (!byTrade) {
+      byTrade = new Map();
+      moves.set(teamId, byTrade);
+    }
+    const found = byTrade.get(tradeId);
+    if (found) return found;
+    const fresh = { arriving: 0, leaving: new Set<string>() };
+    byTrade.set(tradeId, fresh);
+    return fresh;
+  };
+
+  for (const row of rows) {
+    // The same derivation `resolveTrade` uses: an asset goes to whichever side
+    // of the trade did not send it.
+    const toTeamId =
+      row.from_team_id === row.proposer_team_id ? row.receiver_team_id : row.proposer_team_id;
+
+    forTeam(row.from_team_id, row.trade_id).leaving.add(row.player_id);
+    forTeam(toTeamId, row.trade_id).arriving += 1;
+  }
+
+  return new Map([...moves].map(([teamId, byTrade]) => [teamId, [...byTrade.values()]]));
+}
+
 // ---------------------------------------------------------------------------
 // Proposing
 // ---------------------------------------------------------------------------
@@ -464,6 +543,56 @@ function explain(code: string, rules: LeagueRules): string {
 // ---------------------------------------------------------------------------
 
 /**
+ * What a team will count as holding once this trade and its siblings land.
+ *
+ * Reads the designation live, like every other capacity check in the repo, so a
+ * player who recovers while a trade is pending starts counting from that moment.
+ */
+async function projectedSizeFor(
+  tx: SqlClient,
+  teamId: string,
+  irSlots: number,
+  moves: ReadonlyMap<string, CommittedTradeMoves>,
+  extra: { readonly arriving: number; readonly leaving: ReadonlySet<string> },
+): Promise<number> {
+  const held = await tx.query<{
+    player_id: string;
+    on_ir: boolean;
+    designation: string | null;
+  }>(
+    `SELECT r.player_id, r.on_ir, p.injury_designation AS designation
+       FROM roster_entries r
+       JOIN players p ON p.id = r.player_id
+      WHERE r.team_id = $1 AND r.released_at IS NULL`,
+    [teamId],
+  );
+
+  const roster = held.map((row) => ({
+    playerId: row.player_id,
+    onIr: row.on_ir,
+    injuryDesignation: row.designation,
+  }));
+
+  /*
+    Two different questions, and they must not be answered the same way.
+
+    The trade being accepted is *atomic*: its departures and its arrivals move
+    in one transaction, so its departures do free room for its own arrivals. A
+    two-for-one is permitted, which is the owner's rule.
+
+    Every other accepted trade is *conditional*. Its rows have not moved and may
+    never move, so it can only take room, never give it back. Merging the two
+    sets — which is what this used to do — credits a departure that has not
+    happened against an arrival that might, and lets both a veto and a second
+    trade put the team over.
+  */
+  return (
+    projectedRosterSize({ roster, leaving: extra.leaving, arriving: extra.arriving, irSlots }) +
+    reservedByTrades(roster, moves.get(teamId) ?? [], irSlots)
+  );
+}
+
+/**
  * Accept a trade, opening the veto window.
  *
  * This is the moment the players freeze. Nothing moves yet — rosters swap only
@@ -545,6 +674,56 @@ export async function acceptTrade(
         throw new TradeError(
           `${asset.player_id} is already committed to an accepted trade`,
           "PLAYER_IN_ANOTHER_TRADE",
+        );
+      }
+    }
+
+    /*
+      Capacity, for BOTH teams, and on counted size rather than row count.
+
+      Rows conserve across a trade; counted size does not. An outgoing player
+      who was stashed on IR was not being counted, so his departure frees
+      nothing — while every incoming player counts, because a trade never
+      carries the IR flag across. So a plain one-for-one of two stashed players
+      takes two teams that were each exactly at the limit to one over, each.
+      There is no 'side receiving more' to scope this to.
+
+      Checked here rather than at execution because a throw there is unrecoverable
+      in the wrong way: `resolveDueTrades` writes a terminal state for one error
+      only, so an over-capacity failure would leave the trade ACCEPTED and retried
+      hourly, freezing the counterparty's players indefinitely for a roster
+      problem that is not theirs.
+
+      And checked against what the accepted trades of this league have already
+      committed each team to, not merely what they hold now — otherwise a team
+      accepts with room, signs a free agent inside the veto window, and lands
+      over the limit when the trade executes. Both acquisitions are legal; only
+      the pair is not.
+    */
+    const shape = buildRosterShape(stored.rules.roster, NFL);
+    const moves = await committedTradeMoves(tx, trade.leagueId);
+
+    for (const teamId of [trade.receiverTeamId, trade.proposerTeamId]) {
+      const gives = new Set(
+        assets.filter((a) => a.from_team_id === teamId).map((a) => a.player_id),
+      );
+      const gets = assets.filter((a) => a.from_team_id !== teamId).length;
+
+      const projected = await projectedSizeFor(tx, teamId, shape.irSlots, moves, {
+        arriving: gets,
+        leaving: gives,
+      });
+
+      if (projected > shape.totalSlots) {
+        const over = projected - shape.totalSlots;
+        const mine = teamId === actingTeamId;
+        throw new TradeError(
+          mine
+            ? `Accepting this leaves you holding ${projected} players and the limit is ` +
+                `${shape.totalSlots} — release ${over} more first.`
+            : `The other team no longer has room for what you are sending back, so this ` +
+                `trade cannot be accepted.`,
+          "ROSTER_WOULD_OVERFLOW",
         );
       }
     }
