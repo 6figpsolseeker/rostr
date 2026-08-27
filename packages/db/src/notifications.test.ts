@@ -4,7 +4,7 @@ import type { DraftRules, LeagueRules } from "@rostr/core";
 import { createDraftRecord } from "./draft.js";
 import { createUser } from "./identity.js";
 import { createLeague } from "./leagues.js";
-import { notificationsForUser } from "./notifications.js";
+import { NOTIFICATION_URGENCY, notificationsForUser } from "./notifications.js";
 import { seedSport } from "./sports.js";
 import { addTestTeam, createTestDatabase } from "./testing.js";
 import type { PGliteClient } from "./testing.js";
@@ -277,6 +277,147 @@ describe("notificationsForUser", () => {
 
     const items = await notificationsForUser(fx.client, fx.seats[0]!.userId, NOW);
     expect(items.map((i) => i.kind)).toContain("LINEUP_UNSET");
+  });
+
+  describe("a player who is no longer on an NFL roster", () => {
+    /*
+      Issue #254. `season-sync` clears `players.active` for anyone the provider
+      stops listing with a club, and the player stayed on the roster scoring
+      zero with nothing anywhere saying so. The only sentence in the product
+      that states this fact is shown to a rival whose claim failed.
+    */
+
+    /** Put `count` players on a team, `cut` of them no longer listed. */
+    const roster = async (
+      fx: Fixture,
+      teamId: string,
+      names: readonly string[],
+      cut: number,
+    ) => {
+      const [sport] = await fx.client.query<{ id: string }>(
+        "SELECT id FROM sports WHERE key = $1",
+        [NFL.key],
+      );
+      const [position] = await fx.client.query<{ id: string }>(
+        "SELECT id FROM positions WHERE sport_id = $1 LIMIT 1",
+        [sport!.id],
+      );
+
+      for (const [index, name] of names.entries()) {
+        const [player] = await fx.client.query<{ id: string }>(
+          `INSERT INTO players (sport_id, external_ref, full_name, primary_position_id, active)
+           VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+          [
+            sport!.id,
+            `ext-${name}`,
+            name,
+            position!.id,
+            index >= names.length - cut ? false : true,
+          ],
+        );
+        await fx.client.query(
+          `INSERT INTO roster_entries (team_id, player_id, acquired_via, acquired_at)
+           VALUES ($1, $2, 'DRAFT', now())`,
+          [teamId, player!.id],
+        );
+      }
+    };
+
+    const inSeason = async (fx: Fixture) =>
+      fx.client.query("UPDATE leagues SET state = 'IN_SEASON' WHERE id = $1", [fx.leagueId]);
+
+    it("names him, so the link lands somewhere the manager can act", async () => {
+      // A bare count would be `unsetLineups`' shape, and wrong here: an empty
+      // lineup slot is visible on arrival, and the roster panel renders every
+      // player identically, so "1 player" is a fourteen-row search.
+      const fx = await fixture();
+      await inSeason(fx);
+      await roster(fx, fx.seats[0]!.teamId, ["Adams", "Brown", "Carter"], 1);
+
+      const items = await notificationsForUser(fx.client, fx.seats[0]!.userId, NOW);
+      const item = items.find((i) => i.kind === "PLAYER_OFF_NFL_ROSTER");
+
+      expect(item).toMatchObject({
+        kind: "PLAYER_OFF_NFL_ROSTER",
+        leagueId: fx.leagueId,
+        href: `/leagues/${fx.leagueId}/players`,
+        deadline: null,
+        needsSignature: false,
+      });
+      expect(item?.text).toBe(
+        "Carter is no longer on an NFL roster in Sunday Scaries and cannot score",
+      );
+    });
+
+    it("says it once per league, however many it is about", async () => {
+      // `HeaderControls` keys the list on `kind:leagueId`, so a second row for
+      // one league collides — and a manager holding two has one problem.
+      const fx = await fixture();
+      await inSeason(fx);
+      await roster(fx, fx.seats[0]!.teamId, ["Adams", "Brown", "Carter"], 2);
+
+      const items = await notificationsForUser(fx.client, fx.seats[0]!.userId, NOW);
+      const mine = items.filter((i) => i.kind === "PLAYER_OFF_NFL_ROSTER");
+
+      expect(mine).toHaveLength(1);
+      expect(mine[0]?.text).toBe(
+        "Brown and 1 other are no longer on an NFL roster in Sunday Scaries and cannot score",
+      );
+    });
+
+    it("tells the manager holding him and nobody else", async () => {
+      const fx = await fixture();
+      await inSeason(fx);
+      await roster(fx, fx.seats[0]!.teamId, ["Adams"], 1);
+
+      const held = await notificationsForUser(fx.client, fx.seats[0]!.userId, NOW);
+      expect(held.map((i) => i.kind)).toContain("PLAYER_OFF_NFL_ROSTER");
+
+      const other = await notificationsForUser(fx.client, fx.seats[1]!.userId, NOW);
+      expect(other.map((i) => i.kind)).not.toContain("PLAYER_OFF_NFL_ROSTER");
+    });
+
+    it("stops saying it the moment he is dropped", async () => {
+      // The property that makes deriving right: nothing has to remember to
+      // delete this, and `syncPlayers` re-asserts `active` every morning, so a
+      // stored copy would be wrong in both directions.
+      const fx = await fixture();
+      await inSeason(fx);
+      await roster(fx, fx.seats[0]!.teamId, ["Adams"], 1);
+
+      await fx.client.query(
+        "UPDATE roster_entries SET released_at = now() WHERE team_id = $1",
+        [fx.seats[0]!.teamId],
+      );
+
+      const items = await notificationsForUser(fx.client, fx.seats[0]!.userId, NOW);
+      expect(items.map((i) => i.kind)).not.toContain("PLAYER_OFF_NFL_ROSTER");
+    });
+
+    it("stays quiet before the season, when nothing is being lost yet", async () => {
+      // A league is `IN_SEASON` from the moment its draft completes, so this
+      // covers only a draft still running — where the remedy is the draft.
+      const fx = await fixture();
+      await roster(fx, fx.seats[0]!.teamId, ["Adams"], 1);
+
+      const items = await notificationsForUser(fx.client, fx.seats[0]!.userId, NOW);
+      expect(items.map((i) => i.kind)).not.toContain("PLAYER_OFF_NFL_ROSTER");
+    });
+
+    it("sorts below an unset lineup and above an invitation", async () => {
+      /*
+        Both are open-ended, so the tie is broken on cost. A lineup slot closes
+        at kickoff whether or not a deadline was stored — which is why the rule
+        is the window, not the field. An invitation costs nothing and expires
+        never.
+      */
+      expect(NOTIFICATION_URGENCY.indexOf("PLAYER_OFF_NFL_ROSTER")).toBeGreaterThan(
+        NOTIFICATION_URGENCY.indexOf("LINEUP_UNSET"),
+      );
+      expect(NOTIFICATION_URGENCY.indexOf("PLAYER_OFF_NFL_ROSTER")).toBeLessThan(
+        NOTIFICATION_URGENCY.indexOf("INVITATION"),
+      );
+    });
   });
 
   it("puts the pick clock ahead of everything else", async () => {
