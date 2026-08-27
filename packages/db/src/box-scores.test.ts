@@ -1950,6 +1950,16 @@ describe("what the operator screen can tell apart — #233", () => {
       The thing that stops a week settling must be the thing the producer goes
       and fetches, and the thing an operator is shown. Three spellings could
       disagree; one cannot.
+
+      **STALE, not NO_STATS.** This game was read two hours before the whistle,
+      so it has stat lines — real ones, from real play. It asserted NO_STATS
+      until a review pointed out that the screen then tells the operator "no box
+      score has been read … every player in it currently scores zero" over a
+      game whose quarterback has 287 passing yards. What is true of it is that
+      what we hold is behind the game, which is what STALE says.
+
+      The correspondence being tested is unchanged: one game unread by the
+      hold's own predicate, one game the screen shows as not yet final.
     */
     const fx = await setup();
     await fx.client.query(
@@ -1971,7 +1981,9 @@ describe("what the operator screen can tell apart — #233", () => {
     const { games } = await problems(fx);
 
     expect(held?.unread).toBe(1);
-    expect(games.filter((g) => g.ingest === "NO_STATS")).toHaveLength(1);
+    expect(games.filter((g) => g.ingest === "STALE")).toHaveLength(1);
+    // And nothing claims the stat lines are absent.
+    expect(games.filter((g) => g.ingest === "NO_STATS")).toHaveLength(0);
   });
 
   it("keeps the alarm count bounded while the screen's total is not", async () => {

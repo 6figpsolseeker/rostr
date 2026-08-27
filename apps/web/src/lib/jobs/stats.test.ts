@@ -385,6 +385,45 @@ describe("the stats cron", () => {
     expect(quietBody.outstanding.total).toBe(1);
   });
 
+  it("stays green when the provider owes us a box score and this job did nothing wrong", async () => {
+    /*
+      The backlog is not a fault in this job.
+
+      `unresolvedStatsProblems` reports everything unresolved rather than what
+      this run touched — deliberately, so a quiet Tuesday cannot look clean over
+      a game that has been failing since Sunday. Feeding that count into
+      `last_outcome` therefore turns `cronJobState` red for as long as *any*
+      game anywhere is outstanding, on runs that fetched nothing, failed at
+      nothing and skipped nothing. That is the permanently-true health signal
+      this file already removed two other counts for.
+
+      Staged here as the ordinary shape: a finished game the work list has
+      already attempted, so it is paced out of this run and nothing is fetched.
+      The screen still lists it, with the severity that belongs to it.
+    */
+    db = await createTestDatabase();
+    await seedSport(db, NFL);
+    await league(2026);
+    await seedDefenses();
+    await finishedGame(2026, "g1");
+
+    await db.query(
+      `UPDATE games SET stats_synced_at = NULL, stats_attempted_at = now(),
+                       final_at = now() - interval '3 hours'`,
+    );
+
+    const quiet = fakeProvider(() => new Error("must not be called"));
+    const response = await runStatsJob(db, quiet.provider, NOW);
+    const body = (await response.json()) as {
+      outstanding: { total: number; blockingRecent: number };
+    };
+
+    expect(quiet.calls).toEqual([]);
+    // The operator can see it — and the heartbeat is not claiming this job broke.
+    expect(body.outstanding.blockingRecent).toBeGreaterThan(0);
+    expect(await lastOutcome()).toBeNull();
+  });
+
   /**
    * The route's own `try`/`catch` around a whole season is **not** exercised
    * here, and saying so is better than a test named as if it were.

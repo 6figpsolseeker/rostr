@@ -62,7 +62,11 @@ export interface OpsView {
   readonly total: number;
   readonly shown: number;
   /**
-   * Games with no usable box score whose week can still be corrected.
+   * Games whose box score is missing or behind the game, in a week that can
+   * still be corrected.
+   *
+   * Both severities. "No usable box score" would be wrong for the STALE half,
+   * which has one.
    *
    * The count fit to drive an alarm, and the only one here that can fall to
    * zero. Computed by the query rather than from the rows below, because those
@@ -198,7 +202,15 @@ export function ingestSentence(row: ProblemRow): string {
       : "No box score has been read for this game. Every player in it currently scores zero.";
   }
   if (row.ingest === "STALE") {
-    return "Stat lines exist from an earlier read and the most recent read failed, so these are not the final numbers.";
+    // **Not "the most recent read failed".** That is one of two ways to get here
+    // and not the more common one: a game starved by `MAX_GAMES_PER_RUN`, or
+    // skipped by the consecutive-failure breaker, has had no read attempted
+    // since the whistle at all. Naming a failure that did not happen sends an
+    // operator looking for an error that is not there.
+    return (
+      "Stat lines exist from a read taken before the game finished, and nothing has " +
+      "been read successfully since, so these are not the final numbers."
+    );
   }
   return "The stat lines were ingested — this is a discrepancy, not a failure — so this game has been scored, possibly wrongly.";
 }

@@ -947,7 +947,13 @@ export async function unresolvedStatsProblems(
   /** Everything flagged, however old. The screen's number. */
   readonly total: number;
   /**
-   * Games with no usable box score whose week can still be corrected.
+   * Games whose box score is missing or behind the game, in a week that can
+   * still be corrected.
+   *
+   * Both severities, deliberately: the operator's question is "are these numbers
+   * final", and NO_STATS and STALE answer it the same way. It must not be called
+   * "no usable box score" — a STALE game has one, and saying otherwise is the
+   * class of false claim this screen exists to stop.
    *
    * The alarm's number, and the only one of the two that can fall to zero.
    * Bounded at `ALARM_WINDOW_HOURS` from the week's last kickoff rather than at
@@ -1023,17 +1029,30 @@ export async function unresolvedStatsProblems(
         )`;
 
   /*
-    Order matters and the first two arms are not interchangeable.
+    Order matters, and the first arm is what makes the rest of them legible.
 
-    NO_STATS is claimed by "nothing written" *before* the unread test, because a
-    game with no sync stamp at all has no `final_at` to compare against and would
-    otherwise fall through to DISCREPANCY — which is the calmest tier, for the
-    worst state. That is issue #233's own shape.
+    NO_STATS means exactly one thing: **nothing was ever written**. A game with
+    no sync stamp has no `final_at` to compare against, so it is claimed first
+    rather than falling through to DISCREPANCY — the calmest tier, for the worst
+    state, which is issue #233's own shape.
+
+    Every arm below it therefore describes a game that **does** have stat lines,
+    and none of them may say otherwise. The second arm used to say NO_STATS for a
+    FINAL game read before the whistle — unreachable for a game with nothing
+    written, since the first arm has already taken those, so it could only ever
+    fire on one that had been read during play and had real numbers in it. The
+    screen drew that as "No box score … every player scores zero" over a
+    quarterback with 287 passing yards: #233's own defect, one layer down, inside
+    the fix for it.
+
+    Both remaining unread shapes are STALE, and the reason they are one tier is
+    that an operator can do nothing different about them — what we hold is behind
+    the game, whether the last read failed or no read has been attempted since.
   */
   const severity = `
         CASE
           WHEN g.stats_synced_at IS NULL THEN 'NO_STATS'
-          WHEN g.status = 'FINAL' AND ${UNREAD_SQL("g")} THEN 'NO_STATS'
+          WHEN g.status = 'FINAL' AND ${UNREAD_SQL("g")} THEN 'STALE'
           WHEN g.stats_attempted_at > g.stats_synced_at THEN 'STALE'
           ELSE 'DISCREPANCY'
         END`;

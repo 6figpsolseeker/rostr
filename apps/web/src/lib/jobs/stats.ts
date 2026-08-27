@@ -144,11 +144,6 @@ export async function runStatsJob(
   // itself clean over a game that has been failing since Sunday.
   const outstanding = await unresolvedStatsProblems(client, NFL.key);
 
-  // Read once for the alarm, from the same query the operator screen uses, so
-  // the number in the heartbeat and the rows on the page cannot disagree about
-  // what is wrong.
-  const blocking = outstanding.blockingRecent;
-
   // **Every reason, joined — not the first one.** This was a chain of ternaries,
   // so a run with a broken season announced only that and said nothing about the
   // twelve games that also failed. A heartbeat is read once and acted on once.
@@ -175,8 +170,21 @@ export async function runStatsJob(
     `season-sync` reported FAILING daily for the four week-16 and four week-17
     fixtures the NFL deliberately leaves undated. Same table, same shape.
 
-    Nothing is lost. Both counts are in the response body below, `games.stats_error`
-    still holds the text per game, and `/ops/stats` renders it.
+    `outstanding.blockingRecent` belongs to the same rule and was briefly on the
+    wrong side of it. It counts games the *provider* has not given us a complete
+    box score for — a real thing to act on, and not a fault in this job. Because
+    `unresolvedStatsProblems` reports everything unresolved rather than what this
+    run touched, a run that fetched nothing, failed at nothing and skipped
+    nothing still reported `FAILING` while one game anywhere was outstanding:
+    exactly the permanently-true health signal this note argues against, and the
+    one `pnpm cron:status` reads first.
+
+    Nothing is lost. Every count is in the response body below,
+    `games.stats_error` still holds the text per game, and `/ops/stats` renders
+    each of them with the severity that belongs to it — which is what #233 was
+    filed to make possible. What is still missing is a channel for "the provider
+    owes us a box score" that is neither a job failure nor silence; that needs a
+    severity axis `cronJobState` does not have.
   */
   const problem =
     [
@@ -206,24 +214,6 @@ export async function runStatsJob(
       */
       starvedSeasons > 0
         ? `${starvedSeasons} season(s) had games under way and read none`
-        : null,
-      /*
-        **A week is being held open by a game with no usable box score.**
-
-        The one condition on this page's subject that is worth waking somebody
-        for: those players are all scoring zero, the week cannot settle, and once
-        it does the result is permanent because a finalised week is never
-        rescored.
-
-        Bounded to the window in which the outcome could still change —
-        `ALARM_WINDOW_HOURS` from the week's last kickoff, not the full 168h the
-        screen keeps reporting for. An alarm's job is to fire once and be acted
-        on; one latched red for seven days over a fact nobody can act on any more
-        is a status board wearing an alarm's colours, and that is exactly how the
-        count this file already removed stopped being read.
-      */
-      blocking > 0
-        ? `${blocking} game(s) have no usable box score in a week that can still be corrected`
         : null,
     ]
       .filter((part) => part !== null)
