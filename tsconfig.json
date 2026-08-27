@@ -20,6 +20,8 @@
     { "path": "./packages/pinning" },
     { "path": "./packages/pinning/tsconfig.test.json" },
     { "path": "./packages/stats" },
-    { "path": "./packages/stats/tsconfig.test.json" }
+    { "path": "./packages/stats/tsconfig.test.json" },
+    { "path": "./programs/rostr-escrow/tsconfig.test.json" },
+    { "path": "./tsconfig.tooling.json" }
   ]
 }

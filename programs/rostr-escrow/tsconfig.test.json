@@ -1,0 +1,53 @@
+{
+  // The program's TypeScript suite — 105 tests over the code that holds the pot,
+  // and until #261 they were in no tsconfig at all. See
+  // `scripts/check-test-projects.mjs` for how the same hole reached `packages/`
+  // and how long it lasted there (#257).
+  //
+  // Unlike a package there is no build half: nothing here ships as JavaScript —
+  // the artefact is a `.so` built by cargo — so there is no `dist/` and no
+  // `tsconfig.json` beside this one. `noEmit` says so, and the guard asserts it.
+  //
+  // `paths` names each package's SOURCE, mirroring `vitest.alias.ts`. It reads
+  // as a duplicate of that file and is not one, but the two lists below ARE
+  // load-bearing together: with a `references` edge present TypeScript redirects
+  // each `paths` hit to that project's declaration output, which
+  // `tsc --build` regenerates from source first. Drop a `references` entry and
+  // that package's `src/**` silently becomes this project's own input — 84 x
+  // TS6307. Add a `paths` entry without one and you get the same. Keep them in
+  // step.
+  //
+  // `moduleResolution` is inherited rather than set. `bundler` would save six
+  // one-word `.js` import extensions and cost two overrides — TypeScript
+  // enforces `module` and `moduleResolution` as a pair — so the extensions are
+  // the cheaper side, and `failed-league.test.ts` already wrote one.
+  //
+  // Editing this file matches `programs/**` and so triggers a full Anchor build
+  // in `anchor.yml`. GitHub Actions cannot combine `paths` with `paths-ignore`,
+  // so that is accepted rather than fixed.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM"],
+    "noEmit": true,
+    "types": ["node"],
+    "baseUrl": "../..",
+    "paths": {
+      "@rostr/db/postgres": ["packages/db/src/postgres.ts"],
+      "@rostr/db/migrate": ["packages/db/src/migrate.ts"],
+      "@rostr/db/testing": ["packages/db/src/testing.ts"],
+      "@rostr/core": ["packages/core/src/index.ts"],
+      "@rostr/db": ["packages/db/src/index.ts"],
+      "@rostr/escrow": ["packages/escrow/src/index.ts"],
+      "@rostr/pinning": ["packages/pinning/src/index.ts"],
+      "@rostr/stats": ["packages/stats/src/index.ts"]
+    }
+  },
+  "include": ["tests/**/*.ts"],
+  "references": [
+    { "path": "../../packages/core" },
+    { "path": "../../packages/db" },
+    { "path": "../../packages/escrow" },
+    { "path": "../../packages/pinning" },
+    { "path": "../../packages/stats" }
+  ]
+}

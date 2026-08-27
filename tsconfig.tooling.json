@@ -1,0 +1,31 @@
+{
+  // The root tooling files, which no project covered either.
+  //
+  // `vitest.alias.ts` is the one that matters: all three runner configs import
+  // it, its own docstring records a defect that shipped when the list it holds
+  // drifted, and nothing typechecked it. The four runner configs and the
+  // `server-only` stub are here for the same reason and cost nothing — this
+  // project compiles clean with no edit to any of them.
+  //
+  // `files` rather than `include`, deliberately: an `include` glob rooted here
+  // would reach into `packages/` and `apps/`, which have their own projects.
+  // The list is short and the guard has no rule for it, so it is spelled out.
+  //
+  // `scripts/*.mjs` and `eslint.config.mjs` are NOT here. Checking those means
+  // `allowJs` + `checkJs`, which is a policy decision rather than a config one,
+  // and two of those scripts deliberately run before `pnpm install` with no
+  // toolchain at all.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node"]
+  },
+  "files": [
+    "vitest.alias.ts",
+    "vitest.config.ts",
+    "vitest.web.config.ts",
+    "vitest.program.config.ts",
+    "vitest.bankrun.config.ts",
+    "test-stubs/server-only.ts"
+  ]
+}

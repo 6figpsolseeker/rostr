@@ -38,6 +38,13 @@ jobs:
       # files across five packages were typechecked by nothing (#257). A sixth
       # package added by copying a fifth would inherit the hole silently, so it
       # is asserted rather than remembered.
+      #
+      # It covers `programs/*/tests` too, which had the same hole for the same
+      # reason and kept it longer (#261). No new step for it: the program suite is
+      # a project in the root solution, so `pnpm typecheck` below already checks
+      # it — and needs no Anchor toolchain to do so, because nothing under those
+      # tests imports `target/` and the generated type is committed to
+      # `packages/escrow/src/types.ts` by `pnpm idl:sync`.
       - name: Test projects are wired up
         run: node scripts/check-test-projects.mjs
 

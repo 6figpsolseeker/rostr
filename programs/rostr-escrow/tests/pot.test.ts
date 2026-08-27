@@ -30,7 +30,8 @@ import {
   validArgs,
   validFreeArgs,
   vaultPda,
-} from "./helpers";
+  type EscrowProgram,
+} from "./helpers.js";
 
 /**
  * D3, D4, D5 — joining, staking, and the timelock refund.
@@ -41,7 +42,7 @@ import {
 
 const BUY_IN = 10_000_000;
 
-let program: anchor.Program;
+let program: EscrowProgram;
 let provider: anchor.AnchorProvider;
 let mint: anchor.web3.PublicKey;
 
@@ -49,7 +50,7 @@ const initialize = async (args: InitArgs): Promise<anchor.web3.PublicKey> => {
   const league = leaguePda(program, args.leagueId);
   await program.methods
     .initializeLeague(args)
-    .accounts({
+    .accountsPartial({
       league,
       mint,
       vault: vaultPda(program, league),
@@ -64,7 +65,7 @@ const initialize = async (args: InitArgs): Promise<anchor.web3.PublicKey> => {
 const join = async (league: anchor.web3.PublicKey, member: Member, rulesHash: number[]) =>
   program.methods
     .joinLeague(rulesHash)
-    .accounts({
+    .accountsPartial({
       league,
       membership: membershipPda(program, league, member.keypair.publicKey),
       member: member.keypair.publicKey,
@@ -80,7 +81,7 @@ const deposit = async (
 ) =>
   program.methods
     .deposit()
-    .accounts({
+    .accountsPartial({
       league,
       membership: membershipPda(program, league, member.keypair.publicKey),
       vault: vaultPda(program, league),
@@ -94,7 +95,7 @@ const deposit = async (
 const refund = async (league: anchor.web3.PublicKey, member: Member) =>
   program.methods
     .refundStake()
-    .accounts({
+    .accountsPartial({
       league,
       membership: membershipPda(program, league, member.keypair.publicKey),
       vault: vaultPda(program, league),
@@ -144,7 +145,7 @@ describe("join_league", () => {
     const member = await fundedMember(provider, mint, BUY_IN);
 
     const wrong = [...args.rulesHash];
-    wrong[0] = (wrong[0] + 1) % 256;
+    wrong[0] = ((wrong[0] ?? 0) + 1) % 256;
 
     await expectError(join(league, member, wrong), "RulesHashMismatch");
   });
@@ -279,7 +280,7 @@ describe("deposit", () => {
     const league = leaguePda(program, args.leagueId);
     await program.methods
       .initializeFreeLeague(args)
-      .accounts({
+      .accountsPartial({
         league,
         payer: provider.wallet.publicKey,
         systemProgram: anchor.web3.SystemProgram.programId,
