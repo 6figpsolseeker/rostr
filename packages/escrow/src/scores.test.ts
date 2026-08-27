@@ -77,6 +77,7 @@ describe("expectedScoreTerms", () => {
     // Index 0 is WIN_PCT, so a silent default would seed the whole league by win
     // percentage alone and look entirely plausible.
     const bad: ScoreTermRules = {
+      ...RULES,
       schedule: { ...RULES.schedule, tiebreakers: ["WIN_PCT", "COIN_FLIP"] },
     };
     expect(() => expectedScoreTerms(bad, 12)).toThrow(/COIN_FLIP/);

@@ -5,9 +5,26 @@ import { NFL_PPR_ROSTER } from "../rules/nfl-ppr.js";
 import { autolineup, seasonAverage } from "./autolineup.js";
 import type { AutolineupCandidate } from "./autolineup.js";
 import { validateLineup } from "./lineup.js";
+import type { KickoffTimes } from "./lineup.js";
 
 const SHAPE = buildRosterShape(NFL_PPR_ROSTER, NFL);
 const SUNDAY = 1_757_782_800;
+
+/**
+ * Kickoffs for a candidate roster, and a moment before all of them.
+ *
+ * `ValidateLineupInput.kickoffs` is required, and `lineup.ts` says why: "an
+ * optional filter that defaults to permissive is the shape that produced the
+ * `loadProjections` defect". Both calls below omitted it and compiled anyway,
+ * because no test under `packages/` was typechecked — #257. Deriving it from
+ * the roster the lineup was built from keeps the two from drifting apart, and
+ * passing `now` is what makes these assertions about the path a manager's own
+ * edit takes rather than the preview path.
+ */
+const kickoffsOf = (roster: readonly AutolineupCandidate[]): KickoffTimes =>
+  new Map(roster.map((player) => [player.playerId, player.kickoffAt]));
+
+const BEFORE_KICKOFF = SUNDAY - 3_600;
 
 function candidate(
   playerId: string,
@@ -66,7 +83,14 @@ describe("autolineup", () => {
     const roster = new Map(ROSTER.map((player) => [player.playerId, player]));
 
     expect(
-      validateLineup({ assignments: lineup, shape: SHAPE, roster, requireFull: true }),
+      validateLineup({
+        assignments: lineup,
+        shape: SHAPE,
+        roster,
+        kickoffs: kickoffsOf(ROSTER),
+        now: BEFORE_KICKOFF,
+        requireFull: true,
+      }),
     ).toEqual([]);
   });
 
@@ -375,8 +399,15 @@ describe("WEEKLY_PROJECTION", () => {
     });
     const roster = new Map(candidates.map((player) => [player.playerId, player]));
 
-    expect(validateLineup({ assignments, shape: SHAPE, roster, requireFull: true })).toEqual(
-      [],
-    );
+    expect(
+      validateLineup({
+        assignments,
+        shape: SHAPE,
+        roster,
+        kickoffs: kickoffsOf(candidates),
+        now: BEFORE_KICKOFF,
+        requireFull: true,
+      }),
+    ).toEqual([]);
   });
 });

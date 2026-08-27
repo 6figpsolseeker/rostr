@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { NFL } from "../sports/nfl.js";
 import { NFL_DEFAULT_WAIVERS, NFL_PPR_ROSTER } from "../rules/nfl-ppr.js";
 import { buildRosterShape } from "../draft/roster.js";
-import type { DraftablePlayer } from "../draft/roster.js";
+import type { DraftablePlayer, RosterShape } from "../draft/roster.js";
 import {
   availabilityAt,
   dropDestination,
