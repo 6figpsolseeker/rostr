@@ -629,13 +629,30 @@ needs to happen.
 and no forfeiture. A manager who stops setting lineups is not defrauding anyone, and a
 rule people would only discover by losing money to it is the wrong rule to have.
 
-Instead, **a slot you leave empty gets filled for you at lock**, and it is on by default.
+Instead, **a slot you leave empty gets filled for you**, and it is on by default. The fill
+runs through the week and always before your week is scored. It never starts a player whose
+own game has kicked off, so a slot you leave empty past a player's lock will not be filled
+with him — the same rule that stops you starting him yourself.
 
 **Selection is deterministic**, because a filled team's results move other people's
-playoff seeds and, in a pot league, decide who gets paid: the highest-ranked player
-eligible for each slot, ties broken by ascending player ID. Scarce slots are filled first,
-so a tight end who also qualifies for the FLEX is considered for TE first rather than
-being taken by the FLEX and leaving TE empty.
+playoff seeds and, in a pot league, decide who gets paid.
+
+**Who is eligible.** Every player on your active roster who can fill the slot. A player
+stashed on IR is not — that is what the slot is for. **Nor is a player whose own game has
+already kicked off**, because § 2's lock forbids moving him into a slot he was not already
+in. The autofill is held to that lock exactly as you are: it may leave a player whose game
+has started where he already stands, and it may not start him anywhere new.
+
+**Who gets the slot.** Among those eligible, a player with a game this week who is not
+ruled out comes first, because a player on a bye or officially out cannot score at all.
+Then the highest-ranked of those, ties broken by ascending player ID. Scarce slots are
+filled first, so a tight end who also qualifies for the FLEX is considered for TE first
+rather than being taken by the FLEX and leaving TE empty.
+
+**A slot with nobody eligible left stays empty** and scores nothing. That is the honest
+outcome once everyone who could have filled it is already playing, and it is the better
+one: an empty slot never locks, so it is still yours to fill from free agency with anyone
+whose own game has not kicked off, where a started player would have locked it for the week.
 
 **The ranking is that week's projection**, scored under this league's own frozen rules
 rather than the provider's. A season average cannot know that this week's opponent is the
@@ -657,7 +674,8 @@ and changeable whenever you like. Off means an empty slot stays empty and scores
 which is the honest meaning of the switch, and why it is not the default.
 
 Setting your own lineup always overrides it. Autofill only ever touches slots you left
-empty, and never a slot that has already locked.
+empty, never a slot that has already locked, and never _puts_ a player whose game has
+kicked off into a slot either.
 
 ---
 

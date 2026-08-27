@@ -1508,8 +1508,32 @@ reproducibility and for independence from roster order.
 **Scarcest slot first.** With one tight end on the roster, filling FLEX first takes him
 and leaves TE empty. There is a test.
 
-An unavailable player still gets started when there is nobody else: an empty slot and an
-inactive player both score nothing, but only one keeps the lineup legal.
+**An unavailable player still gets started when there is nobody else. A player whose game
+has kicked off does not.** Those read as the same rule and are not, which is why this is a
+paragraph rather than a line.
+
+Unavailable is about whether he can _score_: a bye or an OUT designation and an empty slot
+both produce nothing, so starting him costs the manager nothing he had. Kicked off is about
+whether the manager still held the _choice_, and there the two come apart. Filling an empty
+slot from a player already playing locks it from that instant, so a slot the manager had
+three more hours to decide is decided for him, from a performance already half or wholly
+known, with no undo — the stored occupant is what locks, so he cannot even blank it back.
+
+**And it was never ours to do.** `validateLineup` already refuses that placement from every
+other writer — `PLAYER_LOCKED`, whose comment says why: _"an empty slot — which never locks —
+would let a manager start a player after watching him score."_ The autofill got through only
+because `setLineupUnchecked` skips validation, and that bypass is justified on shape,
+ownership and being allowed to leave slots empty, not on locks. It already honoured
+`SLOT_LOCKED`. Honouring one half of a documented pair was the whole of the defect.
+
+So it is a **hard exclusion, not a sort key**, and a slot with no unstarted candidate left is
+**written empty** — legal everywhere, scored as zero like any empty slot, and still fillable
+from free agency, which a locked player would have ended.
+
+**Do not "improve" this by ranking him last instead.** The equality that makes the
+availability rule free — both score nothing — does not hold for a player who is out there
+playing, so the case for excluding him is not that it is cheap. It is that no manager in
+this league is permitted to make that start.
 
 **Persistence is `packages/db/src/lineups.ts`.** The lock is enforced there, not just
 greyed out in the UI — `setLineup` loads what is _currently stored_, works out which slots
