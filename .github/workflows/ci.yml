@@ -30,6 +30,17 @@ jobs:
         if: github.event_name == 'pull_request'
         run: node scripts/check-migration-numbers.mjs "origin/${{ github.base_ref }}"
 
+      # Deliberately before install, like the migration check above: it reads
+      # JSON and needs no toolchain, so a missing project is reported in seconds.
+      # Every package must have both halves of its TypeScript project — the build
+      # config that fills `dist/`, and the `noEmit` config that checks its test
+      # files. For the repo's first year they had only the first, and 74 test
+      # files across five packages were typechecked by nothing (#257). A sixth
+      # package added by copying a fifth would inherit the hole silently, so it
+      # is asserted rather than remembered.
+      - name: Test projects are wired up
+        run: node scripts/check-test-projects.mjs
+
       - uses: pnpm/action-setup@v4
 
       - uses: actions/setup-node@v4

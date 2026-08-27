@@ -56,8 +56,22 @@ interface Fixture {
   rules: LeagueRules;
   teamId: string;
   otherTeamId: string;
-  /** Player IDs by the handle used below. */
+  /**
+   * Player IDs by the handle used below. Prefer `player()` for anything the
+   * product reads; see there for why.
+   */
   players: Map<string, string>;
+  /**
+   * A seeded player's id, by handle. Total on purpose.
+   *
+   * `players.get(handle)!` typechecks and then hands `undefined` to `setLineup`,
+   * whose `playerId` is `string | null` where null means *clear this slot*. A
+   * mistyped handle therefore stops testing the write the test is named for and
+   * starts testing the erase — silently, and green. This throws at the typo
+   * instead. Assertions may keep using `players` directly: an `undefined`
+   * reaching `expect` already fails loudly.
+   */
+  player(handle: string): string;
 }
 
 /**
@@ -160,16 +174,33 @@ async function setup(): Promise<Fixture> {
     teamId: mine.teamId,
     otherTeamId: theirs.teamId,
     players,
+    player: (handle) => {
+      const id = players.get(handle);
+      if (id === undefined) {
+        throw new Error(
+          `no seeded player "${handle}" (have: ${[...players.keys()].join(", ")})`,
+        );
+      }
+      return id;
+    },
   };
 }
 
-const lineupOf = (fx: Fixture, handles: Record<string, string>): LineupAssignment[] =>
+/**
+ * A lineup from slot-to-handle pairs.
+ *
+ * A null handle empties the slot, which is a legal thing for a manager to do
+ * and is what the autofill's candidate tests need to set up. An unrecognised
+ * handle passes straight through as the id, so a test can name a player the
+ * fixture never seeded and watch the product refuse it.
+ */
+const lineupOf = (fx: Fixture, handles: Record<string, string | null>): LineupAssignment[] =>
   Object.entries(handles).map(([slot, handle]) => {
     const [slotType, index] = slot.split(":");
     return {
       slotType: slotType!,
       slotIndex: Number(index ?? 0),
-      playerId: fx.players.get(handle) ?? handle,
+      playerId: handle === null ? null : (fx.players.get(handle) ?? handle),
     };
   });
 
@@ -757,7 +788,7 @@ describe("ensureLineups", () => {
       leagueId: fx.leagueId,
       teamId: fx.teamId,
       week: WEEK,
-      assignments: [{ slotType: "QB", slotIndex: 0, playerId: fx.players.get("sun-qb") }],
+      assignments: [{ slotType: "QB", slotIndex: 0, playerId: fx.player("sun-qb") }],
       now: BEFORE_ANYTHING,
     });
 
@@ -1270,7 +1301,7 @@ describe("the lock survives a drop", () => {
       leagueId: fx.leagueId,
       teamId: fx.teamId,
       week: WEEK,
-      assignments: [{ slotType: "QB", slotIndex: 0, playerId: fx.players.get("thu-qb")! }],
+      assignments: [{ slotType: "QB", slotIndex: 0, playerId: fx.player("thu-qb") }],
       now: BEFORE_ANYTHING,
     });
 
@@ -1288,7 +1319,7 @@ describe("the lock survives a drop", () => {
         leagueId: fx.leagueId,
         teamId: fx.teamId,
         week: WEEK,
-        assignments: [{ slotType: "QB", slotIndex: 0, playerId: fx.players.get("sun-qb")! }],
+        assignments: [{ slotType: "QB", slotIndex: 0, playerId: fx.player("sun-qb") }],
         now: AFTER_THURSDAY,
       }),
     ).rejects.toMatchObject({ code: "INVALID_LINEUP" });
@@ -1319,7 +1350,7 @@ describe("the lock survives a drop", () => {
       leagueId: fx.leagueId,
       teamId: fx.teamId,
       week: WEEK,
-      assignments: [{ slotType: "QB", slotIndex: 0, playerId: fx.players.get("thu-qb")! }],
+      assignments: [{ slotType: "QB", slotIndex: 0, playerId: fx.player("thu-qb") }],
       now: BEFORE_ANYTHING,
     });
 
@@ -1348,7 +1379,7 @@ describe("the lock survives a drop", () => {
       leagueId: fx.leagueId,
       teamId: fx.teamId,
       week: WEEK,
-      assignments: [{ slotType: "QB", slotIndex: 0, playerId: fx.players.get("thu-qb")! }],
+      assignments: [{ slotType: "QB", slotIndex: 0, playerId: fx.player("thu-qb") }],
       now: BEFORE_ANYTHING,
     });
 
@@ -1459,7 +1490,7 @@ describe("a lineup that moves under the manager — #100", () => {
         leagueId: fx.leagueId,
         teamId: fx.teamId,
         week: WEEK,
-        assignments: [{ slotType: "QB", slotIndex: 0, playerId: fx.players.get("thu-qb") }],
+        assignments: [{ slotType: "QB", slotIndex: 0, playerId: fx.player("thu-qb") }],
         now: BEFORE_ANYTHING,
       });
     });
@@ -1469,7 +1500,7 @@ describe("a lineup that moves under the manager — #100", () => {
         leagueId: fx.leagueId,
         teamId: fx.teamId,
         week: WEEK,
-        assignments: [{ slotType: "QB", slotIndex: 0, playerId: fx.players.get("sun-qb") }],
+        assignments: [{ slotType: "QB", slotIndex: 0, playerId: fx.player("sun-qb") }],
         now: BEFORE_ANYTHING,
       }),
     ).rejects.toSatisfy((e) => e instanceof LineupError && e.code === "LINEUP_MOVED");
@@ -1486,7 +1517,7 @@ describe("a lineup that moves under the manager — #100", () => {
         leagueId: fx.leagueId,
         teamId: fx.teamId,
         week: WEEK,
-        assignments: [{ slotType: "QB", slotIndex: 0, playerId: fx.players.get("thu-qb") }],
+        assignments: [{ slotType: "QB", slotIndex: 0, playerId: fx.player("thu-qb") }],
         now: BEFORE_ANYTHING,
       });
     });
@@ -1496,7 +1527,7 @@ describe("a lineup that moves under the manager — #100", () => {
         leagueId: fx.leagueId,
         teamId: fx.teamId,
         week: WEEK,
-        assignments: [{ slotType: "QB", slotIndex: 0, playerId: fx.players.get("sun-qb") }],
+        assignments: [{ slotType: "QB", slotIndex: 0, playerId: fx.player("sun-qb") }],
         now: BEFORE_ANYTHING,
       }),
     ).rejects.toThrow();
@@ -1527,7 +1558,7 @@ describe("a lineup that moves under the manager — #100", () => {
         leagueId: fx.leagueId,
         teamId: fx.teamId,
         week: WEEK,
-        assignments: [{ slotType: "QB", slotIndex: 0, playerId: fx.players.get("thu-qb") }],
+        assignments: [{ slotType: "QB", slotIndex: 0, playerId: fx.player("thu-qb") }],
         now: BEFORE_ANYTHING,
       });
     });
@@ -1541,7 +1572,7 @@ describe("a lineup that moves under the manager — #100", () => {
         week: WEEK,
         assignments: [
           { slotType: "QB", slotIndex: 0, playerId: null },
-          { slotType: "RB", slotIndex: 0, playerId: fx.players.get("rb-a") },
+          { slotType: "RB", slotIndex: 0, playerId: fx.player("rb-a") },
         ],
         now: BEFORE_ANYTHING,
       }),
@@ -1571,7 +1602,7 @@ describe("a lineup that moves under the manager — #100", () => {
       leagueId: fx.leagueId,
       teamId: fx.teamId,
       week: WEEK,
-      assignments: [{ slotType: "QB", slotIndex: 0, playerId: fx.players.get("sun-qb") }],
+      assignments: [{ slotType: "QB", slotIndex: 0, playerId: fx.player("sun-qb") }],
       now: BEFORE_ANYTHING,
     });
 
@@ -1580,7 +1611,7 @@ describe("a lineup that moves under the manager — #100", () => {
         leagueId: fx.leagueId,
         teamId: fx.teamId,
         week: WEEK,
-        assignments: [{ slotType: "QB", slotIndex: 0, playerId: fx.players.get("sun-qb") }],
+        assignments: [{ slotType: "QB", slotIndex: 0, playerId: fx.player("sun-qb") }],
         now: BEFORE_ANYTHING,
       }),
     ).resolves.toBeDefined();

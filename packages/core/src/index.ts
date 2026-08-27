@@ -281,7 +281,7 @@ export {
   countedRosterSize,
   irExemptCount,
   irExemptOnRoster,
-  IR_ELIGIBLE_DESIGNATIONS,
+  MAY_STILL_PLAY,
   isIrEligible,
   refuseIrPlacement,
   type IrPlacementRefusal,

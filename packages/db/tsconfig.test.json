@@ -1,0 +1,17 @@
+{
+  // See packages/core/tsconfig.test.json for why this file exists.
+  //
+  // `references` is restated because `extends` does not inherit it. Without
+  // these edges `tsc --build` has no ordering constraint from this project to
+  // core and stats, and db's tests would be checked against whatever stale
+  // `dist/*.d.ts` happened to be lying around — a failure that presents as a
+  // *passing* typecheck. `scripts/check-test-projects.mjs` asserts this list
+  // matches the build project's.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "tsBuildInfoFile": "./dist/tsconfig.test.tsbuildinfo"
+  },
+  "exclude": [],
+  "references": [{ "path": "../core" }, { "path": "../stats" }]
+}

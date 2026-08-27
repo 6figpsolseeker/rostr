@@ -137,8 +137,6 @@ function untilLock(locksAt: number | null, now: number): string {
   return `in ${minutes}m`;
 }
 
-const OUT_STATUSES = new Set(["OUT", "IR", "INACTIVE", "SUSPENDED", "DOUBTFUL", "PUP", "NFI"]);
-
 export function LineupEditor({ leagueId, week }: { leagueId: string; week: number }) {
   const { data, error, mutate } = useSWR<LineupResponse>(
     `/api/leagues/${leagueId}/lineup?week=${week}`,
@@ -593,9 +591,7 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
                         candidate.availability === "TIME_TBD"
                           ? " — TBD"
                           : ""}
-                        {OUT_STATUSES.has(candidate.status.toUpperCase())
-                          ? ` — ${candidate.status}`
-                          : ""}
+                        {candidate.injuryDesignation ? ` — ${candidate.injuryDesignation}` : ""}
                       </option>
                     );
                   })}
@@ -673,8 +669,24 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
                   </span>
                 </span>
               </button>
-              {OUT_STATUSES.has(player.status.toUpperCase()) && (
-                <span className="text-amber-400/70">{player.status}</span>
+              {/*
+                The bench row's only injury marker, and it showed nothing at all
+                until now: it read `player.status`, a column no code in this repo
+                has ever written, so the test was `"ACTIVE"` against a set of out
+                designations and never matched. `injuryBadge` reads the column the
+                provider actually fills, and is what the starter rows above have
+                been using all along.
+
+                Worth having beyond tidiness: the "To IR" button below is hidden
+                for a player the server would refuse, so a manager whose player is
+                wrongly ineligible sees no badge and no button — nothing to notice
+                and nothing to report. The badge is the half that makes a
+                disagreement visible.
+              */}
+              {player.injuryDesignation && (
+                <span className={injuryTone(player.injuryDesignation)}>
+                  {injuryBadge(player.injuryDesignation)}
+                </span>
               )}
               {/*
                 Offered only to a player the server would actually accept. The

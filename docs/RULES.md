@@ -147,8 +147,18 @@ the exact definition is ESPN's and is recorded with the alignment work in
 | IR               | 2             |
 | **Total roster** | **14 + 2 IR** |
 
-IR slots hold only players officially designated out or on injured reserve, and do not
-count against the roster limit.
+IR slots hold players the provider has designated as carrying an injury, and do not count
+against the roster limit. A player whose designation says he may still play — questionable —
+is not eligible; a designation nobody here recognises **admits** him rather than refusing.
+That direction is chosen. The cost of admitting someone who turns out to play is an IR slot
+his own manager decided to spend, and there are only ever `irSlots` of them. The cost of
+refusing is that a player literally on injured reserve cannot be put on injured reserve.
+
+The check is continuous, not just at the moment you stash him: whenever your roster is
+counted, the exemption is re-read from his current designation. **An injury getting worse
+never costs you the slot** — if his designation moves from out to injured reserve, he stays
+exempt. If he recovers, he counts against your roster again, and nothing is forced off:
+activating him is never refused for capacity.
 
 **Lineup lock:** each slot locks individually at the kickoff of that player's game.
 A player already locked cannot be moved for that week.
