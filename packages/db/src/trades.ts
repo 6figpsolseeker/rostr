@@ -30,12 +30,13 @@ import {
   NFL,
   pastTradeDeadline,
   projectedRosterSize,
+  reservedByTrades,
   tradeBlockedBecause,
   vetoWindowEndsAt,
   vetoWindowHasClosed,
   vetoesRequired,
 } from "@rostr/core";
-import type { LeagueRules } from "@rostr/core";
+import type { CommittedTrade, LeagueRules } from "@rostr/core";
 import type { SqlClient } from "./client.js";
 import { getLeagueRules } from "./leagues.js";
 import { withTransaction } from "./transaction.js";
@@ -284,13 +285,17 @@ export async function lockedByTrade(
   return new Set(rows.map((row) => row.player_id));
 }
 
-/** What each team's accepted trades have committed it to receive and to give up. */
-export interface CommittedTradeMoves {
-  /** How many players are due to arrive. Each one will count: see below. */
-  readonly arriving: number;
-  /** Players due to leave. */
-  readonly leaving: ReadonlySet<string>;
-}
+/**
+ * Every accepted trade a team is party to, **one entry each**.
+ *
+ * Kept apart rather than merged into a single arriving/leaving pair, because
+ * merging them loses the fact that a trade is all-or-nothing: two trades that
+ * cancel out on paper reserve nothing once merged, and the team ends up over
+ * the limit when one is vetoed and the other executes. `reservedByTrades`
+ * takes the worst case across them, which it can only do if it can still see
+ * where one trade ends and the next begins.
+ */
+export type CommittedTradeMoves = readonly CommittedTrade[];
 
 /**
  * The roster moves every accepted trade in this league is committed to make.
@@ -314,24 +319,31 @@ export async function committedTradeMoves(
   leagueId: string,
 ): Promise<ReadonlyMap<string, CommittedTradeMoves>> {
   const rows = await db.query<{
+    trade_id: string;
     proposer_team_id: string;
     receiver_team_id: string;
     from_team_id: string;
     player_id: string;
   }>(
-    `SELECT t.proposer_team_id, t.receiver_team_id, a.from_team_id, a.player_id
+    `SELECT t.id AS trade_id, t.proposer_team_id, t.receiver_team_id,
+            a.from_team_id, a.player_id
        FROM trade_assets a
        JOIN trades t ON t.id = a.trade_id
       WHERE t.league_id = $1 AND t.state = 'ACCEPTED'`,
     [leagueId],
   );
 
-  const moves = new Map<string, { arriving: number; leaving: Set<string> }>();
-  const forTeam = (teamId: string) => {
-    const found = moves.get(teamId);
+  const moves = new Map<string, Map<string, { arriving: number; leaving: Set<string> }>>();
+  const forTeam = (teamId: string, tradeId: string) => {
+    let byTrade = moves.get(teamId);
+    if (!byTrade) {
+      byTrade = new Map();
+      moves.set(teamId, byTrade);
+    }
+    const found = byTrade.get(tradeId);
     if (found) return found;
     const fresh = { arriving: 0, leaving: new Set<string>() };
-    moves.set(teamId, fresh);
+    byTrade.set(tradeId, fresh);
     return fresh;
   };
 
@@ -341,11 +353,11 @@ export async function committedTradeMoves(
     const toTeamId =
       row.from_team_id === row.proposer_team_id ? row.receiver_team_id : row.proposer_team_id;
 
-    forTeam(row.from_team_id).leaving.add(row.player_id);
-    forTeam(toTeamId).arriving += 1;
+    forTeam(row.from_team_id, row.trade_id).leaving.add(row.player_id);
+    forTeam(toTeamId, row.trade_id).arriving += 1;
   }
 
-  return moves;
+  return new Map([...moves].map(([teamId, byTrade]) => [teamId, [...byTrade.values()]]));
 }
 
 // ---------------------------------------------------------------------------
@@ -555,19 +567,29 @@ async function projectedSizeFor(
     [teamId],
   );
 
-  const committed = moves.get(teamId);
-  const leaving = new Set([...(committed?.leaving ?? []), ...extra.leaving]);
+  const roster = held.map((row) => ({
+    playerId: row.player_id,
+    onIr: row.on_ir,
+    injuryDesignation: row.designation,
+  }));
 
-  return projectedRosterSize({
-    roster: held.map((row) => ({
-      playerId: row.player_id,
-      onIr: row.on_ir,
-      injuryDesignation: row.designation,
-    })),
-    leaving,
-    arriving: (committed?.arriving ?? 0) + extra.arriving,
-    irSlots,
-  });
+  /*
+    Two different questions, and they must not be answered the same way.
+
+    The trade being accepted is *atomic*: its departures and its arrivals move
+    in one transaction, so its departures do free room for its own arrivals. A
+    two-for-one is permitted, which is the owner's rule.
+
+    Every other accepted trade is *conditional*. Its rows have not moved and may
+    never move, so it can only take room, never give it back. Merging the two
+    sets — which is what this used to do — credits a departure that has not
+    happened against an arrival that might, and lets both a veto and a second
+    trade put the team over.
+  */
+  return (
+    projectedRosterSize({ roster, leaving: extra.leaving, arriving: extra.arriving, irSlots }) +
+    reservedByTrades(roster, moves.get(teamId) ?? [], irSlots)
+  );
 }
 
 /**

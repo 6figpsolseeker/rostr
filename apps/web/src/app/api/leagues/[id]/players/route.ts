@@ -19,6 +19,10 @@ const STATUS: Record<string, number> = {
   NOT_A_FREE_AGENT: 409,
   NOT_ON_WAIVERS: 409,
   ROSTER_FULL: 409,
+  // Its sibling: the roster has room and a trade has spoken for it. A conflict
+  // with the league's state, not a malformed request, and the fallback below
+  // would call it 400.
+  SLOT_HELD_FOR_TRADE: 409,
   DUPLICATE_CLAIM: 409,
   IN_A_TRADE: 409,
 };

@@ -39,7 +39,8 @@ import {
   availabilityAt,
   everyoneIsOnWaivers,
   buildRosterShape,
-  projectedRosterSize,
+  countedRosterSize,
+  reservedByTrades,
   isIrEligible,
   dropDestination,
   initialWaiverPriority,
@@ -48,7 +49,7 @@ import {
   resolveWaiverClaims,
   waiverClearsAt,
 } from "@rostr/core";
-import type { RosterMember, DraftablePlayer, LeagueRules, WaiverClaim } from "@rostr/core";
+import type { IrRosterEntry, DraftablePlayer, LeagueRules, WaiverClaim } from "@rostr/core";
 import type { SqlClient } from "./client.js";
 import { getLeagueRules } from "./leagues.js";
 import { isUniqueViolation } from "./pg-errors.js";
@@ -632,30 +633,51 @@ export async function addFreeAgent(db: SqlClient, input: AddInput): Promise<void
       two managers already made and this is one nobody has made yet.
     */
     const moves = await committedTradeMoves(tx, input.leagueId);
-    const committed = moves.get(input.teamId);
-    const projected = projectedRosterSize({
-      roster: held.map((row) => ({
-        playerId: row.player_id,
-        onIr: row.on_ir,
-        injuryDesignation: row.designation,
-      })),
-      leaving: committed?.leaving ?? new Set<string>(),
-      arriving: committed?.arriving ?? 0,
-      irSlots: shape.irSlots,
-    });
+    const roster = held.map((row) => ({
+      playerId: row.player_id,
+      onIr: row.on_ir,
+      injuryDesignation: row.designation,
+    }));
 
-    if (projected >= shape.totalSlots) {
-      // Named apart from a plain full roster, because the manager is looking at
-      // an empty slot. `whyClaimFailed` says a full roster stayed full "even
-      // after any drop the claim named", which would be untrue here and would
-      // send them dropping players that will not help.
-      const held = committed !== undefined && committed.arriving > 0;
+    /*
+      Present tense first, then what has been promised away.
+
+      `counting` is what this team holds *now*. Nothing an accepted trade has
+      committed to may reduce it: those players are still on the roster, and the
+      trade can still be vetoed, in which case they stay. Subtracting them here
+      is how a full team was waved through into holding one more than the limit
+      — with no state afterwards that asks anyone to drop.
+
+      `reservedByTrades` then adds back only what the trades can *take*, worst
+      case and per trade.
+    */
+    const counting = countedRosterSize(roster, shape.irSlots);
+    const reserved = reservedByTrades(roster, moves.get(input.teamId) ?? [], shape.irSlots);
+
+    if (counting + reserved >= shape.totalSlots) {
+      /*
+        Which of the two refused it decides what the manager is told, and telling
+        them the wrong one sends them to the wrong screen.
+
+        A full roster is `ROSTER_FULL`: drop someone and the add works. It is
+        only `SLOT_HELD_FOR_TRADE` when there is room today and a trade has
+        spoken for it — the case where the manager is looking at an empty slot,
+        and where `whyClaimFailed`'s "still full even after any drop the claim
+        named" would be untrue.
+
+        Keyed on which count crossed the line, not on whether a trade exists.
+        Every accepted trade has an arriving side — `proposeTrade` refuses
+        `NOTHING_OFFERED` — so "this team is in a trade" would relabel every
+        genuinely full roster and tell managers that dropping will not help, when
+        it is the only thing that will.
+      */
+      const spokenFor = counting < shape.totalSlots;
       throw new WaiverError(
-        held
+        spokenFor
           ? "A roster spot is being held for a trade you accepted, so there is no room " +
               "for this add until that trade executes or is vetoed"
           : "This roster is full — drop someone first",
-        held ? "SLOT_HELD_FOR_TRADE" : "ROSTER_FULL",
+        spokenFor ? "SLOT_HELD_FOR_TRADE" : "ROSTER_FULL",
       );
     }
 
@@ -947,7 +969,18 @@ export async function processWaivers(
       [leagueId],
     );
 
-    const rosters = new Map<string, RosterMember[]>(priority.map((teamId) => [teamId, []]));
+    /*
+      `IrRosterEntry`, not `RosterMember`: the query already selects `on_ir` and
+      the designation, and the trade reservation below has to ask the same
+      question about a departing player that every other capacity check asks —
+      was he counting? Deriving that from a separate set would be a second
+      answer free to disagree with the first, and the capping (`irSlots` bounds
+      how many may be exempt) is exactly where two answers drift apart.
+
+      Still assignable where `RosterMember` is wanted, so the resolver's
+      identity-and-count contract is unchanged.
+    */
+    const rosters = new Map<string, IrRosterEntry[]>(priority.map((teamId) => [teamId, []]));
 
     /*
       Ownership comes from `rosterRows` and from nothing else.
@@ -975,7 +1008,11 @@ export async function processWaivers(
     */
     const irExempt = new Set<string>();
     for (const row of rosterRows) {
-      rosters.get(row.team_id)?.push({ playerId: row.player_id });
+      rosters.get(row.team_id)?.push({
+        playerId: row.player_id,
+        onIr: row.on_ir,
+        injuryDesignation: row.designation,
+      });
       if (row.on_ir && isIrEligible(row.designation)) irExempt.add(row.player_id);
     }
 
@@ -1074,19 +1111,21 @@ export async function processWaivers(
       the same hazard from the other direction, and the one that would otherwise
       make the trade fail for something the trade did not do.
 
-      Departures are netted off using the same live designations everything else
-      here reads: a player leaving who was stashed on IR was not counting, so his
-      going frees nothing and must not be credited as though it did.
+      Worst case per trade, and never netted across them. A departure that has
+      not happened frees nothing — the trade can still be vetoed — and two
+      trades that cancel out on paper still reserve a slot for whichever of them
+      would raise the count, because only one of them may land.
+
+      The IR arithmetic comes with it: a player leaving who was stashed on IR was
+      not counting, so his going returns no room and is not credited as though it
+      did.
     */
     const moves = await committedTradeMoves(tx, leagueId);
     const reserved = new Map<string, number>();
-    for (const [teamId, move] of moves) {
-      const roster = rosters.get(teamId) ?? [];
-      const countedLeaving = roster.filter(
-        (member) => move.leaving.has(member.playerId) && !irExempt.has(member.playerId),
-      ).length;
-      const net = move.arriving - countedLeaving;
-      if (net > 0) reserved.set(teamId, net);
+    for (const [teamId, trades] of moves) {
+      const held = rosters.get(teamId) ?? [];
+      const room = reservedByTrades(held, trades, shape.irSlots);
+      if (room > 0) reserved.set(teamId, room);
     }
 
     const resolution = resolveWaiverClaims({
