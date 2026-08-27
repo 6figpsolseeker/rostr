@@ -72,13 +72,21 @@ interface LineupResponse {
   autofill: {
     enabled: boolean;
     mode: "WEEKLY_PROJECTION" | "SEASON_AVERAGE";
-    /** Per empty slot: who it would start, and who it left on the bench. */
+    /**
+     * Per empty slot: who it would start, and who it left on the bench.
+     *
+     * `playerId` is nullable because a slot the autofill cannot fill is part of
+     * the answer — it used to be filtered out of this list, which rendered it
+     * identically to a slot already set.
+     */
     preview: {
       slotType: string;
       slotIndex: number;
-      playerId: string;
+      playerId: string | null;
       runnerUpId: string | null;
       runnerUpReason: "LOWER_RANKED" | "UNAVAILABLE" | "NO_DATA" | null;
+      /** Why the slot is being left empty; null when it is being filled. */
+      emptyReason: "ALL_PLAYING" | "NONE_ELIGIBLE" | null;
     }[];
   };
   slots: Slot[];
@@ -288,10 +296,10 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
   /*
     Counted from the slots, not from the preview's length.
 
-    The preview only covers slots the autofill can actually fill; a slot with no
-    eligible player left produces no entry. Deriving the count from it would
-    quietly under-report — the manager would be told two slots are empty while
-    three score nothing.
+    The preview covers every empty slot, including the ones the autofill will
+    leave empty — but it is a preview, computed against this instant, and the
+    count above the box is a statement about the lineup as stored. Deriving one
+    from the other would make the count move as games kick off.
   */
   const emptySlots = data.slots.filter((slot) => slot.playerId === null).length;
   const heading = previewHeading({ enabled: data.autofill.enabled, emptySlots });
@@ -390,28 +398,34 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
           {data.autofill.enabled && (
             <ul className="space-y-1.5">
               {data.autofill.preview.map((choice) => {
-                const starter = byId.get(choice.playerId);
-                const passed = choice.runnerUpId ? byId.get(choice.runnerUpId) : null;
-
                 /*
-                  A slot the autofill will leave empty, because everyone who
-                  could fill it is already playing.
+                  A slot the autofill will leave empty.
 
                   This used to render as nothing, which read exactly like a slot
-                  already set. It is the one row here a manager has to act on:
-                  the remaining move is a free agent whose game has not started,
-                  and nothing else on this screen would tell him so.
+                  already set — under a heading whose whole job is naming what
+                  the autofill will do. It is the row a manager has to act on.
+
+                  The two reasons ask him for different things, so the server
+                  says which it is rather than the screen assuming. Guessing
+                  wrong is worse than saying less: "everyone is already playing"
+                  on a Wednesday, to a manager who simply rosters no kicker,
+                  sends him looking for a problem that is not there.
                 */
                 if (choice.playerId === null) {
                   return (
                     <li key={`${choice.slotType}#${choice.slotIndex}`} className="text-[13px]">
                       <span className="text-nocturne-neutral-600">{choice.slotType}</span>{" "}
                       <span className="text-amber-300">
-                        stays empty — everyone eligible is already playing
+                        {choice.emptyReason === "ALL_PLAYING"
+                          ? "stays empty — everyone who could fill it is already playing"
+                          : "stays empty — nobody on your roster can fill it"}
                       </span>
                     </li>
                   );
                 }
+
+                const starter = byId.get(choice.playerId);
+                const passed = choice.runnerUpId ? byId.get(choice.runnerUpId) : null;
 
                 if (!starter) return null;
 
