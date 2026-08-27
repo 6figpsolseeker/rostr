@@ -714,7 +714,23 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
                   title={
                     player.availability === "TIME_TBD"
                       ? "He plays this week. The NFL has not fixed the kickoff time, so this slot locks at the earliest hour the game could start."
-                      : "No fixture stored for his team this week, and it is not their bye. Check back once the schedule syncs."
+                      : player.teamRef === null
+                        ? // Says less, because the other sentence says something
+                          // false here. A player with no club reference has no
+                          // fixture coming, and "check back once the schedule
+                          // syncs" promises one that never arrives — which is
+                          // the worst kind of wrong on a screen somebody is
+                          // deciding from. Issue #254.
+                          //
+                          // Reports the missing club reference and stops there,
+                          // rather than diagnosing why. `teamRef` is null for a
+                          // player no longer on an NFL roster, and also for a
+                          // stale trade, a blank, or a provider rename — see
+                          // `lineups.ts`. Naming the cause would need
+                          // `players.active`, a third reader of a flag issue
+                          // #276 exists to sort out first.
+                          "He is not listed with an NFL club, so no fixture is stored for him."
+                        : "No fixture stored for his team this week, and it is not their bye. Check back once the schedule syncs."
                   }
                 >
                   TBD

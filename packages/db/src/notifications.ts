@@ -43,6 +43,7 @@ export type NotificationKind =
   | "VETO_WINDOW"
   | "DRAFT_SOON"
   | "LINEUP_UNSET"
+  | "PLAYER_OFF_NFL_ROSTER"
   | "INVITATION";
 
 /**
@@ -50,8 +51,19 @@ export type NotificationKind =
  *
  * A pick clock runs in seconds and everything else in hours or days, so it
  * outranks the lot. A trade you have not answered outranks a veto window because
- * the trade cannot proceed without you and the veto can. An invitation is last:
- * it is the only item with no deadline at all.
+ * the trade cannot proceed without you and the veto can.
+ *
+ * **Ranked by how soon acting stops being possible, and where two items are both
+ * open-ended, by what ignoring one costs.** This used to say an invitation is
+ * last because "it is the only item with no deadline at all", which was already
+ * untrue when it was written — `unsetLineups` returns `deadline: null` too, and
+ * ranks above it. The window is what matters, not whether a field holds a date:
+ * an unset lineup closes at kickoff whether or not anything stored the hour.
+ *
+ * So the two open-ended items are separated by cost. A player who is no longer
+ * on an NFL roster scores zero every remaining week and nothing in the system
+ * corrects it. An invitation costs nothing and expires never, which is what
+ * keeps it last.
  */
 export const NOTIFICATION_URGENCY: readonly NotificationKind[] = [
   "ON_THE_CLOCK",
@@ -59,6 +71,7 @@ export const NOTIFICATION_URGENCY: readonly NotificationKind[] = [
   "VETO_WINDOW",
   "DRAFT_SOON",
   "LINEUP_UNSET",
+  "PLAYER_OFF_NFL_ROSTER",
   "INVITATION",
 ];
 
@@ -97,6 +110,82 @@ export interface Notification {
 const DRAFT_SOON_MS = 60 * 60 * 1000;
 
 /**
+ * Players on your roster who are no longer on an NFL roster.
+ *
+ * `season-sync` clears `players.active` for anyone the provider stops listing
+ * with a club, and until now that was the end of it: the player stayed on the
+ * roster, scored zero every week, and the only thing on screen was a headshot
+ * carrying whatever club the provider last reported. Issue #254. The one place
+ * in the product that states this fact — `waiver-run.ts`, "he is no longer on an
+ * NFL roster" — says it to a rival whose claim failed, never to the manager
+ * holding him.
+ *
+ * **Derived, like everything else here, and that is what makes it correct.** The
+ * fact is a standing one rather than an event: it is true for as long as he is
+ * held and not listed, and it stops being true when he is dropped or signs
+ * somewhere. A stored notification would have to be written when the flag
+ * flipped and deleted when it flipped back, and `syncPlayers` re-asserts
+ * `active` unconditionally on every run, so the flag is bidirectional and the
+ * copy would be wrong in both directions.
+ *
+ * **One row per league**, aggregated. `HeaderControls` keys the list on
+ * `kind:leagueId`, so a second row for the same league would collide — and a
+ * manager holding two cut players has one problem, not two.
+ *
+ * **It carries a name.** The count alone would be `unsetLineups`' shape, but an
+ * empty lineup slot is visible the moment you arrive and this is not: the roster
+ * panel renders every player identically, so "1 player" would send somebody to a
+ * fourteen-row list with no way to tell which. Naming one and counting the rest
+ * is the least this can say and still be actionable.
+ *
+ * **No advice in the text.** Not "drop him", not "replace him".
+ * `waiver-run.ts` set this convention for the identical fact — state what is
+ * observable, imply no permanence — and it holds here for two more reasons: a
+ * cut player may be signed again on Wednesday, and whether he should be
+ * acquirable at all is what issue #276 exists to decide. The link is the advice.
+ */
+async function playersOffNflRosters(db: SqlClient, userId: string): Promise<Notification[]> {
+  const rows = await db.query<{
+    league_id: string;
+    league_name: string;
+    held: number;
+    names: string[];
+  }>(
+    `SELECT l.id AS league_id, l.name AS league_name, count(*)::int AS held,
+            array_agg(p.full_name ORDER BY p.full_name) AS names
+       FROM league_memberships m
+       JOIN leagues l ON l.id = m.league_id
+       JOIN teams t ON t.id = m.team_id
+       JOIN roster_entries r ON r.team_id = t.id AND r.released_at IS NULL
+       JOIN players p ON p.id = r.player_id
+      WHERE m.user_id = $1
+        AND l.state IN ('IN_SEASON', 'PLAYOFFS')
+        AND NOT p.active
+      GROUP BY l.id, l.name`,
+    [userId],
+  );
+
+  return rows.map((row) => {
+    const [first] = row.names;
+    const others = row.held - 1;
+
+    return {
+      kind: "PLAYER_OFF_NFL_ROSTER" as const,
+      leagueId: row.league_id,
+      leagueName: row.league_name,
+      href: `/leagues/${row.league_id}/players`,
+      text:
+        others === 0
+          ? `${first} is no longer on an NFL roster in ${row.league_name} and cannot score`
+          : `${first} and ${others} other${others === 1 ? "" : "s"} are no longer on an NFL ` +
+            `roster in ${row.league_name} and cannot score`,
+      deadline: null,
+      needsSignature: false,
+    };
+  });
+}
+
+/**
  * Everything waiting on this user, most urgent first.
  *
  * `now` is passed rather than read, so every deadline in the result is measured
@@ -107,15 +196,16 @@ export async function notificationsForUser(
   userId: string,
   now: Date,
 ): Promise<readonly Notification[]> {
-  const [drafts, trades, vetoes, invitations, lineups] = await Promise.all([
+  const [drafts, trades, vetoes, invitations, lineups, cut] = await Promise.all([
     draftNotifications(db, userId, now),
     tradesAwaitingYou(db, userId),
     vetoWindows(db, userId, now),
     invitationNotifications(db, userId),
     unsetLineups(db, userId),
+    playersOffNflRosters(db, userId),
   ]);
 
-  const all = [...drafts, ...trades, ...vetoes, ...invitations, ...lineups];
+  const all = [...drafts, ...trades, ...vetoes, ...invitations, ...lineups, ...cut];
 
   return all.sort((a, b) => {
     const byKind = NOTIFICATION_URGENCY.indexOf(a.kind) - NOTIFICATION_URGENCY.indexOf(b.kind);
