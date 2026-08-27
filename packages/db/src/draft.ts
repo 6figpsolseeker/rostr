@@ -81,6 +81,10 @@ export class DraftPersistenceError extends Error {
       | "NOT_IN_PROGRESS"
       | "ALREADY_STARTED"
       | "PICK_RACE_LOST"
+      // A pick names a player with no position row. Unreachable through the
+      // schema, and asserted rather than handled: the handled version is a
+      // roster silently one player short, which is the bug being fixed.
+      | "PICK_PLAYER_MISSING"
       | "CLOCK_EXPIRED",
   ) {
     super(message);
@@ -843,6 +847,103 @@ export interface RecordedPick {
 }
 
 /**
+ * The rank given to a player who is on a roster but no longer on the board.
+ *
+ * Never read, and that is provable rather than hopeful: `rank` is only consulted
+ * on `available`, which every engine path computes as the pool minus
+ * `draftedPlayerIds`, and every player this constant is given is in that set.
+ * `MAX_SAFE_INTEGER` matches `loadDraftBoard`'s own `NULLS LAST` convention — if
+ * a future caller ever does read it, "sorts last" is the honest answer for
+ * somebody who has no board position at all.
+ *
+ * Deliberately not zero, and deliberately not an empty `positions` array. Zero
+ * would assert "the best player in the draft"; `[]` would assert "he can fill no
+ * position", which `eligible()` reads exactly that way.
+ */
+const OFF_BOARD_RANK = Number.MAX_SAFE_INTEGER;
+
+/**
+ * The board, plus every player this draft has already taken.
+ *
+ * `rosterFor` rebuilds a drafting roster by looking each pick up in the pool, and
+ * the pool comes from `loadDraftBoard`, which filters `WHERE p.sport_id = $1 AND
+ * p.active` — a flag the daily sync clears for anyone the provider reports as an
+ * NFL free agent. So a player drafted in round 2 and cut by his club overnight
+ * fell out of his own team's roster mid-draft: `canDraft` undercounted and let the
+ * team take `totalSlots + 1`, `isAtPositionCap` under-counted his position so
+ * auto-pick doubled up on it, and `unfilledStarterSlots` went on naming a need the
+ * team had already filled — spending a bot's last pick on a second quarterback
+ * while its defence slot stayed empty. Issue #253.
+ *
+ * **The fix for the waiver half of this does not transfer.** That one narrowed the
+ * resolver to identity only, because that path reads identity and count and
+ * nothing else. The draft genuinely reads `positions`, in the three places above,
+ * and an identity-only roster would tell a bot "you hold someone, unspecified" on
+ * every league in every draft rather than only on a cut player.
+ *
+ * **Widening the pool cannot widen what is draftable, and that is a proof rather
+ * than a convention to keep.** What this adds is exactly the players in `picks`,
+ * and `picks` is exactly `draftedPlayerIds(state)`, which `makeAutoPick` subtracts
+ * to build `available` and `makePick` checks before accepting anything. Every
+ * entry added here is refused by both on the line after it is found. The two sets
+ * cannot drift because one is defined as a superset of the other, in one
+ * expression, from one array — not maintained alongside it.
+ *
+ * That is the distinction from `loadRosterForWeek`, which must **not** be widened
+ * for the lineup lock: there the players a lock needs are not a subset of the ones
+ * it refuses, so widening would let a manager start somebody he had cut. Here they
+ * are the same set.
+ *
+ * Built inside the pick transaction on purpose. Assembled at the route instead, it
+ * would be a second read of `draft_picks` taken outside the lock — safe only by a
+ * timing argument, which is the reasoning this function's own docstring rejects.
+ *
+ * Costs nothing in the ordinary case: with nobody cut, `missing` is empty and no
+ * query runs.
+ */
+async function poolWithDraftedPlayers(
+  db: SqlClient,
+  picks: readonly DraftPick[],
+  pool: ReadonlyMap<string, DraftablePlayer>,
+): Promise<ReadonlyMap<string, DraftablePlayer>> {
+  const missing = [...new Set(picks.map((pick) => pick.playerId))].filter(
+    (playerId) => !pool.has(playerId),
+  );
+  if (missing.length === 0) return pool;
+
+  // The same positions join `loadDraftBoard` uses, without its `active` filter —
+  // which is the whole point — and without its sport filter, which here could only
+  // ever hide a row that belongs: these ids come from this draft's own picks.
+  const rows = await db.query<{ id: string; positions: string[] }>(
+    `SELECT p.id, array_agg(DISTINCT pos.key) AS positions
+       FROM players p
+       JOIN positions pos
+         ON pos.id = p.primary_position_id
+         OR pos.id IN (SELECT position_id FROM player_eligible_positions WHERE player_id = p.id)
+      WHERE p.id = ANY($1::uuid[])
+      GROUP BY p.id`,
+    [missing],
+  );
+
+  if (rows.length !== missing.length) {
+    // Unreachable: `draft_picks.player_id` references `players (id)`, and
+    // `players.primary_position_id` is NOT NULL against a registry whose rows are
+    // never deleted. An assertion rather than a case to handle, because the
+    // handled version is the bug — a roster silently one player short.
+    const found = new Set(rows.map((row) => row.id));
+    throw new DraftPersistenceError(
+      `Drafted players have no position row: ${missing.filter((id) => !found.has(id)).join(", ")}`,
+      "PICK_PLAYER_MISSING",
+    );
+  }
+
+  const widened = new Map(pool);
+  for (const row of rows) {
+    widened.set(row.id, { playerId: row.id, positions: row.positions, rank: OFF_BOARD_RANK });
+  }
+  return widened;
+}
+/**
  * Record one pick — manual if `teamId` and `playerId` are given, automatic
  * otherwise. `null` means the pick the caller meant had already been made.
  *
@@ -936,16 +1037,21 @@ export async function recordPick(
     const queues =
       input.teamId && input.playerId ? undefined : await loadQueues(tx, input.leagueId);
 
+    // The board plus this draft's own picks, so a player cut by his club overnight
+    // is still on the roster the engine counts. Read here rather than at the
+    // route, so the picks widened with are the picks validated against.
+    const pool = await poolWithDraftedPlayers(tx, record.state.picks, input.pool);
+
     const next =
       input.teamId && input.playerId
         ? makePick(record.state, {
             teamId: input.teamId,
             playerId: input.playerId,
-            pool: input.pool,
+            pool,
             shape: input.shape,
           })
         : makeAutoPick(record.state, {
-            pool: input.pool,
+            pool,
             shape: input.shape,
             ...(queues ? { queues } : {}),
           });

@@ -1701,3 +1701,99 @@ describe("the draw refuses a pot league whose season has not started", () => {
     ).resolves.toBeDefined();
   });
 });
+
+describe("a player cut by his club stays on the roster he was drafted to", () => {
+  /*
+    Issue #253. The engine rebuilt a drafting roster by looking each pick up in
+    the draft board, and the board filters on `players.active` — a flag the daily
+    sync clears for anyone the provider reports as an NFL free agent. So a player
+    drafted in round 2 and cut overnight fell out of his own team's roster: the
+    count went on without him, letting the team take one more than the limit, and
+    letting a bot double up at a position it had already filled.
+
+    Deleting him from the fixture's `pool` is exactly what the sync produces —
+    the board is rebuilt from a query he no longer matches.
+  */
+
+  it("keeps drafting when its own earlier pick has left the board", async () => {
+    /*
+      The moment that matters is the team's NEXT pick, because `rosterFor` is
+      per-team: a cut player is only missed when the roster being rebuilt is his
+      own. Two teams, so the snake turns straight back — A takes pick 1, B takes
+      2 and 3, A takes 4.
+
+      Before the fix, A's fourth pick was decided against a roster that had
+      silently lost its first. `rosterFor` now refuses to discard a pick at all,
+      so with the widening removed this same call fails with POOL_INCOMPLETE
+      rather than counting wrong — which is what makes this test load-bearing
+      rather than decorative.
+    */
+    const fx = await setup(2);
+    const order = await scheduled(fx);
+    await startDraft(fx.client, fx.leagueId, SCHEDULED);
+
+    const taken = new Set<string>();
+    const take = async (teamId: string, board: ReadonlyMap<string, DraftablePlayer>) => {
+      const playerId = anyAvailable(fx, taken);
+      taken.add(playerId);
+      await recordPick(fx.client, {
+        leagueId: fx.leagueId,
+        teamId,
+        playerId,
+        pool: board,
+        shape: SHAPE,
+        now: SCHEDULED,
+      });
+      return playerId;
+    };
+
+    const first = await take(order[0]!, fx.pool);
+
+    // Overnight, his club cuts him: the board is rebuilt without him.
+    const cutBoard = new Map(fx.pool);
+    cutBoard.delete(first);
+
+    await take(order[1]!, cutBoard);
+    await take(order[1]!, cutBoard);
+
+    // A picks again, and this is the call that rebuilds A's roster.
+    const fourth = await take(order[0]!, cutBoard);
+
+    const roster = await fx.client.query<{ player_id: string }>(
+      `SELECT player_id FROM roster_entries
+        WHERE team_id = $1 AND released_at IS NULL ORDER BY acquired_at`,
+      [order[0]!],
+    );
+
+    expect(roster.map((row) => row.player_id)).toEqual([first, fourth]);
+  });
+  it("still refuses to draft him twice once he is back on the board", async () => {
+    // The widening puts him back in the pool, and the pool is what `available`
+    // is derived from — so the guard that matters is that he is still in
+    // `draftedPlayerIds`, which is what refuses a second pick of him.
+    const fx = await setup();
+    const order = await scheduled(fx);
+    await startDraft(fx.client, fx.leagueId, SCHEDULED);
+
+    const first = anyAvailable(fx, new Set());
+    await recordPick(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: order[0]!,
+      playerId: first,
+      pool: fx.pool,
+      shape: SHAPE,
+      now: SCHEDULED,
+    });
+
+    await expect(
+      recordPick(fx.client, {
+        leagueId: fx.leagueId,
+        teamId: order[1]!,
+        playerId: first,
+        pool: fx.pool,
+        shape: SHAPE,
+        now: SCHEDULED,
+      }),
+    ).rejects.toMatchObject({ code: "PLAYER_UNAVAILABLE" });
+  });
+});
