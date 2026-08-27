@@ -1,0 +1,25 @@
+{
+  // The test files, which `./tsconfig.json` excludes so that `dist/` holds only
+  // shippable source. Excluded from emit had quietly become excluded from
+  // checking too: for the repo's first year `pnpm typecheck` reported success
+  // over 74 test files it had never read, and one of them referenced a type
+  // that does not exist. See issue #257.
+  //
+  // `include` is inherited, so this project checks the same `src/**/*.ts` the
+  // build project does — and `"exclude": []` is what lets the tests in. Source
+  // therefore arrives as source, which is what vitest itself runs: see
+  // `vitest.alias.ts`, which resolves every `@rostr/*` to `src/` because "a
+  // test exercises whatever was last built, so a run can pass against code that
+  // is not the code in front of you".
+  //
+  // `noEmit`, so this project produces nothing but a `.tsbuildinfo`. It stays
+  // `composite` by inheritance because only a composite project may appear in
+  // the root solution's `references`, which is how `pnpm typecheck` finds it
+  // without the script having to name it.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "tsBuildInfoFile": "./dist/tsconfig.test.tsbuildinfo"
+  },
+  "exclude": []
+}
