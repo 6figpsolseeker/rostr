@@ -1074,6 +1074,15 @@ export async function autoFillLineup(
       roster: candidates,
       mode,
       locked: [...keep.values()],
+      // The same clock the lock check above already used. A player whose game
+      // has begun is not a candidate for a slot that is still open: writing him
+      // there locks the slot around him, and the manager who was entitled to
+      // decide it for another three hours is then refused by SLOT_LOCKED.
+      //
+      // Read inside the transaction, like everything else here. Hoisting the
+      // pool out to save a read would make it a function of a pre-transaction
+      // clock, which is the stale-snapshot shape #224 closed.
+      now,
     });
 
     return setLineupUnchecked(tx, teamId, week, filled, current, slotTypeIds, stored.rules);
@@ -1086,7 +1095,17 @@ export async function autoFillLineup(
  * Only for the autolineup, whose output is already produced from this league's
  * own shape and this team's own roster, and which must succeed even when a
  * manager's own lineup would be rejected — an abandoned team still has to be
- * given one.
+ * given one, and `requireFull` is the check it has to be exempt from.
+ *
+ * **That exemption covers shape, ownership and empty slots. It has never covered
+ * locks.** `validateLineup` refuses to move a player into a slot once his own
+ * game has kicked off, and every path through here skips that refusal — so the
+ * caller owns the lock on both sides: `autoFillLineup` preserves an
+ * already-locked slot by passing it in `locked`, and `autolineup` keeps a
+ * started player out of the candidate pool with the `now` it requires. Neither
+ * half is optional, and nothing below this line will catch a caller who forgets
+ * one: the write is a compare-and-swap on the previous value, and a
+ * compare-and-swap cannot tell a legal fill from an illegal one.
  *
  * **Runs inside a transaction its caller opened**, rather than opening one, so
  * that the lock and the read the write is conditioned on are inside the same

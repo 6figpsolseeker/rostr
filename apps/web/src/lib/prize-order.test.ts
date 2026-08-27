@@ -26,11 +26,14 @@ import {
  *
  * This file is the link. It lives in `apps/web` because that is the only place both
  * packages are legitimately dependencies — it is where the anchor route maps one to the
- * other — and, more importantly, because it is the only place a type-level assertion is
- * actually checked: `packages/core` and `packages/escrow` both exclude `src/**\/*.test.ts`
- * from their tsconfig, so a compile-time guard written next to `PRIZE_ORDER` would never
- * run. `apps/web/tsconfig.json` includes `**\/*.ts`, so the block below is checked by
- * `pnpm typecheck`.
+ * other.
+ *
+ * It also used to be the only place a type-level assertion was actually checked: every
+ * package under `packages/` excluded its own tests from its tsconfig, so a compile-time
+ * guard written next to `PRIZE_ORDER` would never have run. That is no longer true —
+ * a per-package `tsconfig.test.json` checks them as of #257 — so the reason to keep this
+ * guard here has expired and it belongs next to what it guards. Moving it is a real
+ * change to a settlement path, and waits until after the season starts.
  */
 
 /**

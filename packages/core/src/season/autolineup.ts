@@ -93,6 +93,22 @@ export interface AutolineupInput {
    * must not try.
    */
   readonly locked?: readonly LineupAssignment[];
+  /**
+   * Unix seconds, at the moment the fill is being decided.
+   *
+   * **Required, not optional-with-a-fallback**, for the reason `lineup.ts` gives
+   * about `KickoffTimes`: an optional filter that defaults to permissive is the
+   * shape of the defect, and here the permissive default *is* the bug. A
+   * clockless autofill is what let an empty slot be filled from a player whose
+   * game had already started, which locked the slot around him and refused the
+   * manager his own edit to it.
+   *
+   * `mode` and `locked` are optional because their defaults are conservative
+   * and say so. A clock has no conservative default: the only value meaning "no
+   * clock" is the one that admits every player already playing. This file is
+   * pure and cannot obtain one itself, so it has to be given one.
+   */
+  readonly now: number;
 }
 
 /**
@@ -180,8 +196,51 @@ export interface AutolineupChoice extends LineupAssignment {
  * end taken by TE is genuinely not available to FLEX, and reporting him as
  * FLEX's runner-up would describe a choice nobody could make.
  */
+/**
+ * Whether this player’s own game has already begun.
+ *
+ * Deliberately the same three answers `isSlotLocked` gives, because this is the
+ * same rule seen from the other side.
+ *
+ * A bye is **not** started: `kickoffAt === null` means there is no game to have
+ * begun, the slot never locks, and the manager keeps every option he had.
+ *
+ * **Not keyed on `unavailable`.** That flag conflates a bye with an OUT
+ * designation, and a player ruled out of a 16:25 game has not started — he is a
+ * legal fill, and the ranking already puts him last. Keying the exclusion on the
+ * flag would bar him and admit nobody in his place.
+ */
+function hasStarted(candidate: AutolineupCandidate, now: number): boolean {
+  return candidate.kickoffAt !== null && now >= candidate.kickoffAt;
+}
+
 export function autolineupChoices(input: AutolineupInput): readonly AutolineupChoice[] {
-  const { shape, roster, locked, mode = "SEASON_AVERAGE" } = input;
+  const { shape, roster: allCandidates, locked, now, mode = "SEASON_AVERAGE" } = input;
+
+  /*
+    The pool, with anyone already playing removed — and removed here, before a
+    single slot is looked at.
+
+    `validateLineup` already refuses this move for a manager, and its comment
+    says why: "an empty slot — which never locks — would let a manager start a
+    player after watching him score." An empty slot is exactly what this function
+    fills, and `setLineupUnchecked` writes the result without validating it, so
+    this is the only writer in the system able to do what that check exists to
+    prevent. This closes a bypass rather than choosing a policy.
+
+    A hard exclusion, not a demotion in `compare`, and the difference is
+    load-bearing three times over. A filtered player cannot be picked; cannot be
+    named as a runner-up, which would offer an alternative the server would
+    refuse; and cannot inflate `eligibleCount`, which decides the order slots
+    are filled in and would otherwise make a slot look less scarce than it is.
+
+    Locked slots are unaffected: they come from `locked` and are copied through
+    below without consulting the pool, so a player already standing in a slot
+    when his game starts stays exactly where he is. This governs which slots the
+    autofill *fills*, never which it preserves — the same asymmetry
+    `PLAYER_LOCKED` and `SLOT_LOCKED` describe as a pair.
+  */
+  const roster = allCandidates.filter((candidate) => !hasStarted(candidate, now));
 
   const slots = startingSlots(shape);
 

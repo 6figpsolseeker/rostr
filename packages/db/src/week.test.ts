@@ -1186,7 +1186,7 @@ describe("currentWeek is scoped to one season — #105", () => {
     await fx.client.query(
       "INSERT INTO games (sport_id, external_ref, season, week, home_team_ref, away_team_ref, kickoff_at, status) " +
         "VALUES ($1, $2, $3, $4, 'CIN', 'BAL', $5, 'FINAL')",
-      [sport.id, ref, season, week, kickoff.toISOString()],
+      [sport!.id, ref, season, week, kickoff.toISOString()],
     );
   }
 

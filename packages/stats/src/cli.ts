@@ -86,6 +86,35 @@ async function probe(): Promise<void> {
     console.log(`  Sample: ${JSON.stringify(firstPlayer).slice(0, 300)}`);
   }
 
+  /*
+    Every distinct injury designation, counted.
+
+    The same response, not a second call: this endpoint is what `listInjuries`
+    reads, so the histogram costs nothing beyond the request already made.
+
+    It exists because the vocabulary decides a rule. `isIrEligible` matches this
+    field to answer whether a player may be stashed on injured reserve, and the
+    column holds the provider's wording verbatim — nothing normalises it. The
+    set was guessed once and the guess was wrong, so it is measured here rather
+    than remembered, and the result belongs in docs/TANK01.md with the date.
+  */
+  console.log("\nInjury designations");
+  const designations = new Map<string, number>();
+  let designated = 0;
+  for (const player of players) {
+    const injury = player["injury"];
+    if (typeof injury !== "object" || injury === null) continue;
+    const raw = (injury as Record<string, unknown>)["designation"];
+    if (typeof raw !== "string" || raw.trim() === "") continue;
+    designated++;
+    designations.set(raw, (designations.get(raw) ?? 0) + 1);
+  }
+  console.log(`  ${designated} of ${players.length} carry one.`);
+  for (const [value, count] of [...designations].sort((a, b) => b[1] - a[1])) {
+    // Quoted, so trailing spaces and casing are visible rather than inferred.
+    console.log(`  ${JSON.stringify(value).padEnd(34)} ${count}`);
+  }
+
   // The important one: confirm the stat field names in stat-map.ts are real.
   //
   // Sampling one player is not enough — categories only appear when a player has

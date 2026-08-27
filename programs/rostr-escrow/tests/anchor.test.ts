@@ -29,7 +29,13 @@ import {
   NFL_DEFAULT_FEE_BPS,
   NFL_DEFAULT_PAYOUT,
 } from "@rostr/core";
-import { createPotMint, getProgram, getProvider, refundUnlockFor } from "./helpers";
+import {
+  createPotMint,
+  getProgram,
+  getProvider,
+  refundUnlockFor,
+  type EscrowProgram,
+} from "./helpers.js";
 
 /**
  * Create → anchor → join, across both halves at once.
@@ -50,7 +56,7 @@ import { createPotMint, getProgram, getProvider, refundUnlockFor } from "./helpe
  * not cover is the HTTP layer and the wallet popup; everything between is real.
  */
 
-let program: anchor.Program;
+let program: EscrowProgram;
 let provider: anchor.AnchorProvider;
 let mint: anchor.web3.PublicKey;
 let db: PGliteClient;

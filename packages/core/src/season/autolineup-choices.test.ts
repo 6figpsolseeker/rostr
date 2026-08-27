@@ -3,22 +3,33 @@ import { buildRosterShape } from "../draft/roster.js";
 import { NFL } from "../sports/nfl.js";
 import { NFL_PPR_ROSTER } from "../rules/nfl-ppr.js";
 import { autolineup, autolineupChoices } from "./autolineup.js";
-import type { AutolineupCandidate } from "./autolineup.js";
+import type { AutolineupCandidate, AutolineupChoice } from "./autolineup.js";
 
 const SHAPE = buildRosterShape(NFL_PPR_ROSTER, NFL);
 const SUNDAY = 1_757_782_800;
+
+/**
+ * An hour before the fixtures kick off.
+ *
+ * `autolineup` requires a clock so it can refuse to start a player whose game
+ * is already under way. Every candidate below kicks off at `SUNDAY` unless it
+ * says otherwise, so running the suite an hour earlier leaves every existing
+ * expectation about ranking and scarcity exactly as it was. The cases that
+ * exercise the clock name their own moment.
+ */
+const BEFORE_KICKOFF = SUNDAY - 3_600;
 
 function candidate(
   playerId: string,
   positions: string[],
   averageMilliPoints: number | null,
-  extra: { unavailable?: boolean } = {},
+  extra: { unavailable?: boolean; kickoffAt?: number | null } = {},
 ): AutolineupCandidate {
   return {
     playerId,
     positions,
     averageMilliPoints,
-    kickoffAt: SUNDAY,
+    kickoffAt: extra.kickoffAt === undefined ? SUNDAY : extra.kickoffAt,
     ...(extra.unavailable !== undefined ? { unavailable: extra.unavailable } : {}),
   };
 }
@@ -37,9 +48,11 @@ const ROSTER: AutolineupCandidate[] = [
   candidate("dst1", ["DST"], 6_000),
 ];
 
-function choiceFor(choices: readonly { slotType: string; slotIndex: number }[], slot: string) {
+function choiceFor(choices: readonly AutolineupChoice[], slot: string): AutolineupChoice {
   const [slotType, index] = slot.split("#");
-  return choices.find((c) => c.slotType === slotType && c.slotIndex === Number(index));
+  const found = choices.find((c) => c.slotType === slotType && c.slotIndex === Number(index));
+  if (found === undefined) throw new Error(`no choice for slot ${slot}`);
+  return found;
 }
 
 describe("autolineupChoices", () => {
@@ -47,8 +60,8 @@ describe("autolineupChoices", () => {
     // The property that makes a preview safe to show: the screen and the
     // Sunday-morning write cannot name different players, because one is a
     // projection of the other rather than a second implementation.
-    const choices = autolineupChoices({ shape: SHAPE, roster: ROSTER });
-    const lineup = autolineup({ shape: SHAPE, roster: ROSTER });
+    const choices = autolineupChoices({ shape: SHAPE, roster: ROSTER, now: BEFORE_KICKOFF });
+    const lineup = autolineup({ shape: SHAPE, roster: ROSTER, now: BEFORE_KICKOFF });
 
     expect(
       choices.map(({ slotType, slotIndex, playerId }) => ({ slotType, slotIndex, playerId })),
@@ -56,15 +69,15 @@ describe("autolineupChoices", () => {
   });
 
   it("names the runner-up it passed over", () => {
-    const choices = autolineupChoices({ shape: SHAPE, roster: ROSTER });
-    const qb = choiceFor(choices, "QB#0") as { playerId: string; runnerUpId: string | null };
+    const choices = autolineupChoices({ shape: SHAPE, roster: ROSTER, now: BEFORE_KICKOFF });
+    const qb = choiceFor(choices, "QB#0");
 
     expect(qb.playerId).toBe("qb-good");
     expect(qb.runnerUpId).toBe("qb-bad");
   });
 
   it("says the runner-up was ranked lower when that is the reason", () => {
-    const choices = autolineupChoices({ shape: SHAPE, roster: ROSTER });
+    const choices = autolineupChoices({ shape: SHAPE, roster: ROSTER, now: BEFORE_KICKOFF });
     expect(choiceFor(choices, "QB#0")).toMatchObject({ runnerUpReason: "LOWER_RANKED" });
   });
 
@@ -74,7 +87,9 @@ describe("autolineupChoices", () => {
     const roster = ROSTER.map((player) =>
       player.playerId === "qb-bad" ? { ...player, unavailable: true } : player,
     );
-    expect(choiceFor(autolineupChoices({ shape: SHAPE, roster }), "QB#0")).toMatchObject({
+    expect(
+      choiceFor(autolineupChoices({ shape: SHAPE, roster, now: BEFORE_KICKOFF }), "QB#0"),
+    ).toMatchObject({
       runnerUpId: "qb-bad",
       runnerUpReason: "UNAVAILABLE",
     });
@@ -87,7 +102,9 @@ describe("autolineupChoices", () => {
     const roster = ROSTER.map((player) =>
       player.positions[0] === "QB" ? { ...player, unavailable: true } : player,
     );
-    expect(choiceFor(autolineupChoices({ shape: SHAPE, roster }), "QB#0")).toMatchObject({
+    expect(
+      choiceFor(autolineupChoices({ shape: SHAPE, roster, now: BEFORE_KICKOFF }), "QB#0"),
+    ).toMatchObject({
       runnerUpReason: "LOWER_RANKED",
     });
   });
@@ -98,7 +115,9 @@ describe("autolineupChoices", () => {
     const roster = ROSTER.map((player) =>
       player.playerId === "qb-bad" ? { ...player, averageMilliPoints: null } : player,
     );
-    expect(choiceFor(autolineupChoices({ shape: SHAPE, roster }), "QB#0")).toMatchObject({
+    expect(
+      choiceFor(autolineupChoices({ shape: SHAPE, roster, now: BEFORE_KICKOFF }), "QB#0"),
+    ).toMatchObject({
       runnerUpId: "qb-bad",
       runnerUpReason: "NO_DATA",
     });
@@ -106,7 +125,9 @@ describe("autolineupChoices", () => {
 
   it("reports no runner-up when the slot had only one candidate", () => {
     const roster = ROSTER.filter((player) => player.playerId !== "qb-bad");
-    expect(choiceFor(autolineupChoices({ shape: SHAPE, roster }), "QB#0")).toMatchObject({
+    expect(
+      choiceFor(autolineupChoices({ shape: SHAPE, roster, now: BEFORE_KICKOFF }), "QB#0"),
+    ).toMatchObject({
       playerId: "qb-good",
       runnerUpId: null,
       runnerUpReason: null,
@@ -117,7 +138,7 @@ describe("autolineupChoices", () => {
     // The reason the runner-up is computed inside the fill loop. Scarcest slot
     // first means TE takes the only tight end before FLEX is considered, so
     // naming him as FLEX's alternative would describe a choice nobody can make.
-    const choices = autolineupChoices({ shape: SHAPE, roster: ROSTER });
+    const choices = autolineupChoices({ shape: SHAPE, roster: ROSTER, now: BEFORE_KICKOFF });
     const taken = new Set(choices.map((c) => c.playerId).filter(Boolean));
 
     for (const choice of choices) {
@@ -131,9 +152,9 @@ describe("autolineupChoices", () => {
     // RB#0's runner-up is rb2 — who RB#1 then starts. The screen would have
     // offered the manager somebody already in their own lineup, described as an
     // alternative to it.
-    const choices = autolineupChoices({ shape: SHAPE, roster: ROSTER });
-    const rb0 = choiceFor(choices, "RB#0") as { playerId: string; runnerUpId: string | null };
-    const rb1 = choiceFor(choices, "RB#1") as { playerId: string };
+    const choices = autolineupChoices({ shape: SHAPE, roster: ROSTER, now: BEFORE_KICKOFF });
+    const rb0 = choiceFor(choices, "RB#0");
+    const rb1 = choiceFor(choices, "RB#1");
 
     expect(rb0.playerId).toBe("rb1");
     expect(rb1.playerId).toBe("rb2");
@@ -147,11 +168,45 @@ describe("autolineupChoices", () => {
       shape: SHAPE,
       roster: ROSTER,
       locked: [{ slotType: "QB", slotIndex: 0, playerId: "qb-bad" }],
+      now: BEFORE_KICKOFF,
     });
     expect(choiceFor(choices, "QB#0")).toMatchObject({
       playerId: "qb-bad",
       runnerUpId: null,
       runnerUpReason: null,
     });
+  });
+});
+
+describe("a player whose game has started is never offered", () => {
+  const LATE = SUNDAY + 3 * 3_600;
+
+  it("never names a player whose game has started as the runner-up", () => {
+    /*
+      The screen must not suggest a move the server would refuse.
+
+      A runner-up is an alternative the manager could take instead. Once a
+      player's game has kicked off he is not one — `validateLineup` answers
+      `PLAYER_LOCKED` to anyone who tries. Naming him would be the preview
+      offering a road that is closed.
+    */
+    const roster = [
+      candidate("wr-early", ["WR"], 20_000),
+      candidate("wr-late", ["WR"], 12_000, { kickoffAt: LATE }),
+      candidate("wr-later", ["WR"], 11_000, { kickoffAt: LATE }),
+    ];
+
+    const choices = autolineupChoices({
+      shape: SHAPE,
+      roster,
+      now: SUNDAY + 25 * 60,
+      mode: "SEASON_AVERAGE",
+    });
+
+    const named = choices.flatMap((choice) =>
+      [choice.playerId, choice.runnerUpId].filter((id): id is string => id !== null),
+    );
+
+    expect(named).not.toContain("wr-early");
   });
 });

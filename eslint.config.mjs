@@ -3,8 +3,16 @@ import tseslint from "typescript-eslint";
 
 export default tseslint.config(
   {
-    // The web app is typechecked and linted by Next's own toolchain; this config
-    // is type-aware over the packages and would need a separate project setup.
+    // The web app is typechecked and linted by Next's own toolchain.
+    //
+    // Note that this config is NOT type-aware: `tseslint.configs.recommended`
+    // below is the syntactic set, and there is no `projectService` or
+    // `parserOptions.project` anywhere in the repo. This comment used to claim
+    // otherwise, which mattered — it was a reason to believe test files were
+    // being checked by something. They were not, for a year (#257). What checks
+    // them is `packages/*/tsconfig.test.json`; eslint checks nothing about types,
+    // and could not have caught that defect in any configuration, because
+    // assignability is a compiler diagnostic with no lint-rule equivalent.
     ignores: [
       "**/dist/**",
       "**/node_modules/**",

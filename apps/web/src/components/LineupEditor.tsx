@@ -72,13 +72,21 @@ interface LineupResponse {
   autofill: {
     enabled: boolean;
     mode: "WEEKLY_PROJECTION" | "SEASON_AVERAGE";
-    /** Per empty slot: who it would start, and who it left on the bench. */
+    /**
+     * Per empty slot: who it would start, and who it left on the bench.
+     *
+     * `playerId` is nullable because a slot the autofill cannot fill is part of
+     * the answer — it used to be filtered out of this list, which rendered it
+     * identically to a slot already set.
+     */
     preview: {
       slotType: string;
       slotIndex: number;
-      playerId: string;
+      playerId: string | null;
       runnerUpId: string | null;
       runnerUpReason: "LOWER_RANKED" | "UNAVAILABLE" | "NO_DATA" | null;
+      /** Why the slot is being left empty; null when it is being filled. */
+      emptyReason: "ALL_PLAYING" | "NONE_ELIGIBLE" | null;
     }[];
   };
   slots: Slot[];
@@ -128,8 +136,6 @@ function untilLock(locksAt: number | null, now: number): string {
   if (hours > 0) return `in ${hours}h ${minutes}m`;
   return `in ${minutes}m`;
 }
-
-const OUT_STATUSES = new Set(["OUT", "IR", "INACTIVE", "SUSPENDED", "DOUBTFUL", "PUP", "NFI"]);
 
 export function LineupEditor({ leagueId, week }: { leagueId: string; week: number }) {
   const { data, error, mutate } = useSWR<LineupResponse>(
@@ -288,10 +294,10 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
   /*
     Counted from the slots, not from the preview's length.
 
-    The preview only covers slots the autofill can actually fill; a slot with no
-    eligible player left produces no entry. Deriving the count from it would
-    quietly under-report — the manager would be told two slots are empty while
-    three score nothing.
+    The preview covers every empty slot, including the ones the autofill will
+    leave empty — but it is a preview, computed against this instant, and the
+    count above the box is a statement about the lineup as stored. Deriving one
+    from the other would make the count move as games kick off.
   */
   const emptySlots = data.slots.filter((slot) => slot.playerId === null).length;
   const heading = previewHeading({ enabled: data.autofill.enabled, emptySlots });
@@ -354,13 +360,14 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
           className="mt-0.5"
         />
         <span>
-          <span className="block">Fill my empty slots at kickoff</span>
+          <span className="block">Fill my empty slots for me</span>
           <span className="block text-xs text-nocturne-neutral-600">
             {data.autofill.mode === "WEEKLY_PROJECTION"
               ? "Uses this week's projections. "
               : "Uses each player's season average. "}
             {data.autofill.enabled
-              ? "You can still change anything yourself — this only touches slots you leave empty."
+              ? "You can still change anything yourself — this only touches slots you leave empty, " +
+                "and it never starts a player whose game has already kicked off."
               : "Off: an empty slot stays empty and scores nothing."}
           </span>
         </span>
@@ -371,7 +378,10 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
 
         The checkbox alone asks a manager to trust a decision taken while they
         are asleep, on a week that counts. This is the same `autolineupChoices`
-        the write uses, so the names here are the names that get started.
+        the write uses, so the names here are the names that get started if
+        nothing kicks off first. A kickoff changes it: a player already playing
+        drops off this list, because the autofill may not start him any more
+        than the manager may.
 
         Rendered whether autofill is on or off, and saying different things: on,
         it is a prediction; off, an empty slot scores nothing and that is the
@@ -386,8 +396,35 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
           {data.autofill.enabled && (
             <ul className="space-y-1.5">
               {data.autofill.preview.map((choice) => {
+                /*
+                  A slot the autofill will leave empty.
+
+                  This used to render as nothing, which read exactly like a slot
+                  already set — under a heading whose whole job is naming what
+                  the autofill will do. It is the row a manager has to act on.
+
+                  The two reasons ask him for different things, so the server
+                  says which it is rather than the screen assuming. Guessing
+                  wrong is worse than saying less: "everyone is already playing"
+                  on a Wednesday, to a manager who simply rosters no kicker,
+                  sends him looking for a problem that is not there.
+                */
+                if (choice.playerId === null) {
+                  return (
+                    <li key={`${choice.slotType}#${choice.slotIndex}`} className="text-[13px]">
+                      <span className="text-nocturne-neutral-600">{choice.slotType}</span>{" "}
+                      <span className="text-amber-300">
+                        {choice.emptyReason === "ALL_PLAYING"
+                          ? "stays empty — everyone who could fill it is already playing"
+                          : "stays empty — nobody on your roster can fill it"}
+                      </span>
+                    </li>
+                  );
+                }
+
                 const starter = byId.get(choice.playerId);
                 const passed = choice.runnerUpId ? byId.get(choice.runnerUpId) : null;
+
                 if (!starter) return null;
 
                 return (
@@ -554,9 +591,7 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
                         candidate.availability === "TIME_TBD"
                           ? " — TBD"
                           : ""}
-                        {OUT_STATUSES.has(candidate.status.toUpperCase())
-                          ? ` — ${candidate.status}`
-                          : ""}
+                        {candidate.injuryDesignation ? ` — ${candidate.injuryDesignation}` : ""}
                       </option>
                     );
                   })}
@@ -634,8 +669,24 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
                   </span>
                 </span>
               </button>
-              {OUT_STATUSES.has(player.status.toUpperCase()) && (
-                <span className="text-amber-400/70">{player.status}</span>
+              {/*
+                The bench row's only injury marker, and it showed nothing at all
+                until now: it read `player.status`, a column no code in this repo
+                has ever written, so the test was `"ACTIVE"` against a set of out
+                designations and never matched. `injuryBadge` reads the column the
+                provider actually fills, and is what the starter rows above have
+                been using all along.
+
+                Worth having beyond tidiness: the "To IR" button below is hidden
+                for a player the server would refuse, so a manager whose player is
+                wrongly ineligible sees no badge and no button — nothing to notice
+                and nothing to report. The badge is the half that makes a
+                disagreement visible.
+              */}
+              {player.injuryDesignation && (
+                <span className={injuryTone(player.injuryDesignation)}>
+                  {injuryBadge(player.injuryDesignation)}
+                </span>
               )}
               {/*
                 Offered only to a player the server would actually accept. The

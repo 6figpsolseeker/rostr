@@ -56,8 +56,22 @@ interface Fixture {
   rules: LeagueRules;
   teamId: string;
   otherTeamId: string;
-  /** Player IDs by the handle used below. */
+  /**
+   * Player IDs by the handle used below. Prefer `player()` for anything the
+   * product reads; see there for why.
+   */
   players: Map<string, string>;
+  /**
+   * A seeded player's id, by handle. Total on purpose.
+   *
+   * `players.get(handle)!` typechecks and then hands `undefined` to `setLineup`,
+   * whose `playerId` is `string | null` where null means *clear this slot*. A
+   * mistyped handle therefore stops testing the write the test is named for and
+   * starts testing the erase — silently, and green. This throws at the typo
+   * instead. Assertions may keep using `players` directly: an `undefined`
+   * reaching `expect` already fails loudly.
+   */
+  player(handle: string): string;
 }
 
 /**
@@ -110,6 +124,9 @@ async function setup(): Promise<Fixture> {
 
   const roster: [string, string, string | null][] = [
     ["thu-qb", "QB", "PIT"],
+    // FLEX-eligible and in the Thursday game. Without him no empty slot can be
+    // offered a player who is already playing, which is the whole of #240.
+    ["thu-wr", "WR", "PIT"],
     ["sun-qb", "QB", "CIN"],
     ["rb-a", "RB", "CIN"],
     ["rb-b", "RB", "BAL"],
@@ -157,16 +174,33 @@ async function setup(): Promise<Fixture> {
     teamId: mine.teamId,
     otherTeamId: theirs.teamId,
     players,
+    player: (handle) => {
+      const id = players.get(handle);
+      if (id === undefined) {
+        throw new Error(
+          `no seeded player "${handle}" (have: ${[...players.keys()].join(", ")})`,
+        );
+      }
+      return id;
+    },
   };
 }
 
-const lineupOf = (fx: Fixture, handles: Record<string, string>): LineupAssignment[] =>
+/**
+ * A lineup from slot-to-handle pairs.
+ *
+ * A null handle empties the slot, which is a legal thing for a manager to do
+ * and is what the autofill's candidate tests need to set up. An unrecognised
+ * handle passes straight through as the id, so a test can name a player the
+ * fixture never seeded and watch the product refuse it.
+ */
+const lineupOf = (fx: Fixture, handles: Record<string, string | null>): LineupAssignment[] =>
   Object.entries(handles).map(([slot, handle]) => {
     const [slotType, index] = slot.split(":");
     return {
       slotType: slotType!,
       slotIndex: Number(index ?? 0),
-      playerId: fx.players.get(handle) ?? handle,
+      playerId: handle === null ? null : (fx.players.get(handle) ?? handle),
     };
   });
 
@@ -187,7 +221,7 @@ describe("loadRosterForWeek", () => {
     const fx = await setup();
     const roster = await loadRosterForWeek(fx.client, fx.teamId, SEASON, WEEK);
 
-    expect(roster.size).toBe(12);
+    expect(roster.size).toBe(13);
   });
 
   it("carries each player's own kickoff", async () => {
@@ -754,7 +788,7 @@ describe("ensureLineups", () => {
       leagueId: fx.leagueId,
       teamId: fx.teamId,
       week: WEEK,
-      assignments: [{ slotType: "QB", slotIndex: 0, playerId: fx.players.get("sun-qb") }],
+      assignments: [{ slotType: "QB", slotIndex: 0, playerId: fx.player("sun-qb") }],
       now: BEFORE_ANYTHING,
     });
 
@@ -876,8 +910,8 @@ describe("scoring a week end to end", () => {
     const lineups = await loadWeekLineups(fx.client, fx.leagueId, WEEK);
     const mine = lineups.find((lineup) => lineup.teamId === fx.teamId);
 
-    // Twelve rostered, nine starting.
-    expect(mine?.bench).toHaveLength(3);
+    // Thirteen rostered, nine starting.
+    expect(mine?.bench).toHaveLength(4);
     expect(mine?.bench).toContain(fx.players.get("thu-qb"));
   });
 });
@@ -1267,7 +1301,7 @@ describe("the lock survives a drop", () => {
       leagueId: fx.leagueId,
       teamId: fx.teamId,
       week: WEEK,
-      assignments: [{ slotType: "QB", slotIndex: 0, playerId: fx.players.get("thu-qb")! }],
+      assignments: [{ slotType: "QB", slotIndex: 0, playerId: fx.player("thu-qb") }],
       now: BEFORE_ANYTHING,
     });
 
@@ -1285,7 +1319,7 @@ describe("the lock survives a drop", () => {
         leagueId: fx.leagueId,
         teamId: fx.teamId,
         week: WEEK,
-        assignments: [{ slotType: "QB", slotIndex: 0, playerId: fx.players.get("sun-qb")! }],
+        assignments: [{ slotType: "QB", slotIndex: 0, playerId: fx.player("sun-qb") }],
         now: AFTER_THURSDAY,
       }),
     ).rejects.toMatchObject({ code: "INVALID_LINEUP" });
@@ -1316,7 +1350,7 @@ describe("the lock survives a drop", () => {
       leagueId: fx.leagueId,
       teamId: fx.teamId,
       week: WEEK,
-      assignments: [{ slotType: "QB", slotIndex: 0, playerId: fx.players.get("thu-qb")! }],
+      assignments: [{ slotType: "QB", slotIndex: 0, playerId: fx.player("thu-qb") }],
       now: BEFORE_ANYTHING,
     });
 
@@ -1345,7 +1379,7 @@ describe("the lock survives a drop", () => {
       leagueId: fx.leagueId,
       teamId: fx.teamId,
       week: WEEK,
-      assignments: [{ slotType: "QB", slotIndex: 0, playerId: fx.players.get("thu-qb")! }],
+      assignments: [{ slotType: "QB", slotIndex: 0, playerId: fx.player("thu-qb") }],
       now: BEFORE_ANYTHING,
     });
 
@@ -1456,7 +1490,7 @@ describe("a lineup that moves under the manager — #100", () => {
         leagueId: fx.leagueId,
         teamId: fx.teamId,
         week: WEEK,
-        assignments: [{ slotType: "QB", slotIndex: 0, playerId: fx.players.get("thu-qb") }],
+        assignments: [{ slotType: "QB", slotIndex: 0, playerId: fx.player("thu-qb") }],
         now: BEFORE_ANYTHING,
       });
     });
@@ -1466,7 +1500,7 @@ describe("a lineup that moves under the manager — #100", () => {
         leagueId: fx.leagueId,
         teamId: fx.teamId,
         week: WEEK,
-        assignments: [{ slotType: "QB", slotIndex: 0, playerId: fx.players.get("sun-qb") }],
+        assignments: [{ slotType: "QB", slotIndex: 0, playerId: fx.player("sun-qb") }],
         now: BEFORE_ANYTHING,
       }),
     ).rejects.toSatisfy((e) => e instanceof LineupError && e.code === "LINEUP_MOVED");
@@ -1483,7 +1517,7 @@ describe("a lineup that moves under the manager — #100", () => {
         leagueId: fx.leagueId,
         teamId: fx.teamId,
         week: WEEK,
-        assignments: [{ slotType: "QB", slotIndex: 0, playerId: fx.players.get("thu-qb") }],
+        assignments: [{ slotType: "QB", slotIndex: 0, playerId: fx.player("thu-qb") }],
         now: BEFORE_ANYTHING,
       });
     });
@@ -1493,7 +1527,7 @@ describe("a lineup that moves under the manager — #100", () => {
         leagueId: fx.leagueId,
         teamId: fx.teamId,
         week: WEEK,
-        assignments: [{ slotType: "QB", slotIndex: 0, playerId: fx.players.get("sun-qb") }],
+        assignments: [{ slotType: "QB", slotIndex: 0, playerId: fx.player("sun-qb") }],
         now: BEFORE_ANYTHING,
       }),
     ).rejects.toThrow();
@@ -1524,7 +1558,7 @@ describe("a lineup that moves under the manager — #100", () => {
         leagueId: fx.leagueId,
         teamId: fx.teamId,
         week: WEEK,
-        assignments: [{ slotType: "QB", slotIndex: 0, playerId: fx.players.get("thu-qb") }],
+        assignments: [{ slotType: "QB", slotIndex: 0, playerId: fx.player("thu-qb") }],
         now: BEFORE_ANYTHING,
       });
     });
@@ -1538,7 +1572,7 @@ describe("a lineup that moves under the manager — #100", () => {
         week: WEEK,
         assignments: [
           { slotType: "QB", slotIndex: 0, playerId: null },
-          { slotType: "RB", slotIndex: 0, playerId: fx.players.get("rb-a") },
+          { slotType: "RB", slotIndex: 0, playerId: fx.player("rb-a") },
         ],
         now: BEFORE_ANYTHING,
       }),
@@ -1568,7 +1602,7 @@ describe("a lineup that moves under the manager — #100", () => {
       leagueId: fx.leagueId,
       teamId: fx.teamId,
       week: WEEK,
-      assignments: [{ slotType: "QB", slotIndex: 0, playerId: fx.players.get("sun-qb") }],
+      assignments: [{ slotType: "QB", slotIndex: 0, playerId: fx.player("sun-qb") }],
       now: BEFORE_ANYTHING,
     });
 
@@ -1577,9 +1611,114 @@ describe("a lineup that moves under the manager — #100", () => {
         leagueId: fx.leagueId,
         teamId: fx.teamId,
         week: WEEK,
-        assignments: [{ slotType: "QB", slotIndex: 0, playerId: fx.players.get("sun-qb") }],
+        assignments: [{ slotType: "QB", slotIndex: 0, playerId: fx.player("sun-qb") }],
         now: BEFORE_ANYTHING,
       }),
     ).resolves.toBeDefined();
+  });
+});
+
+describe("the autofill will not take a slot the manager still holds", () => {
+  /*
+    Issue #240, end to end on the path the cron actually walks.
+
+    The sequence needs no race. A manager empties a slot while its intended
+    replacement has not kicked off yet — legal, and performed below through the
+    real `setLineup`. The autofill then runs on the next scoring pass and, before
+    this was fixed, filled that slot from whoever ranked highest among everyone
+    left, including a player already playing. From that instant the slot is
+    locked around him and the manager's own edit is refused — and it is
+    `SLOT_LOCKED`, not `PLAYER_LOCKED`, so he cannot even blank it back to empty.
+
+    The projections below are the point of the fixture, not decoration. Ranking
+    is `WEEKLY_PROJECTION` and an unprojected pool is all nulls, where ties break
+    on player id — a UUID coin toss that would make these tests pass or fail for
+    reasons having nothing to do with the clock. Projected, `thu-wr` is
+    unambiguously the best remaining FLEX and the unfixed autofill takes him
+    every time.
+  */
+  const projectionStatId = async (fx: Fixture): Promise<string> => {
+    const [row] = await fx.client.query<{ id: string }>(
+      `SELECT k.id FROM stat_keys k JOIN sports s ON s.id = k.sport_id
+        WHERE s.key = $1 AND k.key = 'rec_yd'`,
+      [NFL.key],
+    );
+    return row!.id;
+  };
+
+  /** `thu-wr` outprojects every other FLEX-eligible player on the roster. */
+  const seedProjections = async (fx: Fixture): Promise<void> => {
+    const statKeyId = await projectionStatId(fx);
+    for (const [handle, value] of [
+      ["thu-wr", 120],
+      ["wr-c", 40],
+      ["rb-c", 30],
+    ] as const) {
+      await fx.client.query(
+        `INSERT INTO player_projections (player_id, season, week, source, stat_key_id, value)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [fx.players.get(handle), SEASON, WEEK, PRIMARY_PROJECTION_SOURCE, statKeyId, value],
+      );
+    }
+  };
+
+  /** A full lineup, then FLEX emptied after the Thursday game has kicked off. */
+  const emptyTheFlexAfterThursday = async (fx: Fixture): Promise<void> => {
+    await setLineup(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: fx.teamId,
+      week: WEEK,
+      assignments: lineupOf(fx, FULL),
+      now: BEFORE_ANYTHING,
+    });
+
+    // Legal: his replacement plays Sunday, so the slot is still his to decide.
+    await setLineup(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: fx.teamId,
+      week: WEEK,
+      assignments: lineupOf(fx, { ...FULL, "FLEX:0": null }),
+      now: AFTER_THURSDAY,
+    });
+  };
+
+  const flexAfter = async (fx: Fixture): Promise<string | null | undefined> => {
+    const lineups = await loadWeekLineups(fx.client, fx.leagueId, WEEK);
+    return lineups
+      .find((lineup) => lineup.teamId === fx.teamId)
+      ?.assignments.find((entry) => entry.slotType === "FLEX")?.playerId;
+  };
+
+  it("does not fill an empty slot with a player whose game has started", async () => {
+    const fx = await setup();
+    await seedProjections(fx);
+    await emptyTheFlexAfterThursday(fx);
+
+    await ensureLineups(fx.client, fx.leagueId, WEEK, AFTER_THURSDAY);
+
+    // thu-wr projects highest by a distance and is already playing, so he is not
+    // a candidate. The next best whose game has not started takes the slot.
+    expect(await flexAfter(fx)).toBe(fx.players.get("wr-c"));
+  });
+
+  it("leaves the manager able to change it afterwards", async () => {
+    const fx = await setup();
+    await seedProjections(fx);
+    await emptyTheFlexAfterThursday(fx);
+
+    await ensureLineups(fx.client, fx.leagueId, WEEK, AFTER_THURSDAY);
+
+    // The half that actually cost the manager something. Before the fix this
+    // threw INVALID_LINEUP carrying SLOT_LOCKED, because the autofill had put a
+    // player already on the field into a slot with hours left to run.
+    await setLineup(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: fx.teamId,
+      week: WEEK,
+      assignments: lineupOf(fx, { ...FULL, "FLEX:0": "rb-c" }),
+      now: AFTER_THURSDAY + 60,
+    });
+
+    expect(await flexAfter(fx)).toBe(fx.players.get("rb-c"));
   });
 });

@@ -36,6 +36,8 @@ export type DraftErrorCode =
   | "NOT_ON_CLOCK"
   | "PLAYER_UNAVAILABLE"
   | "NO_LEGAL_PICK"
+  /** A pick names somebody the caller's pool does not contain. See {@link rosterFor}. */
+  | "POOL_INCOMPLETE"
   | IllegalPickReason;
 
 export class DraftError extends Error {
@@ -80,8 +82,33 @@ export function rosterFor(
 ): readonly DraftablePlayer[] {
   return state.picks
     .filter((pick) => pick.teamId === teamId)
-    .map((pick) => pool.get(pick.playerId))
-    .filter((player): player is DraftablePlayer => player !== undefined);
+    .map((pick) => {
+      const player = pool.get(pick.playerId);
+      if (!player) {
+        /*
+          Not a case to handle.
+
+          You cannot have drafted somebody who was never on the board — `makePick`
+          refuses a player the pool does not contain — so a miss here means the
+          caller's pool is not the pool this draft was played from. The
+          `.filter(defined)` that used to be here could therefore only ever
+          discard somebody legally drafted, and it did: the board is filtered on
+          `players.active`, which the daily sync clears for anyone the provider
+          reports as an NFL free agent, so a player cut overnight fell out of his
+          own team's roster mid-draft and the count went on without him. Issue
+          #253.
+
+          Loud is only safe because the caller now hands over a pool that includes
+          this draft's own picks. On its own this would turn a quiet undercount
+          into a 500 in a room that polls every second.
+        */
+        throw new DraftError(
+          `Pick ${pick.pickNumber} took ${pick.playerId}, who is not in the pool`,
+          "POOL_INCOMPLETE",
+        );
+      }
+      return player;
+    });
 }
 
 /** Picks a team still has after the one currently on the clock. */
@@ -110,6 +137,19 @@ export interface MakePickInput {
  * either way — a manager who wants nothing but wide receivers may have them —
  * but the consequence has to be visible before they confirm, not discovered in
  * Week 1 when the lineup will not validate.
+ *
+ * **The pool must contain this draft's own picks.** `rosterFor` throws
+ * `POOL_INCOMPLETE` on one it cannot rebuild a roster from, and the only pool a
+ * route holds is `draftBoard(...).pool` — filtered on `players.active`, so it
+ * loses anyone cut since he was drafted. `recordPick` widens inside its own
+ * transaction (issue #253); nothing widens for a read. Wiring this to the draft
+ * room as it stands would turn a cut player into a 500 in a room that polls
+ * every second, which is the failure that throw is meant to prevent, not cause.
+ *
+ * Note the asymmetry directly below: a pool missing the *subject* of the pick
+ * is tolerated, and a pool missing an *earlier* pick is not. The first is a
+ * player who has gone off the board while the manager was looking at him, which
+ * is ordinary; the second means the caller is holding the wrong pool.
  */
 export function pickWouldStrandStarters(state: DraftState, input: MakePickInput): boolean {
   const player = input.pool.get(input.playerId);

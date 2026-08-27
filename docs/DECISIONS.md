@@ -215,6 +215,26 @@ worth fixing.
 noise, and the on-chain warning at strikes 1 and 2 was only ever there because money was
 at stake at strike 3.
 
+**Amended 2026-08-27: the autofill's reach is bounded by the lock.**
+
+The reasoning above rests on "the autofill keeps their team competitive". It still does,
+with one limit now explicit: it will not start a player whose own game has kicked off,
+because `validateLineup` forbids that placement from every other writer and the autofill
+is the one writer that skips validation.
+
+The limit bites on Thursday night. `score-week` names its week from `currentWeek` — the
+week of the most recent kickoff — so the first autofill pass for a week does not run until
+that week's first game is already under way. A Thursday player in an empty slot is
+therefore out of the pool every week, for every team. Usually the slot is filled by the
+next-best player who has not started; it goes empty only where the Thursday player was the
+sole eligible body for it.
+
+The fix is not to relax the lock. It is to run the autofill **when § 8 already says it
+runs** — before each player's own lock — rather than on the first scoring pass after the
+week has begun. Until that lands, an abandoned team can lose a Thursday-only starter to an
+empty slot. Recorded here rather than only in the issue because it qualifies a premise
+this decision was made on.
+
 ### The autofill ranks on projections, and that is allowed
 
 Same change. The autofill previously used season-to-date average and `RULES.md` explicitly

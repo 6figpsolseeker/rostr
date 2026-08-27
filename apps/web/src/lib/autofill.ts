@@ -60,7 +60,11 @@ export function previewHeading(input: {
       : `${input.emptySlots} slots are empty and will score nothing — autofill is off.`;
   }
 
+  // Not "will fill": the list below may say a slot stays empty, because the
+  // autofill will not start a player whose game has already kicked off and may
+  // have nobody left who has not. Nor "at kickoff" — the fill runs through the
+  // week, and the checkbox above no longer claims otherwise either.
   return input.emptySlots === 1
-    ? "Autofill will fill 1 empty slot at kickoff:"
-    : `Autofill will fill ${input.emptySlots} empty slots at kickoff:`;
+    ? "1 empty slot, and what autofill would do with it:"
+    : `${input.emptySlots} empty slots, and what autofill would do with them:`;
 }

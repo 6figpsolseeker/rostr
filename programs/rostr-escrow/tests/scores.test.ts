@@ -12,7 +12,8 @@ import {
   validFreeArgs,
   vaultPda,
   type InitArgs,
-} from "./helpers";
+  type EscrowProgram,
+} from "./helpers.js";
 
 /**
  * G7 — the scores account, its roster, and posting.
@@ -33,7 +34,7 @@ const BUY_IN = 10_000_000;
 const TEAM_A = Array.from({ length: 16 }, (_, i) => i + 1);
 const TEAM_B = Array.from({ length: 16 }, (_, i) => 100 + i);
 
-let program: anchor.Program;
+let program: EscrowProgram;
 let provider: anchor.AnchorProvider;
 let mint: anchor.web3.PublicKey;
 
@@ -53,7 +54,7 @@ const initialize = async (args: InitArgs): Promise<anchor.web3.PublicKey> => {
   const league = leaguePda(program, args.leagueId);
   await program.methods
     .initializeLeague(args)
-    .accounts({
+    .accountsPartial({
       league,
       mint,
       vault: vaultPda(program, league),
@@ -70,7 +71,7 @@ async function stakedMember(league: anchor.web3.PublicKey, rulesHash: number[]) 
   const member = await fundedMember(provider, mint, BUY_IN);
   await program.methods
     .joinLeague(rulesHash)
-    .accounts({
+    .accountsPartial({
       league,
       membership: membershipPda(program, league, member.keypair.publicKey),
       member: member.keypair.publicKey,
@@ -80,7 +81,7 @@ async function stakedMember(league: anchor.web3.PublicKey, rulesHash: number[]) 
     .rpc();
   await program.methods
     .deposit()
-    .accounts({
+    .accountsPartial({
       league,
       membership: membershipPda(program, league, member.keypair.publicKey),
       vault: vaultPda(program, league),
@@ -117,7 +118,7 @@ async function initScores(
 ) {
   return program.methods
     .initializeScores({ ...defaultScoresArgs(oracle, teamIds), ...overrides })
-    .accounts({
+    .accountsPartial({
       league,
       scores: scoresPda(league),
       commissioner: provider.wallet.publicKey,
@@ -173,7 +174,7 @@ describe("the payee roster", () => {
     const joinedOnly = await fundedMember(provider, mint, BUY_IN);
     await program.methods
       .joinLeague(args.rulesHash)
-      .accounts({
+      .accountsPartial({
         league,
         membership: membershipPda(program, league, joinedOnly.keypair.publicKey),
         member: joinedOnly.keypair.publicKey,
@@ -205,7 +206,7 @@ describe("the payee roster", () => {
         .initializeScores(
           defaultScoresArgs(anchor.web3.Keypair.generate().publicKey, [TEAM_A, TEAM_B]),
         )
-        .accounts({
+        .accountsPartial({
           league,
           scores: scoresPda(league),
           commissioner: provider.wallet.publicKey,
@@ -263,7 +264,7 @@ describe("the payee roster", () => {
         .initializeScores(
           defaultScoresArgs(anchor.web3.Keypair.generate().publicKey, [TEAM_A, TEAM_B]),
         )
-        .accounts({
+        .accountsPartial({
           league,
           scores: scoresPda(league),
           commissioner: stranger.keypair.publicKey,
@@ -340,7 +341,7 @@ describe("the payee roster", () => {
     const league = leaguePda(program, freeArgs.leagueId);
     await program.methods
       .initializeFreeLeague(freeArgs)
-      .accounts({
+      .accountsPartial({
         league,
         payer: provider.wallet.publicKey,
         systemProgram: anchor.web3.SystemProgram.programId,
@@ -408,7 +409,7 @@ describe("posting a week", () => {
   ) =>
     program.methods
       .postWeek(week, games)
-      .accounts({ scores: scoresPda(league), oracle: oracle.publicKey })
+      .accountsPartial({ scores: scoresPda(league), oracle: oracle.publicKey })
       .signers([oracle])
       .rpc();
 
@@ -463,7 +464,7 @@ describe("posting a week", () => {
 
     await program.methods
       .finalizeWeek(3)
-      .accounts({ scores: scoresPda(league), oracle: oracle.publicKey })
+      .accountsPartial({ scores: scoresPda(league), oracle: oracle.publicKey })
       .signers([oracle])
       .rpc();
 
@@ -471,7 +472,7 @@ describe("posting a week", () => {
     await expectError(
       program.methods
         .finalizeWeek(3)
-        .accounts({ scores: scoresPda(league), oracle: oracle.publicKey })
+        .accountsPartial({ scores: scoresPda(league), oracle: oracle.publicKey })
         .signers([oracle])
         .rpc(),
       "WeekAlreadyFinal",
@@ -493,7 +494,7 @@ describe("posting a week", () => {
     const before = Math.floor(Date.now() / 1000);
     await program.methods
       .finalizeWeek(3)
-      .accounts({ scores: scoresPda(league), oracle: oracle.publicKey })
+      .accountsPartial({ scores: scoresPda(league), oracle: oracle.publicKey })
       .signers([oracle])
       .rpc();
 

@@ -126,7 +126,11 @@ export async function GET(
       The screen used to offer a checkbox and no account of what turning it on
       does — which is the one thing worth knowing before trusting it with a week
       that counts. `autolineupChoices` is the same function `autoFillLineup`
-      fills with, so the preview cannot name a different player from the write.
+      fills with, so the preview cannot name a different player from the write
+      **for the same inputs** — and one of those inputs is the clock below. This
+      one passes request time and the write passes whenever the cron ran, so a
+      preview taken before a kickoff can name a player the write is no longer
+      allowed to start. That is a forecast decaying, not the two disagreeing.
 
       **Locked slots are passed in, not filtered out.** A locked player is
       unavailable to every other slot, so omitting them would let the preview
@@ -155,6 +159,10 @@ export async function GET(
         ),
       mode: context.rules.roster.autofill,
       locked: currentAssignments.filter((entry) => slotIsLocked(entry, kickoffs, now)),
+      // The same instant the locks above are read at. The autofill will not put
+      // a player whose game has started into a slot it finds empty, so neither
+      // may the preview of it.
+      now,
     });
 
     /*
@@ -164,11 +172,42 @@ export async function GET(
       so — and a preview covering filled slots would read as a threat to replace
       a starter somebody deliberately chose.
     */
+    /*
+      The roster a slot could draw on, ignoring the clock.
+
+      `autolineupChoices` reports that a slot is going unfilled, not why, and the
+      two reasons need different words in front of a manager. This asks the
+      narrower question the screen needs: does he roster anybody who plays there?
+    */
+    const eligibleForSlot = (slotType: string) => {
+      const slot = startingSlots(shape).find((entry) => entry.slotType === slotType);
+      if (!slot) return [];
+      return [...roster.values()]
+        .filter((player) => !player.onIr)
+        .filter((player) =>
+          player.positions.some((position) => slot.eligiblePositions.includes(position)),
+        );
+    };
+
+    /** The same test `autolineup` filters the pool with, at the same instant. */
+    const hasKickedOff = (player: { kickoffAt: number | null }): boolean =>
+      player.kickoffAt !== null && now >= player.kickoffAt;
+
     const preview = choices.filter((choice) => {
       const current = currentAssignments.find(
         (entry) => entry.slotType === choice.slotType && entry.slotIndex === choice.slotIndex,
       );
-      return current?.playerId == null && choice.playerId !== null;
+      /*
+        A slot the autofill will leave empty stays in the list, with a null
+        player. It used to be filtered out here, which rendered it identically
+        to a slot already set — nothing — under a heading whose whole job is
+        naming what the autofill will do.
+
+        Those are the slots the manager has to act on himself, and there are two
+        reasons a slot reaches that state — see `emptyReason` below. Hiding them
+        removed the only signal that anything was outstanding.
+      */
+      return current?.playerId == null;
     });
 
     return NextResponse.json({
@@ -188,6 +227,27 @@ export async function GET(
           playerId: choice.playerId,
           runnerUpId: choice.runnerUpId,
           runnerUpReason: choice.runnerUpReason,
+          /*
+            Why a slot is being left empty, because the two reasons ask the
+            manager for different things and the screen must not guess.
+
+            ALL_PLAYING — he rosters somebody who could fill it, and every one
+            of them has kicked off. The move is a free agent whose game has not.
+            NONE_ELIGIBLE — nobody on the roster plays that position at all, or
+            the ones who do are already starting elsewhere. Signing a free agent
+            of the right position is the move, and it is not urgent in the same
+            way.
+
+            Computed here rather than in `autolineupChoices` because it is a
+            question about this screen, not about the fill: the autofill's answer
+            is the same either way.
+          */
+          emptyReason:
+            choice.playerId !== null
+              ? null
+              : eligibleForSlot(choice.slotType).some((player) => !hasKickedOff(player))
+                ? ("NONE_ELIGIBLE" as const)
+                : ("ALL_PLAYING" as const),
         })),
         /** Frozen in the league's rules, so it is the same for everybody. */
         mode: context.rules.roster.autofill,

@@ -316,10 +316,22 @@ async function invitationNotifications(db: SqlClient, userId: string): Promise<N
  * An empty starting slot, in a league where nothing will fill it.
  *
  * **Only when autofill is off**, which is the whole of this check. The autofill
- * is on by default and fills every empty slot at lock, deterministically — so an
- * unset lineup normally costs a manager nothing, and warning about it would be
- * warning about a thing the product already handles. With it off, an empty slot
- * scores zero and the warning is true.
+ * is on by default and fills empty slots deterministically — so an unset lineup
+ * normally costs a manager nothing, and warning about it would be warning about
+ * a thing the product already handles. With it off, an empty slot scores zero
+ * and the warning is true.
+ *
+ * **That premise is now conditional and this filter has not caught up.** The
+ * autofill will not start a player whose own game has kicked off, so a slot
+ * where everyone eligible is already playing is left empty on purpose — on an
+ * autofill-*on* team, which this query never looks at. That manager is told
+ * nothing, while the slot is still fillable from free agency.
+ *
+ * The one-line widening is worse than the gap: the join above already selects
+ * only `player_id IS NULL` rows, so dropping the autofill predicate warns every
+ * team with any empty row — which, before the week's first kickoff, is every
+ * autofill-on team every week. Telling the two apart needs a record of what the
+ * autofill decided, and nothing stores one. Tracked separately.
  */
 async function unsetLineups(db: SqlClient, userId: string): Promise<Notification[]> {
   const rows = await db.query<{

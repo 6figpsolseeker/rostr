@@ -42,9 +42,15 @@ const fetcher = async (url: string): Promise<Notification[]> => {
  * Which kinds are urgent enough to occupy the page.
  *
  * Not everything the bell holds belongs here. An invitation has no deadline and
- * an unset lineup is covered by the autofill; putting either in a strip would
+ * an unset lineup is usually covered by the autofill; putting either in a strip would
  * make the strip permanent, and a permanent strip is furniture. What is left is
  * the set with a clock actually running.
+ *
+ * "Usually" is doing real work since the autofill stopped starting players whose
+ * games have begun: a slot it declines is one the manager has to fill himself, and
+ * nothing here or in the bell says so. The lineup screen names it; this does not.
+ * Tracked separately — the query cannot yet tell a declined slot from one the
+ * autofill has simply not reached.
  */
 const URGENT = new Set(["ON_THE_CLOCK", "TRADE_AWAITING_YOU", "VETO_WINDOW", "DRAFT_SOON"]);
 

@@ -16,10 +16,36 @@ function entry(
 }
 
 describe("isIrEligible", () => {
-  it("accepts the designations that mean a player will not appear", () => {
-    for (const designation of ["OUT", "IR", "PUP", "NFI", "SUSPENDED", "INACTIVE"]) {
-      expect(isIrEligible(designation)).toBe(true);
-    }
+  /*
+    The provider's own wording, not ours.
+
+    This used to iterate the seven short codes the implementation contained and
+    assert they were accepted — the constant checked against itself, which
+    passes for any constant including a wrong one. That is how "Injured
+    Reserve" went unnoticed: it is the second most common value in the column
+    and matched nothing. Every string below is one this project has observed in
+    the field, recorded with its counts in docs/TANK01.md.
+  */
+  it("accepts the designations the provider actually publishes", () => {
+    expect(isIrEligible("Injured Reserve")).toBe(true);
+    expect(isIrEligible("Out")).toBe(true);
+    expect(isIrEligible("Doubtful")).toBe(true);
+  });
+
+  it("admits a designation nobody here has seen", () => {
+    /*
+      The property the inversion buys, and the reason to keep it.
+
+      An allow-list is correct only while its enumeration is complete, and this
+      vocabulary belongs to another company. Refusing an unfamiliar designation
+      strands a player who is genuinely hurt, with no bound; admitting one costs
+      a manager an IR slot he chose to spend, capped at `irSlots`.
+
+      This fails the moment somebody re-tightens it into an allow-list, which is
+      the whole job of the test.
+    */
+    expect(isIrEligible("Reserve/COVID-19")).toBe(true);
+    expect(isIrEligible("Physically Unable To Perform")).toBe(true);
   });
 
   it("treats a healthy player as ineligible however the absence is spelt", () => {
@@ -34,6 +60,40 @@ describe("isIrEligible", () => {
   it("normalises case and whitespace, because the column is provider text", () => {
     expect(isIrEligible(" out ")).toBe(true);
     expect(isIrEligible("Questionable")).toBe(false);
+    expect(isIrEligible("  questionable  ")).toBe(false);
+  });
+
+  it("refuses the one designation that means he may still play", () => {
+    // 240 of the 383 designated players carried this on 2026-08-27 — the
+    // largest group in the column by some way, and the one the IR slot is not
+    // for. A questionable player usually plays.
+    expect(isIrEligible("Questionable")).toBe(false);
+  });
+});
+
+describe("an injury getting worse never costs the slot", () => {
+  /*
+    Issue 251, at the arithmetic rather than the predicate.
+
+    The check is continuous, so a designation is re-read every time the roster
+    is counted. "Out" was accepted and "Injured Reserve" was not, which meant a
+    player who got *more* injured — the ordinary progression, and precisely the
+    population an IR slot exists for — silently stopped being exempt. His
+    manager was then told the roster was full, had waiver claims refused on that
+    basis, and saw him labelled as no longer out.
+  */
+  it("keeps the exemption when Out becomes Injured Reserve", () => {
+    const before = irExemptCount([entry("hurt", true, "Out")], 2);
+    const after = irExemptCount([entry("hurt", true, "Injured Reserve")], 2);
+
+    expect(before).toBe(1);
+    expect(after).toBe(1);
+  });
+
+  it("still counts a player who recovers", () => {
+    // The exemption is conditional in both directions: it is not a one-way
+    // ratchet, and a fit player on the list counts against the roster again.
+    expect(irExemptCount([entry("fit", true, "Questionable")], 2)).toBe(0);
   });
 });
 

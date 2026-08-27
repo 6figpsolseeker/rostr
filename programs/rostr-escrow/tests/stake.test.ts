@@ -23,7 +23,8 @@ import {
   refundUnlockFor,
   tokenBalance,
   vaultPda,
-} from "./helpers";
+  type EscrowProgram,
+} from "./helpers.js";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -84,7 +85,7 @@ async function sendTx(
  * Membership, so the db-side join is not required to exercise them.
  */
 
-let program: anchor.Program;
+let program: EscrowProgram;
 let provider: anchor.AnchorProvider;
 let mint: anchor.web3.PublicKey;
 let db: PGliteClient;
@@ -212,7 +213,7 @@ describe("deposit and refund are wired (issue #27)", () => {
       league.id,
       member.keypair.publicKey,
     );
-    expect(depositVerdict.ok).toBe(true);
+    if (!depositVerdict.ok) throw new Error(`deposit not verified: ${depositVerdict.reason}`);
     expect(depositVerdict.deposited).toBe(BigInt(BUY_IN));
 
     const vaultAfterDeposit = await tokenBalance(provider, vault);
