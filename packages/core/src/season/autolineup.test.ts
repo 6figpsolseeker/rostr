@@ -9,6 +9,17 @@ import { validateLineup } from "./lineup.js";
 const SHAPE = buildRosterShape(NFL_PPR_ROSTER, NFL);
 const SUNDAY = 1_757_782_800;
 
+/**
+ * An hour before the fixtures kick off.
+ *
+ * `autolineup` requires a clock so it can refuse to start a player whose game
+ * is already under way. Every candidate below kicks off at `SUNDAY` unless it
+ * says otherwise, so running the suite an hour earlier leaves every existing
+ * expectation about ranking and scarcity exactly as it was. The cases that
+ * exercise the clock name their own moment.
+ */
+const BEFORE_KICKOFF = SUNDAY - 3_600;
+
 function candidate(
   playerId: string,
   positions: string[],
@@ -52,7 +63,7 @@ const at = (
 
 describe("autolineup", () => {
   it("fills every starting slot", () => {
-    const lineup = autolineup({ shape: SHAPE, roster: ROSTER });
+    const lineup = autolineup({ shape: SHAPE, roster: ROSTER, now: BEFORE_KICKOFF });
 
     expect(lineup).toHaveLength(9);
     expect(lineup.every((entry) => entry.playerId !== null)).toBe(true);
@@ -62,7 +73,7 @@ describe("autolineup", () => {
     // The same validator a manager's own edit goes through. If these two ever
     // disagreed, a team could be auto-set into a lineup it was not allowed to
     // choose for itself.
-    const lineup = autolineup({ shape: SHAPE, roster: ROSTER });
+    const lineup = autolineup({ shape: SHAPE, roster: ROSTER, now: BEFORE_KICKOFF });
     const roster = new Map(ROSTER.map((player) => [player.playerId, player]));
 
     expect(
@@ -71,7 +82,7 @@ describe("autolineup", () => {
   });
 
   it("starts the best player at each position", () => {
-    const lineup = autolineup({ shape: SHAPE, roster: ROSTER });
+    const lineup = autolineup({ shape: SHAPE, roster: ROSTER, now: BEFORE_KICKOFF });
 
     expect(at(lineup, "QB")).toBe("qb-good");
     expect(at(lineup, "K")).toBe("k-a");
@@ -79,13 +90,13 @@ describe("autolineup", () => {
   });
 
   it("starts both running backs in order", () => {
-    const lineup = autolineup({ shape: SHAPE, roster: ROSTER });
+    const lineup = autolineup({ shape: SHAPE, roster: ROSTER, now: BEFORE_KICKOFF });
 
     expect([at(lineup, "RB", 0), at(lineup, "RB", 1)].sort()).toEqual(["rb-a", "rb-b"]);
   });
 
   it("never starts a player twice", () => {
-    const lineup = autolineup({ shape: SHAPE, roster: ROSTER });
+    const lineup = autolineup({ shape: SHAPE, roster: ROSTER, now: BEFORE_KICKOFF });
     const filled = lineup.map((entry) => entry.playerId).filter(Boolean);
 
     expect(new Set(filled).size).toBe(filled.length);
@@ -93,7 +104,7 @@ describe("autolineup", () => {
 
   it("fills the flex from whoever is left", () => {
     // rb-c, wr-c, wr-d and te-b are the leftovers; wr-c is the best of them.
-    const lineup = autolineup({ shape: SHAPE, roster: ROSTER });
+    const lineup = autolineup({ shape: SHAPE, roster: ROSTER, now: BEFORE_KICKOFF });
 
     expect(at(lineup, "FLEX")).toBe("wr-c");
   });
@@ -102,7 +113,7 @@ describe("autolineup", () => {
     // The ordering bug this exists to prevent: with one tight end on the roster,
     // filling FLEX first takes him and leaves TE empty.
     const thin = ROSTER.filter((player) => player.playerId !== "te-b");
-    const lineup = autolineup({ shape: SHAPE, roster: thin });
+    const lineup = autolineup({ shape: SHAPE, roster: thin, now: BEFORE_KICKOFF });
 
     expect(at(lineup, "TE")).toBe("te-a");
     expect(at(lineup, "FLEX")).not.toBe("te-a");
@@ -110,7 +121,7 @@ describe("autolineup", () => {
 
   it("leaves a slot empty when nobody can fill it", () => {
     const noKicker = ROSTER.filter((player) => !player.positions.includes("K"));
-    const lineup = autolineup({ shape: SHAPE, roster: noKicker });
+    const lineup = autolineup({ shape: SHAPE, roster: noKicker, now: BEFORE_KICKOFF });
 
     expect(at(lineup, "K")).toBeNull();
     // And the rest of the lineup is still set.
@@ -119,7 +130,7 @@ describe("autolineup", () => {
 
   it("returns slots in roster order, not fill order", () => {
     // Filling runs scarcest-first; a human reads QB, RB, RB, WR…
-    const lineup = autolineup({ shape: SHAPE, roster: ROSTER });
+    const lineup = autolineup({ shape: SHAPE, roster: ROSTER, now: BEFORE_KICKOFF });
 
     expect(lineup.map((entry) => entry.slotType)).toEqual([
       "QB",
@@ -140,16 +151,20 @@ describe("determinism", () => {
   // playoff seeds — which in a pot league decides who gets paid. "The computer
   // picked" has to be something anyone can recompute.
   it("is reproducible", () => {
-    const first = autolineup({ shape: SHAPE, roster: ROSTER });
-    const second = autolineup({ shape: SHAPE, roster: ROSTER });
+    const first = autolineup({ shape: SHAPE, roster: ROSTER, now: BEFORE_KICKOFF });
+    const second = autolineup({ shape: SHAPE, roster: ROSTER, now: BEFORE_KICKOFF });
 
     expect(first).toEqual(second);
   });
 
   it("does not depend on roster order", () => {
     // Otherwise the lineup would move with however the database returned rows.
-    const forwards = autolineup({ shape: SHAPE, roster: ROSTER });
-    const backwards = autolineup({ shape: SHAPE, roster: [...ROSTER].reverse() });
+    const forwards = autolineup({ shape: SHAPE, roster: ROSTER, now: BEFORE_KICKOFF });
+    const backwards = autolineup({
+      shape: SHAPE,
+      roster: [...ROSTER].reverse(),
+      now: BEFORE_KICKOFF,
+    });
 
     expect(forwards).toEqual(backwards);
   });
@@ -160,7 +175,9 @@ describe("determinism", () => {
       candidate("aaa", ["QB"], 10_000),
     ];
 
-    expect(at(autolineup({ shape: SHAPE, roster: tied }), "QB")).toBe("aaa");
+    expect(at(autolineup({ shape: SHAPE, roster: tied, now: BEFORE_KICKOFF }), "QB")).toBe(
+      "aaa",
+    );
   });
 });
 
@@ -172,7 +189,7 @@ describe("availability", () => {
       candidate("backup", ["QB"], 9_000),
     ];
 
-    expect(at(autolineup({ shape: SHAPE, roster }), "QB")).toBe("backup");
+    expect(at(autolineup({ shape: SHAPE, roster, now: BEFORE_KICKOFF }), "QB")).toBe("backup");
   });
 
   it("still starts an unavailable player rather than nobody", () => {
@@ -181,19 +198,19 @@ describe("availability", () => {
     // legal.
     const roster = [candidate("only-qb", ["QB"], 25_000, { unavailable: true })];
 
-    expect(at(autolineup({ shape: SHAPE, roster }), "QB")).toBe("only-qb");
+    expect(at(autolineup({ shape: SHAPE, roster, now: BEFORE_KICKOFF }), "QB")).toBe("only-qb");
   });
 
   it("prefers a player with a record to one without", () => {
     const roster = [candidate("rookie", ["QB"], null), candidate("veteran", ["QB"], 4_000)];
 
-    expect(at(autolineup({ shape: SHAPE, roster }), "QB")).toBe("veteran");
+    expect(at(autolineup({ shape: SHAPE, roster, now: BEFORE_KICKOFF }), "QB")).toBe("veteran");
   });
 
   it("still starts an unplayed player over nobody", () => {
     const roster = [candidate("rookie", ["QB"], null)];
 
-    expect(at(autolineup({ shape: SHAPE, roster }), "QB")).toBe("rookie");
+    expect(at(autolineup({ shape: SHAPE, roster, now: BEFORE_KICKOFF }), "QB")).toBe("rookie");
   });
 });
 
@@ -204,6 +221,7 @@ describe("locked slots", () => {
       shape: SHAPE,
       roster: ROSTER,
       locked: [{ slotType: "QB", slotIndex: 0, playerId: "qb-bad" }],
+      now: BEFORE_KICKOFF,
     });
 
     expect(at(lineup, "QB")).toBe("qb-bad");
@@ -214,6 +232,7 @@ describe("locked slots", () => {
       shape: SHAPE,
       roster: ROSTER,
       locked: [{ slotType: "FLEX", slotIndex: 0, playerId: "rb-a" }],
+      now: BEFORE_KICKOFF,
     });
 
     expect([at(lineup, "RB", 0), at(lineup, "RB", 1)]).not.toContain("rb-a");
@@ -225,6 +244,7 @@ describe("locked slots", () => {
       shape: SHAPE,
       roster: ROSTER,
       locked: [{ slotType: "K", slotIndex: 0, playerId: null }],
+      now: BEFORE_KICKOFF,
     });
 
     expect(at(lineup, "K")).toBeNull();
@@ -281,6 +301,7 @@ describe("WEEKLY_PROJECTION", () => {
       shape: SHAPE,
       roster,
       mode: "WEEKLY_PROJECTION",
+      now: BEFORE_KICKOFF,
     }).filter((a) => a.slotType === "QB");
     expect(byProjection?.playerId).toBe("qb-spot");
 
@@ -290,6 +311,7 @@ describe("WEEKLY_PROJECTION", () => {
       shape: SHAPE,
       roster,
       mode: "SEASON_AVERAGE",
+      now: BEFORE_KICKOFF,
     }).filter((a) => a.slotType === "QB");
     expect(byAverage?.playerId).toBe("qb-steady");
   });
@@ -301,7 +323,9 @@ describe("WEEKLY_PROJECTION", () => {
       projected("qb-steady", ["QB"], 22_000, 15_000),
       projected("qb-spot", ["QB"], 9_000, 26_000),
     ];
-    const [chosen] = autolineup({ shape: SHAPE, roster }).filter((a) => a.slotType === "QB");
+    const [chosen] = autolineup({ shape: SHAPE, roster, now: BEFORE_KICKOFF }).filter(
+      (a) => a.slotType === "QB",
+    );
     expect(chosen?.playerId).toBe("qb-steady");
   });
 
@@ -319,6 +343,7 @@ describe("WEEKLY_PROJECTION", () => {
       shape: SHAPE,
       roster,
       mode: "WEEKLY_PROJECTION",
+      now: BEFORE_KICKOFF,
     }).filter((a) => a.slotType === "QB");
 
     // Ranked on 25_000, his average — not dumped below the projected player.
@@ -337,6 +362,7 @@ describe("WEEKLY_PROJECTION", () => {
       shape: SHAPE,
       roster,
       mode: "WEEKLY_PROJECTION",
+      now: BEFORE_KICKOFF,
     }).filter((a) => a.slotType === "QB");
     expect(chosen?.playerId).toBe("qb-playing");
   });
@@ -347,11 +373,17 @@ describe("WEEKLY_PROJECTION", () => {
       projectedMilliPoints: 20_000 - c.playerId.length,
     }));
 
-    const once = autolineup({ shape: SHAPE, roster, mode: "WEEKLY_PROJECTION" });
+    const once = autolineup({
+      shape: SHAPE,
+      roster,
+      mode: "WEEKLY_PROJECTION",
+      now: BEFORE_KICKOFF,
+    });
     const twice = autolineup({
       shape: SHAPE,
       roster: [...roster].reverse(),
       mode: "WEEKLY_PROJECTION",
+      now: BEFORE_KICKOFF,
     });
 
     // Same inputs in a different order give the same lineup: these results move
@@ -372,6 +404,7 @@ describe("WEEKLY_PROJECTION", () => {
       shape: SHAPE,
       roster: candidates,
       mode: "WEEKLY_PROJECTION",
+      now: BEFORE_KICKOFF,
     });
     const roster = new Map(candidates.map((player) => [player.playerId, player]));
 
@@ -379,4 +412,159 @@ describe("WEEKLY_PROJECTION", () => {
       [],
     );
   });
+});
+
+describe("a player whose game has started is not a candidate", () => {
+  const LATE = SUNDAY + 3 * 3_600;
+
+  /*
+    Enough of a roster to fill the FLEX two ways: one man already playing and
+    better, one kicking off later and worse. Ranking alone would take the first.
+  */
+  const POOL: AutolineupCandidate[] = [
+    candidate("qb", ["QB"], 20_000),
+    candidate("rb1", ["RB"], 18_000),
+    candidate("rb2", ["RB"], 17_000),
+    candidate("wr1", ["WR"], 16_000),
+    candidate("wr2", ["WR"], 15_000),
+    candidate("te", ["TE"], 10_000),
+    candidate("k", ["K"], 8_000),
+    candidate("dst", ["DST"], 7_000),
+    candidate("flex-early", ["WR"], 14_000),
+    candidate("flex-late", ["WR"], 9_000, { kickoffAt: LATE }),
+  ];
+
+  const flexOf = (now: number) =>
+    autolineup({ shape: SHAPE, roster: POOL, now }).find((e) => e.slotType === "FLEX")
+      ?.playerId;
+
+  it("does not fill an empty slot from a player whose game has started", () => {
+    // Twenty-five minutes into the early games. `flex-early` outranks
+    // `flex-late` by five points and is not eligible for the slot any more:
+    // writing him there would lock it, and the manager still has until the late
+    // kickoff to decide it himself.
+    expect(flexOf(SUNDAY + 25 * 60)).toBe("flex-late");
+  });
+
+  it("still prefers him before his game starts", () => {
+    // The same two players, a minute earlier. Ranking is untouched by this
+    // change — only the clock decides who is in the pool.
+    expect(flexOf(SUNDAY - 60)).toBe("flex-early");
+  });
+
+  it("leaves the slot empty when every candidate has already started", () => {
+    const lineup = autolineup({ shape: SHAPE, roster: POOL, now: LATE + 3_600 });
+
+    // Empty is the honest answer and the better one: an empty slot never locks,
+    // so it can still be filled from free agency with someone yet to kick off.
+    expect(lineup.every((entry) => entry.playerId === null)).toBe(true);
+  });
+
+  it("keeps a player who is already standing in a slot when his game starts", () => {
+    // The mirror of the rule. `SLOT_LOCKED` says a locked slot keeps its player;
+    // this change only governs which slots get *filled*, never which are kept.
+    const lineup = autolineup({
+      shape: SHAPE,
+      roster: POOL,
+      now: SUNDAY + 25 * 60,
+      locked: [{ slotType: "WR", slotIndex: 0, playerId: "wr1" }],
+    });
+
+    expect(lineup.find((e) => e.slotType === "WR" && e.slotIndex === 0)?.playerId).toBe("wr1");
+  });
+
+  it("still starts a player on a bye", () => {
+    // `kickoffAt === null` is a bye, not a game in progress. There is nothing to
+    // have started, the slot never locks, and the manager loses no option.
+    const roster = [
+      ...POOL.filter((c) => c.playerId !== "flex-early" && c.playerId !== "flex-late"),
+      candidate("bye-wr", ["WR"], 12_000, { kickoffAt: null }),
+    ];
+    const lineup = autolineup({ shape: SHAPE, roster, now: SUNDAY + 25 * 60 });
+
+    expect(lineup.find((e) => e.slotType === "FLEX")?.playerId).toBe("bye-wr");
+  });
+
+  it("still starts a player ruled out of a game that has not kicked off", () => {
+    /*
+      The trap this rule must not fall into.
+
+      A player ruled OUT of a 16:25 game is `unavailable`, and `unavailable` is
+      the flag that already sorts a bye or an inactive player last. It is the
+      wrong key for this exclusion: he has not started, his slot does not lock,
+      and starting him takes nothing from anyone. A fix keyed on the flag rather
+      than on the clock bars him and puts nobody in his place.
+    */
+    const roster = [
+      ...POOL.filter((c) => c.playerId !== "flex-early" && c.playerId !== "flex-late"),
+      candidate("out-late-wr", ["WR"], 12_000, { kickoffAt: LATE, unavailable: true }),
+    ];
+    const lineup = autolineup({ shape: SHAPE, roster, now: SUNDAY + 25 * 60 });
+
+    expect(lineup.find((e) => e.slotType === "FLEX")?.playerId).toBe("out-late-wr");
+  });
+});
+
+describe("the autofill may never produce a lineup a manager could not submit", () => {
+  /*
+    The invariant, and the test that would have caught this.
+
+    Every scenario above is a case; this is the rule. `validateLineup` refuses to
+    move a player into a slot once his own game has kicked off, and the autofill
+    reaches the table through `setLineupUnchecked`, which skips validation. So
+    the only thing standing between the autofill and a lineup no manager could
+    have submitted is that it declines to build one.
+
+    Checked at nine moments across a game week rather than one, because the
+    interesting failures are at the boundaries — and because on the unfixed code
+    this fails from the Thursday kickoff onward, which is the very first pass the
+    cron can ever make.
+  */
+  const THURSDAY = SUNDAY - 3 * 86_400;
+  const LATE = SUNDAY + 3 * 3_600;
+
+  const POOL: AutolineupCandidate[] = [
+    candidate("thu-rb", ["RB"], 19_000, { kickoffAt: THURSDAY }),
+    candidate("qb", ["QB"], 20_000),
+    candidate("rb2", ["RB"], 17_000),
+    candidate("wr1", ["WR"], 16_000),
+    candidate("wr2", ["WR"], 15_000),
+    candidate("bye-te", ["TE"], 11_000, { kickoffAt: null }),
+    candidate("out-wr", ["WR"], 13_000, { kickoffAt: LATE, unavailable: true }),
+    candidate("k", ["K"], 8_000),
+    candidate("dst", ["DST"], 7_000),
+    candidate("late-wr", ["WR"], 9_000, { kickoffAt: LATE }),
+  ];
+
+  const kickoffsOf = (roster: readonly AutolineupCandidate[]) =>
+    new Map(roster.map((player) => [player.playerId, player.kickoffAt]));
+
+  const MOMENTS: readonly (readonly [string, number])[] = [
+    ["before the week", THURSDAY - 3_600],
+    ["at the Thursday kickoff", THURSDAY],
+    ["Friday", THURSDAY + 86_400],
+    ["just before the early games", SUNDAY - 1],
+    ["at the early kickoff", SUNDAY],
+    ["mid-afternoon", SUNDAY + 25 * 60],
+    ["just before the late games", LATE - 1],
+    ["at the late kickoff", LATE],
+    ["after everything", LATE + 4 * 3_600],
+  ];
+
+  for (const [when, now] of MOMENTS) {
+    it(`is submittable ${when}`, () => {
+      const assignments = autolineup({ shape: SHAPE, roster: POOL, now });
+
+      const problems = validateLineup({
+        assignments,
+        shape: SHAPE,
+        roster: new Map(POOL.map((c) => [c.playerId, c])),
+        kickoffs: kickoffsOf(POOL),
+        current: [],
+        now,
+      });
+
+      expect(problems).toEqual([]);
+    });
+  }
 });

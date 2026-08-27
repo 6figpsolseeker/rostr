@@ -354,13 +354,14 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
           className="mt-0.5"
         />
         <span>
-          <span className="block">Fill my empty slots at kickoff</span>
+          <span className="block">Fill my empty slots for me</span>
           <span className="block text-xs text-nocturne-neutral-600">
             {data.autofill.mode === "WEEKLY_PROJECTION"
               ? "Uses this week's projections. "
               : "Uses each player's season average. "}
             {data.autofill.enabled
-              ? "You can still change anything yourself — this only touches slots you leave empty."
+              ? "You can still change anything yourself — this only touches slots you leave empty, " +
+                "and it never starts a player whose game has already kicked off."
               : "Off: an empty slot stays empty and scores nothing."}
           </span>
         </span>
@@ -371,7 +372,10 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
 
         The checkbox alone asks a manager to trust a decision taken while they
         are asleep, on a week that counts. This is the same `autolineupChoices`
-        the write uses, so the names here are the names that get started.
+        the write uses, so the names here are the names that get started if
+        nothing kicks off first. A kickoff changes it: a player already playing
+        drops off this list, because the autofill may not start him any more
+        than the manager may.
 
         Rendered whether autofill is on or off, and saying different things: on,
         it is a prediction; off, an empty slot scores nothing and that is the
@@ -388,6 +392,27 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
               {data.autofill.preview.map((choice) => {
                 const starter = byId.get(choice.playerId);
                 const passed = choice.runnerUpId ? byId.get(choice.runnerUpId) : null;
+
+                /*
+                  A slot the autofill will leave empty, because everyone who
+                  could fill it is already playing.
+
+                  This used to render as nothing, which read exactly like a slot
+                  already set. It is the one row here a manager has to act on:
+                  the remaining move is a free agent whose game has not started,
+                  and nothing else on this screen would tell him so.
+                */
+                if (choice.playerId === null) {
+                  return (
+                    <li key={`${choice.slotType}#${choice.slotIndex}`} className="text-[13px]">
+                      <span className="text-nocturne-neutral-600">{choice.slotType}</span>{" "}
+                      <span className="text-amber-300">
+                        stays empty — everyone eligible is already playing
+                      </span>
+                    </li>
+                  );
+                }
+
                 if (!starter) return null;
 
                 return (
