@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { NFL } from "@rostr/core";
 import {
+  currentWeek,
   recordCronRun,
   seasonsInPlay,
   syncByeWeeks,
@@ -95,7 +96,18 @@ export async function runSeasonSyncJob(
     /** Fixtures the provider has not given a kickoff time. See the loop below. */
     undatedGames?: number;
     ranked?: number;
+    /** Season-aggregate projection rows, for the draft board. */
     projections?: number;
+    /** Weekly projection rows, which the autofill ranks on. */
+    weeklyProjections?: number;
+    /**
+     * Which weeks those were pulled for.
+     *
+     * Named rather than counted, because "42 rows" cannot tell an operator that
+     * the job has been writing week 0 and nothing else — which is what it did
+     * from the day it shipped until issue #287.
+     */
+    projectionWeeks?: readonly number[];
     error?: string;
     /**
      * Weeks whose schedule sync threw, named rather than counted.
@@ -176,6 +188,48 @@ export async function runSeasonSyncJob(
       const rankings = await syncRankings(client, provider, NFL.key, season);
       const projections = await syncProjections(client, provider, NFL.key, season);
 
+      /*
+        And the week itself, which nothing ever asked for.
+
+        `syncProjections` defaults its week to the season aggregate, and the call
+        above takes that default — so week 0 was the only row this system ever
+        wrote. `loadProjectedPoints` asks for the real week, so it came back
+        empty every week of every season, and a league whose signed rules say
+        `WEEKLY_PROJECTION` silently ranked on season averages instead. Issue
+        #287. The asymmetry was visible three lines up: `syncGames` loops the
+        weeks, this did not.
+
+        Two weeks, not eighteen. A projection for week 12 published in August is
+        not a projection, and eighteen provider calls a day for seventeen answers
+        nobody reads is the kind of cost `listSeasonProjections` exists to avoid.
+        The current week is what the autofill is ranking on now; the next one is so
+        that a week has projections before its own Thursday rather than after it.
+
+        Failures here are collected like the per-week game failures above rather
+        than thrown: a provider that has not published week N+1 yet is the
+        ordinary case in the hours after a week ends, not a fault.
+      */
+      const projectionWeeks: number[] = [];
+      const playing = await currentWeek(client, NFL.key, season, now);
+      for (const week of [playing ?? 1, (playing ?? 0) + 1]) {
+        if (week >= 1 && week <= NFL.seasonWeeks && !projectionWeeks.includes(week)) {
+          projectionWeeks.push(week);
+        }
+      }
+
+      let weeklyProjections = 0;
+      for (const week of projectionWeeks) {
+        try {
+          const result = await syncProjections(client, provider, NFL.key, season, week);
+          weeklyProjections += result.inserted + result.updated;
+        } catch (error) {
+          weekFailures.push({
+            week,
+            reason: `projections: ${error instanceof Error ? error.message : String(error)}`,
+          });
+        }
+      }
+
       runs.push({
         season,
         players: players.inserted + players.updated,
@@ -185,6 +239,8 @@ export async function runSeasonSyncJob(
         weekFailures,
         ranked: rankings.inserted,
         projections: projections.inserted,
+        weeklyProjections,
+        projectionWeeks,
       });
     } catch (error) {
       // One season's failure must not stop another's, and a partial season is

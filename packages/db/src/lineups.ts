@@ -109,6 +109,23 @@ export const PRIMARY_STAT_SOURCE = "tank01";
  */
 export const PRIMARY_PROJECTION_SOURCE = "tank01";
 
+/**
+ * Week 0 is the season aggregate.
+ *
+ * The draft board asks "who is worth picking for the year"; the autofill asks
+ * "who scores most this Sunday". Same table, same shape, different question —
+ * and a sentinel rather than a nullable column, because Postgres treats NULLs
+ * as distinct and the primary key would then permit two season projections from
+ * one source for the same player.
+ *
+ * Declared here rather than in `sync.ts` because both files need it and
+ * `sync.ts` already imports `PRIMARY_PROJECTION_SOURCE` from this one. Putting
+ * it there and reading it here would close an import cycle around a
+ * module-level constant, which is a temporal-dead-zone hazard settled by
+ * whichever file the bundler happens to load first.
+ */
+export const SEASON_AGGREGATE_WEEK = 0;
+
 export class LineupError extends Error {
   constructor(
     message: string,
@@ -895,6 +912,26 @@ export async function loadAverages(
  *
  * A player with no projection is simply absent from the map, and the autolineup
  * falls back to his season average for that player alone.
+ *
+ * **Falls back to the season projection when the week has none at all**, and the
+ * all-or-nothing part is the whole of it. A season total is a much larger number
+ * than a week's, so a map holding both would rank every player who happened to
+ * have a weekly row below every player who did not — which is not a fallback, it
+ * is a corruption. Either the week has projections and they are used, or it has
+ * none and the season totals rank everybody consistently.
+ *
+ * That case is not hypothetical and was not rare. Issue #287: no production
+ * caller ever passed a week to `syncProjections`, so only the season aggregate
+ * was ever written and this query returned nothing, every week, all season. A
+ * league whose signed rules say `WEEKLY_PROJECTION` silently ranked on season
+ * averages instead — and in week 1, where {@link loadAverages} has no prior week
+ * to average either, every candidate ranked `null` and the autolineup fell
+ * through to its last tie-break, which compares player UUIDs. Launch weekend
+ * would have been decided by `gen_random_uuid()`.
+ *
+ * The ingest is fixed too, so this is the safety net rather than the mechanism.
+ * It still earns its place: it covers the week before a provider publishes, and
+ * any week whose pull failed.
  */
 export async function loadProjectedPoints(
   db: SqlClient,
@@ -903,13 +940,24 @@ export async function loadProjectedPoints(
   rules: LeagueRules,
   source: string = PRIMARY_PROJECTION_SOURCE,
 ): Promise<ReadonlyMap<string, number>> {
-  const rows = await db.query<{ player_id: string; key: string; value: number }>(
+  const weekly = await db.query<{ player_id: string; key: string; value: number }>(
     `SELECT p.player_id, k.key, p.value
        FROM player_projections p
        JOIN stat_keys k ON k.id = p.stat_key_id
       WHERE p.season = $1 AND p.week = $2 AND p.source = $3`,
     [season, week, source],
   );
+
+  const rows =
+    weekly.length > 0 || week === SEASON_AGGREGATE_WEEK
+      ? weekly
+      : await db.query<{ player_id: string; key: string; value: number }>(
+          `SELECT p.player_id, k.key, p.value
+             FROM player_projections p
+             JOIN stat_keys k ON k.id = p.stat_key_id
+            WHERE p.season = $1 AND p.week = $2 AND p.source = $3`,
+          [season, SEASON_AGGREGATE_WEEK, source],
+        );
 
   const byPlayer = new Map<string, StatLine[]>();
   for (const row of rows) {
