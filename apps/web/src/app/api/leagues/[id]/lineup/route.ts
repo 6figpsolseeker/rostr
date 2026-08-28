@@ -300,10 +300,10 @@ export async function GET(
         playerId: player.playerId,
         name: player.fullName,
         positions: player.positions,
-        status: player.status,
-        // Shown, never enforced. The lock is `locked` above, computed from
-        // kickoff; a designation arriving on the Sunday must not be able to
-        // invalidate a lineup that was legal when it was set.
+        // Shown, never enforced *here*. The lock is `locked` above, computed
+        // from kickoff; a designation arriving on the Sunday must not be able to
+        // invalidate a lineup that was legal when it was set. The autofill may
+        // now rank on it, and only that — see `DECISIONS.md` and issue #269.
         imageUrl: player.imageUrl,
         teamRef: player.teamRef,
         injuryDesignation: player.injuryDesignation,

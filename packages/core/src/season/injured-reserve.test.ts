@@ -3,6 +3,7 @@ import {
   countedRosterSize,
   irExemptCount,
   isIrEligible,
+  unlikelyToPlay,
   refuseIrPlacement,
 } from "./injured-reserve.js";
 import type { IrRosterEntry } from "./injured-reserve.js";
@@ -180,5 +181,78 @@ describe("refuseIrPlacement", () => {
     expect(refuseIrPlacement({ roster: [injured], playerId: "hurt", irSlots: 0 })).toBe(
       "IR_FULL",
     );
+  });
+});
+
+describe("unlikelyToPlay", () => {
+  /*
+    The autofill's own vocabulary, deliberately not `isIrEligible`'s.
+
+    They sound like one question and are two: "is he shelved for a while"
+    against "will he appear on Sunday". `DOUBTFUL` is where they part — he may
+    occupy an IR slot, and he is ranked behind a healthy player here.
+  */
+
+  it("demotes the three designations that mean he will not appear", () => {
+    expect(unlikelyToPlay("Out")).toBe(true);
+    expect(unlikelyToPlay("Doubtful")).toBe(true);
+    expect(unlikelyToPlay("Injured Reserve")).toBe(true);
+  });
+
+  it("leaves a questionable player alone, which is most of them", () => {
+    /*
+      240 of the 383 designated players in `docs/TANK01.md`'s capture — five of
+      every eight — and the one value the provider uses to mean he may still
+      play. Demoting it would bench a questionable starter behind a healthy
+      bench body every week, in the lineup nobody is watching.
+
+      No major product does it: ESPN's Quick Lineup acts on "O" alone, and
+      Yahoo's Start Active Players swaps a starter only for a healthy one.
+    */
+    expect(unlikelyToPlay("Questionable")).toBe(false);
+  });
+
+  it("treats an unfamiliar designation as fit, which is the opposite of the IR rule", () => {
+    /*
+      The inversion, and it is the whole reason this is a separate set.
+
+      `isIrEligible` is a deny-list: an unknown word means injured, because
+      refusing a genuinely hurt player an IR slot strands him with no recourse.
+      Here the unbounded failure runs the other way — demoting a healthy man
+      benches him every week with nobody watching — so an unknown word ranks
+      normally.
+
+      It also means the vocabulary being incomplete cannot hurt anyone.
+      `docs/TANK01.md` lists "Physically Unable To Perform" and "Suspension" as
+      never yet observed; if either arrives, this treats him as fit and
+      `syncInjuries` puts the new word in the logs.
+    */
+    expect(unlikelyToPlay("Physically Unable To Perform")).toBe(false);
+    expect(unlikelyToPlay("Suspension")).toBe(false);
+    expect(isIrEligible("Physically Unable To Perform")).toBe(true);
+  });
+
+  it("reads a healthy player as fit", () => {
+    expect(unlikelyToPlay(null)).toBe(false);
+    expect(unlikelyToPlay(undefined)).toBe(false);
+    expect(unlikelyToPlay("")).toBe(false);
+    expect(unlikelyToPlay("   ")).toBe(false);
+  });
+
+  it("matches the provider's wording however it is cased or padded", () => {
+    // The column holds Tank01's wording verbatim, which is title case with a
+    // space — the shape the old seven short codes could never match.
+    expect(unlikelyToPlay("  injured reserve  ")).toBe(true);
+    expect(unlikelyToPlay("OUT")).toBe(true);
+  });
+
+  it("parts from the IR rule on exactly one value", () => {
+    // Doubtful may take an IR slot and is still ranked behind a healthy body.
+    expect(isIrEligible("Doubtful")).toBe(true);
+    expect(unlikelyToPlay("Doubtful")).toBe(true);
+
+    // Questionable is the mirror: never IR-eligible, never demoted.
+    expect(isIrEligible("Questionable")).toBe(false);
+    expect(unlikelyToPlay("Questionable")).toBe(false);
   });
 });

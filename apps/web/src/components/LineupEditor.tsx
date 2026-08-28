@@ -36,7 +36,6 @@ interface RosterPlayer {
   playerId: string;
   name: string;
   positions: string[];
-  status: string;
   kickoffAt: number | null;
   /**
    * How settled this player's week is. `BYE` is a rest week and he cannot

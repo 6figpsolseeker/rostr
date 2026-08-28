@@ -285,6 +285,8 @@ export {
   irExemptCount,
   irExemptOnRoster,
   MAY_STILL_PLAY,
+  UNLIKELY_TO_PLAY,
+  unlikelyToPlay,
   isIrEligible,
   refuseIrPlacement,
   type CommittedTrade,
