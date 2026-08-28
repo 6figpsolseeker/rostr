@@ -738,3 +738,79 @@ one is a different product.
 frozen rule set and **enforced nowhere** — a guarantee members signed that did nothing.
 One field also cannot disagree with itself the way "allowed" and "how many" can.
 schemaVersion 2 -> 3.
+
+## The autofill may read an injury designation, and only to rank an empty slot
+
+Decided 2026-08-28 by the owner: **"do as ESPN does."**
+
+The injury designation is refreshed wholesale on every sync with no revision
+history and no source column, and is therefore **shown and never enforced**:
+nothing scoring, locking, drafting or settling may read it, and a designation
+arriving on the Sunday must not be able to invalidate a lineup that was legal
+when it was set.
+
+That rule is unchanged. This adds one exception, and its boundary is the whole
+of it.
+
+**`autoFillLineup` may read the designation, to order candidates for a slot the
+manager left empty.** Nothing else may. It is a **sort key and never an
+exclusion**: a slot with nobody else still gets filled, exactly as it is for a
+player on a bye.
+
+Three things make this narrower than it looks.
+
+**An empty slot is not a lineup that was legal when it was set** — nothing was
+set. The harm that rule names is a designation overturning a manager's own
+choice, and there is no choice here to overturn. A slot the manager fills
+himself is untouched, as § 8 already says.
+
+**§ 8 has always promised this.** _"A player with a game this week who is not
+ruled out comes first, because a player on a bye or officially out cannot score
+at all."_ Members signed that. The code tested `players.status`, a column
+nothing in this repo has ever written — 271 inserts and 59 updates across the
+whole of its history, none of them naming it — so the comparison was `"ACTIVE"`
+against out-codes and never matched once. This makes a signed rule true rather
+than adding a rule, which is the third time that shape has turned up after
+`irSlots` and `botsAllowed`.
+
+**It is what the products managers know actually do.** ESPN's Quick Lineup
+"will fill the holes in your lineup and take players with 'O' designations
+out"; its Lineup Protection substitutes for a starter marked Out or IL and is
+explicitly not an optimiser; Yahoo's Start Active Players swaps a starter only
+when "bench player is healthy and starting player is injured". None of them
+demotes a questionable player, and none refuses to field somebody rather than
+leave a slot empty.
+
+**The vocabulary is the autofill's own and is not shared with `isIrEligible`.**
+That predicate is a deny-list, treating anything unfamiliar as injured, because
+stranding a genuinely injured player is the worse failure there and its cost is
+bounded by a number in the signed rules. Here the asymmetry reverses: an
+unfamiliar designation ranks **normally**, because benching a healthy starter
+every week in a lineup nobody is watching is unbounded and silent.
+`QUESTIONABLE` — 240 of the 383 designated players in `docs/TANK01.md`'s
+2026-08-27 capture — is **not** demoted. A questionable player usually plays.
+
+**Never an exclusion, and that is not timidity.** `defaultPositionCaps` puts
+QB, K and DEF at one apiece, so a roster the autopicker built holds exactly one
+of each. Refusing to field a designated kicker would empty that slot for the
+week with nothing on the roster able to fill it — manufacturing the permanent
+hole the autopicker's own stranding guard exists to prevent.
+
+**Rejected: reading the absence of a projection instead.** `player_projections`
+carries a source, but it is upserted in place with no revision history, its
+rows are never deleted, and the provider covers roughly 620 of 3,870 players.
+"Nobody projects him" means the provider does not cover him. It is a worse
+input than the designation on every axis this rule cares about, and it is
+silent in exactly the Sunday case.
+
+**Owed, and not yet paid.** The projections precedent below was granted on a
+condition — _"store the projection used, with its source, and the decision is as
+reproducible as anything else in the system"_ — and nothing records either the
+projection or this designation. Issue #267 is that debt. This exception is
+taken on the narrower ground that a demotion cannot overturn a manager's
+choice, but the recording is still owed and both inputs should land together.
+
+**Not decided here: whether an injured-reserve designation should exclude a
+player outright.** That would change § 8's "Who is eligible", which is frozen
+text existing leagues have signed, and it is what issue #270 would need. Left
+open deliberately.

@@ -66,6 +66,66 @@
 export const MAY_STILL_PLAY = new Set(["QUESTIONABLE"]);
 
 /**
+ * Designations that mean a player will probably not take the field this week.
+ *
+ * **An allow-list, and the inversion from {@link MAY_STILL_PLAY} is deliberate
+ * rather than an inconsistency.** That one is a deny-list because refusing an IR
+ * placement wrongly strands a genuinely injured player with no recourse, while
+ * admitting one wrongly costs a manager a slot he chose to spend, bounded by
+ * `roster.irSlots`. Here the asymmetry runs the other way: this decides who the
+ * autofill starts, in a lineup nobody is watching, and demoting a healthy man
+ * wrongly benches him every week with no bound and nobody to notice. So an
+ * unfamiliar designation ranks **normally**, which is the safe direction on this
+ * path and the dangerous one on the other.
+ *
+ * That is also why this is a separate set rather than a reuse. The two answer
+ * questions that sound identical and are not — "is he shelved for a while"
+ * against "will he appear on Sunday" — and `DOUBTFUL` is where they part:
+ * eligible for an IR slot, and demoted here.
+ *
+ * `QUESTIONABLE` is deliberately absent. It is 240 of the 383 designated
+ * players in `docs/TANK01.md`'s capture — five of every eight — and it is the
+ * one value the provider uses to mean a player may still play. Demoting it
+ * would bench a questionable starter behind a healthy bench body every week,
+ * which no major product does: ESPN's Quick Lineup acts on "O" alone, and
+ * Yahoo's Start Active Players swaps a starter only for a healthy alternative.
+ *
+ * `syncInjuries` warns on any designation not yet recorded in `docs/TANK01.md`,
+ * so a new value arrives in the logs rather than silently changing a ranking.
+ */
+export const UNLIKELY_TO_PLAY = new Set(["OUT", "DOUBTFUL", "INJURED RESERVE"]);
+
+/**
+ * Whether the autofill should rank this player behind healthy ones.
+ *
+ * `RULES.md` §8 has promised this since it was written — *"a player with a game
+ * this week who is not ruled out comes first, because a player on a bye or
+ * officially out cannot score at all"* — and nothing delivered it. The code that
+ * was meant to tested `players.status`, a column no writer in this repo has ever
+ * set, so the comparison was `"ACTIVE"` against a set of out-codes and never
+ * matched. Members signed a rule that did nothing. Issue #269, and the third
+ * time this repo has found that shape after `irSlots` and `botsAllowed`.
+ *
+ * **A ranking, never an exclusion, and that distinction is load-bearing.**
+ * `defaultPositionCaps` puts QB, K and DEF at one apiece, so a roster built by
+ * the autopicker holds exactly one of each — and excluding a designated kicker
+ * would empty the kicker slot for the week with nothing on the roster able to
+ * fill it. Demoted, he is still started when there is nobody else, which is
+ * both what the products do and what an empty slot deserves.
+ *
+ * Reads the injury designation, which `CLAUDE.md` records as *shown and never
+ * enforced*. See `DECISIONS.md` for the exception that permits it: the harm that
+ * rule names is a designation overturning a lineup the manager set, and a slot
+ * he left empty is not one. It may rank an empty slot and may do nothing else.
+ */
+export function unlikelyToPlay(designation: string | null | undefined): boolean {
+  if (designation === null || designation === undefined) return false;
+  const normalised = designation.trim().toUpperCase();
+  if (normalised === "") return false;
+  return UNLIKELY_TO_PLAY.has(normalised);
+}
+
+/**
  * Whether this designation permits a player to occupy an IR slot.
  *
  * **Decided by the owner, 2026-08-23: "whenever a player is on IR they need to

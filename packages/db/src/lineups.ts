@@ -39,6 +39,7 @@ import {
   scorePlayer,
   seasonAverage,
   startingSlots,
+  unlikelyToPlay,
   validateLineup,
 } from "@rostr/core";
 import type {
@@ -369,7 +370,6 @@ async function weekFirstKickoff(
  */
 export type RosterPlayer = LineupPlayer & {
   readonly fullName: string;
-  readonly status: string;
   /** Provider-published headshot, or a crest for a team unit. Null renders as initials. */
   readonly imageUrl: string | null;
   /** The club, not the fantasy team — "PHI". */
@@ -417,7 +417,6 @@ export async function loadRosterForWeek(
   const rows = await db.query<{
     player_id: string;
     full_name: string;
-    status: string;
     positions: string[];
     kickoff_at: string | null;
     team_scheduled: boolean;
@@ -430,7 +429,6 @@ export async function loadRosterForWeek(
   }>(
     `SELECT p.id AS player_id,
             p.full_name,
-            p.status,
             -- Display only. A roster row shows a face, a club, and whether the
             -- man is hurt; none of the three is read by a lock, by
             -- validateLineup, or by anything that scores.
@@ -462,7 +460,7 @@ export async function loadRosterForWeek(
         AND g.week = $3
         AND (g.home_team_ref = p.team_ref OR g.away_team_ref = p.team_ref)
       WHERE r.team_id = $1 AND r.released_at IS NULL
-      GROUP BY p.id, p.full_name, p.status, g.kickoff_at, p.team_ref, p.sport_id, r.on_ir,
+      GROUP BY p.id, p.full_name, g.kickoff_at, p.team_ref, p.sport_id, r.on_ir,
                g.home_team_ref, g.away_team_ref,
                p.image_url, p.injury_designation`,
     [teamId, season, week],
@@ -479,7 +477,6 @@ export async function loadRosterForWeek(
       {
         playerId: row.player_id,
         fullName: row.full_name,
-        status: row.status,
         positions: row.positions,
         imageUrl: row.image_url,
         teamRef: row.team_ref,
@@ -928,9 +925,6 @@ export async function loadProjectedPoints(
   );
 }
 
-/** Injury designations that mean a player will not appear. */
-const OUT_STATUSES = new Set(["OUT", "IR", "INACTIVE", "SUSPENDED", "DOUBTFUL", "PUP", "NFI"]);
-
 /**
  * One roster row, as the autofill sees it.
  *
@@ -946,7 +940,7 @@ export function autolineupCandidate(
     readonly playerId: string;
     readonly positions: readonly string[];
     readonly kickoffAt: number | null;
-    readonly status: string;
+    readonly injuryDesignation: string | null;
   },
   ranking: {
     readonly averageMilliPoints: number | null;
@@ -959,9 +953,20 @@ export function autolineupCandidate(
     kickoffAt: player.kickoffAt,
     averageMilliPoints: ranking.averageMilliPoints,
     projectedMilliPoints: ranking.projectedMilliPoints,
-    // A bye and an injury designation both mean "will not appear". Neither is a
-    // hard exclusion — a team with nobody else still has to field someone.
-    unavailable: player.kickoffAt === null || OUT_STATUSES.has(player.status.toUpperCase()),
+    /*
+      A bye and a designation that means he will not appear are the same fact to
+      a ranking: no points either way. Neither is a hard exclusion — a team with
+      nobody else still has to field somebody, and `defaultPositionCaps` puts
+      QB, K and DEF at one apiece, so excluding would empty those slots outright.
+
+      This used to test `players.status` against a set of short codes. Nothing in
+      this repo has ever written that column — 271 inserts and 59 updates across
+      the whole of its history, none of them naming it — so the comparison was
+      `"ACTIVE"` against out-codes and never matched once. `RULES.md` §8 has
+      promised this behaviour to every member who signed, and it did nothing.
+      Issue #269.
+    */
+    unavailable: player.kickoffAt === null || unlikelyToPlay(player.injuryDesignation),
   };
 }
 

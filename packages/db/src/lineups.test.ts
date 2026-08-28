@@ -17,6 +17,7 @@ import { addTestTeam, createTestDatabase } from "./testing.js";
 import type { PGliteClient } from "./testing.js";
 import {
   autoFillLineup,
+  autolineupCandidate,
   ensureLineups,
   loadAverages,
   LineupError,
@@ -1935,5 +1936,129 @@ describe("a roster over the limit is frozen, and nobody is picked for it", () =>
 
     // Gone, and not replaced.
     expect(qb?.player_id).toBeNull();
+  });
+});
+
+describe("the autofill ranks an injured player behind a healthy one — #269", () => {
+  /*
+    `RULES.md` §8 has promised this to every member who signed: "a player with a
+    game this week who is not ruled out comes first, because a player on a bye or
+    officially out cannot score at all."
+
+    It has never once happened. The check tested `players.status` against a set
+    of short codes, and nothing in this repo has ever written that column — so
+    the comparison was "ACTIVE" against out-codes and never matched. A signed
+    rule that did nothing, which is the third time this repo has found that
+    shape after `irSlots` and `botsAllowed`.
+
+    Ranked down, never excluded: QB, K and DEF cap at one apiece, so refusing to
+    field a designated kicker would empty that slot for the week with nothing on
+    the roster able to fill it.
+
+    **The two that assert the flag are the regression tests.** This fixture
+    gives its players random ids and `compare` breaks ties on ascending id, so
+    with nobody demoted two equally-ranked quarterbacks are a coin toss. A
+    demotion settles that — it is the first term of the comparison, ahead of
+    points entirely — so the end-to-end cases below are deterministic *with* the
+    rule and decide by chance without it. The cases that read `unavailable`
+    directly fail on a revert every time, which is what holds this rule down.
+  */
+
+  const designate = async (fx: Fixture, handle: string, designation: string | null) =>
+    fx.client.query("UPDATE players SET injury_designation = $2 WHERE id = $1", [
+      fx.player(handle),
+      designation,
+    ]);
+
+  const startedAt = async (fx: Fixture, slot: string, index = 0) => {
+    const [row] = await fx.client.query<{ player_id: string | null }>(
+      `SELECT l.player_id FROM lineups l
+         JOIN slot_types st ON st.id = l.slot_type_id
+        WHERE l.team_id = $1 AND l.week = $2 AND st.key = $3 AND l.slot_index = $4`,
+      [fx.teamId, WEEK, slot, index],
+    );
+    return row?.player_id ?? null;
+  };
+
+  it("passes over a player who is ruled out, whoever else is available", async () => {
+    // Deterministic in the direction that matters: the demoted man loses to
+    // anyone not demoted, regardless of how the tie between the others falls.
+    const fx = await setup();
+    await designate(fx, "sun-qb", "Out");
+
+    await autoFillLineup(fx.client, fx.leagueId, fx.teamId, WEEK, BEFORE_ANYTHING);
+
+    // The fixture holds exactly two quarterbacks, so a demotion decides it
+    // outright rather than leaving a tie to a random id.
+    expect(await startedAt(fx, "QB")).toBe(fx.player("thu-qb"));
+  });
+
+  it("passes over one on injured reserve, which is issue #270's player", async () => {
+    const fx = await setup();
+    await designate(fx, "sun-qb", "Injured Reserve");
+
+    await autoFillLineup(fx.client, fx.leagueId, fx.teamId, WEEK, BEFORE_ANYTHING);
+
+    expect(await startedAt(fx, "QB")).toBe(fx.player("thu-qb"));
+  });
+
+  it("still starts him when there is nobody else, because an empty slot scores nothing", async () => {
+    /*
+      The half that stops this stranding a roster. `defaultPositionCaps` puts K
+      and DEF at one apiece, so a designated kicker is the only kicker — and a
+      rule that refused to field him would leave that slot empty every week with
+      no possible remedy.
+
+      ESPN and Yahoo both work this way: they substitute when a healthy
+      alternative exists, and neither leaves a slot empty rather than field
+      somebody injured.
+    */
+    const fx = await setup();
+    await designate(fx, "k-a", "Injured Reserve");
+
+    await autoFillLineup(fx.client, fx.leagueId, fx.teamId, WEEK, BEFORE_ANYTHING);
+
+    expect(await startedAt(fx, "K")).toBe(fx.player("k-a"));
+  });
+
+  it("does not demote a questionable player, or one nobody has recorded", async () => {
+    /*
+      Asserted on the flag rather than on who wins, because two undemoted players
+      tie and the tie breaks on a random id.
+
+      Questionable is five of every eight designated players and the one value
+      meaning he may still play. An unrecorded designation ranks normally too,
+      which is the opposite of the IR rule's polarity and is what makes an
+      incomplete vocabulary harmless here.
+    */
+    const fx = await setup();
+    await designate(fx, "sun-qb", "Questionable");
+    await designate(fx, "thu-qb", "Physically Unable To Perform");
+
+    const roster = await loadRosterForWeek(fx.client, fx.teamId, SEASON, WEEK);
+
+    for (const handle of ["sun-qb", "thu-qb"]) {
+      const player = roster.get(fx.player(handle))!;
+      const candidate = autolineupCandidate(player, {
+        averageMilliPoints: null,
+        projectedMilliPoints: null,
+      });
+      expect(candidate.unavailable).toBe(false);
+    }
+  });
+
+  it("marks one who is ruled out unavailable, without excluding him", async () => {
+    const fx = await setup();
+    await designate(fx, "sun-qb", "Doubtful");
+
+    const roster = await loadRosterForWeek(fx.client, fx.teamId, SEASON, WEEK);
+    const candidate = autolineupCandidate(roster.get(fx.player("sun-qb"))!, {
+      averageMilliPoints: null,
+      projectedMilliPoints: null,
+    });
+
+    // A sort key, not an exclusion: he is still a candidate.
+    expect(candidate.unavailable).toBe(true);
+    expect(candidate.playerId).toBe(fx.player("sun-qb"));
   });
 });
