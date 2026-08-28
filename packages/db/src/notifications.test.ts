@@ -420,6 +420,115 @@ describe("notificationsForUser", () => {
     });
   });
 
+  describe("a roster over the limit", () => {
+    /*
+      The one state a manager reaches without acting: a stashed player recovers
+      on the injuries cron, the exemption is read live, and the counted size
+      rises with nothing written and nobody having done anything.
+
+      This item is the safety valve on the rule. The rest of the restriction is
+      discovered the moment the manager tries something; the autofill is not —
+      it is a thing that silently does not happen, on a Sunday. §8 says a rule
+      people would only discover by losing money to it is the wrong rule to
+      have, and without this that is what it would be.
+    */
+
+    /** Give the team `rows` players, `stashed` of them on IR with a designation. */
+    const roster = async (
+      fx: Fixture,
+      teamId: string,
+      rows: number,
+      stashed: { designation: string | null } | null,
+    ) => {
+      const [sport] = await fx.client.query<{ id: string }>(
+        "SELECT id FROM sports WHERE key = $1",
+        [NFL.key],
+      );
+      const [position] = await fx.client.query<{ id: string }>(
+        "SELECT id FROM positions WHERE sport_id = $1 LIMIT 1",
+        [sport!.id],
+      );
+
+      for (let i = 0; i < rows; i++) {
+        const onIr = stashed !== null && i === 0;
+        const handle = `over-${teamId.slice(0, 6)}-${i}`;
+        const [player] = await fx.client.query<{ id: string }>(
+          `INSERT INTO players
+             (sport_id, external_ref, full_name, primary_position_id, injury_designation)
+           VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+          [sport!.id, handle, handle, position!.id, onIr ? stashed.designation : null],
+        );
+        await fx.client.query(
+          `INSERT INTO roster_entries (team_id, player_id, acquired_via, acquired_at, on_ir)
+           VALUES ($1, $2, 'DRAFT', now(), $3)`,
+          [teamId, player!.id, onIr],
+        );
+      }
+    };
+
+    const inSeason = async (fx: Fixture) =>
+      fx.client.query("UPDATE leagues SET state = 'IN_SEASON' WHERE id = $1", [fx.leagueId]);
+
+    it("stays quiet while a genuinely stashed player keeps the team legal", async () => {
+      // Fifteen rows, one genuinely out: counted fourteen, exactly at the limit
+      // and perfectly legal. This is the case a check on row count gets wrong.
+      const fx = await fixture();
+      await inSeason(fx);
+      await roster(fx, fx.seats[0]!.teamId, 15, { designation: "OUT" });
+
+      const items = await notificationsForUser(fx.client, fx.seats[0]!.userId, NOW);
+      expect(items.map((i) => i.kind)).not.toContain("ROSTER_OVER_LIMIT");
+    });
+
+    it("speaks the moment he recovers, with both numbers and the way out", async () => {
+      const fx = await fixture();
+      await inSeason(fx);
+      await roster(fx, fx.seats[0]!.teamId, 15, { designation: "OUT" });
+
+      // The injuries cron clears it. Nothing else changes.
+      await fx.client.query("UPDATE players SET injury_designation = NULL WHERE id = ANY($1)", [
+        (
+          await fx.client.query<{ player_id: string }>(
+            "SELECT player_id FROM roster_entries WHERE team_id = $1 AND on_ir",
+            [fx.seats[0]!.teamId],
+          )
+        ).map((row) => row.player_id),
+      ]);
+
+      const items = await notificationsForUser(fx.client, fx.seats[0]!.userId, NOW);
+      const item = items.find((i) => i.kind === "ROSTER_OVER_LIMIT");
+
+      expect(item).toMatchObject({
+        kind: "ROSTER_OVER_LIMIT",
+        leagueId: fx.leagueId,
+        href: `/leagues/${fx.leagueId}/players`,
+        deadline: null,
+      });
+      expect(item?.text).toContain("holds 15 players and the limit is 14");
+      expect(item?.text).toContain("release one player");
+      // Says what it costs, because that half is otherwise invisible.
+      expect(item?.text).toContain("autofill will not pick anyone");
+    });
+
+    it("tells the manager holding the roster and nobody else", async () => {
+      const fx = await fixture();
+      await inSeason(fx);
+      await roster(fx, fx.seats[0]!.teamId, 15, null);
+
+      const held = await notificationsForUser(fx.client, fx.seats[0]!.userId, NOW);
+      expect(held.map((i) => i.kind)).toContain("ROSTER_OVER_LIMIT");
+
+      const other = await notificationsForUser(fx.client, fx.seats[1]!.userId, NOW);
+      expect(other.map((i) => i.kind)).not.toContain("ROSTER_OVER_LIMIT");
+    });
+
+    it("outranks an unset lineup, because it costs more and closes no later", async () => {
+      expect(NOTIFICATION_URGENCY.indexOf("ROSTER_OVER_LIMIT")).toBeLessThan(
+        NOTIFICATION_URGENCY.indexOf("LINEUP_UNSET"),
+      );
+    });
+  });
+
   it("puts the pick clock ahead of everything else", async () => {
     // The strip shows one item, so the order decides what a manager sees. A
     // 90-second clock outranks anything measured in hours.

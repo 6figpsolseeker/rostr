@@ -69,6 +69,13 @@ interface RosterPlayer {
 
 interface LineupResponse {
   week: number;
+  /**
+   * Whether this team may edit its lineup, and why not when it may not.
+   *
+   * Composed by the server from the same function the write refuses with, so
+   * the screen cannot offer something the server will turn down.
+   */
+  editing: { open: boolean; notice: string | null };
   autofill: {
     enabled: boolean;
     mode: "WEEKLY_PROJECTION" | "SEASON_AVERAGE";
@@ -449,6 +456,15 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
         </div>
       )}
 
+      {data.editing.notice !== null && (
+        // Said once, above everything, because it explains why every control
+        // below is inert. The sentence comes from the server so it cannot drift
+        // from the rule that produced it.
+        <p className="rounded border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-sm text-amber-200/80">
+          {data.editing.notice}
+        </p>
+      )}
+
       {(saveError || problems.length > 0) && (
         <div className="space-y-1 rounded border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
           {saveError && <p>{saveError}</p>}
@@ -554,7 +570,7 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
               <div className="min-w-0 flex-1">
                 <select
                   value={slot.playerId ?? ""}
-                  disabled={slot.locked || saving}
+                  disabled={slot.locked || saving || !data.editing.open}
                   onChange={(e) => assign(slot, e.target.value || null)}
                   className="w-full rounded border border-nocturne-neutral-800 bg-transparent px-2 py-1.5 text-sm disabled:opacity-50"
                 >

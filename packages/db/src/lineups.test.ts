@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { buildNflPprRules, indexScoringRules, NFL, NFL_PPR_SCORING } from "@rostr/core";
+import {
+  buildNflPprRules,
+  buildRosterShape,
+  indexScoringRules,
+  NFL,
+  NFL_PPR_ROSTER,
+  NFL_PPR_SCORING,
+} from "@rostr/core";
 import { resolveWeek } from "@rostr/core";
 import type { DraftRules, LeagueRules, LineupAssignment } from "@rostr/core";
 import type { SqlClient } from "./client.js";
@@ -1720,5 +1727,213 @@ describe("the autofill will not take a slot the manager still holds", () => {
     });
 
     expect(await flexAfter(fx)).toBe(fx.players.get("rb-c"));
+  });
+});
+
+describe("a roster over the limit is frozen, and nobody is picked for it", () => {
+  /*
+    A team can only get here one way, and it is not something the manager did:
+    a player stashed on injured reserve recovers, the exemption is read live,
+    and the counted size rises with no row written and nobody having acted.
+
+    While over, the league stops acting for them — the lineup is frozen and the
+    autofill picks nobody. It still *tidies*, and that half is not a courtesy:
+    the autofill is the only thing that takes a released player out of a stored
+    lineup, this manager is required to release somebody, and a released player
+    left standing in a slot goes on scoring for the team that cut him while
+    being addable by everyone else.
+
+    ESPN behaves the same way in both halves — it never fills a slot for you,
+    and it never leaves a player you dropped in your lineup.
+  */
+
+  const SHAPE = buildRosterShape(NFL_PPR_ROSTER, NFL);
+
+  /** Top the team up to `rows` unreleased players, all fit and all playing Sunday. */
+  const fillTo = async (fx: Fixture, rows: number): Promise<void> => {
+    const [sport] = await fx.client.query<{ id: string }>(
+      "SELECT id FROM sports WHERE key = $1",
+      [NFL.key],
+    );
+    const [rb] = await fx.client.query<{ id: string }>(
+      "SELECT id FROM positions WHERE sport_id = $1 AND key = 'RB'",
+      [sport!.id],
+    );
+    const [held] = await fx.client.query<{ n: number }>(
+      "SELECT count(*)::int AS n FROM roster_entries WHERE team_id = $1 AND released_at IS NULL",
+      [fx.teamId],
+    );
+
+    for (let i = held!.n; i < rows; i++) {
+      const handle = `filler-${i}`;
+      const [player] = await fx.client.query<{ id: string }>(
+        `INSERT INTO players (sport_id, external_ref, full_name, primary_position_id, team_ref)
+         VALUES ($1, $2, $3, $4, 'CIN') RETURNING id`,
+        [sport!.id, handle, handle, rb!.id],
+      );
+      await fx.client.query(
+        "INSERT INTO roster_entries (team_id, player_id, acquired_via) VALUES ($1, $2, 'DRAFT')",
+        [fx.teamId, player!.id],
+      );
+    }
+  };
+
+  it("refuses a lineup change while over, and allows one at exactly the limit", async () => {
+    /*
+      The boundary, and the reason it is a test of its own. Every acquisition
+      check in the repo asks `counted >= totalSlots` — correct for "may I add
+      one more". This rule asks whether the state is illegal, which is only
+      `>`. Writing `>=` here would freeze the lineup of every full roster in
+      the league, which is most of them for most of the season.
+    */
+    const fx = await setup();
+    await fillTo(fx, SHAPE.totalSlots);
+
+    const legal = await setLineup(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: fx.teamId,
+      week: WEEK,
+      assignments: [{ slotType: "QB", slotIndex: 0, playerId: fx.players.get("sun-qb")! }],
+      now: BEFORE_ANYTHING,
+    });
+    expect(legal).toBeDefined();
+
+    // One more, and the same edit is refused.
+    await fillTo(fx, SHAPE.totalSlots + 1);
+
+    await expect(
+      setLineup(fx.client, {
+        leagueId: fx.leagueId,
+        teamId: fx.teamId,
+        week: WEEK,
+        assignments: [{ slotType: "QB", slotIndex: 0, playerId: fx.players.get("thu-qb")! }],
+        now: BEFORE_ANYTHING,
+      }),
+    ).rejects.toMatchObject({ code: "ROSTER_OVER_LIMIT" });
+
+    // And says both numbers, because "your roster is full" is the sentence
+    // that sends a manager to do the thing that was just refused.
+    await expect(
+      setLineup(fx.client, {
+        leagueId: fx.leagueId,
+        teamId: fx.teamId,
+        week: WEEK,
+        assignments: [{ slotType: "QB", slotIndex: 0, playerId: fx.players.get("thu-qb")! }],
+        now: BEFORE_ANYTHING,
+      }),
+    ).rejects.toThrow(/15 players and the limit is 14/);
+  });
+
+  it("lets the manager edit again the moment somebody is released", async () => {
+    // Nothing else has to be cleared, and nobody has to approve it.
+    const fx = await setup();
+    await fillTo(fx, SHAPE.totalSlots + 1);
+
+    await fx.client.query(
+      `UPDATE roster_entries SET released_at = now()
+        WHERE team_id = $1 AND player_id = $2`,
+      [fx.teamId, fx.players.get("bye-te")],
+    );
+
+    await expect(
+      setLineup(fx.client, {
+        leagueId: fx.leagueId,
+        teamId: fx.teamId,
+        week: WEEK,
+        assignments: [{ slotType: "QB", slotIndex: 0, playerId: fx.players.get("sun-qb")! }],
+        now: BEFORE_ANYTHING,
+      }),
+    ).resolves.toBeDefined();
+  });
+
+  it("still writes a lineup, so the league's week can be scored", async () => {
+    /*
+      The regression this must never cause. `resolveWeek` throws on a team with
+      no lineup at all — scoring one as zero would silently hand its opponent a
+      free win — so a team that were simply skipped here would take its whole
+      league's week down with it, and in a pot league block settlement. Eleven
+      innocent managers would pay for one over-full roster.
+    */
+    const fx = await setup();
+    await fillTo(fx, SHAPE.totalSlots + 1);
+
+    const outcome = await ensureLineups(fx.client, fx.leagueId, WEEK, BEFORE_ANYTHING);
+
+    expect(outcome.teamsOverLimit).toEqual([fx.teamId]);
+
+    const [rows] = await fx.client.query<{ n: number }>(
+      "SELECT count(*)::int AS n FROM lineups WHERE team_id = $1 AND week = $2",
+      [fx.teamId, WEEK],
+    );
+    expect(rows!.n).toBe(SHAPE.starters.length);
+
+    // Every slot empty: it was tidied, not filled.
+    const [filled] = await fx.client.query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM lineups
+        WHERE team_id = $1 AND week = $2 AND player_id IS NOT NULL`,
+      [fx.teamId, WEEK],
+    );
+    expect(filled!.n).toBe(0);
+  });
+
+  it("still fills the other teams in the same league", async () => {
+    // Per team, not per league. The other manager did nothing.
+    const fx = await setup();
+    await fillTo(fx, SHAPE.totalSlots + 1);
+
+    await ensureLineups(fx.client, fx.leagueId, WEEK, BEFORE_ANYTHING);
+
+    const [filled] = await fx.client.query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM lineups
+        WHERE team_id = $1 AND week = $2 AND player_id IS NOT NULL`,
+      [fx.otherTeamId, WEEK],
+    );
+    expect(filled!.n).toBeGreaterThan(0);
+  });
+
+  it("takes a released player out of the lineup even though it picks nobody", async () => {
+    /*
+      The half that is not a courtesy, and the reason "the autofill does not run"
+      is the wrong way to build this.
+
+      A manager over the limit is required to release somebody, and a starter is
+      the obvious choice. If the lineup were left untouched he would keep
+      scoring for the team that cut him — and be addable by everybody else at
+      the same time, so one player would score for two teams in one week.
+    */
+    const fx = await setup();
+
+    // A lineup set while the roster was still legal.
+    await setLineup(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: fx.teamId,
+      week: WEEK,
+      assignments: [{ slotType: "QB", slotIndex: 0, playerId: fx.players.get("sun-qb")! }],
+      now: BEFORE_ANYTHING,
+    });
+
+    // Two over, so releasing one still leaves them over — otherwise the
+    // ordinary autofill takes over and fills the slot, which is a different
+    // test.
+    await fillTo(fx, SHAPE.totalSlots + 2);
+
+    // Still over, the manager releases the quarterback they had started.
+    await fx.client.query(
+      `UPDATE roster_entries SET released_at = now()
+        WHERE team_id = $1 AND player_id = $2`,
+      [fx.teamId, fx.players.get("sun-qb")],
+    );
+
+    await ensureLineups(fx.client, fx.leagueId, WEEK, BEFORE_ANYTHING);
+
+    const [qb] = await fx.client.query<{ player_id: string | null }>(
+      `SELECT l.player_id FROM lineups l
+         JOIN slot_types st ON st.id = l.slot_type_id
+        WHERE l.team_id = $1 AND l.week = $2 AND st.key = 'QB' AND l.slot_index = 0`,
+      [fx.teamId, WEEK],
+    );
+
+    // Gone, and not replaced.
+    expect(qb?.player_id).toBeNull();
   });
 });

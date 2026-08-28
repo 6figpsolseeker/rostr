@@ -52,6 +52,7 @@ import type {
 } from "@rostr/core";
 import type { SqlClient } from "./client.js";
 import { getLeagueRules } from "./leagues.js";
+import { overageFor, overLimitNotice } from "./roster-capacity.js";
 import { withTransaction } from "./transaction.js";
 
 /**
@@ -131,7 +132,16 @@ export class LineupError extends Error {
        * this one means nothing is wrong except the timing. The client re-reads
        * and submits again.
        */
-      | "LINEUP_MOVED",
+      | "LINEUP_MOVED"
+      /**
+       * This team holds more players than the limit, so its lineup is frozen.
+       *
+       * Not `INVALID_LINEUP`: nothing about the submitted lineup is wrong, and
+       * the fix is on a different screen. Not `LINEUP_MOVED` either — that one
+       * says "try again", and re-reading changes nothing here until somebody is
+       * released.
+       */
+      | "ROSTER_OVER_LIMIT",
     readonly problems: readonly LineupProblem[] = [],
   ) {
     super(message);
@@ -566,6 +576,21 @@ export async function setLineup(
   );
   if (!team) throw new LineupError("Team is not in this league", "TEAM_NOT_IN_LEAGUE");
 
+  /*
+    Frozen while the roster is over the limit.
+
+    Before the schedule check below, deliberately: a team over the limit in a
+    league whose schedule has not loaded should be told the thing it can act on,
+    not handed the operator's problem.
+
+    Read outside the transaction like every other precondition here. The window
+    is a manager racing his own drop, and it resolves in his favour the moment
+    he retries.
+  */
+  const overage = await overageFor(db, input.teamId, stored.rules);
+  const notice = overLimitNotice(overage);
+  if (notice) throw new LineupError(notice, "ROSTER_OVER_LIMIT");
+
   const season = stored.rules.seasonYear;
 
   // Fail closed. Without the schedule there are no kickoff times, so no lock can
@@ -969,6 +994,23 @@ export async function autoFillLineup(
   teamId: string,
   week: number,
   now: number,
+  options?: {
+    /**
+     * Tidy the lineup but pick nobody. Defaults to filling.
+     *
+     * For a team over the roster limit. The autofill does two jobs — it takes
+     * players the team no longer owns *out* of the lineup, and it puts players
+     * *into* empty slots — and only the second is a courtesy. Withholding the
+     * first would be a scoring bug rather than a penalty: the manager over the
+     * limit is required to release somebody, releasing a starter is the obvious
+     * move, and a released player left standing in a slot goes on scoring for
+     * the team that cut him while being addable by everybody else.
+     *
+     * ESPN behaves the same way in both halves: it never fills a slot for you,
+     * and it never leaves a player you dropped in your lineup.
+     */
+    readonly fillEmptySlots?: boolean;
+  },
 ): Promise<readonly LineupAssignment[]> {
   const stored = await getLeagueRules(db, leagueId);
   if (!stored) throw new LineupError("League has no rules", "LEAGUE_NOT_FOUND");
@@ -1069,9 +1111,23 @@ export async function autoFillLineup(
       keep.set(slot, assignment);
     }
 
+    /*
+      An empty candidate pool is how "tidy but pick nobody" is expressed, and it
+      is not a trick. `autolineupChoices` copies every locked or kept slot
+      through untouched and only consults the pool for the ones still open, so an
+      empty pool leaves exactly the slots the manager set — minus anyone who has
+      left the roster — and materialises the rest as empty.
+
+      Materialising them matters as much as the tidying: `resolveWeek` throws on
+      a team with no lineup at all, on the grounds that scoring it as zero would
+      silently hand its opponent a free win. A team that is simply skipped here
+      would take its whole league's week down with it.
+    */
+    const fillable = options?.fillEmptySlots === false ? [] : candidates;
+
     const filled = autolineup({
       shape: buildRosterShape(stored.rules.roster, NFL),
-      roster: candidates,
+      roster: fillable,
       mode,
       locked: [...keep.values()],
       // The same clock the lock check above already used. A player whose game
@@ -1190,7 +1246,21 @@ export async function ensureLineups(
   leagueId: string,
   week: number,
   now: number,
-): Promise<{ teamsFilled: number; teamsOptedOut: number }> {
+): Promise<{
+  teamsFilled: number;
+  teamsOptedOut: number;
+  /**
+   * Teams whose roster is over the limit, so nobody was picked for them.
+   *
+   * Ids rather than a count, because a number in a cron body cannot be acted
+   * on and the whole point is that an operator can name the team without
+   * opening a database session.
+   */
+  teamsOverLimit: readonly string[];
+}> {
+  const stored = await getLeagueRules(db, leagueId);
+  if (!stored) throw new LineupError("League has no rules", "LEAGUE_NOT_FOUND");
+
   const teams = await db.query<{ id: string; autofill_enabled: boolean; is_bot: boolean }>(
     "SELECT id, autofill_enabled, is_bot FROM teams WHERE league_id = $1 ORDER BY slot",
     [leagueId],
@@ -1198,8 +1268,30 @@ export async function ensureLineups(
 
   let teamsFilled = 0;
   let teamsOptedOut = 0;
+  const teamsOverLimit: string[] = [];
 
   for (const team of teams) {
+    /*
+      Over the limit: tidied, never filled.
+
+      Not a `continue`. A team skipped here gets no lineup rows at all, and
+      `resolveWeek` throws on a team with none — so one manager's over-full
+      roster would stop the whole league's week from scoring, and in a pot
+      league block its settlement. The punishment would land on everybody
+      except the person who caused it.
+
+      Tidied rather than left alone because the autofill is the only thing that
+      takes a released player out of a stored lineup. This manager is required
+      to release somebody; leaving the lineup untouched would let the player
+      they cut go on scoring for them, while being addable by anyone else.
+    */
+    const overage = await overageFor(db, team.id, stored.rules);
+    if (overage.over) {
+      await autoFillLineup(db, leagueId, team.id, week, now, { fillEmptySlots: false });
+      teamsOverLimit.push(team.id);
+      continue;
+    }
+
     // A bot has no manager to forget, so the switch is not theirs to hold.
     if (team.is_bot || team.autofill_enabled) {
       await autoFillLineup(db, leagueId, team.id, week, now);
@@ -1215,7 +1307,7 @@ export async function ensureLineups(
     teamsOptedOut++;
   }
 
-  return { teamsFilled, teamsOptedOut };
+  return { teamsFilled, teamsOptedOut, teamsOverLimit };
 }
 
 /**
