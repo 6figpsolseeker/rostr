@@ -307,6 +307,7 @@ export {
   lockedByTrade,
   proposeTrade,
   resolveDueTrades,
+  tradeClosedReason,
   TradeError,
   vetoTrade,
   withdrawTrade,

@@ -62,6 +62,14 @@ interface TradesResponse {
    * January, permanently.
    */
   tradingClosed: boolean;
+  /**
+   * Whether the league is playing at all, and why not when it is not.
+   *
+   * Separate from `tradingClosed`, which is the deadline. Both can shut trading
+   * and they say different things — "the deadline has passed" is wrong and
+   * confusing in August, when the real answer is that the draft is still on.
+   */
+  trading: { open: boolean; notice: string | null };
   teams: TradeTeam[];
   trades: Trade[];
 }
@@ -181,7 +189,16 @@ export function TradeBlock({ leagueId }: { leagueId: string }) {
         </p>
       )}
 
-      {data.enabled && pastDeadline && (
+      {data.trading.notice !== null && (
+        // Above the deadline banner, because it is the more basic fact: a league
+        // that is not playing has not reached its deadline, and saying both
+        // would be saying one wrong thing.
+        <p className="rounded border border-nocturne-neutral-800 bg-nocturne-neutral-950 px-4 py-3 text-sm text-nocturne-neutral-400">
+          {data.trading.notice}
+        </p>
+      )}
+
+      {data.enabled && data.trading.open && pastDeadline && (
         <p className="rounded border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-sm text-amber-200/80">
           The trade deadline is the end of week {data.deadlineWeek}, and an accepted trade waits{" "}
           {data.vetoWindowHours} hours before it executes — so anything proposed now would land
@@ -192,7 +209,7 @@ export function TradeBlock({ leagueId }: { leagueId: string }) {
       {/* --------------------------------------------------------------- */}
       {/* Building an offer                                                */}
       {/* --------------------------------------------------------------- */}
-      {data.enabled && !pastDeadline && mine && (
+      {data.enabled && data.trading.open && !pastDeadline && mine && (
         <section className="space-y-4">
           <h2 className="text-sm font-medium text-nocturne-neutral-400">Propose a trade</h2>
 
@@ -305,18 +322,27 @@ export function TradeBlock({ leagueId }: { leagueId: string }) {
                 <div className="flex flex-wrap gap-2">
                   {trade.state === "PROPOSED" && trade.receiverTeamId === data.myTeamId && (
                     <>
-                      <button
-                        onClick={() =>
-                          void act(
-                            { action: "ACCEPT", tradeId: trade.tradeId },
-                            `Accepted. It executes in ${data.vetoWindowHours} hours unless the league blocks it.`,
-                          )
-                        }
-                        disabled={busy}
-                        className="rounded border border-nocturne-accent px-3 py-1 text-xs font-medium text-black disabled:opacity-30"
-                      >
-                        Accept
-                      </button>
+                      {/*
+                        Accept goes when the league is not playing; Decline stays.
+                        That asymmetry is the point: a stale offer left from a
+                        draft has to be dismissable, or it sits here with no
+                        legal action available to anybody. The notice above says
+                        why Accept is missing.
+                      */}
+                      {data.trading.open && (
+                        <button
+                          onClick={() =>
+                            void act(
+                              { action: "ACCEPT", tradeId: trade.tradeId },
+                              `Accepted. It executes in ${data.vetoWindowHours} hours unless the league blocks it.`,
+                            )
+                          }
+                          disabled={busy}
+                          className="rounded border border-nocturne-accent px-3 py-1 text-xs font-medium text-black disabled:opacity-30"
+                        >
+                          Accept
+                        </button>
+                      )}
                       <button
                         onClick={() =>
                           void act({ action: "DECLINE", tradeId: trade.tradeId }, "Declined.")

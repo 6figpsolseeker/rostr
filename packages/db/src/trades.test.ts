@@ -22,6 +22,7 @@ import {
   lockedByTrade,
   proposeTrade,
   resolveDueTrades,
+  tradeClosedReason,
   TradeError,
   vetoTrade,
   withdrawTrade,
@@ -2074,5 +2075,172 @@ describe("a trade may never leave a team over the roster limit", () => {
     await expect(
       acceptTrade(fx.client, second.tradeId, fx.teams[1]!, MONDAY),
     ).rejects.toMatchObject({ code: "ROSTER_WOULD_OVERFLOW" });
+  });
+});
+
+describe("trading is shut unless the league is playing", () => {
+  /*
+    Nothing in `trades.ts` read `leagues.state` at any of its nine entry points,
+    so a trade could be proposed, accepted and executed in the middle of a
+    draft. The draft counts a team's roster from its own picks and never reads
+    `roster_entries`, so the swap is invisible to it: the receiving team is
+    still dealt every one of its picks and finishes over the limit, and the
+    sending team finishes under it with a starting slot it can no longer fill.
+
+    The deadline did not catch it, which is why nothing did. `transactionWeek`
+    asks `games` by sport and season — a table with no league column at all — so
+    a league drafting in August is told its execution week is 1 exactly as a
+    league in play is, and `1 > 11` is false.
+
+    Milder than the same hole on the free-agent side: a traded player was
+    drafted, so he stays in the drafted set and no auto-pick reaches for him.
+    Worse in what it costs: a signing added one player, a trade moves any
+    number, and the capacity check at acceptance approves it because two rounds
+    into a draft a team genuinely does have room.
+  */
+
+  const inState = async (fx: Fixture, state: string) =>
+    fx.client.query("UPDATE leagues SET state = $2 WHERE id = $1", [fx.leagueId, state]);
+
+  it("refuses a proposal during the draft, and says when trading opens", async () => {
+    const fx = await setup();
+    await inState(fx, "DRAFTING");
+
+    await expect(
+      proposeTrade(fx.client, {
+        leagueId: fx.leagueId,
+        proposerTeamId: fx.teams[0]!,
+        proposerGives: [fx.players.get("p1")!],
+        receiverTeamId: fx.teams[1]!,
+        receiverGives: [fx.players.get("p2")!],
+        now: MONDAY,
+      }),
+    ).rejects.toMatchObject({ code: "LEAGUE_NOT_IN_SEASON" });
+
+    await expect(
+      proposeTrade(fx.client, {
+        leagueId: fx.leagueId,
+        proposerTeamId: fx.teams[0]!,
+        proposerGives: [fx.players.get("p1")!],
+        receiverTeamId: fx.teams[1]!,
+        receiverGives: [fx.players.get("p2")!],
+        now: MONDAY,
+      }),
+    ).rejects.toThrow(/last pick is in/);
+  });
+
+  it("refuses an acceptance during the draft, which is the gate that matters", async () => {
+    // Acceptance is where the assets freeze and where capacity is checked, and
+    // it is the last moment nothing has moved. A refusal leaves the trade
+    // PROPOSED, which both exits can still clear.
+    const fx = await setup();
+    const tradeId = await propose(fx);
+    await inState(fx, "DRAFTING");
+
+    await expect(acceptTrade(fx.client, tradeId, fx.teams[1]!, MONDAY)).rejects.toMatchObject({
+      code: "LEAGUE_NOT_IN_SEASON",
+    });
+  });
+
+  it("still lets the receiver decline one, or nothing could ever clear it", async () => {
+    /*
+      The asymmetry, pinned so a later tidy-up cannot remove it "for symmetry".
+
+      Once accepting is refused, a stale offer left over from a draft would be
+      permanently undismissable if declining were refused too — it would sit on
+      the screen and in the notification strip with no legal action available to
+      anybody.
+    */
+    const fx = await setup();
+    const tradeId = await propose(fx);
+    await inState(fx, "DRAFTING");
+
+    await expect(
+      declineTrade(fx.client, tradeId, fx.teams[1]!, MONDAY),
+    ).resolves.toBeUndefined();
+  });
+
+  it("still lets the proposer withdraw one", async () => {
+    const fx = await setup();
+    const tradeId = await propose(fx);
+    await inState(fx, "DRAFTING");
+
+    await expect(
+      withdrawTrade(fx.client, tradeId, fx.teams[0]!, MONDAY),
+    ).resolves.toBeUndefined();
+  });
+
+  it("still lets the league veto an accepted one", async () => {
+    /*
+      The most important of the three. If a trade is somehow accepted in a
+      league that is not playing — which is exactly the state this rule leaves
+      behind when it ships — the veto is the league's only lever against it.
+      Refusing the vote would freeze the trade and disarm the one control that
+      could stop it.
+    */
+    const fx = await setup();
+    const tradeId = await propose(fx);
+    await acceptTrade(fx.client, tradeId, fx.teams[1]!, MONDAY);
+    await inState(fx, "DRAFTING");
+
+    await expect(vetoTrade(fx.client, tradeId, fx.teams[2]!, MONDAY)).resolves.toBeDefined();
+  });
+
+  it("holds an accepted trade back while the league drafts, rather than executing it", async () => {
+    const fx = await setup();
+    const tradeId = await propose(fx);
+    await acceptTrade(fx.client, tradeId, fx.teams[1]!, MONDAY);
+    await inState(fx, "DRAFTING");
+
+    expect(await leaguesWithDueTrades(fx.client, AFTER_WINDOW)).toEqual([]);
+
+    // And it lands on its own once the draft finishes — the league reaches
+    // IN_SEASON in the same transaction as the final pick, so the wait is the
+    // rest of the draft and no longer.
+    await inState(fx, "IN_SEASON");
+    expect(await leaguesWithDueTrades(fx.client, AFTER_WINDOW)).toEqual([fx.leagueId]);
+  });
+
+  it("still selects a league whose season is over, so its stale trades expire", async () => {
+    /*
+      Why this filter is negative where the waiver one is positive.
+
+      Naming the playing states here would strand every overdue trade in a
+      finished league: nothing would select it again, the trade would stay
+      ACCEPTED for good, and both sides' players would stay frozen. Selected,
+      it resolves itself — `transactionWeek` answers null once the season's
+      games are behind us, `pastTradeDeadline` treats that as past every
+      deadline, and the trade expires with the rosters untouched.
+    */
+    const fx = await setup();
+    const tradeId = await propose(fx);
+    await acceptTrade(fx.client, tradeId, fx.teams[1]!, MONDAY);
+    await inState(fx, "SETTLED");
+
+    expect(await leaguesWithDueTrades(fx.client, AFTER_WINDOW)).toEqual([fx.leagueId]);
+  });
+
+  it("gives the screen the same sentence the refusal carries", async () => {
+    const fx = await setup();
+    await inState(fx, "DRAFTING");
+
+    const notice = tradeClosedReason("DRAFTING");
+    expect(notice).not.toBeNull();
+
+    await expect(
+      proposeTrade(fx.client, {
+        leagueId: fx.leagueId,
+        proposerTeamId: fx.teams[0]!,
+        proposerGives: [fx.players.get("p1")!],
+        receiverTeamId: fx.teams[1]!,
+        receiverGives: [fx.players.get("p2")!],
+        now: MONDAY,
+      }),
+    ).rejects.toThrow(notice!);
+
+    expect(tradeClosedReason("IN_SEASON")).toBeNull();
+    expect(tradeClosedReason("PLAYOFFS")).toBeNull();
+    expect(tradeClosedReason("FORMING")).toMatch(/has not drafted yet/);
+    expect(tradeClosedReason("SETTLED")).toMatch(/season is over/);
   });
 });

@@ -37,6 +37,7 @@ import {
   vetoesRequired,
 } from "@rostr/core";
 import type { CommittedTrade, LeagueRules } from "@rostr/core";
+import { isTransacting } from "./league-state.js";
 import type { SqlClient } from "./client.js";
 import { getLeagueRules } from "./leagues.js";
 import { withTransaction } from "./transaction.js";
@@ -96,6 +97,18 @@ export class TradeError extends Error {
       | "VETOED_WHILE_EXECUTING"
       | "ALREADY_VETOED"
       | "ROSTER_WOULD_OVERFLOW"
+      /**
+       * The league is not playing, so there is nothing settled to trade.
+       *
+       * Not `WRONG_STATE`, which is about the *trade's* state. This union has
+       * split a code off that one twice already for the same reason — the
+       * member is not confused about the trade, and telling them about it sends
+       * them looking for a fault that is not there.
+       *
+       * Deliberately the same name as `WaiverError`'s code for the same rule,
+       * so somebody grepping the string finds both halves of it.
+       */
+      | "LEAGUE_NOT_IN_SEASON"
       | "ASSET_GONE",
   ) {
     super(message);
@@ -406,6 +419,26 @@ export async function proposeTrade(
   const stored = await getLeagueRules(db, input.leagueId);
   if (!stored) throw new TradeError("League has no rules", "LEAGUE_NOT_FOUND");
 
+  /*
+    The league question first, because it is true or false before any player is
+    named — and answering the player question first sends a manager to a button
+    that will refuse them anyway.
+
+    Read from the column rather than from `stored`, deliberately. State is not
+    in the frozen document and must not look as though it is: it changes, which
+    is the whole reason anything reads it.
+
+    No lock. A proposal landing in the instant a draft ends is harmless — it
+    simply becomes a legal proposal — so there is nothing here for a lock to
+    protect.
+  */
+  const [league] = await db.query<{ state: string }>(
+    "SELECT state FROM leagues WHERE id = $1",
+    [input.leagueId],
+  );
+  if (!league) throw new TradeError("League has no rules", "LEAGUE_NOT_FOUND");
+  refuseUnlessTrading(league.state);
+
   // Derived here, never taken from the caller. This used to be a `week` field on
   // the input, supplied by the route — so the rule depended on a number computed
   // outside the package that enforces it, and the route computed it wrongly.
@@ -593,6 +626,76 @@ async function projectedSizeFor(
 }
 
 /**
+ * Why trading is shut, or `null` when it is open.
+ *
+ * Nothing in this file has ever read `leagues.state` — not at any of its nine
+ * entry points — so a trade could be proposed, accepted and executed in the
+ * middle of a draft. The draft engine counts a team's roster from
+ * `state.picks` and never reads `roster_entries`, so a mid-draft swap is
+ * invisible to it: the receiving team is still dealt every one of its picks and
+ * finishes over the limit, and the sending team finishes under it with a
+ * starting slot it can no longer fill.
+ *
+ * It is worse than the same hole on the free-agent side (#279), for three
+ * reasons. A signing added one player; a trade moves any number. The capacity
+ * check at acceptance *approves* it, because two rounds into a draft a team
+ * genuinely does have room for twelve more. And it takes two managers to agree,
+ * which is the shape collusion has — while the league's only defence is a veto
+ * cast on a trade whose real effect nobody can see yet.
+ *
+ * The deadline does not catch it, which is why nothing did: `transactionWeek`
+ * asks `games` by sport and season, and that table has no league column at all,
+ * so a league drafting in August is told the execution week is 1 exactly as a
+ * league in play is. `1 > 11` is false, and the trade goes through.
+ *
+ * Exported so the screen refuses from the same function the server does.
+ */
+export function tradeClosedReason(state: string): string | null {
+  if (isTransacting(state)) return null;
+
+  if (state === "DRAFTING") {
+    return (
+      "Your draft is still running — every roster in this league is still being filled, " +
+      "so there is nothing settled to trade yet. Trading opens when the last pick is in."
+    );
+  }
+
+  if (state === "FORMING") {
+    return (
+      "This league has not drafted yet. Nobody owns a player until the draft runs, " +
+      "and trading opens when it finishes."
+    );
+  }
+
+  return "This league's season is over, so its rosters are final.";
+}
+
+/**
+ * The same rule, as a refusal.
+ *
+ * **Proposing and accepting only.** Declining, withdrawing and vetoing are not
+ * gated, and that asymmetry is load-bearing rather than an omission:
+ *
+ * - Decline and withdraw only ever cancel. Once accepting is refused, a stale
+ *   offer left over from a draft would be permanently undismissable if
+ *   declining were refused too — it would sit on the screen and in the
+ *   notification strip with no legal action available to anybody.
+ * - A veto is the league's only lever against a trade that is already accepted,
+ *   which is exactly the state this rule leaves behind when it ships. Refusing
+ *   the vote would freeze the trade and disarm the one control that could stop
+ *   it, which is strictly worse than letting it be cast.
+ *
+ * `resolveTrade` is not gated either, and must not be: a throw there leaves the
+ * trade accepted and retried hourly with both sides' players frozen, which is
+ * the failure its own capacity comment already warns about. The executor is
+ * held back at selection instead — see `leaguesWithDueTrades`.
+ */
+function refuseUnlessTrading(state: string): void {
+  const reason = tradeClosedReason(state);
+  if (reason) throw new TradeError(reason, "LEAGUE_NOT_IN_SEASON");
+}
+
+/**
  * Accept a trade, opening the veto window.
  *
  * This is the moment the players freeze. Nothing moves yet — rosters swap only
@@ -622,6 +725,27 @@ export async function acceptTrade(
   );
 
   return withTransaction(db, async (tx) => {
+    /*
+      The league state, locked, and this is the gate that matters.
+
+      Acceptance is the moment the assets freeze and the moment capacity is
+      checked, and it is the last point at which nothing has moved. Refusing
+      here leaves the trade `PROPOSED`, which both exits can still clear.
+
+      `FOR SHARE` for the reason `addFreeAgent` gives: `recordPick` sets
+      `IN_SEASON` in the transaction that commits the final pick, so this either
+      reads `DRAFTING` and refuses, or reads `IN_SEASON` after the last pick has
+      landed. There is no window between them — which is what makes the capacity
+      check below trustworthy again, since it now runs against a finished roster
+      or not at all.
+    */
+    const [league] = await tx.query<{ state: string }>(
+      "SELECT state FROM leagues WHERE id = $1 FOR SHARE",
+      [trade.leagueId],
+    );
+    if (!league) throw new TradeError("League has no rules", "LEAGUE_NOT_FOUND");
+    refuseUnlessTrading(league.state);
+
     // Re-validate every asset now, not only at propose time. Accepting is the
     // moment the trade freezes for execution, and the proposal's checks are
     // stale: since then a player could have been dropped, or committed to a
@@ -1353,11 +1477,42 @@ export async function leaguesWithDueTrades(
   db: SqlClient,
   now: Date,
 ): Promise<readonly string[]> {
-  const rows = await db.query<{ league_id: string }>(
-    `SELECT DISTINCT league_id FROM trades
-      WHERE state = 'ACCEPTED' AND veto_deadline IS NOT NULL AND veto_deadline <= $1`,
+  /*
+    Held back for the two states in which a roster is still being filled by
+    something that cannot see this table.
+
+    **Negative, where `leaguesDueForWaivers` is positive, and the difference is
+    deliberate.** Naming `IN_SEASON` and `PLAYOFFS` here would strand every
+    overdue trade in a league that has finished: nothing would ever select it
+    again, the trade would stay `ACCEPTED` for good, and both sides' players
+    would stay frozen in a league that is over. Today those leagues resolve
+    themselves correctly — once the season's games are behind us
+    `transactionWeek` answers `null`, `pastTradeDeadline` treats that as past
+    every deadline, and `resolveTrade` writes `EXPIRED` with the rosters
+    untouched. That is the outcome `RULES.md` §6 names, and it is reached
+    without anybody adding a branch for it.
+
+    So this filter says what is actually true: the draft is the thing the
+    executor cannot see. Everything after it is a league whose rosters are
+    settled, and the deadline path already decides correctly for all of them.
+
+    **Not vacuous, unlike its sibling.** A pending waiver claim can only exist
+    for a league that was playing when it was filed, so that filter never
+    excludes anything. This one does: an accepted trade in a drafting league is
+    exactly what it holds back. After the gate on `acceptTrade` no new one can
+    arise, so what it catches is any row already accepted when this shipped —
+    and those execute on their own once the draft ends.
+  */
+  const rows = await db.query<{ id: string }>(
+    `SELECT DISTINCT l.id
+       FROM leagues l
+       JOIN trades t ON t.league_id = l.id
+                    AND t.state = 'ACCEPTED'
+                    AND t.veto_deadline IS NOT NULL
+                    AND t.veto_deadline <= $1
+      WHERE l.state NOT IN ('FORMING', 'DRAFTING')`,
     [now.toISOString()],
   );
 
-  return rows.map((row) => row.league_id);
+  return rows.map((row) => row.id);
 }

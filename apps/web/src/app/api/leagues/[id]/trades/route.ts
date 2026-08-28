@@ -7,6 +7,7 @@ import {
   listTrades,
   lockedByTrade,
   proposeTrade,
+  tradeClosedReason,
   TradeError,
   transactionWeek,
   vetoTrade,
@@ -33,6 +34,9 @@ const STATUS: Record<string, number> = {
   PLAYER_IN_ANOTHER_TRADE: 409,
   ALREADY_VETOED: 409,
   ROSTER_WOULD_OVERFLOW: 409,
+  // The league is not playing. A conflict with its state, like the 409s above,
+  // and it shares its name with the waiver code for the same rule.
+  LEAGUE_NOT_IN_SEASON: 409,
   TRADES_DISABLED: 400,
   PAST_DEADLINE: 400,
   SAME_TEAM: 400,
@@ -106,6 +110,21 @@ export async function GET(
       deadlineWeek: context.rules.trades.deadlineWeek,
       vetoWindowHours: context.rules.trades.vetoWindowHours,
       tradingClosed: await tradingClosed(now, context.rules),
+      /*
+        Whether the league is playing at all, and the sentence if not.
+
+        Separate from `tradingClosed`, which is the *deadline* — a different
+        question with a different answer, and collapsing them would tell a
+        manager in August that the trade deadline has passed.
+
+        Composed here from the same function that refuses the write, so the
+        screen and the server cannot disagree about what is on offer. It is also
+        the only way the sentence gets a test.
+      */
+      trading: {
+        open: tradeClosedReason(context.state) === null,
+        notice: tradeClosedReason(context.state),
+      },
       teams: teams.map((team) => ({
         teamId: team.id,
         name: team.name,
