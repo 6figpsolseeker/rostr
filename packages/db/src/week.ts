@@ -242,6 +242,15 @@ export interface ResolveWeekOutcome {
    */
   readonly finalizedWithUnfinishedGames?: string;
   /**
+   * Teams whose roster was over the limit, so the autofill picked nobody.
+   *
+   * Present only when it happened, like the field above. Ids rather than a
+   * count: an operator reading a cron body needs to be able to name the team
+   * without opening a database session, and "one team was not filled" is a
+   * number nobody can act on.
+   */
+  readonly teamsOverLimit?: readonly string[];
+  /**
    * How many matchups this run declined to write because they were already
    * final, when it wrote at least one other.
    *
@@ -292,7 +301,7 @@ export async function resolveLeagueWeek(
     throw new WeekError(`Week ${week} is already final`, "ALREADY_FINAL");
   }
 
-  await ensureLineups(db, leagueId, week, Math.floor(now.getTime() / 1000));
+  const filled = await ensureLineups(db, leagueId, week, Math.floor(now.getTime() / 1000));
 
   const lineups = await loadWeekLineups(db, leagueId, week);
   const stats = await loadWeekStats(db, stored.rules.sportKey, stored.rules.seasonYear, week);
@@ -376,6 +385,7 @@ export async function resolveLeagueWeek(
     finalized,
     ...(decision.hold === null ? {} : { holdReason: decision.hold }),
     ...(decision.fallback ? { finalizedWithUnfinishedGames: decision.fallback } : {}),
+    ...(filled.teamsOverLimit.length > 0 ? { teamsOverLimit: filled.teamsOverLimit } : {}),
     ...(alreadyFinal > 0 ? { matchupsAlreadyFinal: alreadyFinal } : {}),
     results,
   };

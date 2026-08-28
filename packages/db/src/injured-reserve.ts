@@ -9,6 +9,7 @@ import type { IrPlacementRefusal } from "@rostr/core";
 import { getLeagueRules } from "./leagues.js";
 import type { SqlClient } from "./client.js";
 import { withTransaction } from "./transaction.js";
+import { heldForCapacity } from "./roster-capacity.js";
 import { committedTradeMoves } from "./trades.js";
 
 /**
@@ -157,30 +158,6 @@ export async function moveToIr(
 }
 
 /**
- * The roster, for a capacity question, locked.
- *
- * A sibling of `heldRoster` rather than a reuse of it: that one joins `games`
- * for a kickoff time, which needs a season and a week, and activation
- * deliberately has no kickoff rule — the route does not even send a week for it.
- *
- * `FOR UPDATE OF r` for the same reason `heldRoster` gives: lock the roster
- * rows, never the shared `players` rows.
- */
-async function heldForCapacity(
-  tx: SqlClient,
-  teamId: string,
-): Promise<{ player_id: string; on_ir: boolean; designation: string | null }[]> {
-  return tx.query<{ player_id: string; on_ir: boolean; designation: string | null }>(
-    `SELECT r.player_id, r.on_ir, p.injury_designation AS designation
-       FROM roster_entries r
-       JOIN players p ON p.id = r.player_id
-      WHERE r.team_id = $1 AND r.released_at IS NULL
-      FOR UPDATE OF r`,
-    [teamId],
-  );
-}
-
-/**
  * Bring a player back.
  *
  * **A recovered player is never refused**, and that is the important
@@ -242,12 +219,7 @@ export async function activateFromIr(
       compute the same room, and the two `UPDATE`s touch different rows so
       nothing conflicts. Textbook write skew, and `FOR UPDATE` is what stops it.
     */
-    const held = await heldForCapacity(tx, input.teamId);
-    const roster = held.map((row) => ({
-      playerId: row.player_id,
-      onIr: row.on_ir,
-      injuryDesignation: row.designation,
-    }));
+    const roster = await heldForCapacity(tx, input.teamId, { lock: true });
 
     if (!roster.some((entry) => entry.playerId === input.playerId && entry.onIr)) {
       throw new IrError("That player is not on injured reserve.", "NOT_ON_IR");

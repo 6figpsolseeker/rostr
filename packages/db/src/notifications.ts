@@ -29,7 +29,8 @@
  */
 
 import type { SqlClient } from "./client.js";
-import { pickPosition } from "@rostr/core";
+import { buildRosterShape, NFL, pickPosition, rosterOverage } from "@rostr/core";
+import type { IrRosterEntry, LeagueRules } from "@rostr/core";
 
 /**
  * What kind of thing is waiting.
@@ -42,6 +43,7 @@ export type NotificationKind =
   | "TRADE_AWAITING_YOU"
   | "VETO_WINDOW"
   | "DRAFT_SOON"
+  | "ROSTER_OVER_LIMIT"
   | "LINEUP_UNSET"
   | "PLAYER_OFF_NFL_ROSTER"
   | "INVITATION";
@@ -70,6 +72,11 @@ export const NOTIFICATION_URGENCY: readonly NotificationKind[] = [
   "TRADE_AWAITING_YOU",
   "VETO_WINDOW",
   "DRAFT_SOON",
+  // Above an unset lineup because it costs strictly more and closes at least as
+  // soon: an unset lineup costs the empty slots and only when autofill is off,
+  // while this costs the lineup *and* the autofill *and* every acquisition, and
+  // the window shuts at the same kickoff.
+  "ROSTER_OVER_LIMIT",
   "LINEUP_UNSET",
   "PLAYER_OFF_NFL_ROSTER",
   "INVITATION",
@@ -186,6 +193,100 @@ async function playersOffNflRosters(db: SqlClient, userId: string): Promise<Noti
 }
 
 /**
+ * Leagues where this manager's roster is over the limit.
+ *
+ * The one state a manager can be in without having done anything: a player
+ * stashed on injured reserve recovers, the exemption is read live, and the
+ * counted size rises on the hourly cron's schedule rather than theirs. Nothing
+ * is forced off the roster — but until they release somebody the league stops
+ * acting for them, and the autofill in particular stops picking anyone.
+ *
+ * **Which is why this has to reach them.** The rest of the restriction is
+ * discovered the moment they try to do something. The autofill is not: it is a
+ * thing that silently does not happen, on a Sunday, to a manager who may not
+ * open the app. `RULES.md` §8 says a rule people would only discover by losing
+ * money to it is the wrong rule to have, and without this notification that is
+ * exactly what this would be.
+ *
+ * Rules live in a frozen JSON document rather than in columns, and the
+ * exemption depends on `isIrEligible` — another company's vocabulary, which
+ * changes — so this returns a row per rostered player and does the arithmetic
+ * in TypeScript through the same helper every other capacity check uses.
+ * Re-expressing that deny-list in SQL would be a second copy of a moving rule.
+ * It is the first non-aggregate query in this file; at a dozen or so rows per
+ * league that is within the budget the module documents.
+ */
+async function rostersOverLimit(db: SqlClient, userId: string): Promise<Notification[]> {
+  const rows = await db.query<{
+    league_id: string;
+    league_name: string;
+    canonical: string;
+    player_id: string;
+    on_ir: boolean;
+    designation: string | null;
+  }>(
+    `SELECT l.id AS league_id, l.name AS league_name, lr.canonical,
+            r.player_id, r.on_ir, p.injury_designation AS designation
+       FROM league_memberships m
+       JOIN leagues l ON l.id = m.league_id
+       JOIN league_rules lr ON lr.league_id = l.id
+       JOIN teams t ON t.id = m.team_id
+       JOIN roster_entries r ON r.team_id = t.id AND r.released_at IS NULL
+       JOIN players p ON p.id = r.player_id
+      WHERE m.user_id = $1
+        AND l.state IN ('IN_SEASON', 'PLAYOFFS')`,
+    [userId],
+  );
+
+  const byLeague = new Map<
+    string,
+    { name: string; canonical: string; roster: IrRosterEntry[] }
+  >();
+  for (const row of rows) {
+    const found = byLeague.get(row.league_id) ?? {
+      name: row.league_name,
+      canonical: row.canonical,
+      roster: [],
+    };
+    found.roster.push({
+      playerId: row.player_id,
+      onIr: row.on_ir,
+      injuryDesignation: row.designation,
+    });
+    byLeague.set(row.league_id, found);
+  }
+
+  const items: Notification[] = [];
+  for (const [leagueId, league] of byLeague) {
+    const rules = JSON.parse(league.canonical) as LeagueRules;
+    const shape = buildRosterShape(rules.roster, NFL);
+    const overage = rosterOverage({
+      roster: league.roster,
+      totalSlots: shape.totalSlots,
+      irSlots: shape.irSlots,
+    });
+    if (!overage.over) continue;
+
+    const players = overage.mustRelease === 1 ? "one player" : `${overage.mustRelease} players`;
+
+    items.push({
+      kind: "ROSTER_OVER_LIMIT",
+      leagueId,
+      leagueName: league.name,
+      href: `/leagues/${leagueId}/players`,
+      text:
+        `Your roster in ${league.name} holds ${overage.counted} players and the limit is ` +
+        `${overage.limit} — release ${players}. Until then your lineup is frozen and the ` +
+        `autofill will not pick anyone for you.`,
+      deadline: null,
+      needsSignature: false,
+    });
+  }
+
+  return items;
+}
+
+/**
  * Everything waiting on this user, most urgent first.
  *
  * `now` is passed rather than read, so every deadline in the result is measured
@@ -196,16 +297,25 @@ export async function notificationsForUser(
   userId: string,
   now: Date,
 ): Promise<readonly Notification[]> {
-  const [drafts, trades, vetoes, invitations, lineups, cut] = await Promise.all([
+  const [drafts, trades, vetoes, invitations, lineups, cut, overLimit] = await Promise.all([
     draftNotifications(db, userId, now),
     tradesAwaitingYou(db, userId),
     vetoWindows(db, userId, now),
     invitationNotifications(db, userId),
     unsetLineups(db, userId),
     playersOffNflRosters(db, userId),
+    rostersOverLimit(db, userId),
   ]);
 
-  const all = [...drafts, ...trades, ...vetoes, ...invitations, ...lineups, ...cut];
+  const all = [
+    ...drafts,
+    ...trades,
+    ...vetoes,
+    ...invitations,
+    ...lineups,
+    ...cut,
+    ...overLimit,
+  ];
 
   return all.sort((a, b) => {
     const byKind = NOTIFICATION_URGENCY.indexOf(a.kind) - NOTIFICATION_URGENCY.indexOf(b.kind);

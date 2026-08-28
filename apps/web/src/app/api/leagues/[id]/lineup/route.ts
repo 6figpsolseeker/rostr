@@ -21,6 +21,8 @@ import {
   loadRosterForWeek,
   loadTbdKickoffs,
   loadWeekStats,
+  overageFor,
+  overLimitNotice,
   setAutofillEnabled,
   setLineup,
 } from "@rostr/db";
@@ -35,6 +37,10 @@ const STATUS: Record<string, number> = {
   // somebody else wrote the slot between validation and the write, so the client
   // re-reads and submits again. 409 rather than 422: the request was well formed.
   LINEUP_MOVED: 409,
+  // The roster holds more players than the limit, so the lineup is frozen until
+  // somebody is released. A conflict with the team's state rather than anything
+  // wrong with the lineup submitted, so 409 and not 422.
+  ROSTER_OVER_LIMIT: 409,
   SLOT_TYPE_UNKNOWN: 500,
   // A league whose games are not ingested cannot enforce a kickoff lock, so it
   // refuses rather than accepting a lineup it could not police.
@@ -117,6 +123,11 @@ export async function GET(
     const averages = await loadAverages(client, playerIds, context.season, week, context.rules);
 
     const autofillEnabled = await getAutofillEnabled(client, context.myTeamId);
+
+    // Same function the write path refuses with. See the response below.
+    const editingNotice = overLimitNotice(
+      await overageFor(client, context.myTeamId, context.rules),
+    );
 
     const now = Math.floor(Date.now() / 1000);
 
@@ -214,6 +225,18 @@ export async function GET(
       week,
       /** From the frozen rules, so the screen cannot invent an allowance. */
       irSlots: context.rules.roster.irSlots,
+      /*
+        Whether this team may edit at all, and the sentence if not.
+
+        Composed here from the same function `setLineup` throws with, so the
+        screen and the server cannot disagree about it — and it is the only way
+        that sentence gets a test, because `apps/web` cannot render a component
+        in one.
+      */
+      editing: {
+        open: editingNotice === null,
+        notice: editingNotice,
+      },
       autofill: {
         enabled: autofillEnabled ?? true,
         /**

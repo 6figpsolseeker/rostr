@@ -495,8 +495,29 @@ legal — accepting a trade you have room for, then signing somebody — would p
 together, and the trade would be the thing that broke.
 
 **The one exception is injured reserve, and § 2 describes it.** A stashed player who
-recovers stops being exempt and can leave you over the limit. He is never forced off, and
-until you resolve it you cannot acquire anyone. Nothing else may ever put a team over.
+recovers stops being exempt, and that can leave you over the limit two ways. Directly: you
+were at the limit with him stashed, his designation clears, and you hold one more than you
+may. Or through a trade you had room for — you accepted with room to spare, a stashed player
+recovered while the league had its say, and the trade landed you over anyway. Neither is
+refused, because neither is anything anybody did. **Nothing else may ever put a team over.**
+
+**While you are over, the league stops acting for you.** You cannot sign anyone and a waiver
+claim will not be awarded to you. Your lineup is frozen as it stands — nothing is cleared,
+nothing is benched, and you cannot change it either. **And the autofill will not pick anyone
+for you**, so a slot you left empty stays empty and scores nothing, exactly as if you had
+turned it off. That is the whole of it. There is no fine, no forfeit, and nothing is taken
+away from you.
+
+It does keep your lineup honest while you are over: a player you release is taken out of it,
+because leaving him there would go on scoring him for you after he had gone.
+
+**Releasing a player ends it, and releasing is never refused for being over.** It is the way
+out, so it stays open — and so does a trade that leaves you at the limit or below, because a
+trade that sheds is you resolving this rather than continuing it. Dropping the recovered
+player works and is usually the right move; dropping someone still genuinely stashed does
+not, because he was never counting against you in the first place. You are told how far over
+you are and by how many, and the moment you are back at the limit everything opens again on
+its own. Nobody has to approve it.
 
 ---
 
@@ -653,7 +674,8 @@ and no forfeiture. A manager who stops setting lineups is not defrauding anyone,
 rule people would only discover by losing money to it is the wrong rule to have.
 
 Instead, **a slot you leave empty gets filled for you**, and it is on by default. The fill
-runs through the week and always before your week is scored. It never starts a player whose
+runs through the week and always before your week is scored — unless your roster is over the
+limit, and § 6 says what happens then. It never starts a player whose
 own game has kicked off, so a slot you leave empty past a player's lock will not be filled
 with him — the same rule that stops you starting him yourself.
 
@@ -691,6 +713,14 @@ Which of the two a league uses is frozen at creation, like every other rule.
 > **decision** standing in for the manager's own start/sit call, and nobody asks two
 > providers to agree on one of those. The projection used is recorded with the lineup, so
 > the decision is checkable after the fact.
+
+**It does not pick anyone while your roster is over the limit.** § 6 sets that out, and this
+is the half of it that costs something: with nobody being picked for you, an empty slot is
+just an empty slot and it scores nothing. Two things follow, and both are deliberate. A
+lineup you had already set stands and scores exactly as it would have — nobody is punished
+for work already done. And a lineup you were leaving to the autofill will not be rescued,
+which is the real weight of the rule. You are told the moment it applies, on the hub and on
+your lineup screen, and releasing one player turns it back on.
 
 **You can turn it off.** It is a per-team setting, not a league rule, so it is yours alone
 and changeable whenever you like. Off means an empty slot stays empty and scores nothing —

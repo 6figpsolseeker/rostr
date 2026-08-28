@@ -216,6 +216,72 @@ export function projectedRosterSize(input: {
   return countedRosterSize(staying, input.irSlots) + input.arriving;
 }
 
+/** A team's standing against its roster limit, right now. */
+export interface RosterOverage {
+  /** Past the limit, and therefore restricted. */
+  readonly over: boolean;
+  /** Players counting against the limit, genuinely stashed ones already subtracted. */
+  readonly counted: number;
+  /** The limit itself, carried so no caller has to fetch the shape to say "15 of 14". */
+  readonly limit: number;
+  /**
+   * How many must go before the team is legal again. Zero when it already is.
+   *
+   * Carried rather than left to the caller to subtract. Four surfaces say this
+   * number out loud — the notification, the lineup refusal, the market screen
+   * and the roster panel — and one subtraction written in four places is how
+   * four sentences come to disagree about one roster.
+   */
+  readonly mustRelease: number;
+}
+
+/**
+ * How far past the roster limit a team is, and what it takes to get back.
+ *
+ * **Counted size, never row count.** A team at the limit holding two genuinely
+ * stashed players has sixteen rows and is perfectly legal — that is what the
+ * allowance in RULES.md §2 *is*. So this goes through {@link countedRosterSize},
+ * which subtracts the exemption and caps it at `irSlots`. A check written
+ * against `roster.length` reports an overage that does not exist and locks a
+ * manager out of a lineup he was entitled to set.
+ *
+ * **Strictly over, not full.** `counted === limit` is a team with no room to
+ * add, and every acquisition path already refuses that on its own with `>=`.
+ * This asks the different question — is the state itself illegal — and only
+ * `>` answers it. Conflating the two would put every full roster in the league
+ * under a lineup lock, which is most of them for most of the season, and which
+ * is a rule nobody signed.
+ *
+ * **No trade reservation, deliberately.** {@link reservedByTrades} holds room
+ * against an acquisition that has not happened; a team at the limit with an
+ * accepted give-one-get-two has done nothing wrong and may still see that trade
+ * vetoed. The two must never be summed: that one gates *acquiring*, this one
+ * gates *being*.
+ *
+ * **The designation has to be read live by the caller.** This state is reachable
+ * in exactly one way — a designation clears on the hourly cron and the counted
+ * size rises with no row written and nobody having acted. A cached designation
+ * cannot see that, which would make this silent for the only case it exists for.
+ *
+ * `mustRelease` is not always one: the exemption is capped, so two stashed
+ * players recovering in the same pass move a team two past the limit at once.
+ */
+export function rosterOverage(input: {
+  /** Every unreleased row the team holds now, designations read live. */
+  readonly roster: readonly IrRosterEntry[];
+  /** Starters plus bench. IR is already excluded from it. */
+  readonly totalSlots: number;
+  readonly irSlots: number;
+}): RosterOverage {
+  const counted = countedRosterSize(input.roster, input.irSlots);
+  const mustRelease = Math.max(0, counted - input.totalSlots);
+
+  // `over` is returned rather than left for callers to re-derive, for the reason
+  // `mustRelease` is: the requirement is that the surfaces cannot disagree, and
+  // that only holds if none of them works it out again.
+  return { over: mustRelease > 0, counted, limit: input.totalSlots, mustRelease };
+}
+
 /** One accepted trade, from the point of view of one of its two teams. */
 export interface CommittedTrade {
   /** How many players this team is due to receive. Each one will count. */

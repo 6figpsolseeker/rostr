@@ -281,6 +281,7 @@ export {
   countedRosterSize,
   projectedRosterSize,
   reservedByTrades,
+  rosterOverage,
   irExemptCount,
   irExemptOnRoster,
   MAY_STILL_PLAY,
@@ -288,5 +289,6 @@ export {
   refuseIrPlacement,
   type CommittedTrade,
   type IrPlacementRefusal,
+  type RosterOverage,
   type IrRosterEntry,
 } from "./season/injured-reserve.js";
