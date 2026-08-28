@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { buildNflPprRules, NFL } from "@rostr/core";
+import { buildNflPprRules, buildRosterShape, NFL } from "@rostr/core";
 import type { DraftRules, LeagueRules } from "@rostr/core";
 import { createLeague } from "./leagues.js";
 import { createUser } from "./identity.js";
@@ -356,5 +356,183 @@ describe("the check constraint", () => {
 describe("IrError", () => {
   it("carries a code a route can map to a status", () => {
     expect(new IrError("nope", "NOT_INJURED").code).toBe("NOT_INJURED");
+  });
+});
+
+describe("activation may not push a roster past the limit — #272", () => {
+  /*
+    `activateFromIr` was an unconditional flag flip. A team at the limit could
+    bring back a player who was still genuinely hurt and sit at `totalSlots + 1`
+    — a second route past the line #250 drew, and the one the function's own
+    docstring was accidentally defending.
+
+    That argument is sound for a *recovered* player: he already counts,
+    activation costs nothing, and refusing would trap the roster in an illegal
+    state. It never covered a player who is still out, where activation is +1
+    and leaving him stashed is legal and stable.
+
+    The fixture is why this was reachable at all — every test in this file ran
+    on a four-player roster against fourteen slots, ten short of the boundary
+    the rule lives on.
+  */
+
+  const SHAPE = buildRosterShape(
+    (buildNflPprRules({ seasonYear: 2026, draft: DRAFT }) as LeagueRules).roster,
+    NFL,
+  );
+
+  /** Top the team up to `rows` unreleased players, all fit. */
+  const fillTo = async (fx: Fixture, rows: number): Promise<void> => {
+    const [sport] = await fx.client.query<{ id: string }>(
+      "SELECT id FROM sports WHERE key = $1",
+      [NFL.key],
+    );
+    const [rb] = await fx.client.query<{ id: string }>(
+      "SELECT id FROM positions WHERE sport_id = $1 AND key = 'RB'",
+      [sport!.id],
+    );
+    const [held] = await fx.client.query<{ n: number }>(
+      "SELECT count(*)::int AS n FROM roster_entries WHERE team_id = $1 AND released_at IS NULL",
+      [fx.teamId],
+    );
+
+    for (let i = held!.n; i < rows; i++) {
+      const handle = `filler-${i}`;
+      const [player] = await fx.client.query<{ id: string }>(
+        `INSERT INTO players (sport_id, external_ref, full_name, primary_position_id, team_ref)
+         VALUES ($1, $2, $3, $4, 'CIN') RETURNING id`,
+        [sport!.id, handle, handle, rb!.id],
+      );
+      await fx.client.query(
+        "INSERT INTO roster_entries (team_id, player_id, acquired_via) VALUES ($1, $2, 'DRAFT')",
+        [fx.teamId, player!.id],
+      );
+    }
+  };
+
+  /** Counted size, worked out here rather than imported, so the test agrees independently. */
+  const countedFor = async (fx: Fixture): Promise<number> => {
+    const rows = await fx.client.query<{ on_ir: boolean; designation: string | null }>(
+      `SELECT r.on_ir, p.injury_designation AS designation
+         FROM roster_entries r JOIN players p ON p.id = r.player_id
+        WHERE r.team_id = $1 AND r.released_at IS NULL`,
+      [fx.teamId],
+    );
+    const genuine = rows.filter((row) => row.on_ir && row.designation === "OUT").length;
+    return rows.length - Math.min(genuine, SHAPE.irSlots);
+  };
+
+  const stash = async (fx: Fixture, handle: string) =>
+    moveToIr(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: fx.teamId,
+      playerId: fx.players.get(handle)!,
+      week: 2,
+      now: NOW,
+    });
+
+  const activate = async (fx: Fixture, handle: string) =>
+    activateFromIr(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: fx.teamId,
+      playerId: fx.players.get(handle)!,
+    });
+
+  it("refuses to bring back a player who is still out, when the roster is full", async () => {
+    const fx = await setup();
+    await stash(fx, "hurt");
+    // One stashed and exempt, fourteen counting: exactly at the limit.
+    await fillTo(fx, SHAPE.totalSlots + 1);
+
+    expect(await countedFor(fx)).toBe(SHAPE.totalSlots);
+
+    await expect(activate(fx, "hurt")).rejects.toMatchObject({
+      code: "ROSTER_WOULD_OVERFLOW",
+    });
+
+    // Says the number, and says the stash is not a problem to be solved.
+    await expect(activate(fx, "hurt")).rejects.toThrow(/15 players and the limit is 14/);
+    await expect(activate(fx, "hurt")).rejects.toThrow(/as long as he needs it/);
+
+    // And he is still on injured reserve, which is the legal state he was in.
+    const [row] = await fx.client.query<{ on_ir: boolean }>(
+      "SELECT on_ir FROM roster_entries WHERE team_id = $1 AND player_id = $2",
+      [fx.teamId, fx.players.get("hurt")],
+    );
+    expect(row?.on_ir).toBe(true);
+  });
+
+  it("still brings back a recovered player from a roster already over the limit", async () => {
+    /*
+      The escape route, and the reason the predicate asks what the move costs
+      rather than whether the player is exempt. This team is over the limit
+      because his designation cleared — refusing here would trap it in the
+      illegal state instead of letting the manager resolve it.
+    */
+    const fx = await setup();
+    await stash(fx, "hurt");
+    await fillTo(fx, SHAPE.totalSlots + 1);
+
+    await fx.client.query("UPDATE players SET injury_designation = NULL WHERE id = $1", [
+      fx.players.get("hurt"),
+    ]);
+
+    expect(await countedFor(fx)).toBe(SHAPE.totalSlots + 1);
+    await expect(activate(fx, "hurt")).resolves.toBeDefined();
+  });
+
+  it("allows it when the roster has room", async () => {
+    const fx = await setup();
+    await stash(fx, "hurt");
+    await fillTo(fx, SHAPE.totalSlots);
+
+    // Thirteen counting, one exempt: bringing him back lands exactly on the
+    // limit, which is legal.
+    expect(await countedFor(fx)).toBe(SHAPE.totalSlots - 1);
+    await expect(activate(fx, "hurt")).resolves.toBeDefined();
+    expect(await countedFor(fx)).toBe(SHAPE.totalSlots);
+  });
+
+  it("allows the one that costs nothing when more are hurt than there are slots", async () => {
+    /*
+      The case a predicate keyed on "is this player exempt" gets wrong, and the
+      reason this one is keyed on the delta instead.
+
+      `irExemptCount` caps exemptions at `irSlots` **by count, not identity** —
+      three stashed players against two slots means two exemptions and no way
+      to say which two. So the first activation costs nothing: one of the three
+      was already counting. Only the second one raises the count.
+
+      A predicate asking `onIr && isIrEligible` answers yes for all three and
+      refuses all three, every one wrongly.
+    */
+    const fx = await setup();
+    await stash(fx, "hurt");
+    await stash(fx, "alsohurt");
+
+    // A third stash needs a slot to free first, which is how a real roster
+    // reaches this state: a designation lifts, the slot frees, it comes back.
+    await fx.client.query(
+      "UPDATE players SET injury_designation = 'QUESTIONABLE' WHERE id = $1",
+      [fx.players.get("hurt")],
+    );
+    await stash(fx, "third");
+    await fx.client.query("UPDATE players SET injury_designation = 'OUT' WHERE id = $1", [
+      fx.players.get("hurt"),
+    ]);
+
+    await fillTo(fx, SHAPE.totalSlots + 2);
+
+    // Three stashed, two slots: fourteen counting, at the limit.
+    expect(await countedFor(fx)).toBe(SHAPE.totalSlots);
+
+    // Free — one of the three was already counting.
+    await expect(activate(fx, "hurt")).resolves.toBeDefined();
+    expect(await countedFor(fx)).toBe(SHAPE.totalSlots);
+
+    // This one genuinely costs a slot.
+    await expect(activate(fx, "alsohurt")).rejects.toMatchObject({
+      code: "ROSTER_WOULD_OVERFLOW",
+    });
   });
 });

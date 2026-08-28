@@ -25,6 +25,11 @@ const STATUS: Record<string, number> = {
   NOT_INJURED: 409,
   IR_FULL: 409,
   GAME_STARTED: 409,
+  // Bringing him back would breach the roster limit, or a trade is holding the
+  // room. Same family as the three above, and without these the fallback below
+  // would report a state conflict as a malformed request.
+  ROSTER_WOULD_OVERFLOW: 409,
+  SLOT_HELD_FOR_TRADE: 409,
 };
 
 function fail(error: unknown): NextResponse {
