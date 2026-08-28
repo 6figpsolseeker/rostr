@@ -1,8 +1,15 @@
-import { buildRosterShape, NFL, refuseIrPlacement } from "@rostr/core";
+import {
+  buildRosterShape,
+  countedRosterSize,
+  NFL,
+  refuseIrPlacement,
+  reservedByTrades,
+} from "@rostr/core";
 import type { IrPlacementRefusal } from "@rostr/core";
 import { getLeagueRules } from "./leagues.js";
 import type { SqlClient } from "./client.js";
 import { withTransaction } from "./transaction.js";
+import { committedTradeMoves } from "./trades.js";
 
 /**
  * Moving a player on and off injured reserve.
@@ -20,7 +27,26 @@ import { withTransaction } from "./transaction.js";
 export class IrError extends Error {
   constructor(
     message: string,
-    readonly code: IrPlacementRefusal | "LEAGUE_NOT_FOUND" | "NOT_ON_IR" | "GAME_STARTED",
+    readonly code:
+      | IrPlacementRefusal
+      | "LEAGUE_NOT_FOUND"
+      | "NOT_ON_IR"
+      | "GAME_STARTED"
+      /**
+       * Bringing him back would put the roster over the limit.
+       *
+       * Named as `acceptTrade` names the same fact, and deliberately not
+       * `ROSTER_FULL`: that code's sentence is "drop someone first", which is
+       * the instruction issue #273 documents as misleading in exactly this
+       * corner — dropping the injured man frees an IR slot, not a roster slot.
+       *
+       * Not added to `IrPlacementRefusal`. That union is the vocabulary
+       * `refuseIrPlacement` speaks about *placing* a player, and it would owe a
+       * `REFUSALS` message for a refusal it can never produce.
+       */
+      | "ROSTER_WOULD_OVERFLOW"
+      /** A slot is being held for a trade this team accepted. */
+      | "SLOT_HELD_FOR_TRADE",
   ) {
     super(message);
     this.name = "IrError";
@@ -131,17 +157,70 @@ export async function moveToIr(
 }
 
 /**
+ * The roster, for a capacity question, locked.
+ *
+ * A sibling of `heldRoster` rather than a reuse of it: that one joins `games`
+ * for a kickoff time, which needs a season and a week, and activation
+ * deliberately has no kickoff rule — the route does not even send a week for it.
+ *
+ * `FOR UPDATE OF r` for the same reason `heldRoster` gives: lock the roster
+ * rows, never the shared `players` rows.
+ */
+async function heldForCapacity(
+  tx: SqlClient,
+  teamId: string,
+): Promise<{ player_id: string; on_ir: boolean; designation: string | null }[]> {
+  return tx.query<{ player_id: string; on_ir: boolean; designation: string | null }>(
+    `SELECT r.player_id, r.on_ir, p.injury_designation AS designation
+       FROM roster_entries r
+       JOIN players p ON p.id = r.player_id
+      WHERE r.team_id = $1 AND r.released_at IS NULL
+      FOR UPDATE OF r`,
+    [teamId],
+  );
+}
+
+/**
  * Bring a player back.
  *
- * **Never refused for capacity**, and that is the important asymmetry. A team
- * whose stashed player recovered is already over the counted limit — the
- * exemption evaporated the moment his designation cleared — so refusing to
- * activate him would trap the roster in the illegal state rather than let the
- * manager resolve it. Activation is the fix, not the offence.
+ * **A recovered player is never refused**, and that is the important
+ * asymmetry. A team whose stashed player recovered is already over the counted
+ * limit — the exemption evaporated the moment his designation cleared — so
+ * refusing to activate him would trap the roster in the illegal state rather
+ * than let the manager resolve it. Activation is the fix, not the offence.
  *
- * Nor does it check the kickoff. Coming off IR only ever *adds* to what counts
- * against the limit, so it cannot be used to dodge anything mid-game, and the
- * lineup lock still decides whether he can actually be started.
+ * **A player who is still genuinely hurt is a different case, and this used to
+ * treat them alike.** He is not counting, activation is `+1`, and nothing is
+ * trapped by refusing: leaving him on injured reserve is a legal, stable state
+ * that costs the team nothing. So a team at the limit could bring him back and
+ * sit at `totalSlots + 1` — a second route past the line #250 drew, and the
+ * one the docstring above was accidentally defending. Issue #272.
+ *
+ * ## The question this asks, and the one it refuses to ask
+ *
+ * Not "is this player exempt". That has no answer. `irExemptCount` caps
+ * exemptions at `irSlots` **by count, not by identity**, so a team holding
+ * three genuinely-injured players with two slots has two exemptions and no way
+ * to say which two — and any tie-break invented here (insertion order, id,
+ * acquisition date) would be a rule that exists nowhere else in the product.
+ *
+ * The well-formed question is what the move *costs*: recompute the counted size
+ * with this player's flag flipped and compare. The algebra is
+ * `capped(g, s) - capped(g - 1, s)`, which is **1 when `g <= s` and 0 when
+ * `g > s`** — so the third stashed player of three, with two slots, activates
+ * for free, because one of the three was already counting. A predicate keyed on
+ * `onIr && isIrEligible` refuses all three of them, every one wrongly.
+ *
+ * ## Why this cannot trap anybody
+ *
+ * It refuses only when the move *raises* the count and lands over the limit,
+ * which means the roster it refuses from is `after - 1 <= totalSlots` —
+ * legal. A refusal therefore never leaves a manager in an illegal state, which
+ * is what separates it from the case the docstring above rightly protects.
+ *
+ * Still no kickoff check. Coming off IR only ever adds to what counts, so it
+ * cannot be used to dodge anything mid-game, and the lineup lock still decides
+ * whether he can actually be started.
  */
 export async function activateFromIr(
   db: SqlClient,
@@ -151,16 +230,83 @@ export async function activateFromIr(
     readonly playerId: string;
   },
 ): Promise<{ playerId: string }> {
-  const rows = await db.query<{ player_id: string }>(
-    `UPDATE roster_entries SET on_ir = false
-      WHERE team_id = $1 AND player_id = $2 AND released_at IS NULL AND on_ir
-      RETURNING player_id`,
-    [input.teamId, input.playerId],
-  );
+  const stored = await getLeagueRules(db, input.leagueId);
+  if (!stored) throw new IrError("League has no rules", "LEAGUE_NOT_FOUND");
+  const shape = buildRosterShape(stored.rules.roster, NFL);
 
-  if (rows.length === 0) {
-    throw new IrError("That player is not on injured reserve.", "NOT_ON_IR");
-  }
+  return withTransaction(db, async (tx) => {
+    /*
+      Locked, because this reads every row of the roster and then writes one of
+      them. Two managers cannot do this at once, but one manager with two tabs
+      can: both reads see a roster where only their own flip is pending, both
+      compute the same room, and the two `UPDATE`s touch different rows so
+      nothing conflicts. Textbook write skew, and `FOR UPDATE` is what stops it.
+    */
+    const held = await heldForCapacity(tx, input.teamId);
+    const roster = held.map((row) => ({
+      playerId: row.player_id,
+      onIr: row.on_ir,
+      injuryDesignation: row.designation,
+    }));
 
-  return { playerId: input.playerId };
+    if (!roster.some((entry) => entry.playerId === input.playerId && entry.onIr)) {
+      throw new IrError("That player is not on injured reserve.", "NOT_ON_IR");
+    }
+
+    // The same roster with this one move made. Rows are unchanged — activation
+    // releases nobody — so only the exemption count can move.
+    const activated = roster.map((entry) =>
+      entry.playerId === input.playerId ? { ...entry, onIr: false } : entry,
+    );
+
+    const before = countedRosterSize(roster, shape.irSlots);
+    const after = countedRosterSize(activated, shape.irSlots);
+
+    /*
+      Room already spoken for by accepted trades, counted against the roster
+      this move would leave behind.
+
+      Computed on `activated` rather than on `roster`: a stashed player who is
+      also on his way out in a trade frees no roster slot while he is exempt,
+      but does once he is not, and measuring before the flip would count him
+      twice and refuse a move that fits.
+
+      Cheap to skip when the move is free — `after > before` is checked first,
+      so the recovered player never reaches this query at all.
+    */
+    if (after > before) {
+      const moves = await committedTradeMoves(tx, input.leagueId);
+      const reserved = reservedByTrades(
+        activated,
+        moves.get(input.teamId) ?? [],
+        shape.irSlots,
+      );
+
+      if (after + reserved > shape.totalSlots) {
+        // Which count crossed the line decides what he is told, the same way
+        // `addFreeAgent` decides it. "Drop someone" is the wrong instruction
+        // when the room exists and a trade is holding it.
+        const spokenFor = after <= shape.totalSlots;
+        throw new IrError(
+          spokenFor
+            ? "A roster spot is being held for a trade you accepted, so there is no room to " +
+                "bring him back until that trade executes or is vetoed. He is still listed out, " +
+                "so injured reserve holds his place until then."
+            : `Bringing him back would leave you holding ${after} players and the limit is ` +
+                `${shape.totalSlots}. He is still listed out, so injured reserve is his for as ` +
+                `long as he needs it — release one of your active players first if you want him ` +
+                `back now.`,
+          spokenFor ? "SLOT_HELD_FOR_TRADE" : "ROSTER_WOULD_OVERFLOW",
+        );
+      }
+    }
+
+    await tx.query(
+      `UPDATE roster_entries SET on_ir = false
+        WHERE team_id = $1 AND player_id = $2 AND released_at IS NULL AND on_ir`,
+      [input.teamId, input.playerId],
+    );
+
+    return { playerId: input.playerId };
+  });
 }
