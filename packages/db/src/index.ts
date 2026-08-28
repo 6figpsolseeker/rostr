@@ -83,6 +83,8 @@ export {
   type AddInput,
   type Availability,
   type WaiverRunOutcome,
+  marketClosedReason,
+  type RosterMove,
 } from "./waivers.js";
 
 export {

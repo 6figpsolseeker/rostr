@@ -73,7 +73,9 @@ export class WaiverError extends Error {
       | "SLOT_HELD_FOR_TRADE"
       | "DUPLICATE_CLAIM"
       | "IN_A_TRADE"
-      | "GAME_STARTED",
+      | "GAME_STARTED"
+      /** The league is not playing, so nobody is moving players. */
+      | "LEAGUE_NOT_IN_SEASON",
   ) {
     super(message);
     this.name = "WaiverError";
@@ -379,6 +381,89 @@ async function lockRosterRow(
  * `acceptTrade` that committed before it. Under REPEATABLE READ it would read
  * the transaction's original snapshot and silently revert to the bug.
  */
+/** The states in which a manager may move players. Nothing else is a market. */
+const TRANSACTING_STATES = new Set(["IN_SEASON", "PLAYOFFS"]);
+
+/** Which half of the market is being asked for, because they refuse differently. */
+export type RosterMove = "ACQUIRE" | "RELEASE";
+
+/**
+ * Why the market is shut, or `null` when it is open.
+ *
+ * Issue #279. Nothing anywhere gated a roster move on the league's state, so a
+ * manager could sign free agents during their own draft — or before it. The
+ * draft's capacity guard counts its own picks and never reads
+ * `roster_entries`; this file counts `roster_entries` and never reads the
+ * draft. Neither could see the other, and a team ended a completed draft
+ * holding `totalSlots + 1`.
+ *
+ * The miscount was not the worst of it. `makeAutoPick` draws from the pool
+ * minus this draft's own picks, and a free-agent signing is in neither set, so
+ * the bot reaches for a player somebody already owns, the `roster_entries`
+ * insert violates `roster_entries_one_owner_per_league`, and it does so
+ * deterministically on every tick — a permanently wedged draft whose room 500s
+ * once a second. Signing before the draft is worse still: the first pick is the
+ * one that collides, and the league never makes a pick at all.
+ *
+ * **Both halves, and releasing is not merely for symmetry.** Auto-pick reads
+ * the roster it is filling from `state.picks` too, so a manager who drafts a
+ * quarterback and cuts him three rounds later leaves the bot believing that
+ * slot is filled: `wouldStrandStarters` never reserves a pick for one, and the
+ * team finishes with no quarterback and no way to have gotten one. That is the
+ * exact harm auto-pick exists to prevent.
+ *
+ * **Exported, because the screen has to say the same thing the server does.**
+ * `availablePlayers` carries that rule already — the two must not be able to
+ * disagree, because one decides what the screen offers and the other decides
+ * what the server accepts. A manager who is shown a live Add button and then
+ * refused has met a wall rather than an explanation.
+ *
+ * Note a paused draft holds `DRAFTING` — `pauseDraft` writes `drafts.status`
+ * and nothing ever writes league state backwards — so a long pause closes the
+ * market for its duration. That is not a trap: picks are the only way to
+ * acquire anyone at that point, so a paused draft has already stopped
+ * acquisition, and the commissioner holds the control that resumes it.
+ */
+export function marketClosedReason(state: string, move: RosterMove): string | null {
+  if (TRANSACTING_STATES.has(state)) return null;
+
+  if (state === "DRAFTING") {
+    return move === "ACQUIRE"
+      ? "Your draft is still running — you get players by drafting them. Free agency opens when the last pick is in."
+      : "Your draft is still running — it counts every pick you have made, so nobody can be released until the last pick is in.";
+  }
+
+  if (state === "FORMING") {
+    return "This league has not drafted yet. Rosters are filled by the draft, and free agency opens when it finishes.";
+  }
+
+  return "This league's season is over, so its rosters are final.";
+}
+
+/**
+ * The same rule, as a refusal.
+ *
+ * **Member-initiated paths only.** `processWaivers` also writes roster rows and
+ * must never refuse on state: its whole league runs in one transaction, so a
+ * throw rolls back the cycle rather than one claim, the claims stay `PENDING`,
+ * and the hourly cron re-selects the league and fails identically — forever.
+ * That is not hypothetical; migration `0038`'s CHECK did exactly it. The run is
+ * gated where it is safe to gate, at selection, by `leaguesDueForWaivers`.
+ *
+ * It needs no gate anyway. A `PENDING` claim can only exist for a league that
+ * was transacting when it was filed, state only ever moves forward, and no
+ * forward transition leaves `IN_SEASON` or `PLAYOFFS` — so the refusal is
+ * unreachable there by construction and would be pure downside.
+ *
+ * `cancelClaim` is ungated for the same family of reasons: it is the manager's
+ * own exit, it writes nothing any capacity rule reads, and closing an escape
+ * hatch is how a recoverable state becomes a permanent one.
+ */
+function refuseUnlessTransacting(state: string, move: RosterMove): void {
+  const reason = marketClosedReason(state, move);
+  if (reason) throw new WaiverError(reason, "LEAGUE_NOT_IN_SEASON");
+}
+
 async function refuseIfFrozen(
   tx: SqlClient,
   leagueId: string,
@@ -450,6 +535,21 @@ export async function dropPlayer(
   if (!stored) throw new WaiverError("League has no rules", "LEAGUE_NOT_FOUND");
 
   return withTransaction(db, async (tx) => {
+    // First, and `FOR SHARE` rather than a bare read.
+    //
+    // The lock is not needed for correctness of this check — state only moves
+    // forward, so a stale read can only be an earlier state, which is only ever
+    // more restrictive. It costs nothing in a statement that has to run anyway,
+    // and it closes something else: this was the one member path that could
+    // land in the middle of a `processWaivers` run, which is precisely what the
+    // matching lock in `addFreeAgent` exists to prevent.
+    const [league] = await tx.query<{ state: string }>(
+      "SELECT state FROM leagues WHERE id = $1 FOR SHARE",
+      [leagueId],
+    );
+    if (!league) throw new WaiverError("League has no rules", "LEAGUE_NOT_FOUND");
+    refuseUnlessTransacting(league.state, "RELEASE");
+
     const entry = await lockRosterRow(tx, leagueId, teamId, playerId);
     if (!entry) throw new WaiverError("That player is not on this roster", "NOT_ON_ROSTER");
 
@@ -548,7 +648,18 @@ export async function addFreeAgent(db: SqlClient, input: AddInput): Promise<void
     // lock exists.
     //
     // Adds racing *each other* are arbitrated below, by the index, not by a lock.
-    await tx.query("SELECT id FROM leagues WHERE id = $1 FOR SHARE", [input.leagueId]);
+    // The same lock, one column wider. Reading the state here rather than
+    // before the transaction is what makes it trustworthy: `recordPick` sets
+    // `IN_SEASON` in the transaction that commits the final pick, and `FOR
+    // SHARE` conflicts with that write — so this either reads `DRAFTING` and
+    // refuses, or reads `IN_SEASON` after the last pick has landed. There is no
+    // window between them.
+    const [league] = await tx.query<{ state: string }>(
+      "SELECT state FROM leagues WHERE id = $1 FOR SHARE",
+      [input.leagueId],
+    );
+    if (!league) throw new WaiverError("League has no rules", "LEAGUE_NOT_FOUND");
+    refuseUnlessTransacting(league.state, "ACQUIRE");
 
     // Inside the transaction, not before it. Read on `db` and written on `tx`,
     // this answered a question about a moment that had already passed by the time
@@ -769,6 +880,38 @@ export async function submitClaim(
   db: SqlClient,
   input: AddInput,
 ): Promise<{ claimId: string }> {
+  /*
+    The league questions first, because they are true or false before any player
+    is named — and answering the player question first sends a manager to a
+    button that will refuse them anyway.
+
+    This is also the read that used to sit three checks lower, fetching
+    `waiver_priority` only to test whether the row existed. Widened rather than
+    duplicated: it now carries the state as well, joins the team on, and costs
+    the same one round trip. `waiver_priority` is legitimately nullable, so
+    presence is tested on `t.id`, exactly as the old `if (!priority)` did.
+
+    One behaviour change worth naming: a caller naming a team in another league
+    now gets `TEAM_NOT_IN_LEAGUE` where it used to get whatever
+    `availabilityOf` said about the player.
+  */
+  const [league] = await db.query<{
+    state: string;
+    team_id: string | null;
+    waiver_priority: number | null;
+  }>(
+    `SELECT l.state, t.id AS team_id, t.waiver_priority
+       FROM leagues l
+       LEFT JOIN teams t ON t.id = $2 AND t.league_id = l.id
+      WHERE l.id = $1`,
+    [input.leagueId, input.teamId],
+  );
+  if (!league) throw new WaiverError("League has no rules", "LEAGUE_NOT_FOUND");
+  if (league.team_id === null) {
+    throw new WaiverError("Team is not in this league", "TEAM_NOT_IN_LEAGUE");
+  }
+  refuseUnlessTransacting(league.state, "ACQUIRE");
+
   const availability = await availabilityOf(db, input.leagueId, input.addPlayerId, input.now);
   if (availability === "ROSTERED") {
     throw new WaiverError("Somebody already has that player", "PLAYER_TAKEN");
@@ -787,12 +930,6 @@ export async function submitClaim(
   );
   if (existing) throw new WaiverError("You already claimed that player", "DUPLICATE_CLAIM");
 
-  const [priority] = await db.query<{ waiver_priority: number | null }>(
-    "SELECT waiver_priority FROM teams WHERE id = $1 AND league_id = $2",
-    [input.teamId, input.leagueId],
-  );
-  if (!priority) throw new WaiverError("Team is not in this league", "TEAM_NOT_IN_LEAGUE");
-
   const [row] = await db.query<{ id: string }>(
     `INSERT INTO waiver_claims
        (league_id, team_id, add_player_id, drop_player_id, priority_at_claim)
@@ -803,7 +940,7 @@ export async function submitClaim(
       input.teamId,
       input.addPlayerId,
       input.dropPlayerId ?? null,
-      priority.waiver_priority,
+      league.waiver_priority,
     ],
   );
 

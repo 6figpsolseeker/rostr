@@ -4,6 +4,7 @@ import {
   availablePlayers,
   cancelClaim,
   dropPlayer,
+  marketClosedReason,
   pendingClaims,
   submitClaim,
   WaiverError,
@@ -25,6 +26,14 @@ const STATUS: Record<string, number> = {
   SLOT_HELD_FOR_TRADE: 409,
   DUPLICATE_CLAIM: 409,
   IN_A_TRADE: 409,
+  // The league is not playing. A conflict with its state, like every other 409
+  // here, and the fallback below would call it a malformed request.
+  LEAGUE_NOT_IN_SEASON: 409,
+  // Not new, and not part of #279 — `RULES.md` §6's kickoff refusal has been
+  // reaching the client as a 400 since it was written, because it was never
+  // added here. Fixed alongside rather than left as the odd one out in a map
+  // this change already edits.
+  GAME_STARTED: 409,
 };
 
 /** Everyone unrostered, with whether they can be added now or only claimed. */
@@ -91,6 +100,22 @@ export async function GET(
         injuryDesignation: row.injury_designation,
       })),
       claims: await pendingClaims(client, id, context.myTeamId),
+      /*
+        Whether this league is transacting at all, and the sentence if not.
+
+        Composed here rather than in the component, from the same function that
+        refuses the write, because the screen and the server must not be able to
+        disagree about it — a live Add button over a server that says no is a
+        wall rather than an answer. It is also the only way this string gets a
+        test: `apps/web` cannot render a component in one.
+
+        The list itself stays. Those players genuinely are unrostered, and
+        looking at the pool during a draft is useful.
+      */
+      market: {
+        open: marketClosedReason(context.state, "ACQUIRE") === null,
+        notice: marketClosedReason(context.state, "ACQUIRE"),
+      },
     });
   } catch (error) {
     if (error instanceof DraftContextError) {

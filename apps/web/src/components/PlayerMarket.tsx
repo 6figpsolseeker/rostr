@@ -51,6 +51,14 @@ interface MarketResponse {
   available: Available[];
   roster: Rostered[];
   claims: Claim[];
+  /**
+   * Whether this league is transacting, and why not when it is not.
+   *
+   * The sentence is composed by the server from the same function that refuses
+   * the write, so the two cannot drift. Rendering a button the server will
+   * refuse is the failure this exists to prevent — it turns a rule into a wall.
+   */
+  market: { open: boolean; notice: string | null };
 }
 
 const fetcher = async (url: string): Promise<MarketResponse> => {
@@ -157,6 +165,15 @@ export function PlayerMarket({ leagueId }: { leagueId: string }) {
       {failure && (
         <p className="rounded border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
           {failure}
+        </p>
+      )}
+
+      {data.market.notice !== null && (
+        // Said once, at the top, rather than on every row. The buttons below are
+        // gone rather than disabled: a disabled button invites a manager to work
+        // out why, and the sentence has already told them.
+        <p className="rounded border border-nocturne-neutral-800 bg-nocturne-neutral-950 px-3 py-2 text-xs text-nocturne-neutral-400">
+          {data.market.notice}
         </p>
       )}
 
@@ -268,23 +285,25 @@ export function PlayerMarket({ leagueId }: { leagueId: string }) {
                 <span className="text-xs text-amber-400/70">{clearsIn(player.clearsAt)}</span>
               )}
 
-              <button
-                onClick={() =>
-                  void act({
-                    action: "ADD",
-                    playerId: player.playerId,
-                    dropPlayerId: dropWith || null,
-                  })
-                }
-                disabled={busy || claimedIds.has(player.playerId)}
-                className="rounded border border-nocturne-accent px-3 py-1 text-xs font-medium text-black disabled:opacity-30"
-              >
-                {claimedIds.has(player.playerId)
-                  ? "Claimed"
-                  : player.availability === "ON_WAIVERS"
-                    ? "Claim"
-                    : "Add"}
-              </button>
+              {data.market.open && (
+                <button
+                  onClick={() =>
+                    void act({
+                      action: "ADD",
+                      playerId: player.playerId,
+                      dropPlayerId: dropWith || null,
+                    })
+                  }
+                  disabled={busy || claimedIds.has(player.playerId)}
+                  className="rounded border border-nocturne-accent px-3 py-1 text-xs font-medium text-black disabled:opacity-30"
+                >
+                  {claimedIds.has(player.playerId)
+                    ? "Claimed"
+                    : player.availability === "ON_WAIVERS"
+                      ? "Claim"
+                      : "Add"}
+                </button>
+              )}
             </li>
           ))}
         </ul>
@@ -326,13 +345,15 @@ export function PlayerMarket({ leagueId }: { leagueId: string }) {
                   </span>
                 </span>
               </button>
-              <button
-                onClick={() => void act({ action: "DROP", playerId: player.playerId })}
-                disabled={busy}
-                className="rounded border border-nocturne-neutral-800 px-2 py-1 text-xs text-nocturne-neutral-400 hover:text-nocturne-text disabled:opacity-30"
-              >
-                Drop
-              </button>
+              {data.market.open && (
+                <button
+                  onClick={() => void act({ action: "DROP", playerId: player.playerId })}
+                  disabled={busy}
+                  className="rounded border border-nocturne-neutral-800 px-2 py-1 text-xs text-nocturne-neutral-400 hover:text-nocturne-text disabled:opacity-30"
+                >
+                  Drop
+                </button>
+              )}
             </li>
           ))}
         </ul>
