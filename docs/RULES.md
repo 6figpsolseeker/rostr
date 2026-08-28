@@ -471,6 +471,13 @@ accept a trade and cut the player they promised, and execution would find a hole
 roster spot used to be. This is the database half of "both NFTs move to the escrow PDA",
 and it holds whether or not the league has a pot.
 
+**Trading opens when the draft finishes.** Until the last pick is in, nobody owns a
+settled roster — the draft is still deciding who owns what, and it counts a team by the
+picks it has made rather than by the players it holds. A trade agreed before then would be
+invisible to it: the team receiving players would still be dealt every one of its picks and
+finish over the limit, and the team sending them would finish under it, with a starting
+slot it no longer has a pick left to fill. Trading closes again when the season is over.
+
 **A trade may change the shape of a roster, never its size past the limit.** A two-for-one
 is a normal trade and no proposal is refused for being uneven — only one where a side gives
 nothing, because a gift is how an eliminated team hands its roster to a friend without

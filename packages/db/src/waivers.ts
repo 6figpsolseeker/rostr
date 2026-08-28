@@ -54,6 +54,7 @@ import type { SqlClient } from "./client.js";
 import { getLeagueRules } from "./leagues.js";
 import { isUniqueViolation } from "./pg-errors.js";
 import { loadDraftBoard } from "./sync.js";
+import { isTransacting } from "./league-state.js";
 import { committedTradeMoves, lockedByTrade } from "./trades.js";
 import { withTransaction } from "./transaction.js";
 import { transactionWeek } from "./week.js";
@@ -381,9 +382,6 @@ async function lockRosterRow(
  * `acceptTrade` that committed before it. Under REPEATABLE READ it would read
  * the transaction's original snapshot and silently revert to the bug.
  */
-/** The states in which a manager may move players. Nothing else is a market. */
-const TRANSACTING_STATES = new Set(["IN_SEASON", "PLAYOFFS"]);
-
 /** Which half of the market is being asked for, because they refuse differently. */
 export type RosterMove = "ACQUIRE" | "RELEASE";
 
@@ -425,7 +423,7 @@ export type RosterMove = "ACQUIRE" | "RELEASE";
  * acquisition, and the commissioner holds the control that resumes it.
  */
 export function marketClosedReason(state: string, move: RosterMove): string | null {
-  if (TRANSACTING_STATES.has(state)) return null;
+  if (isTransacting(state)) return null;
 
   if (state === "DRAFTING") {
     return move === "ACQUIRE"
