@@ -23,6 +23,14 @@ export interface DraftContext {
   readonly rules: LeagueRules;
   readonly shape: RosterShape;
   readonly season: number;
+  /**
+   * The league's current state.
+   *
+   * From the column, and — unlike `season` below — that is the point. State is
+   * not in the frozen document and must not look as though it is: it changes,
+   * which is the whole reason anything reads it.
+   */
+  readonly state: string;
 }
 
 export class DraftContextError extends Error {
@@ -41,7 +49,8 @@ export async function draftContext(leagueId: string): Promise<DraftContext> {
   const [league] = await client.query<{
     season: number;
     commissioner_id: string;
-  }>("SELECT season, commissioner_id FROM leagues WHERE id = $1", [leagueId]);
+    state: string;
+  }>("SELECT season, commissioner_id, state FROM leagues WHERE id = $1", [leagueId]);
   if (!league) throw new DraftContextError("League not found", 404);
 
   const stored = await getLeagueRules(client, leagueId);
@@ -72,6 +81,7 @@ export async function draftContext(leagueId: string): Promise<DraftContext> {
       through the caller's `?? 1` fallback.
     */
     season: stored.rules.seasonYear,
+    state: league.state,
   };
 }
 

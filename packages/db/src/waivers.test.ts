@@ -19,6 +19,7 @@ import {
   pendingClaims,
   processWaivers,
   seedWaiverPriority,
+  marketClosedReason,
   submitClaim,
 } from "./waivers.js";
 
@@ -78,6 +79,20 @@ async function setup(): Promise<Fixture> {
     commissionerId: commissioner.id,
     rules,
   });
+
+  /*
+    In season, because that is where these tests live.
+
+    `createLeague` leaves a league `FORMING`, and since #279 a roster move is
+    refused outside `IN_SEASON`/`PLAYOFFS` — the draft is how a roster is filled
+    before then. Every fixture here describes a league that has drafted and is
+    playing; without this line they describe one that cannot transact at all,
+    which is a different subject from the one being tested.
+
+    Set directly rather than driven through `startDraft` and a full pick
+    sequence, which would make every waiver test a draft test.
+  */
+  await db.query("UPDATE leagues SET state = 'IN_SEASON' WHERE id = $1", [league.id]);
 
   const teams: string[] = [];
   for (let i = 0; i < 4; i++) {
@@ -1703,10 +1718,8 @@ describe("choosing which leagues are due — #131", () => {
       addPlayerId: fx.players.get("held")!,
       now: MONDAY,
     });
-    // The selection query only considers leagues actually playing.
-    await fx.client.query("UPDATE leagues SET state = 'IN_SEASON' WHERE id = $1", [
-      fx.leagueId,
-    ]);
+    // Already in season — `setup` puts it there, because since #279 nothing
+    // here could transact otherwise. This used to set it.
   }
 
   it("still returns the healthy leagues when one cannot be checked", async () => {
@@ -1840,5 +1853,175 @@ describe("choosing which leagues are due — #131", () => {
 
     // And due the moment it arrives.
     expect((await leaguesDueForWaivers(fx.client, runsAt)).due).toEqual([fx.leagueId]);
+  });
+});
+
+describe("the market is shut unless the league is playing", () => {
+  /*
+    Issue #279. Nothing gated a roster move on the league's state, so a manager
+    could sign free agents during their own draft — the draft counts its own
+    picks and never reads `roster_entries`, this file counts `roster_entries`
+    and never reads the draft, and a team finished a completed draft holding
+    `totalSlots + 1`.
+
+    The miscount was the mild half. `makeAutoPick` draws from the pool minus
+    this draft's own picks; a signing is in neither set, so the bot reaches for
+    somebody already owned, the roster insert violates
+    `roster_entries_one_owner_per_league`, and it does so identically on every
+    tick — a draft that never advances and a room that 500s once a second.
+  */
+
+  const WHEN = new Date(MONDAY.getTime() + 2 * DAY);
+
+  const closed = async (fx: Fixture, state: string) =>
+    fx.client.query("UPDATE leagues SET state = $2 WHERE id = $1", [fx.leagueId, state]);
+
+  /** Drop somebody first, so there is a claimable player. Needs an open market. */
+  const waived = async (fx: Fixture): Promise<string> => {
+    await dropPlayer(fx.client, fx.leagueId, fx.teams[0]!, fx.players.get("held")!, MONDAY);
+    return fx.players.get("held")!;
+  };
+
+  it("refuses a signing during the draft, and says where players come from", async () => {
+    const fx = await setup();
+    await closed(fx, "DRAFTING");
+
+    await expect(
+      addFreeAgent(fx.client, {
+        leagueId: fx.leagueId,
+        teamId: fx.teams[0]!,
+        addPlayerId: fx.players.get("target")!,
+        now: MONDAY,
+      }),
+    ).rejects.toMatchObject({ code: "LEAGUE_NOT_IN_SEASON" });
+
+    await expect(
+      addFreeAgent(fx.client, {
+        leagueId: fx.leagueId,
+        teamId: fx.teams[0]!,
+        addPlayerId: fx.players.get("target")!,
+        now: MONDAY,
+      }),
+    ).rejects.toThrow(/drafting them/);
+  });
+
+  it("refuses one before the draft too, which is the worse case", async () => {
+    // Reachable from the state every league sits in by default — and a league
+    // that signs anyone pre-draft cannot make pick 1, because the first
+    // auto-pick is the one that collides.
+    const fx = await setup();
+    await closed(fx, "FORMING");
+
+    await expect(
+      addFreeAgent(fx.client, {
+        leagueId: fx.leagueId,
+        teamId: fx.teams[0]!,
+        addPlayerId: fx.players.get("target")!,
+        now: MONDAY,
+      }),
+    ).rejects.toMatchObject({ code: "LEAGUE_NOT_IN_SEASON" });
+  });
+
+  it("refuses a release during the draft, because auto-pick cannot see it", async () => {
+    /*
+      Not symmetry. `makeAutoPick` reads the roster it is filling from
+      `state.picks`, so a manager who drafts a quarterback and cuts him three
+      rounds later leaves the bot believing that slot is filled:
+      `wouldStrandStarters` never reserves a pick for one, and the team ends the
+      draft with no quarterback and no way to have gotten one.
+    */
+    const fx = await setup();
+    await closed(fx, "DRAFTING");
+
+    await expect(
+      dropPlayer(fx.client, fx.leagueId, fx.teams[0]!, fx.players.get("held")!, MONDAY),
+    ).rejects.toMatchObject({ code: "LEAGUE_NOT_IN_SEASON" });
+  });
+
+  it("refuses a claim during the draft, which would otherwise detonate later", async () => {
+    // `everyoneIsOnWaivers` is a pure weekly clock with no season awareness, so
+    // a pre-season Tuesday reads as a waiver period. Those claims sat PENDING
+    // through the draft — `leaguesDueForWaivers` skips `DRAFTING` — and went
+    // live in the first hour after the final pick.
+    const fx = await setup();
+    const wanted = await waived(fx);
+    await closed(fx, "DRAFTING");
+
+    await expect(
+      submitClaim(fx.client, {
+        leagueId: fx.leagueId,
+        teamId: fx.teams[1]!,
+        addPlayerId: wanted,
+        now: MONDAY,
+      }),
+    ).rejects.toMatchObject({ code: "LEAGUE_NOT_IN_SEASON" });
+  });
+
+  it("keeps the run itself ungated, so a cycle cannot wedge", async () => {
+    /*
+      The failure this must not reproduce: `0038`'s CHECK refused inside the
+      run's single transaction, so it rolled back the whole league's cycle
+      rather than one claim, the claims stayed PENDING, and the hourly cron
+      re-selected the league and failed identically — forever.
+
+      A claim filed in season must still resolve after the league enters the
+      playoffs, which is the one forward transition that can happen underneath
+      a pending claim.
+    */
+    const fx = await setup();
+    const wanted = await waived(fx);
+    await submitClaim(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: fx.teams[1]!,
+      addPlayerId: wanted,
+      now: MONDAY,
+    });
+
+    await closed(fx, "PLAYOFFS");
+
+    const outcome = await processWaivers(fx.client, fx.leagueId, WHEN);
+    expect(outcome.awarded).toBe(1);
+    expect(await pendingClaims(fx.client, fx.leagueId, fx.teams[1]!)).toHaveLength(0);
+  });
+
+  it("lets a manager withdraw a claim whatever the state, because that is the exit", async () => {
+    // Gating the escape hatch is how a recoverable state becomes a permanent
+    // one. It writes nothing any capacity rule reads.
+    const fx = await setup();
+    const wanted = await waived(fx);
+    const { claimId } = await submitClaim(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: fx.teams[1]!,
+      addPlayerId: wanted,
+      now: MONDAY,
+    });
+
+    await closed(fx, "DRAFTING");
+    await expect(
+      cancelClaim(fx.client, fx.leagueId, fx.teams[1]!, claimId),
+    ).resolves.toBeUndefined();
+    expect(await pendingClaims(fx.client, fx.leagueId, fx.teams[1]!)).toHaveLength(0);
+  });
+
+  it("gives the screen the same sentence the refusal carries", async () => {
+    // The two must not be able to disagree: one decides what the screen offers
+    // and the other decides what the server accepts.
+    const fx = await setup();
+    await closed(fx, "DRAFTING");
+
+    const notice = marketClosedReason("DRAFTING", "ACQUIRE");
+    expect(notice).not.toBeNull();
+
+    await expect(
+      addFreeAgent(fx.client, {
+        leagueId: fx.leagueId,
+        teamId: fx.teams[0]!,
+        addPlayerId: fx.players.get("target")!,
+        now: MONDAY,
+      }),
+    ).rejects.toThrow(notice!);
+
+    expect(marketClosedReason("IN_SEASON", "ACQUIRE")).toBeNull();
+    expect(marketClosedReason("PLAYOFFS", "RELEASE")).toBeNull();
   });
 });

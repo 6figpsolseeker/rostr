@@ -118,6 +118,20 @@ async function setup(overrides?: Partial<LeagueRules>): Promise<Fixture> {
     rules,
   });
 
+  /*
+    In season, because that is where these tests live.
+
+    `createLeague` leaves a league `FORMING`, and since #279 a roster move is
+    refused outside `IN_SEASON`/`PLAYOFFS` — the draft is how a roster is filled
+    before then. Every fixture here describes a league that has drafted and is
+    playing; without this line they describe one that cannot transact at all,
+    which is a different subject from the one being tested.
+
+    Set directly rather than driven through `startDraft` and a full pick
+    sequence, which would make every waiver test a draft test.
+  */
+  await db.query("UPDATE leagues SET state = 'IN_SEASON' WHERE id = $1", [league.id]);
+
   const teams: string[] = [];
   for (let i = 0; i < 6; i++) {
     teams.push((await addTestTeam(db, league.id, `Team ${i + 1}`)).teamId);
@@ -225,6 +239,9 @@ async function setupWithSecondLeague(): Promise<TwoLeagueFixture> {
     commissionerId: other.id,
     rules: buildNflPprRules({ seasonYear: 2026, draft: DRAFT }) as LeagueRules,
   });
+  await fx.client.query("UPDATE leagues SET state = 'IN_SEASON' WHERE id = $1", [
+    otherLeague.id,
+  ]);
 
   const otherTeams: string[] = [];
   for (let i = 0; i < 2; i++) {

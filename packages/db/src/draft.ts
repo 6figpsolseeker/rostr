@@ -85,6 +85,11 @@ export class DraftPersistenceError extends Error {
       // schema, and asserted rather than handled: the handled version is a
       // roster silently one player short, which is the bug being fixed.
       | "PICK_PLAYER_MISSING"
+      // A pick names somebody this league already holds by a route other than
+      // the draft. Closed at source by the market gate (#279); translated here
+      // because a bare unique violation escaping this insert wedges the draft
+      // permanently rather than failing one pick.
+      | "PICK_PLAYER_TAKEN"
       | "CLOCK_EXPIRED",
   ) {
     super(message);
@@ -1082,11 +1087,39 @@ export async function recordPick(
     // The draft is the origin of every roster in the league, so the pick lands
     // on the roster in the same transaction. A pick recorded without a roster
     // entry would leave a team owning a player nothing else could see.
-    await tx.query(
-      `INSERT INTO roster_entries (team_id, player_id, acquired_via, acquired_at)
-       VALUES ($1, $2, 'DRAFT', $3)`,
-      [pick.teamId, pick.playerId, input.now],
-    );
+    try {
+      await tx.query(
+        `INSERT INTO roster_entries (team_id, player_id, acquired_via, acquired_at)
+         VALUES ($1, $2, 'DRAFT', $3)`,
+        [pick.teamId, pick.playerId, input.now],
+      );
+    } catch (cause) {
+      if (!isUniqueViolation(cause)) throw cause;
+
+      /*
+        Somebody in this league already holds him, by a route that did not go
+        through the draft.
+
+        This was a bare insert, and the raw 23505 from
+        `roster_entries_one_owner_per_league` escaped as itself — which the draft
+        `GET` route rethrows, so the room 500s once a second for as long as the
+        condition holds. And it holds: `makeAutoPick` draws from the pool minus
+        this draft's own picks, a player acquired outside the draft is in
+        neither set, and the choice is deterministic, so every tick reaches for
+        the same player forever. Issue #279 measured it — a draft that never
+        advances and a league that never reaches `IN_SEASON`.
+
+        The gate on `addFreeAgent` closes the only production path that could
+        put a non-drafted player into this league's rosters, so this should now
+        be unreachable. It is translated rather than left bare because
+        "unreachable" is a claim about today's writers, and the cost of being
+        wrong about it is a dead league rather than a failed request.
+      */
+      throw new DraftPersistenceError(
+        `Pick ${pick.pickNumber} took ${pick.playerId}, who is already held in this league`,
+        "PICK_PLAYER_TAKEN",
+      );
+    }
 
     // A drafted player is off everyone's queue. Leaving them would make the next
     // auto-pick reach for someone already gone.
