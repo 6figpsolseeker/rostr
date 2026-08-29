@@ -12,7 +12,7 @@
 
 import type { ProviderGame, StatsProvider } from "@rostr/stats";
 import type { SqlClient } from "./client.js";
-import { PRIMARY_PROJECTION_SOURCE } from "./lineups.js";
+import { PRIMARY_PROJECTION_SOURCE, SEASON_AGGREGATE_WEEK } from "./lineups.js";
 import { loadSportIds } from "./sports.js";
 
 export interface SyncResult {
@@ -397,17 +397,6 @@ export interface ProjectionCapableProvider {
   listSeasonProjections(season: number): Promise<readonly ProviderProjectionRow[]>;
   listWeekProjections(season: number, week: number): Promise<readonly ProviderProjectionRow[]>;
 }
-
-/**
- * Week 0 is the season aggregate.
- *
- * The draft board asks "who is worth picking for the year"; the autofill asks
- * "who scores most this Sunday". Same table, same shape, different question —
- * and a sentinel rather than a nullable column, because Postgres treats NULLs
- * as distinct and the primary key would then permit two season projections from
- * one source for the same player.
- */
-export const SEASON_AGGREGATE_WEEK = 0;
 
 /**
  * Pull projections.

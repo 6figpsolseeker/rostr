@@ -28,6 +28,7 @@ import {
   loadWeekLineups,
   loadWeekStats,
   PRIMARY_PROJECTION_SOURCE,
+  SEASON_AGGREGATE_WEEK,
   PRIMARY_STAT_SOURCE,
   setLineup,
 } from "./lineups.js";
@@ -2060,5 +2061,133 @@ describe("the autofill ranks an injured player behind a healthy one — #269", (
     // A sort key, not an exclusion: he is still a candidate.
     expect(candidate.unavailable).toBe(true);
     expect(candidate.playerId).toBe(fx.player("sun-qb"));
+  });
+});
+
+describe("the autofill ranks on something real in week 1 — #287", () => {
+  /*
+    No production caller ever passed a week to `syncProjections`, so only the
+    season aggregate was written and `loadProjectedPoints` — which asks for the
+    real week — came back empty every week of every season. A league whose
+    signed rules say `WEEKLY_PROJECTION` silently ranked on season averages.
+
+    In week 1 that was worse than a downgrade. `loadAverages` returns all-null
+    for `week <= 1` — correctly, there is no prior week to average — so with no
+    projections either, every candidate ranked `null` and `compare` fell
+    through to its last tie-break, which compares player ids. Those are
+    `gen_random_uuid()`. Launch weekend was a lottery, and because the autofill
+    never revisits a slot it filled, the lottery result stood for the week.
+  */
+
+  const project = async (
+    fx: Fixture,
+    week: number,
+    values: readonly [string, number][],
+  ): Promise<void> => {
+    const [key] = await fx.client.query<{ id: string }>(
+      `SELECT k.id FROM stat_keys k
+         JOIN sports s ON s.id = k.sport_id
+        WHERE s.key = $1 AND k.key = 'rec_yd'`,
+      [NFL.key],
+    );
+
+    for (const [handle, value] of values) {
+      await fx.client.query(
+        `INSERT INTO player_projections (player_id, season, week, stat_key_id, source, value)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (player_id, season, week, stat_key_id, source)
+         DO UPDATE SET value = EXCLUDED.value`,
+        [fx.player(handle), SEASON, week, key!.id, PRIMARY_PROJECTION_SOURCE, value],
+      );
+    }
+  };
+
+  it("uses the week's projections when the week has them", async () => {
+    const fx = await setup();
+    // wr-c is the worse receiver by season average; the week says otherwise.
+    await project(fx, WEEK, [
+      ["wr-a", 10],
+      ["wr-c", 900],
+    ]);
+
+    const projected = await loadProjectedPoints(fx.client, SEASON, WEEK, fx.rules);
+
+    expect(projected.get(fx.player("wr-c"))).toBeGreaterThan(projected.get(fx.player("wr-a"))!);
+  });
+
+  it("falls back to the season projection when the week has none", async () => {
+    /*
+      The safety net, and the case that was permanently live before #287: the
+      ingest only ever wrote week 0, so this is what every real week hit.
+    */
+    const fx = await setup();
+    await project(fx, SEASON_AGGREGATE_WEEK, [
+      ["wr-a", 10],
+      ["wr-c", 900],
+    ]);
+
+    const projected = await loadProjectedPoints(fx.client, SEASON, WEEK, fx.rules);
+
+    expect(projected.size).toBeGreaterThan(0);
+    expect(projected.get(fx.player("wr-c"))).toBeGreaterThan(projected.get(fx.player("wr-a"))!);
+  });
+
+  it("never mixes the two, because a season total dwarfs a week's", async () => {
+    /*
+      All or nothing, deliberately. A map holding one player's weekly number
+      beside another's season total would rank everybody with a weekly row
+      below everybody without one — not a fallback, a corruption. So a week
+      with any projections at all uses only those.
+    */
+    const fx = await setup();
+    await project(fx, SEASON_AGGREGATE_WEEK, [["wr-a", 900]]);
+    await project(fx, WEEK, [["wr-c", 10]]);
+
+    const projected = await loadProjectedPoints(fx.client, SEASON, WEEK, fx.rules);
+
+    // Only the player the week names. The season row is not consulted at all.
+    expect(projected.has(fx.player("wr-c"))).toBe(true);
+    expect(projected.has(fx.player("wr-a"))).toBe(false);
+  });
+
+  it("gives week 1 a real ranking instead of a uuid ordering", async () => {
+    /*
+      The launch-weekend case. `loadAverages` is all-null at week 1 by design,
+      so before this the whole ranking was `playerId.localeCompare`.
+
+      Asserted by running the fill twice against two different projections and
+      requiring it to follow them. Under uuid ordering the answer cannot change,
+      because the ids do not.
+    */
+    const first = await setup();
+    await project(first, SEASON_AGGREGATE_WEEK, [
+      ["wr-a", 900],
+      ["wr-b", 10],
+      ["wr-c", 10],
+    ]);
+    await autoFillLineup(first.client, first.leagueId, first.teamId, WEEK, BEFORE_ANYTHING);
+
+    const second = await setup();
+    await project(second, SEASON_AGGREGATE_WEEK, [
+      ["wr-a", 10],
+      ["wr-b", 900],
+      ["wr-c", 10],
+    ]);
+    await autoFillLineup(second.client, second.leagueId, second.teamId, WEEK, BEFORE_ANYTHING);
+
+    const startedWr = async (fx: Fixture) => {
+      const rows = await fx.client.query<{ player_id: string }>(
+        `SELECT l.player_id FROM lineups l
+           JOIN slot_types st ON st.id = l.slot_type_id
+          WHERE l.team_id = $1 AND l.week = $2 AND st.key = 'WR'
+            AND l.player_id IS NOT NULL`,
+        [fx.teamId, WEEK],
+      );
+      return rows.map((row) => row.player_id);
+    };
+
+    // Each run starts the receiver its own projections favour.
+    expect(await startedWr(first)).toContain(first.player("wr-a"));
+    expect(await startedWr(second)).toContain(second.player("wr-b"));
   });
 });
