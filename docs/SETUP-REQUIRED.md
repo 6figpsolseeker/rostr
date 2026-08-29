@@ -223,6 +223,32 @@ because `.env` is gitignored, so a fresh checkout still needs steps 2 onward:
    has, and running `db:migrate` blind is how a forward-only runner meets a surprise.
 4. `pnpm db:migrate` — applies whatever is pending.
 5. `pnpm db:seed` — inserts the NFL registry.
+6. `pnpm db:sync 2026` — **and this step is the one that was missing.** Players, bye
+   weeks, the whole schedule, rankings, and projections for the season and the next two
+   weeks. Without it there are no `games` rows, so `setLineup` refuses every lineup with
+   `SCHEDULE_MISSING`, `currentWeek` is null so the scoring cron does nothing, and no week
+   can ever finalise. A database that has migrated and seeded still cannot hold a league.
+
+Steps 3 through 6 all run `packages/db/dist/cli.js`, and `dist/` is gitignored — so on a
+fresh checkout they need a build first. `pnpm install` now does that through a `prepare`
+script, which is why step 3 no longer dies with `ERR_MODULE_NOT_FOUND` before it reaches
+the database. That was issue #98's first hard stop, and it made the very command this
+recipe opens with unrunnable.
+
+### Then check it can actually hold a season
+
+A list of credentials cannot catch a missing **step** — which is how #75's absent stats
+producer survived unnoticed. So verify the end state rather than the inputs:
+
+```
+pnpm db:status                 # in step, nothing pending
+pnpm cron:status               # every scheduled job present; NEVER_RAN is expected pre-deploy
+```
+
+Then, against the running app: create a league, draft it, and set a lineup. A lineup that
+saves means `games` are loaded and the locks can be enforced. If `score-week` returns
+`{ week: null }` after the season's first kickoff, the schedule is missing regardless of
+what the other checks say.
 
 ---
 
