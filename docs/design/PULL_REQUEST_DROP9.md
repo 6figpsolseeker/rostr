@@ -5,8 +5,15 @@ Not for immediate merge — review pass pending.
 ## What changed
 
 ### screens/Rostr Mobile.dc.html — 17 frames become 34
-Every shipped route and every bottom-nav tab now has a 390px design, plus the edge
-states. New frames, in file order:
+Most shipped routes now have a 390px design, plus the edge states. Three do not:
+`/scoring`, `/invitations` (folded into frame 18 as a section) and `/ops/stats`.
+The bottom nav in these frames is `Home · Matchup · Team · Players · League`, which
+does not match the shipped nav (`LeagueChrome.tsx`): `League` is a fifth tab with no
+route, and `Trades` and `Standings` are shipped tabs missing from it — so frames 20,
+31 and 34 are unreachable from the design's own navigation. Reconcile before building.
+Routes are also written `/l/<slug>/…` throughout; shipped is `/leagues/[id]/…`.
+
+New frames, in file order:
 
 - 18 Leagues — the drop-8 hub stacked for a phone (your leagues → invitations → public;
   no join button in any list, every card leads to the rules)
