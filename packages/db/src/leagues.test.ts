@@ -889,6 +889,68 @@ describe("the rules URI is written once — #69 §3, §4", () => {
     expect(await storedUri(client, league.id)).toBe(uri);
   });
 
+  /*
+    The headline scenario, and it was the one case the block did not cover —
+    which is exactly why the docstring claimed something untrue about it.
+    Every other test here operates on a single league.
+  */
+  it("refuses another league's pin when that league's rules differ", async () => {
+    const { client, commissionerId } = await setup();
+    const mine = await createLeague(client, NFL, {
+      name: "Mine",
+      commissionerId,
+      rules: rules(),
+    });
+    const theirs = await createLeague(client, NFL, {
+      name: "Theirs",
+      commissionerId,
+      rules: rules({ seasonYear: 2027 }),
+    });
+    expect(theirs.rulesHash).not.toBe(mine.rulesHash);
+
+    // Their document, my league. Nothing matches, nothing is written.
+    expect(
+      await setRulesUri(client, mine.id, {
+        uri: "ipfs://bafytheirs",
+        hash: theirs.rulesHash,
+      }),
+    ).toBe(false);
+    expect(await storedUri(client, mine.id)).toBeNull();
+  });
+
+  it("writes when two leagues share a rule set, because the URI is the same one", async () => {
+    /*
+      The swap guards the document, not the league, and those come apart:
+      `hashLeagueRules` is a pure function of the rule set, so two leagues from
+      one template hash identically and each accepts the other's pin.
+
+      That is safe for a reason the predicate does not supply. Identical hashes
+      mean identical canonical bytes, and a CID is a function of the bytes — so
+      the URI being attached is byte-for-byte the one this league should have
+      had. Asserting it rather than describing it, because the whole set-once
+      rule in 0044 rests on this property.
+    */
+    const { client, commissionerId } = await setup();
+    const one = await createLeague(client, NFL, {
+      name: "One",
+      commissionerId,
+      rules: rules(),
+    });
+    const two = await createLeague(client, NFL, {
+      name: "Two",
+      commissionerId,
+      rules: rules(),
+    });
+
+    expect(one.id).not.toBe(two.id);
+    expect(two.rulesHash).toBe(one.rulesHash);
+    // The reason it is safe: same rules, same bytes, therefore same address.
+    expect(two.canonical).toBe(one.canonical);
+
+    const uri = "ipfs://bafyshared";
+    expect(await setRulesUri(client, one.id, { uri, hash: two.rulesHash })).toBe(true);
+    expect(await storedUri(client, one.id)).toBe(uri);
+  });
   it("accepts an uppercase hash, like every other hash check in the repo", async () => {
     // `0004` constrains the column to lowercase hex and `hashLeagueRules` emits
     // it, so this can only arrive from a caller that upcased on the way through —

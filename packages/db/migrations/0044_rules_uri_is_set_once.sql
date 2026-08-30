@@ -30,13 +30,18 @@
 -- cannot tell one from a substitution without a CID parser. Which one comes back
 -- is an account setting on the pinning service's side rather than a property of
 -- the bytes, so the request pins it: `pinataOptions: { cidVersion: 0 }` in
--- `PinataPinningService.pin`. That line is what makes this rule safe, and this
--- comment asserted it before it existed — it was added in the same change that
--- added this migration's review, which is the failure this repo names.
+-- `PinataPinningService.pin`. That line is what makes this rule safe, and a
+-- test fails if it is removed.
 --
 -- The escape hatch here is another migration, deliberately: moving where a
 -- member's rules live should cost as much as changing the schema, because it is
 -- the same kind of act.
+--
+-- **This is a new protection, not `CLAUDE.md` invariant 4.** Members sign the
+-- rules *hash* — `buildJoinMessage` carries no URI — so this column is an
+-- address rather than the rules, and freezing it restricts something nobody
+-- signed. That is why a migration is an acceptable escape hatch here and would
+-- not be for the rules themselves.
 --
 -- Clearing to NULL is refused for the same reason. Otherwise the rewrite is
 -- simply two statements instead of one, and a rule that a second UPDATE defeats
@@ -64,11 +69,14 @@ CREATE TRIGGER leagues_rules_uri_set_once
   FOR EACH ROW EXECUTE FUNCTION leagues_rules_uri_is_set_once();
 
 COMMENT ON COLUMN leagues.rules_uri IS
-  'Where the canonical rule document is pinned, as an IPFS URI. Written once by '
-  'setRulesUri after a successful pin and never again — see '
-  'leagues_rules_uri_set_once. NULL means the rules exist and are hashed but '
-  'have not been published yet, which is an ordinary state: pinning is a network '
-  'call that can fail, and a league with no members yet publishes nothing.';
+  'Where the canonical rule document is pinned, as a content-addressed URI. '
+  'Written once by setRulesUri, after a pin that verified its own round trip, '
+  'and never again — see leagues_rules_uri_set_once. createLeague deliberately '
+  'does not write it: this trigger freezes the first value, so an unverified one '
+  'at INSERT would be permanent. NULL means the rules exist and are hashed but '
+  'have not been published yet, which is an ordinary state — pinning is a '
+  'network call that can fail, and a league with no members yet publishes '
+  'nothing.';
 
 -- Leagues whose rules were never published. The mirror of 0014's
 -- `leagues_unanchored_idx`, and a real state for the same reason: the pin is a

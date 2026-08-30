@@ -27,12 +27,6 @@ export interface CreateLeagueInput {
   readonly name: string;
   readonly commissionerId: string;
   readonly rules: LeagueRules;
-  /**
-   * Where the canonical rule document is pinned. Optional at creation: a league
-   * in FORMING state with no members yet anchors nothing. It must be set before
-   * anyone joins — see `setRulesUri`.
-   */
-  readonly rulesUri?: string;
 }
 
 export interface CreatedLeague {
@@ -69,8 +63,11 @@ export async function createLeague(
 
   return withTransaction(db, async (tx) => {
     const [league] = await tx.query<{ id: string }>(
-      `INSERT INTO leagues (sport_id, season, name, visibility, commissioner_id, rules_hash, rules_uri)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+      // No `rules_uri` here. It is set only by `setRulesUri`, after a pin that
+      // verified its own round trip — and `0044` freezes the first value written,
+      // so an unverified one at INSERT would be permanent. See that function.
+      `INSERT INTO leagues (sport_id, season, name, visibility, commissioner_id, rules_hash)
+       VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING id`,
       [
         ids.sportId,
@@ -79,7 +76,6 @@ export async function createLeague(
         input.rules.league.visibility,
         input.commissionerId,
         rulesHash,
-        input.rulesUri ?? null,
       ],
     );
     const leagueId = league!.id;
@@ -134,6 +130,16 @@ export async function createLeague(
   });
 }
 
+/**
+ * A scheme, `://`, and at least one non-space character.
+ *
+ * Deliberately not `ipfs://` alone — `InMemoryPinningService` returns
+ * `memory://<hex>`, so a stricter pattern would refuse every test double. The
+ * no-whitespace tail matters more than it looks: `"ipfs:// "` would otherwise
+ * pass, and `0044` freezes whatever is written first.
+ */
+const PINNING_URI = /^[a-z][a-z0-9+.-]*:\/\/\S+$/;
+
 /** A pinned rule document: where it lives, and what it hashes to. */
 export interface PinnedRules {
   /** The content address the bytes were published at. */
@@ -167,8 +173,21 @@ export interface PinnedRules {
  * it, which is precisely the check this column exists to spare them.
  *
  * So the swap is on `rules_hash`: the row is written only if the league's own
- * hash is the hash of the bytes that were pinned. Wrong league, wrong document,
- * either way there is no row to update and no write.
+ * hash is the hash of the bytes that were pinned. A document belonging to a
+ * league with different rules matches nothing, so there is no row to update.
+ *
+ * **It guards the document, not the league, and those come apart.**
+ * `hashLeagueRules` is a pure function of the rule set — no league id, no name —
+ * so two leagues created from one template have the *same* `rules_hash`, and
+ * attaching one's pin to the other does write. That is not a hole, but the
+ * reason is content-addressing rather than the swap: identical hashes mean
+ * identical canonical bytes, identical bytes mean an identical CID, so the URI
+ * being attached is byte-for-byte the one that league should have had. The
+ * league ends up correct by a different route than the predicate.
+ *
+ * Which is why the predicate cannot be relaxed to trust the caller's league id
+ * alone, and why `pinLeagueRules` verifying its own round trip before this is
+ * called is load-bearing rather than belt-and-braces.
  *
  * `rules_uri = $1` in the predicate makes a genuine retry a no-op success rather
  * than a refusal — re-pinning is content-addressed, so the same rules give back
@@ -196,7 +215,6 @@ export async function setRulesUri(
     a caller handing over a non-URI has a bug, and `pinLeagueRules` already
     refuses a response with no CID in it.
   */
-  const PINNING_URI = new RegExp("^[a-z][a-z0-9+.-]*://.+");
   if (!PINNING_URI.test(pinned.uri)) {
     throw new Error(`Not a pinning URI: ${JSON.stringify(pinned.uri)}`);
   }
