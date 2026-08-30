@@ -78,9 +78,11 @@ export class PinataPinningService implements PinningService {
     }
 
     if (!response.ok) {
-      throw new PinningError(
-        `Pinata returned ${response.status}: ${await response.text().catch(() => "")}`,
-      );
+      // Truncated: this is a third party's response body going into an exception
+      // whose message reaches a server log. The status and the first line are
+      // what anyone diagnoses from; the rest is unbounded text we do not control.
+      const detail = await response.text().catch(() => "");
+      throw new PinningError(`Pinata returned ${response.status}: ${detail.slice(0, 500)}`);
     }
 
     const body = (await response.json()) as PinataResponse;

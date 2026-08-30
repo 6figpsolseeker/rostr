@@ -167,6 +167,7 @@ export {
   USERNAME_SET_PER_USER,
   USERNAME_CHECK_PER_IP,
   INVITE_PER_USER,
+  LEAGUE_CREATE_PER_USER,
   type RateLimitResult,
   type RateLimitRule,
 } from "./rate-limit.js";

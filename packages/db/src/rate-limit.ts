@@ -247,3 +247,27 @@ export const INVITE_PER_USER: RateLimitRule = {
   limit: 60,
   windowMs: HOUR,
 };
+
+/**
+ * Creating a league.
+ *
+ * **This exists because a league now costs a third-party upload.** Before the
+ * rule document was pinned, an unbounded creation loop cost a few rows and
+ * nothing else. It now spends a metered Pinata quota per league — and when that
+ * quota is gone, every *other* commissioner's league is created unpublished,
+ * permanently: `0044` freezes `rules_uri` on first write, `league_rules`
+ * refuses its own DELETE, and nothing re-pins. So one account's loop degrades
+ * everybody else's leagues with no automated recovery. That is the consequence
+ * being bounded here, not the row count.
+ *
+ * Twelve an hour: a commissioner runs a handful of leagues a season and creates
+ * them one at a time in a form that freezes the rules irreversibly, so this is
+ * far above ordinary use and far below a quota worth draining. Per user rather
+ * than per address, because creation already requires a session and a username —
+ * an address bucket would only punish households.
+ */
+export const LEAGUE_CREATE_PER_USER: RateLimitRule = {
+  bucket: "league:create:user",
+  limit: 12,
+  windowMs: HOUR,
+};
