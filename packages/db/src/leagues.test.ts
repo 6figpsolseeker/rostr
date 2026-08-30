@@ -1205,6 +1205,47 @@ describe("the hash covers the bytes — #294, migration 0045", () => {
     );
   });
 
+  it("refuses a number spelled differently in the two columns", async () => {
+    /*
+      Found by review, and it falsified the first version of this check.
+
+      jsonb equality is **numeric** equality, so `{"a":1}` and `{"a":1.0}` were
+      equal to `IS DISTINCT FROM` — while `->>` answers `1` and `1.0`. Both
+      consumers cast that result, so a row this trigger accepted would then break
+      `0028`'s draft-clock anchor and the lobby query with `invalid input syntax
+      for type bigint`. Fail-closed, and still a divergence the check claimed to
+      have removed.
+
+      Comparing the rendered text on both sides is what closes it.
+    */
+    const { client, commissionerId } = await setup();
+    const canonical = '{"scheduledAt":1767225600}';
+    const hash = sha256Hex(canonical);
+    const leagueId = await leagueDeclaring(client, commissionerId, hash);
+
+    await expect(
+      insertRules(client, leagueId, '{"scheduledAt":1767225600.0}', canonical, hash),
+    ).rejects.toThrow(/rule_json is not the document in canonical/);
+  });
+
+  it("names non-JSON bytes as non-JSON, even under a correct hash", async () => {
+    /*
+      Also from review. With a *wrong* hash the byte check answers first and this
+      never arises — which is what an earlier version of the migration header
+      claimed made the case impossible. With a hash that is correct **for the
+      garbage**, the byte check passes and the cast raised a bare `22P02 invalid
+      input syntax for type json`: fail-closed, but saying nothing about rules.
+    */
+    const { client, commissionerId } = await setup();
+    const canonical = "not a rule document at all";
+    const hash = sha256Hex(canonical);
+    const leagueId = await leagueDeclaring(client, commissionerId, hash);
+
+    await expect(insertRules(client, leagueId, '{"a":1}', canonical, hash)).rejects.toThrow(
+      /canonical is not JSON/,
+    );
+  });
+
   it("accepts rule_json written with different whitespace and key order", async () => {
     // jsonb compares as a document, not as text. Requiring the two columns to
     // match byte-for-byte would refuse every honest league: jsonb re-renders
@@ -1220,21 +1261,32 @@ describe("the hash covers the bytes — #294, migration 0045", () => {
     ).resolves.toBeDefined();
   });
 
-  it("lets 0004 answer first when the league's own hash is wrong", async () => {
+  it("lets 0004 answer first when both checks would refuse the row", async () => {
     /*
       Same-event triggers fire in **name** order, and
       `league_rules_stored_bytes_match_hash` is named to sort after
       `league_rules_hash_matches` so the coarser question is answered first.
-      Renaming either silently changes which error a caller sees; this is what
-      makes that dependency visible.
+
+      **The row has to be one both checks refuse**, and the first version of this
+      test got that wrong: it inserted bytes whose hash was correct *for
+      themselves* but not for the league, so 0045 never fired and only 0004 could
+      raise. It returned `rules hash mismatch` whichever way the triggers were
+      named — a green test pinning nothing, while the migration header claimed a
+      test pinned it. Proven under both namings before rewriting.
+
+      So: a hash that is wrong for the league *and* wrong for the bytes. Rename
+      the byte trigger to sort first and this reports `stored rule bytes do not
+      hash` instead.
     */
     const { client, commissionerId } = await setup();
     const leagueId = await leagueDeclaring(client, commissionerId, "0".repeat(64));
 
-    // These bytes hash correctly for themselves, but not to what the league declares.
     const canonical = '{"a":1}';
+    const wrongForBoth = "b".repeat(64);
+    expect(wrongForBoth).not.toBe(sha256Hex(canonical));
+
     await expect(
-      insertRules(client, leagueId, canonical, canonical, sha256Hex(canonical)),
+      insertRules(client, leagueId, canonical, canonical, wrongForBoth),
     ).rejects.toThrow(/rules hash mismatch/);
   });
 });
