@@ -225,7 +225,16 @@ describe("league_rules immutability", () => {
     return league!.id;
   }
 
-  const HASH = "5afc934db3b3e1b1f5ec7a9e503f61e531aa925a6f966c41ec227118201da36a";
+  /**
+   * `sha256('{"a":1}')`, which is what every insert below stores as `canonical`.
+   *
+   * It used to be an unrelated 64-hex string. Nothing checked, so nothing
+   * noticed — which is issue #294 in miniature: the hash and the bytes it is
+   * supposedly a hash of were free to be anything, and this file's own fixture
+   * had drifted apart without a single test going red. `0045` checks it now, so
+   * the wrong constant fails four tests here.
+   */
+  const HASH = "015abd7f5cc57a2dd94b7590f04ad8084273905ee33ec5cebeae62276a97f862";
 
   it("accepts the initial insert", async () => {
     const client = await fresh();

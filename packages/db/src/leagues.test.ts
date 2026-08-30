@@ -6,6 +6,7 @@ import {
   NFL,
   NFL_DEFAULT_FEE_BPS,
   NFL_DEFAULT_PAYOUT,
+  sha256Hex,
 } from "@rostr/core";
 import type { DraftRules, LeagueRules, PotRules } from "@rostr/core";
 import {
@@ -583,14 +584,43 @@ describe("verifyStoredRules hashes the stored bytes — #69 §1", () => {
     corruption this check exists to catch." This did the opposite, while
     `CLAUDE.md` claimed it did the same.
 
-    **The corruption is inserted, not updated, and that is the reachable path.**
-    `league_rules_immutable` refuses UPDATE and DELETE on this table, so a
-    stored row cannot be rewritten. What is unguarded is the INSERT:
-    `check_rules_hash_matches` compares the incoming hash against
-    `leagues.rules_hash` and never looks at the bytes at all. So a row whose
-    bytes are anything whatsoever is accepted under a correct hash — at ordinary
-    application privilege, which is the threat `0019`'s header names.
+    **The INSERT is guarded now, and these tests disable the guard on purpose.**
+    This block used to say the insert was unguarded, and it was: `0004`'s
+    `check_rules_hash_matches` reads the incoming hash and never looks at the
+    bytes. `0045` closes that (issue #294), so the corrupt rows below can no
+    longer be written while its trigger is armed.
+
+    Disabling it is not a dodge. `0019`'s header names `DISABLE TRIGGER` as the
+    irreducible floor — no trigger can defend against dropping the trigger — so a
+    database with that guard off is precisely the state `verifyStoredRules`
+    exists to answer in. It is also the only check a *reader* can run: it needs
+    no privilege and reaches rows a migration might have let through.
+
+    Only `league_rules_stored_bytes_match_hash` is disabled, never
+    `session_replication_role = 'replica'`, which would take `league_rules_immutable`
+    down with it and let these tests silently UPDATE a frozen row.
   */
+
+  /** 0045's byte check. Disabled around the deliberately-corrupt inserts below. */
+  const BYTES_TRIGGER = "league_rules_stored_bytes_match_hash";
+
+  /**
+   * Insert a row 0045 would refuse.
+   *
+   * Re-armed in a `finally`, so a failing assertion cannot leave the guard off
+   * for whatever runs next against the same database.
+   */
+  const withBytesCheckOff = async <T>(
+    client: PGliteClient,
+    write: () => Promise<T>,
+  ): Promise<T> => {
+    await client.exec(`ALTER TABLE league_rules DISABLE TRIGGER ${BYTES_TRIGGER}`);
+    try {
+      return await write();
+    } finally {
+      await client.exec(`ALTER TABLE league_rules ENABLE TRIGGER ${BYTES_TRIGGER}`);
+    }
+  };
 
   const honest = encodeLeagueRules(rules());
 
@@ -631,15 +661,18 @@ describe("verifyStoredRules hashes the stored bytes — #69 §1", () => {
       ],
     );
 
-    // Accepted: the hash matches the league, and nothing checks the bytes.
-    await client.query(
-      `INSERT INTO league_rules (league_id, rule_json, canonical, hash)
+    // Accepted only because 0045's byte check is off; 0004 alone looks at the
+    // hash and never at the bytes.
+    await withBytesCheckOff(client, () =>
+      client.query(
+        `INSERT INTO league_rules (league_id, rule_json, canonical, hash)
        VALUES ($1, $2::jsonb, $3, $4)`,
-      // Two parameters for one value, deliberately. Bound once and used twice,
-      // Postgres infers a single type for the placeholder — jsonb, from the cast —
-      // and the text column then stores jsonb's normalised rendering instead of the
-      // bytes under test. That silently repairs the corruption before the check runs.
-      [league!.id, canonical, canonical, hash],
+        // Two parameters for one value, deliberately. Bound once and used twice,
+        // Postgres infers a single type for the placeholder — jsonb, from the cast —
+        // and the text column then stores jsonb's normalised rendering instead of the
+        // bytes under test. That silently repairs the corruption before the check runs.
+        [league!.id, canonical, canonical, hash],
+      ),
     );
 
     return league!.id;
@@ -748,10 +781,12 @@ describe("verifyStoredRules hashes the stored bytes — #69 §1", () => {
         hash,
       ],
     );
-    await client.query(
-      `INSERT INTO league_rules (league_id, rule_json, canonical, hash)
-       VALUES ($1, $2::jsonb, $3, $4)`,
-      [league!.id, honest, canonical, hash],
+    await withBytesCheckOff(client, () =>
+      client.query(
+        `INSERT INTO league_rules (league_id, rule_json, canonical, hash)
+         VALUES ($1, $2::jsonb, $3, $4)`,
+        [league!.id, honest, canonical, hash],
+      ),
     );
 
     // False, not a thrown SyntaxError.
@@ -1028,5 +1063,230 @@ describe("the rules URI is written once — #69 §3, §4", () => {
 
     expect((await getChainState(client, league.id))?.cluster).toBe("localnet");
     expect(await storedUri(client, league.id)).toBeNull();
+  });
+});
+
+describe("the hash covers the bytes — #294, migration 0045", () => {
+  /*
+    `0004` checks that an incoming row declares the hash its league declares,
+    and nothing else — never `canonical`, never `rule_json`. So any bytes at all
+    could be stored under a correct hash, at ordinary application privilege, and
+    both that trigger and the on-chain anchor accepted it.
+
+    No live exploit: `createLeague` binds one string to both columns. What made
+    it worth a migration is that two consumers already document the guarantee as
+    though it held — the lobby reads `rule_json` under a comment calling it "the
+    frozen rule document … what a member signs", and `0028` anchors the draft
+    clock to it under one calling it "checkable by a stranger". A stranger holds
+    the pinned bytes, which are `canonical`.
+  */
+
+  /** A league row whose declared hash is `hash`, so 0004's check passes. */
+  const leagueDeclaring = async (
+    client: PGliteClient,
+    commissionerId: string,
+    hash: string,
+  ): Promise<string> => {
+    const [sport] = await client.query<{ id: string }>("SELECT id FROM sports WHERE key = $1", [
+      NFL.key,
+    ]);
+    const [league] = await client.query<{ id: string }>(
+      `INSERT INTO leagues (sport_id, season, name, visibility, commissioner_id, rules_hash)
+       VALUES ($1, 2026, 'Bytes', 'PRIVATE', $2, $3) RETURNING id`,
+      [sport!.id, commissionerId, hash],
+    );
+    return league!.id;
+  };
+
+  const insertRules = (
+    client: PGliteClient,
+    leagueId: string,
+    ruleJson: string,
+    canonical: string,
+    hash: string,
+  ) =>
+    client.query(
+      `INSERT INTO league_rules (league_id, rule_json, canonical, hash)
+       VALUES ($1, $2::jsonb, $3, $4)`,
+      [leagueId, ruleJson, canonical, hash],
+    );
+
+  it("still lets an ordinary league be created", async () => {
+    // The first thing a byte check can break is the honest path.
+    const { client, commissionerId } = await setup();
+
+    const league = await createLeague(client, NFL, {
+      name: "Ordinary",
+      commissionerId,
+      rules: rules(),
+    });
+
+    expect(await verifyStoredRules(client, league.id)).toBe(true);
+  });
+
+  /*
+    **The case that matters most.** A false refusal here does not corrupt
+    anything — it makes league creation fail outright for a legitimate rule set.
+    The risk is real rather than theoretical: this check hashes in the database
+    and the application hashes in Node, so the two must agree on the UTF-8
+    encoding of every character a rule document can carry.
+  */
+  it.each([
+    ["ascii", '{"a":1}'],
+    ["emoji", '{"a":"🏈🇺🇸"}'],
+    ["CJK", '{"a":"中文テスト한국어"}'],
+    ["NFD accent", '{"a":"café"}'],
+    ["NFC accent", '{"a":"café"}'],
+    ["astral plane", '{"a":"𝔘𝔫𝔦"}'],
+    ["ZWJ sequence", '{"a":"👨‍👩‍👧"}'],
+    ["emoji as a key", '{"🏈":1}'],
+    ["escaped quote and backslash", '{"a":"he said \\"x\\" \\\\ y"}'],
+    ["escaped control characters", '{"a":"\\u001f\\u007f"}'],
+  ])("accepts an honest document containing %s", async (_name, canonical) => {
+    const { client, commissionerId } = await setup();
+    const hash = sha256Hex(canonical);
+    const leagueId = await leagueDeclaring(client, commissionerId, hash);
+
+    await expect(
+      insertRules(client, leagueId, canonical, canonical, hash),
+    ).resolves.toBeDefined();
+    expect(await verifyStoredRules(client, leagueId)).toBe(true);
+  });
+
+  it("cannot store a NUL, and that is jsonb's limit rather than this check's", async () => {
+    /*
+      Postgres refuses \u0000 in a jsonb value outright — "unsupported Unicode
+      escape sequence" — however the surrounding document is escaped. Recorded
+      here because it looks like a false refusal from 0045 and is not: it is the
+      column type, it predates this migration, and it fires on the cast before
+      either trigger runs.
+
+      Reachable in principle through `pot.feeRecipient`, the one rule field with
+      no charset validation (`validate.ts` checks only that it is non-empty). It
+      fails closed — a write error at creation, never a corrupt row — so nothing
+      here has to defend against it.
+    */
+    const { client, commissionerId } = await setup();
+    const canonical = '{"a":"\\u0000"}';
+    const hash = sha256Hex(canonical);
+    const leagueId = await leagueDeclaring(client, commissionerId, hash);
+
+    await expect(insertRules(client, leagueId, canonical, canonical, hash)).rejects.toThrow(
+      /unsupported Unicode escape sequence/,
+    );
+  });
+
+  it("refuses bytes that do not hash to the declared hash", async () => {
+    const { client, commissionerId } = await setup();
+    const honest = '{"a":1}';
+    const hash = sha256Hex(honest);
+    const leagueId = await leagueDeclaring(client, commissionerId, hash);
+
+    // A different document entirely, under a correct hash. Accepted before 0045.
+    await expect(insertRules(client, leagueId, '{"a":99}', '{"a":99}', hash)).rejects.toThrow(
+      /stored rule bytes do not hash/,
+    );
+  });
+
+  it("refuses two byte columns that disagree with each other", async () => {
+    /*
+      The sharper shape, and the one `verifyStoredRules` cannot see: `canonical`
+      is honest, so the hash checks out and the chain agrees — while
+      `rule_json`, the column the lobby and `0028` actually query, holds
+      something else.
+    */
+    const { client, commissionerId } = await setup();
+    const honest = '{"a":1}';
+    const hash = sha256Hex(honest);
+    const leagueId = await leagueDeclaring(client, commissionerId, hash);
+
+    await expect(insertRules(client, leagueId, '{"a":99}', honest, hash)).rejects.toThrow(
+      /rule_json is not the document in canonical/,
+    );
+  });
+
+  it("refuses a number spelled differently in the two columns", async () => {
+    /*
+      Found by review, and it falsified the first version of this check.
+
+      jsonb equality is **numeric** equality, so `{"a":1}` and `{"a":1.0}` were
+      equal to `IS DISTINCT FROM` — while `->>` answers `1` and `1.0`. Both
+      consumers cast that result, so a row this trigger accepted would then break
+      `0028`'s draft-clock anchor and the lobby query with `invalid input syntax
+      for type bigint`. Fail-closed, and still a divergence the check claimed to
+      have removed.
+
+      Comparing the rendered text on both sides is what closes it.
+    */
+    const { client, commissionerId } = await setup();
+    const canonical = '{"scheduledAt":1767225600}';
+    const hash = sha256Hex(canonical);
+    const leagueId = await leagueDeclaring(client, commissionerId, hash);
+
+    await expect(
+      insertRules(client, leagueId, '{"scheduledAt":1767225600.0}', canonical, hash),
+    ).rejects.toThrow(/rule_json is not the document in canonical/);
+  });
+
+  it("names non-JSON bytes as non-JSON, even under a correct hash", async () => {
+    /*
+      Also from review. With a *wrong* hash the byte check answers first and this
+      never arises — which is what an earlier version of the migration header
+      claimed made the case impossible. With a hash that is correct **for the
+      garbage**, the byte check passes and the cast raised a bare `22P02 invalid
+      input syntax for type json`: fail-closed, but saying nothing about rules.
+    */
+    const { client, commissionerId } = await setup();
+    const canonical = "not a rule document at all";
+    const hash = sha256Hex(canonical);
+    const leagueId = await leagueDeclaring(client, commissionerId, hash);
+
+    await expect(insertRules(client, leagueId, '{"a":1}', canonical, hash)).rejects.toThrow(
+      /canonical is not JSON/,
+    );
+  });
+
+  it("accepts rule_json written with different whitespace and key order", async () => {
+    // jsonb compares as a document, not as text. Requiring the two columns to
+    // match byte-for-byte would refuse every honest league: jsonb re-renders
+    // with a space after each colon and sorts keys by length, while the
+    // canonical encoder emits no whitespace and sorts by code unit.
+    const { client, commissionerId } = await setup();
+    const canonical = '{"a":1,"bbb":2}';
+    const hash = sha256Hex(canonical);
+    const leagueId = await leagueDeclaring(client, commissionerId, hash);
+
+    await expect(
+      insertRules(client, leagueId, '{ "bbb" : 2, "a" : 1 }', canonical, hash),
+    ).resolves.toBeDefined();
+  });
+
+  it("lets 0004 answer first when both checks would refuse the row", async () => {
+    /*
+      Same-event triggers fire in **name** order, and
+      `league_rules_stored_bytes_match_hash` is named to sort after
+      `league_rules_hash_matches` so the coarser question is answered first.
+
+      **The row has to be one both checks refuse**, and the first version of this
+      test got that wrong: it inserted bytes whose hash was correct *for
+      themselves* but not for the league, so 0045 never fired and only 0004 could
+      raise. It returned `rules hash mismatch` whichever way the triggers were
+      named — a green test pinning nothing, while the migration header claimed a
+      test pinned it. Proven under both namings before rewriting.
+
+      So: a hash that is wrong for the league *and* wrong for the bytes. Rename
+      the byte trigger to sort first and this reports `stored rule bytes do not
+      hash` instead.
+    */
+    const { client, commissionerId } = await setup();
+    const leagueId = await leagueDeclaring(client, commissionerId, "0".repeat(64));
+
+    const canonical = '{"a":1}';
+    const wrongForBoth = "b".repeat(64);
+    expect(wrongForBoth).not.toBe(sha256Hex(canonical));
+
+    await expect(
+      insertRules(client, leagueId, canonical, canonical, wrongForBoth),
+    ).rejects.toThrow(/rules hash mismatch/);
   });
 });
