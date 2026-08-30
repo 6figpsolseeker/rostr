@@ -20,6 +20,7 @@ import { listCronRuns } from "./cron-runs.js";
 import { loadMigrations, migrate } from "./migrate.js";
 import { createPostgresClient } from "./postgres.js";
 import { seedSport } from "./sports.js";
+import { currentWeek } from "./week.js";
 import {
   loadDraftBoard,
   syncByeWeeks,
@@ -196,6 +197,42 @@ async function main(): Promise<void> {
         console.log(
           `projections +${projections.inserted} stat lines, ` +
             `${projections.skipped} players unmatched`,
+        );
+
+        /*
+          And the weeks, which is what the autofill actually ranks on.
+
+          The call above takes `syncProjections`' default week, which is the
+          season aggregate — the draft board's number. Issue #287: for the whole
+          life of this system that was the only week ever written, so
+          `loadProjectedPoints` came back empty every week, and in week 1 — where
+          there is no prior week to average either — the autofill fell through to
+          comparing player uuids.
+
+          The cron gained this and this command did not, which is the drift the
+          job's own docstring warns about: "It is tempting to have the cron do a
+          narrower job than the operator command. That is how the two drift, and
+          then 'run the sync' means one thing to a person and another to the
+          scheduler." It drifted the other way round for an hour. An operator who
+          sets a database up by hand and drafts the same day would have got the
+          uuid lottery back.
+
+          Same two weeks the cron pulls, and the same reason: a projection for
+          week 12 published in August is not a projection.
+        */
+        const playing = await currentWeek(client, NFL.key, season, new Date());
+        const projectionWeeks = [...new Set([playing ?? 1, (playing ?? 0) + 1])].filter(
+          (week) => week >= 1 && week <= REGULAR_SEASON_WEEKS,
+        );
+
+        let weekly = 0;
+        for (const week of projectionWeeks) {
+          const result = await syncProjections(client, provider, NFL.key, season, week);
+          weekly += result.inserted + result.updated;
+        }
+        console.log(
+          `weekly     +${weekly} projected stat lines for week${projectionWeeks.length > 1 ? "s" : ""} ` +
+            `${projectionWeeks.join(" and ")}`,
         );
 
         if (projections.unmatched.length > 0) {
