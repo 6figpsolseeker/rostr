@@ -13,7 +13,12 @@
  */
 
 import type { LeagueRules, SportDef } from "@rostr/core";
-import { encodeLeagueRules, hashLeagueRules, validateLeagueRules } from "@rostr/core";
+import {
+  encodeLeagueRules,
+  hashLeagueRules,
+  sha256Hex,
+  validateLeagueRules,
+} from "@rostr/core";
 import type { SqlClient } from "./client.js";
 import { loadSportIds } from "./sports.js";
 import { withTransaction } from "./transaction.js";
@@ -297,13 +302,37 @@ export async function getLeagueRules(
 }
 
 /**
- * Re-derive a league's hash from its stored rules and check it still matches.
+ * Hash a league's stored rule bytes and check they still match what members signed.
  *
- * Cheap, and it catches the failure mode that would matter most: stored rules
- * that no longer hash to what members signed.
+ * **The stored bytes, not the parsed object, and that is the whole of it.** This
+ * used to be `hashLeagueRules(stored.rules)` — re-parsing `canonical` and
+ * re-canonicalising it before hashing, which normalises away precisely the
+ * corruption the check exists to catch. Whitespace, key order, an alternate
+ * string escape, an alternate number spelling and a duplicated key all survive
+ * `JSON.parse` into an equal object, so all five re-derived the original hash
+ * and reported success over bytes that were not the bytes. Issue #69 §1.
+ *
+ * The sibling package has always stated the rule and followed it — see
+ * `pinLeagueRules`: *"Hash the retrieved bytes directly. Re-parsing and
+ * re-encoding would hide exactly the corruption this check exists to catch."*
+ * This function did the opposite while `CLAUDE.md` claimed it did the same.
+ *
+ * **Reachable at ordinary privilege**, which is sharper than the issue allowed.
+ * `0004`'s `check_rules_hash_matches` compares `NEW.hash` against
+ * `leagues.rules_hash` and never looks at `canonical` — so a plain INSERT can
+ * store any bytes at all under a correct hash, and both that trigger and this
+ * check pass. The duplicate-key case is the worst of them: `rule_json` is
+ * `jsonb` and normalises, `canonical` is `text` and does not, so the two
+ * columns end up holding different documents and the one that is queried is not
+ * the one that is displayed.
+ *
+ * The bytes are safe to hash directly: `createLeague` binds the same string it
+ * hashed into a `text` column, and `canonicalize` emits nothing `text` would
+ * alter — `JSON.stringify` escapes NUL and lone surrogates, so no raw control
+ * byte and no invalid UTF-8 can reach the column to be rewritten on the way in.
  */
 export async function verifyStoredRules(db: SqlClient, leagueId: string): Promise<boolean> {
   const stored = await getLeagueRules(db, leagueId);
   if (!stored) return false;
-  return hashLeagueRules(stored.rules) === stored.hash;
+  return sha256Hex(stored.canonical) === stored.hash;
 }
