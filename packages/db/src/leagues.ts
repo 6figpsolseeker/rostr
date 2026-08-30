@@ -319,20 +319,31 @@ export async function getLeagueRules(
  *
  * **Reachable at ordinary privilege**, which is sharper than the issue allowed.
  * `0004`'s `check_rules_hash_matches` compares `NEW.hash` against
- * `leagues.rules_hash` and never looks at `canonical` — so a plain INSERT can
- * store any bytes at all under a correct hash, and both that trigger and this
- * check pass. The duplicate-key case is the worst of them: `rule_json` is
- * `jsonb` and normalises, `canonical` is `text` and does not, so the two
- * columns end up holding different documents and the one that is queried is not
- * the one that is displayed.
+ * `leagues.rules_hash` and never looks at the bytes — so a plain INSERT can
+ * store anything at all under a correct hash, and both that trigger and this
+ * check pass.
+ *
+ * **Reads the columns rather than going through `getLeagueRules`, so that bytes
+ * which are not JSON at all answer `false` instead of throwing.** That helper
+ * ends in `JSON.parse(row.canonical)`, and the corruption this function exists
+ * to catch is exactly the corruption that makes the parse fail — so routing
+ * through it turned the worst case into a `SyntaxError` out of a function whose
+ * declared type is `boolean`. Nothing here needs the parsed object anyway: the
+ * question is whether the bytes hash to the hash, and a parse can only lose that
+ * information.
  *
  * The bytes are safe to hash directly: `createLeague` binds the same string it
- * hashed into a `text` column, and `canonicalize` emits nothing `text` would
- * alter — `JSON.stringify` escapes NUL and lone surrogates, so no raw control
- * byte and no invalid UTF-8 can reach the column to be rewritten on the way in.
+ * hashed into a `text` column, and `canonicalize` escapes NUL and lone
+ * surrogates on the way out, so nothing that reaches the column is invalid UTF-8
+ * for `TextEncoder` to substitute. Verified round-trip: `text` applies no
+ * Unicode normalisation in any collation, so NFC and NFD stay distinct and come
+ * back byte-identical.
  */
 export async function verifyStoredRules(db: SqlClient, leagueId: string): Promise<boolean> {
-  const stored = await getLeagueRules(db, leagueId);
-  if (!stored) return false;
-  return sha256Hex(stored.canonical) === stored.hash;
+  const [row] = await db.query<{ canonical: string; hash: string }>(
+    "SELECT canonical, hash FROM league_rules WHERE league_id = $1",
+    [leagueId],
+  );
+  if (!row) return false;
+  return sha256Hex(row.canonical) === row.hash;
 }

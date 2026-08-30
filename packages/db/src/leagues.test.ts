@@ -587,18 +587,25 @@ describe("verifyStoredRules hashes the stored bytes — #69 §1", () => {
     `league_rules_immutable` refuses UPDATE and DELETE on this table, so a
     stored row cannot be rewritten. What is unguarded is the INSERT:
     `check_rules_hash_matches` compares the incoming hash against
-    `leagues.rules_hash` and never looks at `canonical` at all. So a row whose
+    `leagues.rules_hash` and never looks at the bytes at all. So a row whose
     bytes are anything whatsoever is accepted under a correct hash — at ordinary
     application privilege, which is the threat `0019`'s header names.
   */
+
+  const honest = encodeLeagueRules(rules());
 
   /**
    * A league whose stored bytes are not the bytes that were hashed.
    *
    * Built by hand rather than through `createLeague`, because that writes both
-   * columns from one derivation and the trigger then refuses every rewrite —
-   * so an honest league cannot be corrupted after the fact, and this is the
-   * shape an attacker or a second writer would actually produce.
+   * columns from one derivation and `league_rules_immutable` then refuses every
+   * rewrite — so an honest league cannot be corrupted after the fact, and the
+   * insert is the shape a second writer would actually produce.
+   *
+   * `canonical` goes into both columns, as `createLeague` does with the bytes
+   * it hashed. A helper that wrote honest JSON to one and corrupt text to the
+   * other would manufacture the divergence the duplicate-key case is there to
+   * demonstrate.
    */
   const leagueWithBytes = async (
     client: PGliteClient,
@@ -628,7 +635,11 @@ describe("verifyStoredRules hashes the stored bytes — #69 §1", () => {
     await client.query(
       `INSERT INTO league_rules (league_id, rule_json, canonical, hash)
        VALUES ($1, $2::jsonb, $3, $4)`,
-      [league!.id, encodeLeagueRules(ruleSet), canonical, hash],
+      // Two parameters for one value, deliberately. Bound once and used twice,
+      // Postgres infers a single type for the placeholder — jsonb, from the cast —
+      // and the text column then stores jsonb's normalised rendering instead of the
+      // bytes under test. That silently repairs the corruption before the check runs.
+      [league!.id, canonical, canonical, hash],
     );
 
     return league!.id;
@@ -636,54 +647,124 @@ describe("verifyStoredRules hashes the stored bytes — #69 §1", () => {
 
   it("passes when the stored bytes are the bytes that were hashed", async () => {
     const { client, commissionerId } = await setup();
-    const id = await leagueWithBytes(client, commissionerId, encodeLeagueRules(rules()));
+    const id = await leagueWithBytes(client, commissionerId, honest);
 
     expect(await verifyStoredRules(client, id)).toBe(true);
   });
 
-  it("catches bytes that parse to the same object", async () => {
-    /*
-      Pretty-printing and reordered keys are what a hand edit produces; the
-      alternate escape and number spelling are what a different encoder
-      produces. Every one survives a parse, so every one used to pass.
-    */
-    const honest = encodeLeagueRules(rules());
+  /*
+    Every rewrite survives a parse, so every one used to pass. Pretty-printing
+    and reordered keys are what a hand edit produces; the alternate escape and
+    number spelling are what a different encoder produces.
 
-    const rewrites: readonly [string, string][] = [
-      ["pretty-printed", JSON.stringify(JSON.parse(honest), null, 2)],
-      [
-        "key order reversed",
-        JSON.stringify(Object.fromEntries(Object.entries(JSON.parse(honest)).reverse())),
-      ],
-      ["alternate escape", honest.replace('"seasonYear"', '"\\u0073easonYear"')],
-      ["alternate number spelling", honest.replace(/"seasonYear":\d+/, '"seasonYear":2.026e3')],
-    ];
+    One case per test rather than a loop: a loop stops at the first failure, so
+    a regression in the fourth rewrite would stay hidden behind the first three
+    — and it would hold four migrated databases open at once, since `setup`
+    reassigns the one handle `afterEach` closes.
+  */
+  it.each([
+    ["pretty-printed", JSON.stringify(JSON.parse(honest), null, 2)],
+    [
+      "key order reversed",
+      JSON.stringify(Object.fromEntries(Object.entries(JSON.parse(honest)).reverse())),
+    ],
+    ["alternate escape", honest.replace('"seasonYear"', '"\\u0073easonYear"')],
+    ["alternate number spelling", honest.replace(/"seasonYear":\d+/, '"seasonYear":2.026e3')],
+  ])("catches bytes that parse to the same object: %s", async (_name, canonical) => {
+    // A rewrite that did not change the bytes would prove nothing — and this
+    // caught a dropped backslash in the escape case during review.
+    expect(canonical).not.toBe(honest);
+    expect(JSON.parse(canonical)).toEqual(JSON.parse(honest));
 
-    for (const [name, canonical] of rewrites) {
-      // A rewrite that did not change the bytes would prove nothing.
-      expect(canonical, name).not.toBe(honest);
+    const { client, commissionerId } = await setup();
+    const id = await leagueWithBytes(client, commissionerId, canonical);
 
-      const { client, commissionerId } = await setup();
-      const id = await leagueWithBytes(client, commissionerId, canonical);
-
-      expect(await verifyStoredRules(client, id), name).toBe(false);
-    }
+    expect(await verifyStoredRules(client, id)).toBe(false);
   });
 
   it("catches a duplicated key, where the two stored columns disagree", async () => {
     /*
-      The worst of them. `rule_json` is jsonb and normalises a duplicate key
-      away; `canonical` is text and keeps both. So the column that is queried
-      and the column that is displayed hold materially different documents, and
-      the old check — which read the parsed object — saw only the tidy one.
+      The worst of them, because the corruption does not stay in one column.
+      `rule_json` is jsonb and normalises a duplicate key away; `canonical` is
+      text and keeps both. So one insert of one string leaves the column that is
+      queried and the column that is hashed holding different documents — and
+      the old check, which read the parsed object, saw only the tidy one.
     */
-    const honest = encodeLeagueRules(rules());
-    const doubled = honest.replace(/^\{/, '{"seasonYear":2026,');
+    const doubled = honest.replace(/^{/, '{"seasonYear":2026,');
     expect(doubled).not.toBe(honest);
 
     const { client, commissionerId } = await setup();
     const id = await leagueWithBytes(client, commissionerId, doubled);
 
+    // The divergence is Postgres's doing, not the fixture's: both columns were
+    // bound from the same parameter.
+    const [row] = await client.query<{ from_json: string; from_text: string }>(
+      "SELECT rule_json::text AS from_json, canonical AS from_text FROM league_rules WHERE league_id = $1",
+      [id],
+    );
+    const seasonYears = (s: string) => s.split('"seasonYear"').length - 1;
+    expect(seasonYears(row!.from_text)).toBe(2);
+    expect(seasonYears(row!.from_json)).toBe(1);
+
     expect(await verifyStoredRules(client, id)).toBe(false);
+  });
+
+  /*
+    The worst corruption class, and the one that used to crash rather than
+    answer. `verifyStoredRules` went through `getLeagueRules`, which ends in
+    `JSON.parse(row.canonical)` — so bytes that are not JSON at all threw a
+    `SyntaxError` out of a function declared to return a boolean. A caller
+    asking "are these rules intact?" got an exception instead of "no".
+
+    These need the two columns bound separately, unlike every case above:
+    `rule_json` is jsonb and simply cannot hold text that does not parse, so
+    this is the one shape where a writer must fill the columns from different
+    values. That is not a contrivance — it is what makes the case reachable at
+    all, and `0004` checks neither column against the hash.
+  */
+  it.each([
+    ["empty", ""],
+    ["not JSON at all", "corrupted"],
+    ["truncated mid-document", honest.slice(0, honest.length - 1)],
+    ["trailing junk after a valid document", honest + "xx"],
+  ])("answers false for bytes that do not parse: %s", async (_name, canonical) => {
+    expect(() => JSON.parse(canonical)).toThrow();
+
+    const { client, commissionerId } = await setup();
+    const ruleSet = rules();
+    const hash = hashLeagueRules(ruleSet);
+    const [sport] = await client.query<{ id: string }>("SELECT id FROM sports WHERE key = $1", [
+      NFL.key,
+    ]);
+    const [league] = await client.query<{ id: string }>(
+      `INSERT INTO leagues (sport_id, season, name, visibility, commissioner_id, rules_hash)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+      [
+        sport!.id,
+        ruleSet.seasonYear,
+        "Unparseable",
+        ruleSet.league.visibility,
+        commissionerId,
+        hash,
+      ],
+    );
+    await client.query(
+      `INSERT INTO league_rules (league_id, rule_json, canonical, hash)
+       VALUES ($1, $2::jsonb, $3, $4)`,
+      [league!.id, honest, canonical, hash],
+    );
+
+    // False, not a thrown SyntaxError.
+    await expect(verifyStoredRules(client, league!.id)).resolves.toBe(false);
+  });
+
+  it("answers false for a league that has no stored rules", async () => {
+    // Reads the columns directly now, so the missing-row case is its own branch
+    // rather than something `getLeagueRules` handled on the way past.
+    const { client } = await setup();
+
+    await expect(
+      verifyStoredRules(client, "00000000-0000-0000-0000-000000000000"),
+    ).resolves.toBe(false);
   });
 });
