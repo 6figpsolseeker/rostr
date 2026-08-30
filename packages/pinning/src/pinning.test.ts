@@ -171,6 +171,30 @@ describe("PinataPinningService", () => {
     expect(init.body).toBeInstanceOf(FormData);
   });
 
+  it("pins at CIDv0, because the URI it produces is written once", async () => {
+    /*
+      CIDv0 `Qm…` and CIDv1 `bafy…` encode the same multihash, and which one
+      comes back is an account setting on Pinata's side rather than a property
+      of the bytes. Left to the default, a change nobody here made would give a
+      different URI for identical rules.
+
+      Migration 0044 makes `leagues.rules_uri` set-once, and its whole argument
+      is that a CID is a function of the bytes — so a different URI means
+      different rules and there is no honest reason to repoint. This request is
+      what makes that true, and 0044's comment names it. Removing it would not
+      fail anything else: the league would simply be unrepointable at the wrong
+      address, correctable only by another migration.
+    */
+    const fetchImpl = mockFetch({});
+    const service = new PinataPinningService({ jwt: "token", fetchImpl });
+
+    await service.pin('{"a":1}', "rules.json");
+
+    const [, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
+    const options = (init.body as FormData).get("pinataOptions");
+    expect(options, "pinataOptions was not sent at all").toBeTypeOf("string");
+    expect(JSON.parse(options as string)).toEqual({ cidVersion: 0 });
+  });
   it("sends the content byte-for-byte as a file part", async () => {
     const fetchImpl = mockFetch({});
     const service = new PinataPinningService({ jwt: "token", fetchImpl });

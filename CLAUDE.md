@@ -2983,6 +2983,32 @@ valid JSON, so the JSON endpoint looks right — but it re-serialises server-sid
 reordering keys and reformatting numbers, which changes the bytes and therefore the hash.
 There is a test asserting the endpoint, so this cannot regress silently.
 
+**Two request fields are load-bearing now, not one.** The second is
+`pinataOptions: { cidVersion: 0 }`, added with `0044`. CIDv0 `Qm…` and CIDv1 `bafy…`
+encode the same multihash, and **which one comes back is an account setting on Pinata's
+side rather than a property of the bytes** — so left to the default, a change nobody here
+made would return a different URI for identical rules. That matters because `0044` makes
+`leagues.rules_uri` **set-once**, and its entire argument is that a CID is a function of
+the bytes: a different URI therefore means different rules, and there is no honest reason
+to repoint. Without the pinned version that premise is false, and a league would be
+unrepointable at the wrong address, correctable only by another migration. A test fails
+if the line is removed.
+
+**`createLeague` does not write `rules_uri`, and must not be given a way to.** It carried
+an optional `rulesUri` input with no producer anywhere in the repo — unpinned,
+unverified, no hash correspondence, no shape check — and since `0044`'s trigger is BEFORE
+UPDATE, a value written at INSERT is the first one and therefore permanent. It was deleted
+rather than guarded. `setRulesUri` is the only writer, it takes `{ uri, hash }` and swaps
+on the league's own `rules_hash`, and it returns whether it wrote.
+
+**That swap guards the document, not the league**, and the two come apart:
+`hashLeagueRules` is a pure function of the rule set, so two leagues built from one
+template share a `rules_hash` and each accepts the other's pin. It is safe for a
+different reason than the predicate — same hash means same bytes means same CID, so the
+URI attached is the one that league should have had. Do not "tighten" this by trusting a
+league id instead; the round-trip check inside `pinLeagueRules` is what makes the first
+write correct by construction.
+
 ### League creation
 
 `createLeague()` in `packages/db/src/leagues.ts` is the only moment a league's rules are

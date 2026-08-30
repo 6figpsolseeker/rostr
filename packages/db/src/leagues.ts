@@ -27,12 +27,6 @@ export interface CreateLeagueInput {
   readonly name: string;
   readonly commissionerId: string;
   readonly rules: LeagueRules;
-  /**
-   * Where the canonical rule document is pinned. Optional at creation: a league
-   * in FORMING state with no members yet anchors nothing. It must be set before
-   * anyone joins — see `setRulesUri`.
-   */
-  readonly rulesUri?: string;
 }
 
 export interface CreatedLeague {
@@ -69,8 +63,11 @@ export async function createLeague(
 
   return withTransaction(db, async (tx) => {
     const [league] = await tx.query<{ id: string }>(
-      `INSERT INTO leagues (sport_id, season, name, visibility, commissioner_id, rules_hash, rules_uri)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+      // No `rules_uri` here. It is set only by `setRulesUri`, after a pin that
+      // verified its own round trip — and `0044` freezes the first value written,
+      // so an unverified one at INSERT would be permanent. See that function.
+      `INSERT INTO leagues (sport_id, season, name, visibility, commissioner_id, rules_hash)
+       VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING id`,
       [
         ids.sportId,
@@ -79,7 +76,6 @@ export async function createLeague(
         input.rules.league.visibility,
         input.commissionerId,
         rulesHash,
-        input.rulesUri ?? null,
       ],
     );
     const leagueId = league!.id;
@@ -135,18 +131,106 @@ export async function createLeague(
 }
 
 /**
- * Record where the rule document is pinned.
+ * A scheme, `://`, and at least one non-space character.
+ *
+ * Deliberately not `ipfs://` alone — `InMemoryPinningService` returns
+ * `memory://<hex>`, so a stricter pattern would refuse every test double. The
+ * no-whitespace tail matters more than it looks: `"ipfs:// "` would otherwise
+ * pass, and `0044` freezes whatever is written first.
+ */
+const PINNING_URI = /^[a-z][a-z0-9+.-]*:\/\/\S+$/;
+
+/** A pinned rule document: where it lives, and what it hashes to. */
+export interface PinnedRules {
+  /** The content address the bytes were published at. */
+  readonly uri: string;
+  /**
+   * The hash of the bytes that were pinned — not the hash the league is
+   * expected to have. The point of passing it is that the two can differ.
+   */
+  readonly hash: string;
+}
+
+/**
+ * Record where a league's rule document is pinned.
  *
  * Separate from creation because pinning is a network call that can fail, and a
- * league with no members yet anchors nothing. `leagues` is mutable; the rules
+ * league with no members yet publishes nothing. `leagues` is mutable; the rules
  * themselves are not.
+ *
+ * **Takes the pinned document's hash and swaps on it.** This used to be a bare
+ * `UPDATE … SET rules_uri = $1 WHERE id = $2`, which writes whatever it is
+ * handed to whichever league it is handed, and the caller is the only thing
+ * standing between those two being the same document. Issue #69 §4.
+ *
+ * That caller is an async pin: encode, upload, await, then write. Nothing in
+ * that shape keeps a league id and a CID together — a retry closing over a stale
+ * variable, two creations in flight, or an argument order slip all end with a
+ * league pointing at somebody else's rules. And it would look right: the URI
+ * resolves, the document is a valid rule set, and `rules_hash` is untouched, so
+ * `verifyStoredRules`, `0004`'s trigger and the on-chain anchor all still pass.
+ * The mismatch is only visible to a member who fetches the document and hashes
+ * it, which is precisely the check this column exists to spare them.
+ *
+ * So the swap is on `rules_hash`: the row is written only if the league's own
+ * hash is the hash of the bytes that were pinned. A document belonging to a
+ * league with different rules matches nothing, so there is no row to update.
+ *
+ * **It guards the document, not the league, and those come apart.**
+ * `hashLeagueRules` is a pure function of the rule set — no league id, no name —
+ * so two leagues created from one template have the *same* `rules_hash`, and
+ * attaching one's pin to the other does write. That is not a hole, but the
+ * reason is content-addressing rather than the swap: identical hashes mean
+ * identical canonical bytes, identical bytes mean an identical CID, so the URI
+ * being attached is byte-for-byte the one that league should have had. The
+ * league ends up correct by a different route than the predicate.
+ *
+ * Which is why the predicate cannot be relaxed to trust the caller's league id
+ * alone, and why `pinLeagueRules` verifying its own round trip before this is
+ * called is load-bearing rather than belt-and-braces.
+ *
+ * `rules_uri = $1` in the predicate makes a genuine retry a no-op success rather
+ * than a refusal — re-pinning is content-addressed, so the same rules give back
+ * the same URI. `0044`'s `leagues_rules_uri_set_once` is the backstop under
+ * both clauses; in the ordinary path it never fires.
+ *
+ * @returns `true` if the league now points at `pinned.uri`. `false` means it was
+ * refused — no such league, its rules hash to something else, or it is already
+ * pinned somewhere different — and the caller must not treat the rules as
+ * published.
  */
 export async function setRulesUri(
   db: SqlClient,
   leagueId: string,
-  rulesUri: string,
-): Promise<void> {
-  await db.query("UPDATE leagues SET rules_uri = $1 WHERE id = $2", [rulesUri, leagueId]);
+  pinned: PinnedRules,
+): Promise<boolean> {
+  /*
+    Refuse a URI that is not one, rather than writing it.
+
+    This is the one argument the function cannot second-guess after the fact.
+    A wrong `hash` is caught by the swap and costs a retry; a malformed `uri`
+    is *accepted*, and `0044` then makes it permanent — so an empty string
+    would brick the column for the life of the league. Every other refusal here
+    is recoverable and this one is not, which is why it is the one that throws:
+    a caller handing over a non-URI has a bug, and `pinLeagueRules` already
+    refuses a response with no CID in it.
+  */
+  if (!PINNING_URI.test(pinned.uri)) {
+    throw new Error(`Not a pinning URI: ${JSON.stringify(pinned.uri)}`);
+  }
+
+  const rows = await db.query<{ id: string }>(
+    `UPDATE leagues SET rules_uri = $1
+      WHERE id = $2
+        AND rules_hash = $3
+        AND (rules_uri IS NULL OR rules_uri = $1)
+      RETURNING id`,
+    // Lowercased to match the column, which `0004` constrains to lowercase hex.
+    // `verifyLeagueRulesHash` and `verifyPinnedRules` both normalise their input;
+    // an entry point that did not would silently refuse a correct document.
+    [pinned.uri, leagueId, pinned.hash.toLowerCase()],
+  );
+  return rows.length > 0;
 }
 
 export interface ChainAnchor {

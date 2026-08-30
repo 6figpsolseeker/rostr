@@ -62,6 +62,7 @@ export {
   type CreatedLeague,
   type CreateLeagueInput,
   type LeagueChainState,
+  type PinnedRules,
   type StoredLeagueRules,
 } from "./leagues.js";
 
