@@ -185,13 +185,32 @@ export async function setRulesUri(
   leagueId: string,
   pinned: PinnedRules,
 ): Promise<boolean> {
+  /*
+    Refuse a URI that is not one, rather than writing it.
+
+    This is the one argument the function cannot second-guess after the fact.
+    A wrong `hash` is caught by the swap and costs a retry; a malformed `uri`
+    is *accepted*, and `0044` then makes it permanent — so an empty string
+    would brick the column for the life of the league. Every other refusal here
+    is recoverable and this one is not, which is why it is the one that throws:
+    a caller handing over a non-URI has a bug, and `pinLeagueRules` already
+    refuses a response with no CID in it.
+  */
+  const PINNING_URI = new RegExp("^[a-z][a-z0-9+.-]*://.+");
+  if (!PINNING_URI.test(pinned.uri)) {
+    throw new Error(`Not a pinning URI: ${JSON.stringify(pinned.uri)}`);
+  }
+
   const rows = await db.query<{ id: string }>(
     `UPDATE leagues SET rules_uri = $1
       WHERE id = $2
         AND rules_hash = $3
         AND (rules_uri IS NULL OR rules_uri = $1)
       RETURNING id`,
-    [pinned.uri, leagueId, pinned.hash],
+    // Lowercased to match the column, which `0004` constrains to lowercase hex.
+    // `verifyLeagueRulesHash` and `verifyPinnedRules` both normalise their input;
+    // an entry point that did not would silently refuse a correct document.
+    [pinned.uri, leagueId, pinned.hash.toLowerCase()],
   );
   return rows.length > 0;
 }

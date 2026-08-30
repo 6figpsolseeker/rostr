@@ -26,11 +26,17 @@
 -- rewrites are honest.
 --
 -- The one genuine exception is a re-encoding of the same content — CIDv0
--- `Qm…` against CIDv1 `bafy…` — which SQL cannot tell from a substitution
--- without a CID parser. So the format is fixed at write time in `pinLeagueRules`
--- instead, and the escape hatch here is another migration. That is deliberate:
--- moving where a member's rules live should cost as much as changing the schema,
--- because it is the same kind of act.
+-- `Qm…` against CIDv1 `bafy…` are two encodings of the same multihash, and SQL
+-- cannot tell one from a substitution without a CID parser. Which one comes back
+-- is an account setting on the pinning service's side rather than a property of
+-- the bytes, so the request pins it: `pinataOptions: { cidVersion: 0 }` in
+-- `PinataPinningService.pin`. That line is what makes this rule safe, and this
+-- comment asserted it before it existed — it was added in the same change that
+-- added this migration's review, which is the failure this repo names.
+--
+-- The escape hatch here is another migration, deliberately: moving where a
+-- member's rules live should cost as much as changing the schema, because it is
+-- the same kind of act.
 --
 -- Clearing to NULL is refused for the same reason. Otherwise the rewrite is
 -- simply two statements instead of one, and a rule that a second UPDATE defeats

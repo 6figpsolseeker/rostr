@@ -49,6 +49,23 @@ export class PinataPinningService implements PinningService {
     form.append("file", new Blob([content], { type: "application/json" }), name);
     form.append("pinataMetadata", JSON.stringify({ name }));
 
+    /*
+      Pin at CIDv0 explicitly, because the URI it produces is written once.
+
+      A CID is a function of the bytes, so re-pinning the same rules gives back
+      the same address and a retry is a no-op — that is what lets `setRulesUri`
+      treat an identical URI as success and what makes `0044`'s set-once rule
+      safe. But CIDv0 `Qm…` and CIDv1 `bafy…` are two encodings of the same
+      multihash, and which one comes back is an **account setting** on Pinata's
+      side, not a property of the bytes. Left to the default, a change nobody
+      here made would produce a different string for identical rules — the retry
+      clause would miss, and the league, already pinned, could only be corrected
+      by a migration.
+
+      `0044` states that the format is fixed at write time. This is where.
+    */
+    form.append("pinataOptions", JSON.stringify({ cidVersion: 0 }));
+
     let response: Response;
     try {
       response = await this.doFetch(PIN_ENDPOINT, {
