@@ -289,7 +289,7 @@ describe("createLeague", () => {
       rules: rules(),
     });
 
-    await setRulesUri(client, league.id, "ipfs://bafyfake");
+    await setRulesUri(client, league.id, { uri: "ipfs://bafyfake", hash: league.rulesHash });
 
     const [row] = await client.query<{ rules_uri: string }>(
       "SELECT rules_uri FROM leagues WHERE id = $1",
@@ -503,7 +503,7 @@ describe("the frozen rules are frozen against ordinary SQL", () => {
     const { client, commissionerId } = await setup();
     const created = await frozenLeague(client, commissionerId);
 
-    await setRulesUri(client, created.id, "ipfs://bafyfake");
+    await setRulesUri(client, created.id, { uri: "ipfs://bafyfake", hash: created.rulesHash });
     await recordChainAnchor(client, created.id, { signature: "sig", cluster: "localnet" });
 
     expect((await getChainState(client, created.id))?.cluster).toBe("localnet");
@@ -766,5 +766,143 @@ describe("verifyStoredRules hashes the stored bytes — #69 §1", () => {
     await expect(
       verifyStoredRules(client, "00000000-0000-0000-0000-000000000000"),
     ).resolves.toBe(false);
+  });
+});
+
+describe("the rules URI is written once — #69 §3, §4", () => {
+  /*
+    `rules_hash` is the guarantee and `0004` already protects it. `rules_uri` is
+    the address a member actually fetches in order to *read* the rules, and it
+    was a plain nullable column any UPDATE could move anywhere.
+
+    Repointing it leaves `rules_hash` untouched, so `verifyStoredRules`, the
+    trigger in `0004` and the on-chain anchor all still agree and nothing in the
+    system notices. A member who hashes what they fetched is safe; the defect is
+    that it makes the careless path and the careful path disagree in silence.
+  */
+
+  const pinned = async (client: PGliteClient, commissionerId: string) => {
+    const league = await createLeague(client, NFL, {
+      name: "Pinned",
+      commissionerId,
+      rules: rules(),
+    });
+    const uri = "ipfs://bafyhonest";
+    expect(await setRulesUri(client, league.id, { uri, hash: league.rulesHash })).toBe(true);
+    return { league, uri };
+  };
+
+  const storedUri = async (client: PGliteClient, leagueId: string) => {
+    const [row] = await client.query<{ rules_uri: string | null }>(
+      "SELECT rules_uri FROM leagues WHERE id = $1",
+      [leagueId],
+    );
+    return row!.rules_uri;
+  };
+
+  it("records the pin when the hash is the league's own", async () => {
+    const { client, commissionerId } = await setup();
+    const { league, uri } = await pinned(client, commissionerId);
+
+    expect(await storedUri(client, league.id)).toBe(uri);
+  });
+
+  it("refuses a document that hashes to something else", async () => {
+    /*
+      The mixup this swap exists for: pin document A, attach it to a league whose
+      rules are B. It would look right — the URI resolves, the document is a
+      valid rule set, `rules_hash` is untouched — and only a member who fetched
+      and hashed it would ever find out.
+    */
+    const { client, commissionerId } = await setup();
+    const league = await createLeague(client, NFL, {
+      name: "Mine",
+      commissionerId,
+      rules: rules(),
+    });
+    const somebodyElses = hashLeagueRules(rules({ seasonYear: 2027 }));
+    expect(somebodyElses).not.toBe(league.rulesHash);
+
+    expect(
+      await setRulesUri(client, league.id, { uri: "ipfs://bafyother", hash: somebodyElses }),
+    ).toBe(false);
+    expect(await storedUri(client, league.id)).toBeNull();
+  });
+
+  it("refuses a league that does not exist", async () => {
+    const { client } = await setup();
+
+    expect(
+      await setRulesUri(client, "00000000-0000-0000-0000-000000000000", {
+        uri: "ipfs://bafyghost",
+        hash: "0".repeat(64),
+      }),
+    ).toBe(false);
+  });
+
+  it("treats a genuine retry as a no-op success", async () => {
+    // Re-pinning is content-addressed, so the same rules give back the same URI.
+    // A retry after a lost response must not read as a refusal.
+    const { client, commissionerId } = await setup();
+    const { league, uri } = await pinned(client, commissionerId);
+
+    expect(await setRulesUri(client, league.id, { uri, hash: league.rulesHash })).toBe(true);
+    expect(await storedUri(client, league.id)).toBe(uri);
+  });
+
+  it("refuses to repoint a league that is already pinned", async () => {
+    const { client, commissionerId } = await setup();
+    const { league, uri } = await pinned(client, commissionerId);
+
+    expect(
+      await setRulesUri(client, league.id, {
+        uri: "ipfs://bafyswapped",
+        hash: league.rulesHash,
+      }),
+    ).toBe(false);
+    expect(await storedUri(client, league.id)).toBe(uri);
+  });
+
+  it("refuses a repoint at the database, past the function entirely", async () => {
+    // 0044. The predicate in setRulesUri never lets this reach the trigger, so
+    // the trigger is only reachable by a writer that went around the function —
+    // which is the writer it exists for.
+    const { client, commissionerId } = await setup();
+    const { league, uri } = await pinned(client, commissionerId);
+
+    await expect(
+      client.query("UPDATE leagues SET rules_uri = $2 WHERE id = $1", [
+        league.id,
+        "ipfs://bafyswapped",
+      ]),
+    ).rejects.toThrow(/cannot be repointed/);
+    expect(await storedUri(client, league.id)).toBe(uri);
+  });
+
+  it("refuses to clear it back to null, which is the same rewrite in two steps", async () => {
+    const { client, commissionerId } = await setup();
+    const { league, uri } = await pinned(client, commissionerId);
+
+    await expect(
+      client.query("UPDATE leagues SET rules_uri = NULL WHERE id = $1", [league.id]),
+    ).rejects.toThrow(/cannot be repointed/);
+    expect(await storedUri(client, league.id)).toBe(uri);
+  });
+
+  it("leaves an unpinned league writable, and the other columns alone", async () => {
+    // The trigger guards one column in one direction. A league that has not been
+    // pinned is the ordinary state, and the chain anchor has to keep working.
+    const { client, commissionerId } = await setup();
+    const league = await createLeague(client, NFL, {
+      name: "Unpinned",
+      commissionerId,
+      rules: rules(),
+    });
+
+    await client.query("UPDATE leagues SET name = $2 WHERE id = $1", [league.id, "Renamed"]);
+    await recordChainAnchor(client, league.id, { signature: "sig", cluster: "localnet" });
+
+    expect((await getChainState(client, league.id))?.cluster).toBe("localnet");
+    expect(await storedUri(client, league.id)).toBeNull();
   });
 });

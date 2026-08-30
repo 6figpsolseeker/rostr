@@ -134,19 +134,66 @@ export async function createLeague(
   });
 }
 
+/** A pinned rule document: where it lives, and what it hashes to. */
+export interface PinnedRules {
+  /** The content address the bytes were published at. */
+  readonly uri: string;
+  /**
+   * The hash of the bytes that were pinned — not the hash the league is
+   * expected to have. The point of passing it is that the two can differ.
+   */
+  readonly hash: string;
+}
+
 /**
- * Record where the rule document is pinned.
+ * Record where a league's rule document is pinned.
  *
  * Separate from creation because pinning is a network call that can fail, and a
- * league with no members yet anchors nothing. `leagues` is mutable; the rules
+ * league with no members yet publishes nothing. `leagues` is mutable; the rules
  * themselves are not.
+ *
+ * **Takes the pinned document's hash and swaps on it.** This used to be a bare
+ * `UPDATE … SET rules_uri = $1 WHERE id = $2`, which writes whatever it is
+ * handed to whichever league it is handed, and the caller is the only thing
+ * standing between those two being the same document. Issue #69 §4.
+ *
+ * That caller is an async pin: encode, upload, await, then write. Nothing in
+ * that shape keeps a league id and a CID together — a retry closing over a stale
+ * variable, two creations in flight, or an argument order slip all end with a
+ * league pointing at somebody else's rules. And it would look right: the URI
+ * resolves, the document is a valid rule set, and `rules_hash` is untouched, so
+ * `verifyStoredRules`, `0004`'s trigger and the on-chain anchor all still pass.
+ * The mismatch is only visible to a member who fetches the document and hashes
+ * it, which is precisely the check this column exists to spare them.
+ *
+ * So the swap is on `rules_hash`: the row is written only if the league's own
+ * hash is the hash of the bytes that were pinned. Wrong league, wrong document,
+ * either way there is no row to update and no write.
+ *
+ * `rules_uri = $1` in the predicate makes a genuine retry a no-op success rather
+ * than a refusal — re-pinning is content-addressed, so the same rules give back
+ * the same URI. `0044`'s `leagues_rules_uri_set_once` is the backstop under
+ * both clauses; in the ordinary path it never fires.
+ *
+ * @returns `true` if the league now points at `pinned.uri`. `false` means it was
+ * refused — no such league, its rules hash to something else, or it is already
+ * pinned somewhere different — and the caller must not treat the rules as
+ * published.
  */
 export async function setRulesUri(
   db: SqlClient,
   leagueId: string,
-  rulesUri: string,
-): Promise<void> {
-  await db.query("UPDATE leagues SET rules_uri = $1 WHERE id = $2", [rulesUri, leagueId]);
+  pinned: PinnedRules,
+): Promise<boolean> {
+  const rows = await db.query<{ id: string }>(
+    `UPDATE leagues SET rules_uri = $1
+      WHERE id = $2
+        AND rules_hash = $3
+        AND (rules_uri IS NULL OR rules_uri = $1)
+      RETURNING id`,
+    [pinned.uri, leagueId, pinned.hash],
+  );
+  return rows.length > 0;
 }
 
 export interface ChainAnchor {
