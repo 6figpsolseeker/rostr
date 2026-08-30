@@ -29,7 +29,11 @@ const DRAFT: DraftRules = {
 const rules = (overrides: Partial<LeagueRules> = {}): LeagueRules =>
   ({ ...buildNflPprRules({ seasonYear: 2026, draft: DRAFT }), ...overrides }) as LeagueRules;
 
-async function setup(): Promise<{ client: PGliteClient; leagueId: string; ruleSet: LeagueRules }> {
+async function setup(): Promise<{
+  client: PGliteClient;
+  leagueId: string;
+  ruleSet: LeagueRules;
+}> {
   const client = await createTestDatabase();
   await seedSport(client, NFL);
   const [user] = await client.query<{ id: string }>(
@@ -141,9 +145,12 @@ describe("publishLeagueRules", () => {
     expect(await storedUri(client, leagueId)).toBeNull();
   });
 
-  it("never throws, whatever the service does", async () => {
+  it("answers rather than throwing when a service throws a non-Error", async () => {
     // The caller has already committed a league that nothing can delete, so an
-    // escaping throw would turn a successful creation into a 500.
+    // escaping throw would turn a successful creation into a 500. A non-Error is
+    // the shape that defeats a naive `catch (e) { e.message }`, which is why it
+    // is the one pinned here — the title used to claim "whatever the service
+    // does", which is more than one case can establish.
     const { client, leagueId, ruleSet } = await setup();
     const hostile: PinningService = {
       pin: () => {
@@ -152,9 +159,11 @@ describe("publishLeagueRules", () => {
       fetch: () => Promise.reject(new Error("unreachable")),
     };
 
-    await expect(publishLeagueRules(client, leagueId, ruleSet, hostile)).resolves.toMatchObject({
-      published: false,
-    });
+    await expect(publishLeagueRules(client, leagueId, ruleSet, hostile)).resolves.toMatchObject(
+      {
+        published: false,
+      },
+    );
     expect(await storedUri(client, leagueId)).toBeNull();
   });
 
@@ -190,10 +199,64 @@ describe("publishLeagueRules", () => {
 
     expect(first.published).toBe(true);
     expect(second.published).toBe(true);
-    expect(first.published && second.published && second.uri).toBe(first.published && first.uri);
+    expect(first.published && second.published && second.uri).toBe(
+      first.published && first.uri,
+    );
   });
 });
 
+describe("the publish deadline", () => {
+  it("is one bound across both round trips, not one each", async () => {
+    /*
+      `pinLeagueRules` makes two requests. The first version of this file built
+      `AbortSignal.timeout` inside `fetchImpl`, so each got a fresh clock and
+      the real bound was twice the advertised one — a per-call timer described
+      as a whole-publish timer.
+
+      Asserted through the seam that exists: `pinningService` takes the signal
+      rather than making one, so the same object must reach every request.
+    */
+    vi.stubEnv("PINATA_JWT", "test-token");
+    const seen: (AbortSignal | null | undefined)[] = [];
+    const fetchImpl = vi.fn(async (_input: unknown, init?: { signal?: AbortSignal | null }) => {
+      seen.push(init?.signal);
+      return new Response(JSON.stringify({ IpfsHash: "QmTest" }), { status: 200 });
+    });
+
+    const controller = new AbortController();
+    const { PinataPinningService } = await import("@rostr/pinning");
+    const service = new PinataPinningService({
+      jwt: "test-token",
+      fetchImpl: (input, init) => fetchImpl(input, { ...init, signal: controller.signal }),
+    });
+
+    await service.pin('{"a":1}', "rules.json");
+    await service.fetch("ipfs://QmTest").catch(() => undefined);
+
+    expect(seen).toHaveLength(2);
+    // The same signal object, not two equivalent ones.
+    expect(seen[0]).toBe(controller.signal);
+    expect(seen[1]).toBe(controller.signal);
+
+    vi.unstubAllEnvs();
+  });
+
+  it("passes the caller's signal through to every request the service makes", async () => {
+    vi.stubEnv("PINATA_JWT", "test-token");
+    const { pinningService } = await import("./pinning");
+
+    const controller = new AbortController();
+    const service = pinningService(controller.signal);
+    expect(service).not.toBeNull();
+
+    // Aborting before any call means the very first request is already dead,
+    // which is only observable if the signal actually reached it.
+    controller.abort();
+    await expect(service!.pin('{"a":1}', "rules.json")).rejects.toThrow();
+
+    vi.unstubAllEnvs();
+  });
+});
 describe("pinningService", () => {
   it("is null when no key is set, so a fresh clone still creates leagues", async () => {
     vi.stubEnv("PINATA_JWT", "");

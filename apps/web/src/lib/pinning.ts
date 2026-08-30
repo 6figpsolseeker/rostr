@@ -10,18 +10,26 @@ import "server-only";
  *
  * **A failed pin never fails the request, and that is forced rather than
  * chosen.** `league_rules` refuses its own DELETE and holds the `leagues` row
- * via `ON DELETE RESTRICT`, so once `createLeague` commits the row cannot be
- * removed by anything. There is no "undo the league and report an error" branch
- * available to write. The only reachable outcomes are a league with a URI and a
- * league without one, so this returns which of those happened and the caller
- * carries on either way.
+ * via `ON DELETE RESTRICT`, so once `createLeague` commits no code path here can
+ * remove the row — `0019`'s own closing note records the floor honestly, that a
+ * migration or whoever owns the tables can still drop a trigger. There is no
+ * "undo the league and report an error" branch available to write. The only
+ * reachable outcomes are a league with a URI and a league without one, so this
+ * returns which of those happened and the caller carries on either way.
  *
  * `leagues.rules_uri IS NULL` is therefore an ordinary state, and `0044`'s
  * column comment says so. A member may join a league whose rules are not yet
  * published — decided by the owner on 2026-08-30. The rules are still frozen,
  * still hashed, still rendered in full above the join control from the database,
- * and still anchored on-chain; publication makes them independently verifiable
- * rather than making them exist.
+ * and still anchored on-chain **before anyone can join** — anchoring is a
+ * separate action the commissioner signs, so a league is unanchored at the
+ * moment this runs and `joinLeague` is what refuses until it is not.
+ *
+ * **What publication adds is an independent copy, not verifiability.** A member
+ * can already re-encode the rules `GET /api/leagues/[id]` returns, hash them, and
+ * compare against the chain — the encoder is deterministic and open source, so a
+ * lying server is catchable without IPFS. What a pinned document survives is
+ * *us*: this app being down, or the row being gone.
  */
 
 import type { LeagueRules } from "@rostr/core";
@@ -33,10 +41,13 @@ import type { PinningService } from "@rostr/pinning";
 /**
  * How long the whole publish may take before it is abandoned.
  *
- * `pinLeagueRules` is two network round trips — the upload, then the read-back
- * that proves the bytes survived — and this sits inside a user-facing POST that
- * has already committed a league. An unbounded wait would hold that response
- * open behind somebody else's outage for as long as it lasted.
+ * **One deadline across both round trips, not one each.** `pinLeagueRules` makes
+ * two — the upload, then the read-back that proves the bytes survived — and this
+ * sits inside a user-facing POST that has already committed a league. A fresh
+ * timeout per request would make the real bound twice this number, which is what
+ * this comment claimed before review caught it: a per-call timer described as a
+ * whole-publish one. `publishLeagueRules` now creates a single signal and hands
+ * it to both, so the figure below is the figure.
  *
  * Abandoning is safe in a way that is worth stating: the upload may well have
  * succeeded, and a later retry re-pins the identical bytes to the identical CID,
@@ -49,8 +60,12 @@ export type PublishOutcome =
   /** Pinned, read back, verified, and recorded. */
   | { readonly published: true; readonly uri: string }
   /**
-   * Not published. The league exists and is usable; the document can be pinned
-   * later, and `leagues_unpinned_idx` in `0044` is what finds these.
+   * Not published. The league exists and is usable, and its rules are unaffected.
+   *
+   * **Nothing retries.** `leagues_unpinned_idx` in `0044` exists so these can be
+   * found, and no job reads it — so a league that fails here stays unpublished
+   * until somebody goes looking. That is the honest state of it; do not write a
+   * comment implying a sweep until one exists.
    *
    * `reason` is for the server log and for the operator, never for the member —
    * it names an outage or a missing credential, neither of which they can act
@@ -66,8 +81,12 @@ export type PublishOutcome =
  * `null` lets league creation work untouched on a fresh clone, at the cost of an
  * unpublished document — which is exactly the trade the rest of this file makes
  * for a Pinata outage, so it needs no separate branch.
+ *
+ * @param signal Abort applied to every request this service makes. Passed in
+ * rather than created here so one deadline can span a whole publish; a service
+ * that made its own would give each round trip a fresh one.
  */
-export function pinningService(): PinningService | null {
+export function pinningService(signal?: AbortSignal): PinningService | null {
   const jwt = process.env.PINATA_JWT;
   if (!jwt) return null;
 
@@ -77,8 +96,10 @@ export function pinningService(): PinningService | null {
     // Only pass it when set, so the service keeps its own default rather than
     // receiving an empty string. `exactOptionalPropertyTypes` is on.
     ...(gateway ? { gateway } : {}),
-    fetchImpl: (input, init) =>
-      fetch(input, { ...init, signal: AbortSignal.timeout(PUBLISH_TIMEOUT_MS) }),
+    // The caller's signal, verbatim. Not `AbortSignal.timeout(...)` built here —
+    // that is a fresh clock per request, and two requests would then take twice
+    // the bound this file advertises.
+    ...(signal ? { fetchImpl: (input, init) => fetch(input, { ...init, signal }) } : {}),
   });
 }
 
@@ -94,19 +115,31 @@ export function pinningService(): PinningService | null {
  *
  * @param rules The frozen rule set. Passed rather than re-read so the bytes
  * pinned are derived from the same object `createLeague` hashed.
+ * @param service Omit to use the configured one. `null` means deliberately
+ * unconfigured, which is why this is not simply a default argument: the two are
+ * different answers and a default would collapse them.
  */
 export async function publishLeagueRules(
   db: SqlClient,
   leagueId: string,
   rules: LeagueRules,
-  service: PinningService | null = pinningService(),
+  service?: PinningService | null,
 ): Promise<PublishOutcome> {
-  if (!service) {
+  /*
+    One deadline for the whole publish, created here and shared by both round
+    trips. Built before the service so it can be handed to it — a service that
+    made its own would restart the clock on the read-back, which is exactly the
+    defect review found in the first version of this file.
+  */
+  const resolved =
+    service === undefined ? pinningService(AbortSignal.timeout(PUBLISH_TIMEOUT_MS)) : service;
+
+  if (!resolved) {
     return { published: false, reason: "No pinning service is configured (PINATA_JWT)" };
   }
 
   try {
-    const pinned = await pinLeagueRules(service, rules, `rules-${leagueId}.json`);
+    const pinned = await pinLeagueRules(resolved, rules, `rules-${leagueId}.json`);
 
     // False here is not an outage. It means the league's own hash is not the
     // hash of what was just pinned — a mixup rather than a failure — so it must
@@ -124,10 +157,11 @@ export async function publishLeagueRules(
 
     return { published: true, uri: pinned.uri };
   } catch (error) {
-    // Deliberately broad. Every failure here has the same remedy — the league
-    // stands, unpublished, and is pinned later — so distinguishing a timeout
-    // from a refused upload from a failed read-back would change nothing the
-    // caller does. The message keeps the distinction for whoever reads the log.
+    // Deliberately broad. Every failure here leaves the same state — the league
+    // stands, unpublished — so distinguishing a timeout from a refused upload
+    // from a failed read-back would change nothing the caller does. The message
+    // keeps the distinction for whoever reads the log, which is currently the
+    // only way any of these is ever noticed.
     return {
       published: false,
       reason: error instanceof Error ? `${error.name}: ${error.message}` : String(error),

@@ -10,10 +10,17 @@ import {
   validateLeagueRules,
 } from "@rostr/core";
 import type { PotRules } from "@rostr/core";
-import { createDraftRecord, createLeague, LeagueValidationError, seedSport } from "@rostr/db";
+import {
+  createDraftRecord,
+  createLeague,
+  LEAGUE_CREATE_PER_USER,
+  LeagueValidationError,
+  seedSport,
+} from "@rostr/db";
 import type { CreatedLeague } from "@rostr/db";
 import { POT_LEAGUES_COMING_SOON, potLeagueGate, potMintFor } from "@rostr/escrow";
 import { db } from "@/lib/db";
+import { enforceRateLimit } from "@/lib/rate-limit";
 import { publishLeagueRules } from "@/lib/pinning";
 import { declaredCluster } from "@/lib/cluster";
 import { currentUser } from "@/lib/session";
@@ -369,6 +376,18 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ error: "Those rules are not valid", problems }, { status: 400 });
   }
 
+  /*
+    Before any work, and before the pin in particular.
+
+    Creating a league is cheap for us and no longer cheap in total: each one
+    spends a Pinata upload against a metered tier, and an exhausted quota leaves
+    every subsequent league — anybody's — permanently unpublished, because 0044
+    freezes `rules_uri` on first write and nothing re-pins. A limiter that ran
+    after the pin would have limited nothing.
+  */
+  const limited = await enforceRateLimit([{ rule: LEAGUE_CREATE_PER_USER, subject: user.id }]);
+  if (limited) return limited;
+
   const pool = db();
   const { client, release } = await pool.connect();
 
@@ -455,13 +474,18 @@ export async function POST(request: Request): Promise<NextResponse> {
     the caller.
 
     An unpublished league is a real, usable state: the rules are frozen, hashed,
-    rendered in full above the join control, and anchored on-chain. Publication
-    makes them independently verifiable rather than making them exist, and a
-    member may join without it — decided by the owner on 2026-08-30.
+    and rendered in full above the join control from the database. A member may
+    join without a URI — decided by the owner on 2026-08-30 — though not before
+    the commissioner anchors, which `joinLeague` enforces separately.
+
+    What publication adds is an independent copy rather than verifiability: the
+    rules this endpoint returns can already be re-encoded and hashed against the
+    chain. A pinned document survives *us* being gone.
 
     After the draft record, because that is the piece a league cannot do without:
-    a league with no draft silently has no draft until somebody notices, while a
-    league with no URI is listed by `leagues_unpinned_idx`.
+    a league with no draft silently has no draft until somebody notices. **A
+    league with no URI is noticed by nobody** — `leagues_unpinned_idx` exists so
+    they can be found and no job reads it, so this warning is the only trace.
   */
   const publication = await publishLeagueRules(pool, created.id, rules);
   if (!publication.published) {
