@@ -82,11 +82,13 @@ export type PublishOutcome =
  * unpublished document — which is exactly the trade the rest of this file makes
  * for a Pinata outage, so it needs no separate branch.
  *
- * @param signal Abort applied to every request this service makes. Passed in
- * rather than created here so one deadline can span a whole publish; a service
- * that made its own would give each round trip a fresh one.
+ * @param signal Abort applied to every request this service makes. **Required**,
+ * and passed in rather than created here, so one deadline can span a whole
+ * publish — a service that made its own would give each round trip a fresh one,
+ * which is exactly the defect review found in the first version of this file.
+ * Optional would have made the unbounded service the default one.
  */
-export function pinningService(signal?: AbortSignal): PinningService | null {
+export function pinningService(signal: AbortSignal): PinningService | null {
   const jwt = process.env.PINATA_JWT;
   if (!jwt) return null;
 
@@ -99,7 +101,7 @@ export function pinningService(signal?: AbortSignal): PinningService | null {
     // The caller's signal, verbatim. Not `AbortSignal.timeout(...)` built here —
     // that is a fresh clock per request, and two requests would then take twice
     // the bound this file advertises.
-    ...(signal ? { fetchImpl: (input, init) => fetch(input, { ...init, signal }) } : {}),
+    fetchImpl: (input, init) => fetch(input, { ...init, signal }),
   });
 }
 
@@ -162,9 +164,25 @@ export async function publishLeagueRules(
     // from a failed read-back would change nothing the caller does. The message
     // keeps the distinction for whoever reads the log, which is currently the
     // only way any of these is ever noticed.
-    return {
-      published: false,
-      reason: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
-    };
+    return { published: false, reason: describeFailure(error) };
+  }
+}
+
+/**
+ * A reason string for anything that can be thrown.
+ *
+ * `String(error)` is not total: an object with a null prototype has no
+ * `toString`, so stringifying one throws `Cannot convert object to primitive
+ * value` — out of the catch block, from the function whose contract is that it
+ * never throws. Unreachable through `PinataPinningService`, which throws only
+ * `PinningError` or lets a `fetch` error through, so this guards a hostile or
+ * future implementation rather than a live path.
+ */
+function describeFailure(error: unknown): string {
+  if (error instanceof Error) return `${error.name}: ${error.message}`;
+  try {
+    return String(error);
+  } catch {
+    return "A pinning service threw something that cannot be described";
   }
 }

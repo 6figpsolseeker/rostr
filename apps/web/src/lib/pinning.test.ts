@@ -167,6 +167,27 @@ describe("publishLeagueRules", () => {
     expect(await storedUri(client, leagueId)).toBeNull();
   });
 
+  it("answers even when the thrown thing cannot be turned into a string", async () => {
+    /*
+      `String(error)` is not total. An object with a null prototype has no
+      `toString`, so describing it throws — out of the catch block, from the
+      one function whose whole contract is that it never throws. Not reachable
+      through the real service; this pins the guard so it is not simplified
+      back to `String(error)`.
+    */
+    const { client, leagueId, ruleSet } = await setup();
+    const unspeakable: PinningService = {
+      pin: () => {
+        throw Object.create(null) as Error;
+      },
+      fetch: () => Promise.reject(new Error("unreachable")),
+    };
+
+    await expect(
+      publishLeagueRules(client, leagueId, ruleSet, unspeakable),
+    ).resolves.toMatchObject({ published: false });
+    expect(await storedUri(client, leagueId)).toBeNull();
+  });
   it("reports a hash mixup as a mixup, not as something to retry", async () => {
     /*
       `setRulesUri` refuses when the pinned document is not this league's. That
@@ -206,57 +227,73 @@ describe("publishLeagueRules", () => {
 });
 
 describe("the publish deadline", () => {
-  it("is one bound across both round trips, not one each", async () => {
-    /*
-      `pinLeagueRules` makes two requests. The first version of this file built
-      `AbortSignal.timeout` inside `fetchImpl`, so each got a fresh clock and
-      the real bound was twice the advertised one — a per-call timer described
-      as a whole-publish timer.
+  /*
+    The first version of this file built `AbortSignal.timeout` inside
+    `fetchImpl`, so each round trip got a fresh clock and the real bound was
+    twice the advertised one — a per-call timer documented as a whole-publish
+    timer.
 
-      Asserted through the seam that exists: `pinningService` takes the signal
-      rather than making one, so the same object must reach every request.
-    */
-    vi.stubEnv("PINATA_JWT", "test-token");
+    The first tests written for that defect did not catch it. One built its own
+    service with a hardcoded signal and asserted the signal arrived, which is
+    tautological; the other asserted only that an aborted service throws, which
+    any failure satisfies. Both passed against the reverted code. It also drove
+    the real `globalThis.fetch`, so a regression would have sent a live request
+    to Pinata from the unit suite.
+
+    So this drives `publishLeagueRules` — the thing that owns the deadline —
+    with `fetch` stubbed, and asserts the property directly: two requests, one
+    signal object between them.
+  */
+  const signalsSeen = async (): Promise<(AbortSignal | null | undefined)[]> => {
     const seen: (AbortSignal | null | undefined)[] = [];
-    const fetchImpl = vi.fn(async (_input: unknown, init?: { signal?: AbortSignal | null }) => {
+    vi.stubGlobal("fetch", (_input: unknown, init?: { signal?: AbortSignal | null }) => {
       seen.push(init?.signal);
-      return new Response(JSON.stringify({ IpfsHash: "QmTest" }), { status: 200 });
+      // Enough for `pin` to return, then for the read-back to be attempted.
+      return Promise.resolve(
+        new Response(JSON.stringify({ IpfsHash: "QmStub" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      );
     });
 
-    const controller = new AbortController();
-    const { PinataPinningService } = await import("@rostr/pinning");
-    const service = new PinataPinningService({
-      jwt: "test-token",
-      fetchImpl: (input, init) => fetchImpl(input, { ...init, signal: controller.signal }),
-    });
+    const { client, leagueId, ruleSet } = await setup();
+    const { publishLeagueRules: publish } = await import("./pinning");
+    await publish(client, leagueId, ruleSet);
+    return seen;
+  };
 
-    await service.pin('{"a":1}', "rules.json");
-    await service.fetch("ipfs://QmTest").catch(() => undefined);
+  it("gives both round trips one signal, not one each", async () => {
+    vi.stubEnv("PINATA_JWT", "test-token");
 
+    const seen = await signalsSeen();
+
+    // The upload and the read-back.
     expect(seen).toHaveLength(2);
-    // The same signal object, not two equivalent ones.
-    expect(seen[0]).toBe(controller.signal);
-    expect(seen[1]).toBe(controller.signal);
+    expect(seen[0]).toBeInstanceOf(AbortSignal);
+    // The whole property: one deadline spanning the publish. Two distinct
+    // signals here is the defect, and it is what the reverted code produces.
+    expect(seen[1]).toBe(seen[0]);
 
+    vi.unstubAllGlobals();
     vi.unstubAllEnvs();
   });
 
-  it("passes the caller's signal through to every request the service makes", async () => {
+  it("bounds the publish at all, rather than leaving it open", async () => {
+    // `pinningService()` with no signal builds a service on bare `fetch` with
+    // no deadline. That is the shape this must never regress to.
     vi.stubEnv("PINATA_JWT", "test-token");
-    const { pinningService } = await import("./pinning");
 
-    const controller = new AbortController();
-    const service = pinningService(controller.signal);
-    expect(service).not.toBeNull();
+    const seen = await signalsSeen();
 
-    // Aborting before any call means the very first request is already dead,
-    // which is only observable if the signal actually reached it.
-    controller.abort();
-    await expect(service!.pin('{"a":1}', "rules.json")).rejects.toThrow();
+    expect(seen[0], "the publish ran with no deadline").toBeDefined();
+    expect(seen[0]).not.toBeNull();
 
+    vi.unstubAllGlobals();
     vi.unstubAllEnvs();
   });
 });
+
 describe("pinningService", () => {
   it("is null when no key is set, so a fresh clone still creates leagues", async () => {
     vi.stubEnv("PINATA_JWT", "");
