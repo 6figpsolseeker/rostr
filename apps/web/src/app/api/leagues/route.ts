@@ -11,8 +11,10 @@ import {
 } from "@rostr/core";
 import type { PotRules } from "@rostr/core";
 import { createDraftRecord, createLeague, LeagueValidationError, seedSport } from "@rostr/db";
+import type { CreatedLeague } from "@rostr/db";
 import { POT_LEAGUES_COMING_SOON, potLeagueGate, potMintFor } from "@rostr/escrow";
 import { db } from "@/lib/db";
+import { publishLeagueRules } from "@/lib/pinning";
 import { declaredCluster } from "@/lib/cluster";
 import { currentUser } from "@/lib/session";
 
@@ -370,6 +372,13 @@ export async function POST(request: Request): Promise<NextResponse> {
   const pool = db();
   const { client, release } = await pool.connect();
 
+  /*
+    Assigned inside the block below and read after it, because the publish must
+    not run while a connection is checked out. Every path out of the `catch`
+    either returns or rethrows, so by the time this is read it is set.
+  */
+  let created: CreatedLeague;
+
   try {
     // Idempotent, and cheap. Guarantees the registry exists before the first
     // league on a fresh database.
@@ -397,9 +406,9 @@ export async function POST(request: Request): Promise<NextResponse> {
       scheduledAt: new Date(rules.draft.scheduledAt * 1000),
     });
 
-    // TODO (A8 wiring): pin the canonical document and call setRulesUri once a
-    // Pinata key is configured. See docs/SETUP-REQUIRED.md.
-    return NextResponse.json(league, { status: 201 });
+    // The rule document is published after the connection goes back to the
+    // pool — see below the `finally`.
+    created = league;
   } catch (error) {
     if (error instanceof LeagueValidationError) {
       return NextResponse.json(
@@ -424,6 +433,52 @@ export async function POST(request: Request): Promise<NextResponse> {
     }
     throw error;
   } finally {
+    // Before the pin, deliberately. See below.
     release();
   }
+
+  /*
+    Publish the rule document, and never lose the league over it.
+
+    **On the pool, after the connection is released.** Pinning is two network
+    round trips behind a 15-second bound, and `pool.connect()` waits when every
+    connection is busy — with a 10-second `connectionTimeoutMillis`. Holding one
+    across the pin would let a slow pinning service time out *other people's*
+    requests, which is the same shape as the rule this repo already states about
+    row locks and RPC round trips. Nothing here needs a transaction: it is one
+    guarded UPDATE.
+
+    Nothing rolls back on failure, and that is forced rather than chosen —
+    `league_rules` refuses its own DELETE and holds the row via ON DELETE
+    RESTRICT, so once `createLeague` commits the league is permanent. There is no
+    branch in which a failed pin undoes anything; the only choice is what to tell
+    the caller.
+
+    An unpublished league is a real, usable state: the rules are frozen, hashed,
+    rendered in full above the join control, and anchored on-chain. Publication
+    makes them independently verifiable rather than making them exist, and a
+    member may join without it — decided by the owner on 2026-08-30.
+
+    After the draft record, because that is the piece a league cannot do without:
+    a league with no draft silently has no draft until somebody notices, while a
+    league with no URI is listed by `leagues_unpinned_idx`.
+  */
+  const publication = await publishLeagueRules(pool, created.id, rules);
+  if (!publication.published) {
+    // The operator's problem, not the commissioner's — a missing key or an
+    // outage, neither of which they can act on.
+    console.warn(`League ${created.id}: rules not published — ${publication.reason}`);
+  }
+
+  return NextResponse.json(
+    {
+      ...created,
+      // Stated rather than implied. A client that assumed publication would have
+      // no way to tell this case from a pinned one, and the difference is whether
+      // anybody outside this database can check the rules.
+      rulesUri: publication.published ? publication.uri : null,
+      rulesPublished: publication.published,
+    },
+    { status: 201 },
+  );
 }

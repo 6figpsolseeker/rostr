@@ -252,15 +252,34 @@ what the other checks say.
 
 ---
 
-### ⬜ IPFS pinning service
+### ✅ IPFS pinning service
 
-**Blocks:** actually pinning a rule document. The pinning client and its adapter interface
-can be written and tested against a fake without this.
-**Needed by:** before the first real league is created — a league's `rules_uri` must
-resolve, or the on-chain hash anchors nothing.
+**Done 2026-08-30.** `PINATA_JWT` and `PINATA_GATEWAY` are set, and league creation
+publishes the rule document — `publishLeagueRules` in `apps/web/src/lib/pinning.ts`,
+called from `POST /api/leagues`.
+
+**Verified end to end against the live service**, not reasoned about: a real league's rules
+pinned to `ipfs://QmZsZ4jys8XKkwCV8iDf9tcUipL4GmV5iUzzmjTGMkBuhM`, fetched back through the
+gateway, re-hashed, and matched against the hash the league was frozen with. The CID comes
+back as **v0** (`Qm…`), confirming `pinataOptions: { cidVersion: 0 }` reaches the real API —
+which `0044`'s set-once rule depends on.
+
+**This entry used to say a `rules_uri` "must resolve, or the on-chain hash anchors
+nothing", and that was wrong twice over.** The on-chain hash anchors the _rules_, and it
+does so whether or not anyone published them; and nothing enforced the requirement anyway.
+A league whose document is unpinned is a real, usable state — the rules are frozen, hashed,
+rendered in full above the join control, and anchored. Publication makes them independently
+verifiable rather than making them exist. **A member may join without it** (decided by the
+owner, 2026-08-30), and a failed pin never costs a league — it cannot, since `league_rules`
+refuses its own DELETE and holds the `leagues` row via `ON DELETE RESTRICT`.
+
 **Cost:** Pinata's free tier is sufficient. web3.storage is an alternative.
 
-**To do:** create an account, generate an API key, add to `.env`.
+**Still open:** nothing re-pins a league whose publish failed. `leagues_unpinned_idx` in
+`0044` exists to find them and no job reads it yet, so an outage during creation leaves a
+league unpublished until somebody looks. `verifyPinnedRules` is likewise written and
+uncalled — pinning services drop content, and nothing checks that a recorded URI still
+resolves.
 
 ---
 
