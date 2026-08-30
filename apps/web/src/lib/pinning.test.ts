@@ -299,7 +299,9 @@ describe("pinningService", () => {
     vi.stubEnv("PINATA_JWT", "");
     const { pinningService } = await import("./pinning");
 
-    expect(pinningService()).toBeNull();
+    // The signal is required now, so it has to be supplied even here — the
+    // unconfigured answer comes before it is ever used.
+    expect(pinningService(new AbortController().signal)).toBeNull();
 
     vi.unstubAllEnvs();
   });
