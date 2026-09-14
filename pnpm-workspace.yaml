@@ -34,3 +34,9 @@ allowBuilds:
   # @solana/spl-token, with a pure-JS fallback. Program tests are not
   # bigint-bound, so decline the native build rather than compile it everywhere.
   bigint-buffer: false
+  # Both arrive with @privy-io/react-auth, through its WalletConnect and
+  # Ethereum dependencies — neither is used, since sign-in is email and wallets
+  # are Solana only. keccak falls back to pure JS; @reown/appkit's script builds
+  # nothing we load. Declined rather than run on every install.
+  '@reown/appkit': false
+  keccak: false
