@@ -2962,6 +2962,48 @@ of auth are password hashing and OAuth flows, and there are none here — magic 
 opaque token is ~200 lines and 30 tests. A vendor would also split identity across their
 user table and ours, exactly where wallet linking and league membership have to agree.
 
+### Sign-in moves to Privy — decided 2026-09-13, reversing the paragraph above
+
+**The owner decided rostr signs people in through Privy**, which generates a Solana
+wallet for every account, because being asked to connect a wallet reads as less safe to
+a new user than an email login that hands you one. The managed-provider rejection above
+was reasoned about magic links and is superseded — record, not current.
+
+**Privy runs the login; rostr owns the account.** The browser posts a Privy access token
+to `POST /api/auth/privy`. `lib/privy.ts` checks the token locally (signature, issuer,
+audience = our app id, expiry) and reads the user record from Privy with the app secret;
+`signInWithPrivy` in `@rostr/db` finds or creates the account and records the wallet;
+the route sets the ordinary `rostr_session` cookie. `currentUser()` and everything behind
+it are unchanged, `@rostr/db` holds no Privy dependency, and the "split identity" worry
+above is answered by `users.privy_user_id` (migration `0046`) being a pointer, not a
+second user table.
+
+Four rules that are load-bearing:
+
+- **Facts come from Privy's record, never the request and never the identity token.**
+  The identity token is minted at login, before a new person's wallet exists, and is
+  documented as possibly incomplete.
+- **An existing account is attached by email only when Privy verified that email by
+  code** (`type: "email"`). An OAuth profile's email is the provider's claim; matching on
+  it would let anyone sign in to a victim's leagues. An email already joined to a
+  _different_ Privy user is refused (`ACCOUNT_CONFLICT`).
+- **`wallets.verified_at` now has a second writer.** The 0040 backfill argued no unproven
+  row can exist; that still holds, because a Privy-embedded address comes from Privy's
+  own record over an authenticated call — nobody typed it. Any third path needs the same
+  argument made again.
+- **The route is JSON-only on purpose** — it is the login-CSRF defence.
+
+**Settled with the owner the same day:** Solana only, **no EVM wallet** (the server
+ignores one if it appears). X is linked after sign-up, optional, never a login method.
+External wallets (Phantom, Seeker Seed Vault) stay as an "advanced" linked wallet, never
+sign-in. Users fund their own SOL — no server signer, so "no private key of ours exists
+anywhere" stands. For free leagues only the commissioner needs SOL; for a pot league
+everyone does.
+
+**Not done yet:** the browser half (`@privy-io/react-auth`), and deleting what this
+replaces — `/api/auth/request`, `/api/auth/code`, `/api/auth/wallet-signin` and
+link-by-signature. The owner designs the screens. Owner setup is in `SETUP-REQUIRED.md`.
+
 **Wallets:** Phantom, Solflare, and Coinbase adapters are registered explicitly, but most
 wallets — including Seed Vault on Seeker — auto-register via the Wallet Standard and need
 nothing. Do **not** add `@solana/wallet-adapter-wallets`: that meta-package pulls in

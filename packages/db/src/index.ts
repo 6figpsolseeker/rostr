@@ -162,6 +162,7 @@ export {
   SIGN_IN_ATTEMPT_PER_IP,
   SIGN_IN_PER_EMAIL,
   SIGN_IN_PER_IP,
+  PRIVY_SIGN_IN_PER_IP,
   WALLET_CHALLENGE_PER_IP,
   WALLET_CHALLENGE_PER_USER,
   USERNAME_SET_PER_USER,
@@ -204,6 +205,13 @@ export {
   type VerificationToken,
   type Wallet,
 } from "./identity.js";
+
+export {
+  PrivySignInError,
+  signInWithPrivy,
+  type PrivySignIn,
+  type VerifiedPrivyAccount,
+} from "./privy-identity.js";
 
 export {
   CLOSING_READ_HOURS,

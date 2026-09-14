@@ -204,6 +204,21 @@ export const WALLET_CHALLENGE_PER_IP: RateLimitRule = {
 };
 
 /**
+ * Privy sign-ins, per address.
+ *
+ * Nothing here is guessable — the token is a signed JWT, and a forged one fails
+ * locally for free. What this bounds is the call each *valid* token costs us to
+ * Privy's API, and the writes behind it. Looser than the code routes because a
+ * normal sign-in posts more than once: at login, and again when the new wallet
+ * or a linked X account appears.
+ */
+export const PRIVY_SIGN_IN_PER_IP: RateLimitRule = {
+  bucket: "auth:privy:ip",
+  limit: 60,
+  windowMs: HOUR,
+};
+
+/**
  * Username changes, per account.
  *
  * Not about abuse of the name itself — a username is meant to be public and

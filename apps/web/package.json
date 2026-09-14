@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@privy-io/node": "^0.34.0",
     "@rostr/core": "workspace:*",
     "@rostr/db": "workspace:*",
     "@rostr/escrow": "workspace:*",

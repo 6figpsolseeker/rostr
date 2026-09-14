@@ -328,8 +328,11 @@ export async function linkWallet(
     /**
      * Whether the caller has proved the holder controls this key.
      *
-     * **Only `linkWalletWithSignature` may pass true**, and it is the only
-     * caller that has checked a signature. Everything reading
+     * **Only two callers may pass true.** `linkWalletWithSignature`, which has
+     * checked a signature over a server-issued nonce; and `signInWithPrivy`,
+     * for a wallet Privy generated and holds, whose address came from Privy's
+     * own user record over a call authenticated with our app secret. Neither
+     * address was typed by anybody. Everything reading
      * `wallets.verified_at` — `findUserByWallet`, and through it invite-by-
      * address and wallet sign-in — is asking exactly that question.
      */
@@ -404,7 +407,8 @@ export async function linkWallet(
  * the wrong person.
  *
  * **Only a verified wallet counts.** `wallets.verified_at` is set by
- * `linkWalletWithSignature` and by nothing else.
+ * `linkWalletWithSignature`, and — since 2026-09-13 — by `signInWithPrivy`
+ * for a wallet Privy generated and holds. Nothing else sets it.
  *
  * **That sentence was false until 2026-08-23, and this function never returned
  * anybody.** `linkWalletWithSignature` ended by calling `linkWallet`, which
