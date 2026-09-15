@@ -44,6 +44,8 @@ export function PrivyTestPanel() {
               isNew: privy.isNew,
               gaps: privy.gaps,
               xUsername: privy.xUsername,
+              walletStatus: privy.walletStatus,
+              walletAddress: privy.wallet?.address ?? null,
               error: privy.error,
             },
             null,

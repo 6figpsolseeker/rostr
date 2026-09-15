@@ -39,7 +39,9 @@ import {
   browserRpcEndpoint,
   embeddedSolanaAddress,
   privyChain,
+  privyWalletStatus,
   websocketEndpoint,
+  type PrivyWalletStatus,
 } from "@/lib/privy-wallet";
 
 const APP_ID = process.env["NEXT_PUBLIC_PRIVY_APP_ID"]?.trim() ?? "";
@@ -127,6 +129,13 @@ export interface PrivySession {
    * Privy app. Screens reach it through `useLeagueWallet`, not directly.
    */
   readonly wallet: PrivyEmbeddedWallet | null;
+  /**
+   * Where the embedded wallet is, so a screen can say something true while it
+   * is not ready — see `privyWalletStatus`.
+   */
+  readonly walletStatus: PrivyWalletStatus;
+  /** Whether this build has a Privy app at all. */
+  readonly configured: boolean;
   signIn(): void;
   /** Post the current Privy login to the server again, after an `error`. */
   retry(): void;
@@ -142,6 +151,8 @@ const NOT_CONFIGURED: PrivySession = {
   error: { code: "NOT_CONFIGURED", message: "Sign-in is not configured here" },
   xUsername: null,
   wallet: null,
+  walletStatus: "none",
+  configured: false,
   signIn: () => {},
   retry: () => {},
   // No Privy here, but there may still be a rostr session to end.
@@ -252,7 +263,7 @@ function useConfiguredSession(): PrivySession {
   // The embedded wallet, matched by address against what Privy's user record
   // says it generated — not "the first Solana wallet Privy can see", which
   // would include an external one connected through Privy's own modal.
-  const { wallets: solanaWallets } = useWallets();
+  const { wallets: solanaWallets, ready: walletsReady } = useWallets();
   const { signMessage } = useSignMessage();
   const { signTransaction } = useSignTransaction();
   const embeddedAddress =
@@ -296,6 +307,14 @@ function useConfiguredSession(): PrivySession {
     error,
     xUsername: twitter?.username ?? null,
     wallet,
+    walletStatus: privyWalletStatus({
+      ready: privy.ready,
+      authenticated: privy.authenticated,
+      walletsReady,
+      embeddedAddress,
+      found: connected !== null,
+    }),
+    configured: true,
     signIn: () => privy.login(),
     retry: () => {
       posted.current = null;

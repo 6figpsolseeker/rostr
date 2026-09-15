@@ -132,3 +132,36 @@ export function websocketEndpoint(httpEndpoint: string): string {
   else if (url.protocol === "http:") url.protocol = "ws:";
   return url.toString();
 }
+
+/**
+ * The embedded wallet's state, as a screen should describe it.
+ *
+ * - `none` — nobody is logged in to Privy, so there is no wallet to wait for.
+ * - `loading` — Privy is starting up, or the wallet has not been created yet.
+ *   A new person's wallet is made a moment *after* login.
+ * - `ready` — it can sign.
+ * - `missing` — Privy has loaded its wallets and says it generated one, but it
+ *   is not among them. Nothing will fix this by waiting, so it is reported
+ *   rather than shown as a spinner forever.
+ *
+ * **`loading` is why a league screen never falls back to an extension wallet
+ * while someone is logged in to Privy.** The adapter auto-connects Phantom in a
+ * browser that used it before, and it does so faster than Privy loads — so a
+ * fallback taken during `loading` asked a member to sign with Phantom in place
+ * of the wallet their account was given (seen 2026-09-15).
+ */
+export type PrivyWalletStatus = "none" | "loading" | "ready" | "missing";
+
+export function privyWalletStatus(input: {
+  readonly ready: boolean;
+  readonly authenticated: boolean;
+  readonly walletsReady: boolean;
+  readonly embeddedAddress: string | null;
+  readonly found: boolean;
+}): PrivyWalletStatus {
+  if (!input.ready) return "loading";
+  if (!input.authenticated) return "none";
+  if (input.found) return "ready";
+  if (!input.walletsReady || input.embeddedAddress === null) return "loading";
+  return "missing";
+}

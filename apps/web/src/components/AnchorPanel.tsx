@@ -12,6 +12,7 @@ import {
   payoutArray,
 } from "@rostr/escrow";
 import { AnchorProvider, type Wallet } from "@coral-xyz/anchor";
+import { WalletPreparing } from "@/components/JoinPanel";
 import { useLeagueWallet } from "@/components/useLeagueWallet";
 
 /**
@@ -188,7 +189,9 @@ export function AnchorPanel({
         something that already happened.
       </p>
 
-      {!wallet.connected ? (
+      {!wallet.connected && wallet.privyStatus !== "none" ? (
+        <WalletPreparing status={wallet.privyStatus} />
+      ) : !wallet.connected ? (
         <WalletMultiButton />
       ) : (
         <button

@@ -147,7 +147,7 @@ export function JoinPanel({
   tokenMint: string | null;
 }) {
   const { connection } = useConnection();
-  const { publicKey, signMessage, signTransaction, connected } = useLeagueWallet();
+  const { publicKey, signMessage, signTransaction, connected, privyStatus } = useLeagueWallet();
   const [linked, setLinked] = useState<readonly string[]>(linkedWallets);
   const [teamName, setTeamName] = useState("");
   const [message, setMessage] = useState<string | null>(null);
@@ -491,7 +491,9 @@ export function JoinPanel({
     <section className="space-y-4 rounded border border-nocturne-neutral-900 p-6">
       <h2 className="text-lg font-medium">Join {leagueName}</h2>
 
-      {!connected ? (
+      {!connected && privyStatus !== "none" ? (
+        <WalletPreparing status={privyStatus} />
+      ) : !connected ? (
         <>
           <p className="text-sm text-nocturne-neutral-400">
             Connect a wallet to sign these rules. Signing is what records your consent — there
@@ -630,5 +632,23 @@ export function JoinPanel({
         </div>
       )}
     </section>
+  );
+}
+
+/**
+ * What a league screen shows while the account's Privy wallet is not ready.
+ *
+ * Never an extension wallet's connect button: someone logged in to Privy has a
+ * wallet coming, and offering Phantom in that gap is how a member was asked to
+ * sign with the wrong wallet. Shared with `AnchorPanel`.
+ */
+export function WalletPreparing({ status }: { status: "loading" | "ready" | "missing" }) {
+  return status === "missing" ? (
+    <p className="text-sm text-amber-200">
+      Your wallet could not be loaded. Reload the page; if it is still missing, sign out and
+      sign back in.
+    </p>
+  ) : (
+    <p className="text-sm text-nocturne-neutral-400">Getting your wallet ready…</p>
   );
 }

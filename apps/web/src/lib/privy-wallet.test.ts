@@ -11,6 +11,7 @@ import {
   browserRpcEndpoint,
   embeddedSolanaAddress,
   privyChain,
+  privyWalletStatus,
   signTransactionWithBytes,
   websocketEndpoint,
 } from "./privy-wallet";
@@ -164,5 +165,35 @@ describe("websocketEndpoint", () => {
       "wss://devnet.helius-rpc.com/?api-key=k",
     );
     expect(websocketEndpoint("http://127.0.0.1:8899")).toBe("ws://127.0.0.1:8899/");
+  });
+});
+
+describe("privyWalletStatus", () => {
+  const base = {
+    ready: true,
+    authenticated: true,
+    walletsReady: true,
+    embeddedAddress: "BrQ6XPXe1x64UFzmBjtwNuAzeELjvjEWKZ9GaJTaqyY4",
+    found: true,
+  };
+
+  it("is ready once the generated wallet is among Privy's wallets", () => {
+    expect(privyWalletStatus(base)).toBe("ready");
+  });
+
+  it("is loading while Privy starts, and while a new wallet is still being created", () => {
+    expect(privyWalletStatus({ ...base, ready: false, found: false })).toBe("loading");
+    expect(privyWalletStatus({ ...base, walletsReady: false, found: false })).toBe("loading");
+    expect(privyWalletStatus({ ...base, embeddedAddress: null, found: false })).toBe("loading");
+  });
+
+  it("is none when nobody is logged in to Privy", () => {
+    expect(
+      privyWalletStatus({ ...base, authenticated: false, embeddedAddress: null, found: false }),
+    ).toBe("none");
+  });
+
+  it("is missing, not loading, when Privy has loaded and the wallet is not there", () => {
+    expect(privyWalletStatus({ ...base, found: false })).toBe("missing");
   });
 });
