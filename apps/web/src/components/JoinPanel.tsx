@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useConnection, useWallet } from "@solana/wallet-adapter-react";
+import { useConnection } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { PublicKey, Transaction } from "@solana/web3.js";
 import {
@@ -15,6 +15,8 @@ import {
 } from "@rostr/escrow";
 import { AnchorProvider, type Wallet } from "@coral-xyz/anchor";
 import bs58 from "bs58";
+import { useLeagueWallet } from "@/components/useLeagueWallet";
+import { WalletPreparing } from "@/components/WalletPreparing";
 
 /**
  * The join flow.
@@ -31,7 +33,15 @@ import bs58 from "bs58";
  *      verbatim. A client that composed its own could sign one rule set and be
  *      admitted under another.
  *
- * And then a fifth step, the on-chain half (issues #26 and #27): after consent
+ * **A free league stops at step 4, and that is the owner's rule** (2026-09-13):
+ * "for signing the free message signature only commissioners need sol." The
+ * rules signature is free; `join_league` is not — it creates a `Membership`
+ * account the member pays rent for, and in a free league nothing reads that
+ * account (no stake, no refund, and `drawDraftOrder`'s funding gate is pot-only).
+ * So a free league's member is done once consent is recorded, and the wallet
+ * Privy gave them never needs funding.
+ *
+ * And then, for a pot league, a fifth step, the on-chain half (issues #26 and #27): after consent
  * is recorded in Postgres, the member signs `join_league` — **and `deposit`, in
  * the same transaction, when the league has a pot and this deployment is taking
  * buy-ins** — from their own wallet, so the program's `Membership` account
@@ -138,7 +148,7 @@ export function JoinPanel({
   tokenMint: string | null;
 }) {
   const { connection } = useConnection();
-  const { publicKey, signMessage, signTransaction, connected } = useWallet();
+  const { publicKey, signMessage, signTransaction, connected, privyStatus } = useLeagueWallet();
   const [linked, setLinked] = useState<readonly string[]>(linkedWallets);
   const [teamName, setTeamName] = useState("");
   const [message, setMessage] = useState<string | null>(null);
@@ -298,9 +308,10 @@ export function JoinPanel({
 
       const body = (await response.json()) as { error?: string };
       if (!response.ok) throw new Error(body.error ?? "Join failed");
-      // Db-side consent is recorded. Next, the on-chain half: the member signs
-      // `join_league` so the program's Membership account exists.
-      setStatus("onchain");
+      // Db-side consent is recorded. In a pot league the on-chain half follows:
+      // the member signs `join_league` so the program's Membership account
+      // exists. A free league has nothing on-chain to add — see the top of file.
+      setStatus(hasPot ? "onchain" : "done");
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setStatus("idle");
@@ -481,7 +492,9 @@ export function JoinPanel({
     <section className="space-y-4 rounded border border-nocturne-neutral-900 p-6">
       <h2 className="text-lg font-medium">Join {leagueName}</h2>
 
-      {!connected ? (
+      {!connected && privyStatus !== "none" ? (
+        <WalletPreparing status={privyStatus} />
+      ) : !connected ? (
         <>
           <p className="text-sm text-nocturne-neutral-400">
             Connect a wallet to sign these rules. Signing is what records your consent — there
@@ -510,8 +523,15 @@ export function JoinPanel({
           {status === "done" ? (
             <div className="space-y-2 rounded border border-nocturne-accent/30 p-4">
               <p className="text-sm text-nocturne-text/80">
-                Joined, on both sides. Your consent is recorded here and your{" "}
-                <code className="font-mono text-xs">Membership</code> account exists on-chain.
+                {hasPot ? (
+                  <>
+                    Joined, on both sides. Your consent is recorded here and your{" "}
+                    <code className="font-mono text-xs">Membership</code> account exists
+                    on-chain.
+                  </>
+                ) : (
+                  "Joined. Your signature over these rules is recorded, and it cost nothing."
+                )}
               </p>
               <p className="text-xs text-nocturne-neutral-600">
                 Reload to see the league as a member.

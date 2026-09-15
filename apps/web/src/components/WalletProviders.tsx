@@ -11,7 +11,7 @@ import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
 import { PhantomWalletAdapter } from "@solana/wallet-adapter-phantom";
 import { SolflareWalletAdapter } from "@solana/wallet-adapter-solflare";
 import { CoinbaseWalletAdapter } from "@solana/wallet-adapter-coinbase";
-import { clusterApiUrl } from "@solana/web3.js";
+import { browserRpcEndpoint } from "@/lib/privy-wallet";
 import {
   clusterFromGenesisHash,
   clusterMismatch,
@@ -42,11 +42,6 @@ import "@solana/wallet-adapter-react-ui/styles.css";
 const BUILD_CLUSTER: Cluster =
   parseCluster(process.env["NEXT_PUBLIC_SOLANA_CLUSTER"]) ?? "devnet";
 
-/** `clusterApiUrl` has no localnet, so that one case is spelled out. */
-function defaultEndpoint(cluster: Cluster): string {
-  return cluster === "localnet" ? "http://127.0.0.1:8899" : clusterApiUrl(cluster);
-}
-
 /**
  * Wallet connection.
  *
@@ -70,7 +65,8 @@ function defaultEndpoint(cluster: Cluster): string {
  */
 export function WalletProviders({ children }: { children: ReactNode }) {
   const endpoint = useMemo(
-    () => process.env["NEXT_PUBLIC_SOLANA_RPC_URL"] ?? defaultEndpoint(BUILD_CLUSTER),
+    // Shared with the Privy provider, so both signers use one RPC — see `browserRpcEndpoint`.
+    () => browserRpcEndpoint(BUILD_CLUSTER, process.env["NEXT_PUBLIC_SOLANA_RPC_URL"]),
     [],
   );
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useConnection, useWallet } from "@solana/wallet-adapter-react";
+import { useConnection } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { PublicKey, Transaction } from "@solana/web3.js";
 import {
@@ -12,6 +12,8 @@ import {
   payoutArray,
 } from "@rostr/escrow";
 import { AnchorProvider, type Wallet } from "@coral-xyz/anchor";
+import { WalletPreparing } from "@/components/WalletPreparing";
+import { useLeagueWallet } from "@/components/useLeagueWallet";
 
 /**
  * Putting a league's rules on-chain.
@@ -24,6 +26,11 @@ import { AnchorProvider, type Wallet } from "@coral-xyz/anchor";
  * The consequence is that a league can sit unanchored — someone closes the tab
  * between creating and signing. That is deliberate and recoverable: nobody can
  * join until it is done, so the failure is visible rather than silent.
+ *
+ * **Signed with the commissioner's Privy wallet when they have one** — see
+ * `useLeagueWallet`. That wallet starts empty, and anchoring pays rent, so a
+ * commissioner funds it with a little SOL first; members of a free league never
+ * need to.
  *
  * Free leagues anchor too. The guarantee members are offered is that the rules
  * are fixed and checkable, and a guarantee that only covered leagues with money
@@ -63,7 +70,7 @@ export function AnchorPanel({
   pot: PotTerms | null;
 }) {
   const { connection } = useConnection();
-  const wallet = useWallet();
+  const wallet = useLeagueWallet();
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -76,9 +83,14 @@ export function AnchorPanel({
     setError(null);
 
     try {
-      const provider = new AnchorProvider(connection, wallet as unknown as Wallet, {
-        commitment: "confirmed",
-      });
+      const provider = new AnchorProvider(
+        connection,
+        {
+          publicKey: wallet.publicKey,
+          signTransaction: wallet.signTransaction,
+        } as unknown as Wallet,
+        { commitment: "confirmed" },
+      );
       const program = escrowProgram(provider);
 
       // The hash goes on-chain as raw bytes and comes out of Postgres as hex,
@@ -177,7 +189,9 @@ export function AnchorPanel({
         something that already happened.
       </p>
 
-      {!wallet.connected ? (
+      {!wallet.connected && wallet.privyStatus !== "none" ? (
+        <WalletPreparing status={wallet.privyStatus} />
+      ) : !wallet.connected ? (
         <WalletMultiButton />
       ) : (
         <button

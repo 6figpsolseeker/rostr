@@ -239,9 +239,11 @@ function SiteHeader() {
             wallet was connected throughout; nothing here said so.
           */}
           {/*
-            Disconnected shows Connect wallet; connected replaces it in the
-            same slot with the username and adds the bell to its left — drop
-            9. It resolves the account itself, because this page is static.
+            Signed out shows Sign in (it read Connect wallet until sign-in moved
+            to Privy on 2026-09-14, when the wallet started arriving with the
+            account); signed in replaces it in the same slot with the username
+            and adds the bell to its left — drop 9. It resolves the account
+            itself, because this page is static.
           */}
           <HeaderControls />
         </div>

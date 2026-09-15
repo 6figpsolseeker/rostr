@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { ed25519 } from "@noble/curves/ed25519";
 import bs58 from "bs58";
 import { buildWalletLinkMessage, sha256Hex } from "@rostr/core";
-import { beginEmailSignIn, getWallets, verifySignInCode } from "./identity.js";
+import { createUser, getWallets } from "./identity.js";
 import {
   CHALLENGE_TTL_MS,
   createSession,
@@ -36,73 +36,10 @@ const sign = (secret: Uint8Array, message: string): string =>
 
 async function signedIn(email = "figp@example.com") {
   db = await createTestDatabase();
-  const { user } = await beginEmailSignIn(db, email, "figp", NOW);
+  const user = await createUser(db, email, "figp");
   const session = await createSession(db, user.id, NOW);
   return { client: db, user, session };
 }
-
-describe("beginEmailSignIn", () => {
-  it("registers a new account and issues a token", async () => {
-    db = await createTestDatabase();
-    const result = await beginEmailSignIn(db, "new@example.com", "New", NOW);
-
-    expect(result.isNew).toBe(true);
-    expect(result.user.email).toBe("new@example.com");
-    // Six digits, typed rather than followed — see migration 0031.
-    expect(result.token.token).toMatch(/^[0-9]{6}$/);
-  });
-
-  it("reuses the account on a second sign-in", async () => {
-    // One entry point for both cases. Separate register and sign-in routes would
-    // respond differently, and the difference tells anyone who asks whether an
-    // email has an account here.
-    db = await createTestDatabase();
-    const first = await beginEmailSignIn(db, "again@example.com", "Again", NOW);
-    const second = await beginEmailSignIn(db, "again@example.com", undefined, NOW);
-
-    expect(second.isNew).toBe(false);
-    expect(second.user.id).toBe(first.user.id);
-  });
-
-  it("supersedes the previous code", async () => {
-    // Otherwise an old code forwarded to someone else still works.
-    db = await createTestDatabase();
-    const first = await beginEmailSignIn(db, "super@example.com", "S", NOW);
-    await beginEmailSignIn(db, "super@example.com", undefined, NOW);
-
-    await expect(
-      verifySignInCode(db, "super@example.com", first.token.token, NOW),
-    ).rejects.toMatchObject({ code: "TOKEN_INVALID" });
-  });
-
-  it("defaults a display name from the address", async () => {
-    db = await createTestDatabase();
-    const { user } = await beginEmailSignIn(db, "figp@example.com", undefined, NOW);
-
-    expect(user.displayName).toBe("figp");
-  });
-
-  it("rejects something that is not an email", async () => {
-    db = await createTestDatabase();
-    await expect(beginEmailSignIn(db, "not-an-email", "X", NOW)).rejects.toThrow();
-  });
-
-  it("keeps the original verification time across later sign-ins", async () => {
-    // These codes double as sign-in credentials, so this runs on every login.
-    db = await createTestDatabase();
-    const first = await beginEmailSignIn(db, "keep@example.com", "K", NOW);
-    await verifySignInCode(db, "keep@example.com", first.token.token, NOW);
-
-    const later = new Date(NOW.getTime() + 86_400_000);
-    const second = await beginEmailSignIn(db, "keep@example.com", undefined, later);
-    await verifySignInCode(db, "keep@example.com", second.token.token, later);
-
-    const [row] = await db.query<{ email_verified_at: string }>(
-      "SELECT email_verified_at FROM users WHERE lower(email) = 'keep@example.com'",
-    );
-    expect(new Date(row!.email_verified_at).toISOString()).toBe(NOW.toISOString());
-  });
-});
 
 describe("sessions", () => {
   it("resolves a fresh token to its user", async () => {
@@ -382,7 +319,7 @@ describe("wallet linking", () => {
       NOW,
     );
 
-    const { user: other } = await beginEmailSignIn(client, "other@example.com", "Other", NOW);
+    const other = await createUser(client, "other@example.com", "Other");
     const theirs = await issueWalletChallenge(client, other.id, kp.address, NOW);
 
     await expect(

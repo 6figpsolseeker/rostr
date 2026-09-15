@@ -525,6 +525,10 @@ because the two prove the same fact and authorise different things: one message
 would let a linking prompt — approved by somebody already inside the account —
 double as a session for it.
 
+**Wallet sign-in was removed on 2026-09-14**, with `SIGNIN_PREFIX`, when sign-in moved
+to Privy — see "Sign-in moves to Privy". Linking by signature stays, as the "advanced"
+external wallet. The confirmation above is a dated record, not a live feature.
+
 ### Handoff, 2026-08-23 — the design audit, and the crons are real
 
 Seven PRs landed (#207–#213), all from a three-agent audit of `docs/design/` against what
@@ -2912,7 +2916,8 @@ to accept a `userId` the client supplied, which meant anyone could join any leag
 anyone — the wallet signature proved they held a key, but nothing tied that key to the
 account being credited. If you find yourself reading an identifier out of a body, stop.
 
-Sign-in is an emailed link. `beginEmailSignIn` handles registration and sign-in through
+**Superseded 2026-09-14 — sign-in is Privy now; see the section below. This paragraph and
+the emailed-code routes it names are a record.** Sign-in was an emailed link. `beginEmailSignIn` handled registration and sign-in through
 one path on purpose: separate routes respond differently, and the difference tells anyone
 who asks whether an email has an account here. `/api/auth/request` answers identically
 either way for the same reason.
@@ -2961,6 +2966,113 @@ A managed provider (Supabase Auth, Clerk) was weighed and not taken. The dangero
 of auth are password hashing and OAuth flows, and there are none here — magic link plus an
 opaque token is ~200 lines and 30 tests. A vendor would also split identity across their
 user table and ours, exactly where wallet linking and league membership have to agree.
+
+### Sign-in moves to Privy — decided 2026-09-13, reversing the paragraph above
+
+**The owner decided rostr signs people in through Privy**, which generates a Solana
+wallet for every account, because being asked to connect a wallet reads as less safe to
+a new user than an email login that hands you one. The managed-provider rejection above
+was reasoned about magic links and is superseded — record, not current.
+
+**Privy runs the login; rostr owns the account.** The browser posts a Privy access token
+to `POST /api/auth/privy`. `lib/privy.ts` checks the token locally (signature, issuer,
+audience = our app id, expiry) and reads the user record from Privy with the app secret;
+`signInWithPrivy` in `@rostr/db` finds or creates the account and records the wallet;
+the route sets the ordinary `rostr_session` cookie. `currentUser()` and everything behind
+it are unchanged, `@rostr/db` holds no Privy dependency, and the "split identity" worry
+above is answered by `users.privy_user_id` (migration `0046`) being a pointer, not a
+second user table.
+
+Four rules that are load-bearing:
+
+- **Facts come from Privy's record, never the request and never the identity token.**
+  The identity token is minted at login, before a new person's wallet exists, and is
+  documented as possibly incomplete.
+- **An existing account is attached by email only when Privy verified that email by
+  code** (`type: "email"`). An OAuth profile's email is the provider's claim; matching on
+  it would let anyone sign in to a victim's leagues. An email already joined to a
+  _different_ Privy user is refused (`ACCOUNT_CONFLICT`).
+- **`wallets.verified_at` now has a second writer.** The 0040 backfill argued no unproven
+  row can exist; that still holds, because a Privy-embedded address comes from Privy's
+  own record over an authenticated call — nobody typed it. Any third path needs the same
+  argument made again.
+- **The route is JSON-only on purpose** — it is the login-CSRF defence.
+
+**Settled with the owner the same day:** Solana only, **no EVM wallet** (the server
+ignores one if it appears). X is linked after sign-up, optional, never a login method.
+External wallets (Phantom, Seeker Seed Vault) stay as an "advanced" linked wallet, never
+sign-in. Users fund their own SOL — no server signer, so "no private key of ours exists
+anywhere" stands. For free leagues only the commissioner needs SOL; for a pot league
+everyone does.
+
+**Done since, 2026-09-14.** The browser half is `components/PrivyAuth.tsx`: the provider in
+the root layout, and `usePrivySession()`, which exchanges a live Privy login for a rostr
+session **once, in the provider**, and re-posts only when the linked accounts change —
+how the wallet created after a first login and a later X link reach the server. The owner
+signed in through it against the hosted database the same day: existing account attached
+by email, embedded wallet recorded as primary.
+
+`/api/auth/request`, `/api/auth/code`, `/api/auth/wallet-signin`, `lib/email.ts` and their
+`@rostr/db` and `@rostr/core` halves were **deleted**. `/signin` is now one Privy button.
+
+**Link-by-signature was kept, and the line that listed it for deletion was wrong.** The
+owner chose to keep external wallets as an "advanced" linked wallet, and
+`/api/auth/wallet` plus `linkWalletWithSignature` are exactly that.
+
+**Signing out must end the Privy login too.** The provider re-exchanges any live Privy
+login on every page load, so a sign-out that only revoked our session would sign the
+person straight back in on the next page. `usePrivySession().signOut` does both; use it
+rather than calling `DELETE /api/auth/session` alone.
+
+**The Privy wallet signs joins and anchors, as of 2026-09-15.** `useLeagueWallet()` hands
+`JoinPanel` and `AnchorPanel` the same `{ publicKey, signMessage, signTransaction }` shape
+they took from `useWallet()`, backed by the Privy embedded wallet when there is one and by
+the adapter otherwise. Three things in it are load-bearing:
+
+- **The chain is passed on every Privy signature** (`privyChain` in `lib/privy-wallet.ts`),
+  from `NEXT_PUBLIC_SOLANA_CLUSTER`. The adapter's own standard-wallet bridge passes none to
+  `signTransaction`, which is why this is a hook rather than registering Privy's wallet with
+  the adapter. Localnet has no Privy chain and refuses.
+- **The embedded wallet is matched by address** against what Privy's user record says it
+  generated, never "the first Solana wallet Privy can see".
+- **`@privy-io/react-auth/solana` needs `@solana-program/memo`, `system` and `token`
+  installed** — optional peers that are not optional for that entry point. Without them every
+  page 500s with `Module not found`, in dev and in the build.
+
+**A free league's join ends at the rules signature** — owner's rule, 2026-09-13: "for signing
+the free message signature only commisioners need sol." `join_league` costs the member rent
+and nothing reads its account in a free league, so `JoinPanel` stops at consent there, the
+league page offers no on-chain resume step, and `commissionerSetup` lists three steps
+(`hasPot`). Pot leagues are unchanged. `/join-onchain` still exists and still works.
+
+**Three-agent review, 2026-09-15 — seven findings, all fixed, none a security hole.**
+Worth knowing because each is easy to reintroduce:
+
+- **Two overlapping sign-ins of one pre-Privy account refused it as `ACCOUNT_CONFLICT`.**
+  Found independently by two reviewers. Both requests miss on the Privy id; the second waits
+  on the first's row lock and, at READ COMMITTED, re-reads a row already carrying _this_
+  Privy id. `signInWithPrivy` now carries on when the id is its own. The test stages the
+  race on PGlite's single connection by making the first lookup miss.
+- **A stale X link locked people out** (`X_TAKEN` rolled back the whole sign-in). X is
+  optional, so the stale holder is cleared instead; Privy allows one X account per Privy user.
+- **`/signin` redirected before a new person's wallet existed**, landing them on `/welcome`
+  offering Phantom and risking an aborted wallet creation. It now waits for the wallet, and
+  `status` is `signed-in` only for an exchange answered for the _current_ linked accounts.
+- **A failed wallet creation showed "getting ready" forever** — Privy retries only on a fresh
+  login. `walletStatus` has a `creating` state and the panels offer "Create my wallet".
+- **A refused sign-in had no way out**: the Privy login persists and re-fails on every page.
+  `/signin` offers "Use a different email", which signs out of Privy.
+- **Every full page load re-verified with Privy** and spent the 60/hour per-address bucket.
+  A tab now skips the POST when its linked accounts are unchanged _and_ `/api/me` confirms
+  the rostr session is still that account (`canSkipExchange`) — asked, never remembered.
+- The retry in `signInWithPrivy` had no test; it does now.
+
+"Privy generated" in the notes above is slightly strong: `isEmbeddedWalletLinkedAccount` also
+accepts a key imported into Privy. Its holder still proved control of the key, so the trust
+argument for `verified_at` is unchanged.
+
+**Not moved to the Privy wallet:** `DepositPanel`, `SettlementPanel` and `DraftLobby`'s
+`start_season` — all pot-only, and pots are out of v1. They still need an extension wallet.
 
 **Wallets:** Phantom, Solflare, and Coinbase adapters are registered explicitly, but most
 wallets — including Seed Vault on Seeker — auto-register via the Wallet Standard and need

@@ -140,56 +140,6 @@ export async function purgeIdleRateLimits(db: SqlClient, olderThan: Date): Promi
 
 const HOUR = 60 * 60 * 1000;
 
-/**
- * Sign-in links, per email address.
- *
- * Generous enough that a real person who mistypes their address twice and then
- * loses the mail is not locked out; tight enough that nobody's inbox becomes a
- * target. The subject is the normalised address, so casing cannot be used to
- * open a second bucket.
- */
-export const SIGN_IN_PER_EMAIL: RateLimitRule = {
-  bucket: "auth:request:email",
-  limit: 5,
-  windowMs: HOUR,
-};
-
-/**
- * Sign-in links, per address.
- *
- * Looser than the per-email rule on purpose: a household, an office, or a campus
- * shares one address, and several people signing in on the same evening is
- * ordinary. It is a ceiling on volume, not a per-person limit.
- */
-export const SIGN_IN_PER_IP: RateLimitRule = {
-  bucket: "auth:request:ip",
-  limit: 20,
-  windowMs: HOUR,
-};
-
-/**
- * Sign-in code *attempts*, per address.
- *
- * The other half of what makes six digits safe. `MAX_CODE_ATTEMPTS` bounds
- * guesses against any one code; without this, an attacker could exhaust a code,
- * request another, and keep going — a million possibilities is not many when
- * the only cost is a round trip.
- *
- * Deliberately not per-email: the attacker chooses the address they are
- * attacking, so a per-email bucket would let them work through one victim at
- * their leisure while never touching their own limit. Per-address caps the
- * machine doing the guessing.
- *
- * 30/hour against a code that dies after 5 wrong tries means roughly six codes
- * can be attacked an hour — about 30 guesses out of 1,000,000. A legitimate
- * person mistyping a few times never comes close.
- */
-export const SIGN_IN_ATTEMPT_PER_IP: RateLimitRule = {
-  bucket: "auth:code:ip",
-  limit: 30,
-  windowMs: HOUR,
-};
-
 /** Wallet challenges, per signed-in account. */
 export const WALLET_CHALLENGE_PER_USER: RateLimitRule = {
   bucket: "auth:wallet:user",
@@ -199,6 +149,21 @@ export const WALLET_CHALLENGE_PER_USER: RateLimitRule = {
 
 export const WALLET_CHALLENGE_PER_IP: RateLimitRule = {
   bucket: "auth:wallet:ip",
+  limit: 60,
+  windowMs: HOUR,
+};
+
+/**
+ * Privy sign-ins, per address.
+ *
+ * Nothing here is guessable — the token is a signed JWT, and a forged one fails
+ * locally for free. What this bounds is the call each *valid* token costs us to
+ * Privy's API, and the writes behind it. Looser than the code routes because a
+ * normal sign-in posts more than once: at login, and again when the new wallet
+ * or a linked X account appears.
+ */
+export const PRIVY_SIGN_IN_PER_IP: RateLimitRule = {
+  bucket: "auth:privy:ip",
   limit: 60,
   windowMs: HOUR,
 };

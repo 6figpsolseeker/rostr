@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
+import { PrivyAuthProvider } from "@/components/PrivyAuth";
 import { WalletProviders } from "@/components/WalletProviders";
 import "./globals.css";
 
@@ -21,7 +22,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <body className="min-h-screen antialiased">
-        <WalletProviders>{children}</WalletProviders>
+        <PrivyAuthProvider>
+          <WalletProviders>{children}</WalletProviders>
+        </PrivyAuthProvider>
       </body>
     </html>
   );

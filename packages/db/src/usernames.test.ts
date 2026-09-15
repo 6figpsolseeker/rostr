@@ -1,14 +1,13 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
-  beginEmailSignIn,
   createUser,
   findUserByEmail,
   findUserByWallet,
   getUser,
   IdentityError,
   linkWallet,
-  verifySignInCode,
 } from "./identity.js";
+import { signInWithPrivy } from "./privy-identity.js";
 import {
   findUserByUsername,
   setUsername,
@@ -174,13 +173,33 @@ describe("every path that returns a User carries the username", () => {
    * So this asserts the shape rather than the value — `null`, never `undefined`
    * — across every function that hands back a `User`. A `toBeNull` here fails
    * on `undefined`, which is exactly the distinction that was missed.
+   *
+   * `verifySignInCode` was removed on 2026-09-14 when sign-in moved to Privy;
+   * `signInWithPrivy` is now the success path, and has three `RETURNING`
+   * clauses of its own to get wrong.
    */
-  it("verifySignInCode does, which is where it was missing", async () => {
+  it("signInWithPrivy does, on every branch", async () => {
     const client = await fresh();
-    const { token } = await beginEmailSignIn(client, "code@example.test");
-    const user = await verifySignInCode(client, "code@example.test", token.token);
+    const account = (id: string, email: string) => ({
+      privyUserId: id,
+      verifiedEmail: email,
+      embeddedSolanaWallets: [],
+      x: null,
+    });
 
-    expect(user.username).toBeNull();
+    // Created, then found by Privy id.
+    const created = await signInWithPrivy(client, account("did:privy:new", "new@example.test"));
+    expect(created.user.username).toBeNull();
+    const again = await signInWithPrivy(client, account("did:privy:new", "new@example.test"));
+    expect(again.user.username).toBeNull();
+
+    // Attached by email.
+    await createUser(client, "old@example.test", "Old");
+    const attached = await signInWithPrivy(
+      client,
+      account("did:privy:old", "old@example.test"),
+    );
+    expect(attached.user.username).toBeNull();
   });
 
   it("createUser, getUser and findUserByEmail do", async () => {
@@ -197,8 +216,12 @@ describe("every path that returns a User carries the username", () => {
     const created = await createUser(client, "named@example.test", "Named");
     await setUsername(client, created.id, "route66");
 
-    const { token } = await beginEmailSignIn(client, "named@example.test");
-    const signedIn = await verifySignInCode(client, "named@example.test", token.token);
+    const { user: signedIn } = await signInWithPrivy(client, {
+      privyUserId: "did:privy:named",
+      verifiedEmail: "named@example.test",
+      embeddedSolanaWallets: [],
+      x: null,
+    });
     expect(signedIn.username).toBe("route66");
     expect((await getUser(client, created.id))?.username).toBe("route66");
   });

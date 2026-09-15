@@ -92,6 +92,30 @@ and both misleading, because the _names_ had swapped underneath. Only `db:migrat
 compares names, and only `information_schema` answers what a database actually has.
 When a migration question matters, read the schema.
 
+### ⬜ Privy app (`PRIVY_APP_ID`, `PRIVY_APP_SECRET`, `NEXT_PUBLIC_PRIVY_APP_ID`)
+
+**Blocks:** signing in through Privy — `POST /api/auth/privy` answers 503 until it is
+set. **Needed:** before the new sign-in screens are tried in a browser. Decided
+2026-09-13; see "Sign-in moves to Privy" in `CLAUDE.md`.
+
+Create an app at dashboard.privy.io, then set it up to match what the server assumes:
+
+- **Login methods: email only.** The server attaches an existing rostr account by an
+  email Privy verified by code, and refuses a Privy account without one
+  (`EMAIL_REQUIRED`). Google, Apple or wallet login would produce accounts that cannot
+  sign in here. Wallet login in particular was decided against.
+- **Embedded wallets: Solana, created on login for all users. No Ethereum.** The server
+  records Solana wallets Privy generated and ignores everything else.
+- **X (Twitter): enabled as a _linkable_ account, not a login method.** It is asked for
+  after sign-up and never required. Privy's default X credentials are enough to start.
+- **Allowed origins:** the production domain and `http://localhost:3000`.
+- Copy the **app id** into both `PRIVY_APP_ID` and `NEXT_PUBLIC_PRIVY_APP_ID`, and the
+  **app secret** into `PRIVY_APP_SECRET` (server only). The **verification key** into
+  `PRIVY_VERIFICATION_KEY` is optional.
+
+Free tier covers development. Check Privy's pricing for monthly active users before
+launch — it is a running cost this project did not have before.
+
 ### ⬜ Solana RPC endpoint (`SOLANA_RPC_URL`)
 
 **Blocks:** drawing draft orders. Every league needs one draw, at its scheduled draft
@@ -152,9 +176,14 @@ with no check.
 
 Devnet SOL is free and worth nothing; this is a rate limit, not a cost.
 
-### ⬜ Email provider (`RESEND_API_KEY`, `EMAIL_FROM`)
+### ✅ Email provider (`RESEND_API_KEY`, `EMAIL_FROM`) — no longer needed
 
-**Blocks:** anyone signing in who is not sitting at the dev server.
+**Retired 2026-09-14.** Sign-in moved to Privy, which sends the code itself, and the
+emailed-code routes and `apps/web/src/lib/email.ts` were deleted. Nothing reads these two
+variables now; they can be removed from Vercel. The text below is the original entry, kept
+as a record.
+
+**Blocked:** anyone signing in who is not sitting at the dev server.
 **Needed by:** before anyone but you uses the app — so, before the first real league.
 **Cost:** Resend's free tier is 3,000 emails a month, which is far more than this needs.
 

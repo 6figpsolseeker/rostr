@@ -5,12 +5,12 @@
  * **username**, which is how other people reach you; and a **wallet**, which is
  * how you consent to anything. Signing up collects all three.
  *
- * **They are not collected in one form, and that is deliberate.** Sign-in stays
- * exactly as it was — an email, then a code — because `beginEmailSignIn` goes to
- * some trouble to answer identically whether or not the address has an account,
- * and a sign-up form that asked for a username up front would tell anyone who
- * asked which emails are registered. So the other two are collected immediately
- * *after* the code is accepted, at `/welcome`.
+ * **They are not collected in one form, and that is deliberate.** Sign-in is
+ * an email and a code, run by Privy since 2026-09-14, and it answers the same
+ * whether or not the address has an account here; a sign-up form that asked for
+ * a username up front would tell anyone who asked which emails are registered.
+ * Privy also creates the wallet, so what is left — usually just the username —
+ * is collected *after* sign-in, at `/welcome`.
  *
  * ## What this does and does not enforce
  *
@@ -70,7 +70,7 @@ export function accountGaps(state: AccountState): readonly AccountGap[] {
   // `username` is typed `string | null`, so `state.username.trim()` looked total.
   // It is not: a query that omits the column yields `undefined`, which passes the
   // null check and then throws on `.trim()`. That happened —
-  // `verifySignInCode`'s `RETURNING` clause was missed when the column was added,
+  // the old `verifySignInCode`'s `RETURNING` clause missed the column when it was added,
   // so **every successful sign-in 500'd** while a wrong code answered correctly,
   // because this line only runs once a code is accepted.
   //

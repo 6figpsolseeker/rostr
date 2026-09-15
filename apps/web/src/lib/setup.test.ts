@@ -14,6 +14,7 @@ function fresh(overrides: Partial<CommissionerSetupInput> = {}): CommissionerSet
     anchored: false,
     hasTeam: false,
     onChainJoined: false,
+    hasPot: true,
     leagueState: "FORMING",
     seatsFree: true,
     fieldLocked: false,
@@ -232,5 +233,28 @@ describe("blockers", () => {
   it("reports whether a seat is held, so the copy can stop saying nobody joined", () => {
     expect(commissionerSetup(fresh())!.seated).toBe(false);
     expect(commissionerSetup(fresh({ ...readyToSeat, hasTeam: true }))!.seated).toBe(true);
+  });
+});
+
+describe("a free league", () => {
+  const free = (overrides: Partial<CommissionerSetupInput> = {}) =>
+    fresh({ hasPot: false, ...overrides });
+
+  it("is done once the commissioner holds a seat — nothing on-chain is owed", () => {
+    const seatedFree = free({ anchored: true, hasLinkedWallet: true, hasTeam: true });
+    expect(commissionerSetupStep(seatedFree)).toBe("DONE");
+    expect(commissionerSetup(seatedFree)?.complete).toBe(true);
+  });
+
+  it("lists three steps and never names the on-chain one", () => {
+    const view = commissionerSetup(free());
+    expect(view?.items.map((item) => item.key)).toEqual(["ANCHOR", "LINK", "SEAT"]);
+    expect(view?.remaining).toBe(3);
+  });
+
+  it("still owes the on-chain step in a pot league", () => {
+    const seatedPot = fresh({ anchored: true, hasLinkedWallet: true, hasTeam: true });
+    expect(commissionerSetupStep(seatedPot)).toBe("ONCHAIN");
+    expect(commissionerSetup(seatedPot)?.items).toHaveLength(4);
   });
 });
