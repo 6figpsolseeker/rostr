@@ -211,6 +211,31 @@ describe("signInWithPrivy — which account", () => {
     expect(await count(client, "SELECT count(*)::int AS n FROM users")).toBe(1);
   });
 
+  it("retries once when Postgres aborts it as a deadlock", async () => {
+    const client = await fresh();
+    let aborted = false;
+    const deadlocking = {
+      exec: (sql: string) => client.exec(sql),
+      query: async <T>(sql: string, params?: unknown[]): Promise<T[]> => {
+        if (!aborted && sql.includes("SET x_subject = NULL")) {
+          aborted = true;
+          throw Object.assign(new Error("deadlock detected"), { code: "40P01" });
+        }
+        return client.query<T>(sql, params);
+      },
+    } as unknown as typeof client;
+
+    const { user } = await signInWithPrivy(
+      deadlocking,
+      account({ x: { subject: "12345", username: "alice" } }),
+      NOW,
+    );
+
+    expect(aborted).toBe(true);
+    expect(await columns(client, user.id)).toMatchObject({ x_subject: "12345" });
+    expect(await count(client, "SELECT count(*)::int AS n FROM users")).toBe(1);
+  });
+
   it("signs a joined account in without an email", async () => {
     const client = await fresh();
     const first = await signInWithPrivy(client, account(), NOW);

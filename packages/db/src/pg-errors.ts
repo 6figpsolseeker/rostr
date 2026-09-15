@@ -22,3 +22,20 @@ export function isUniqueViolation(error: unknown): boolean {
     (error as { code?: unknown }).code === "23505"
   );
 }
+
+/**
+ * Postgres `deadlock_detected` (40P01).
+ *
+ * Postgres resolves a lock cycle by aborting one of the transactions in it, and
+ * the survivor commits. For a transaction whose every write is safe to re-read
+ * and redo, that abort is contention in the same sense as a unique violation.
+ * Retry only such transactions — see `signInWithPrivy`.
+ */
+export function isDeadlock(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === "40P01"
+  );
+}

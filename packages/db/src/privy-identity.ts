@@ -10,7 +10,7 @@
 
 import type { SqlClient } from "./client.js";
 import { IdentityError, linkWallet, type User } from "./identity.js";
-import { isUniqueViolation } from "./pg-errors.js";
+import { isDeadlock, isUniqueViolation } from "./pg-errors.js";
 import { withTransaction } from "./transaction.js";
 
 export class PrivySignInError extends Error {
@@ -105,6 +105,11 @@ function toUser(row: UserRow): User {
  * sign-in, and the fix in each case is to re-read. A wallet collision is not one
  * of them; `linkWallet` turns it into `WALLET_TAKEN` before it gets here.
  *
+ * A deadlock is retried too. Clearing a stale X holder locks *another* account's
+ * row after this login's own, so two people whose Privy users swapped X accounts,
+ * signing in at the same instant, lock in opposite orders; Postgres aborts one,
+ * and re-running it after the other has committed finds nothing left to clear.
+ *
  * **Two posts for one existing account race differently, and that case is not a
  * unique violation.** Both miss on the Privy id; the first locks the row by email
  * and attaches it; the second waits on that lock and, at READ COMMITTED, re-reads
@@ -119,7 +124,7 @@ export async function signInWithPrivy(
   try {
     return await withTransaction(db, (tx) => attempt(tx, account, now));
   } catch (error) {
-    if (!isUniqueViolation(error)) throw error;
+    if (!isUniqueViolation(error) && !isDeadlock(error)) throw error;
     return withTransaction(db, (tx) => attempt(tx, account, now));
   }
 }

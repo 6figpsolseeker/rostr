@@ -10,6 +10,7 @@
  */
 
 import { useEffect } from "react";
+import { WalletPreparing } from "@/components/JoinPanel";
 import { usePrivySession } from "@/components/PrivyAuth";
 
 /** A refusal from `POST /api/auth/privy`, in words that name the next action. */
@@ -60,7 +61,10 @@ export function PrivySignIn({ next }: { next: string }) {
       </button>
 
       {session.status === "signed-in" && !walletSettled && (
-        <p className="text-sm text-nocturne-neutral-400">Setting up your wallet…</p>
+        // Not a bare "setting up" line: a failed creation stays `creating` until a
+        // fresh login, so this page needs the same "Create my wallet" way out the
+        // league screens have, or it waits forever (found in review, 2026-09-15).
+        <WalletPreparing status={session.walletStatus} />
       )}
 
       {session.error && (
