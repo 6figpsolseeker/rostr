@@ -12,7 +12,7 @@ import {
   payoutArray,
 } from "@rostr/escrow";
 import { AnchorProvider, type Wallet } from "@coral-xyz/anchor";
-import { WalletPreparing } from "@/components/JoinPanel";
+import { WalletPreparing } from "@/components/WalletPreparing";
 import { useLeagueWallet } from "@/components/useLeagueWallet";
 
 /**

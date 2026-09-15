@@ -10,7 +10,7 @@
  */
 
 import { useEffect } from "react";
-import { WalletPreparing } from "@/components/JoinPanel";
+import { WalletPreparing } from "@/components/WalletPreparing";
 import { usePrivySession } from "@/components/PrivyAuth";
 
 /** A refusal from `POST /api/auth/privy`, in words that name the next action. */
