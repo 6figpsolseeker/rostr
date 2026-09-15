@@ -7,7 +7,7 @@
  * code because `apps/web` cannot render a component in a test.
  */
 
-import { Transaction, VersionedTransaction } from "@solana/web3.js";
+import { clusterApiUrl, Transaction, VersionedTransaction } from "@solana/web3.js";
 import type { Cluster } from "@rostr/escrow";
 
 /** The chain names Privy's Solana hooks accept. */
@@ -97,4 +97,38 @@ export function embeddedSolanaAddress(user: {
     }
   }
   return null;
+}
+
+/**
+ * The RPC endpoint the browser talks to: `NEXT_PUBLIC_SOLANA_RPC_URL` when set,
+ * otherwise the cluster's public endpoint.
+ *
+ * **One definition for both signers.** The wallet adapter's `ConnectionProvider`
+ * sends every transaction through this, and Privy simulates the transactions it
+ * is asked to sign through its own configured RPC. Two separately-written
+ * endpoints could name different chains for the same signature.
+ *
+ * An empty override counts as unset, rather than as an endpoint called "".
+ */
+export function browserRpcEndpoint(cluster: Cluster, override: string | undefined): string {
+  const given = override?.trim();
+  if (given) return given;
+  // `clusterApiUrl` has no localnet, so that one case is spelled out.
+  return cluster === "localnet" ? "http://127.0.0.1:8899" : clusterApiUrl(cluster);
+}
+
+/**
+ * The websocket endpoint for an HTTP RPC endpoint.
+ *
+ * Privy's Solana hooks will not sign without subscriptions configured for the
+ * chain ("No RPC configuration found for chain solana:devnet", seen 2026-09-15).
+ * Public clusters and the common private providers serve both on the same host
+ * and path, so swapping the scheme is enough; the query string, which carries a
+ * private provider's API key, is kept.
+ */
+export function websocketEndpoint(httpEndpoint: string): string {
+  const url = new URL(httpEndpoint);
+  if (url.protocol === "https:") url.protocol = "wss:";
+  else if (url.protocol === "http:") url.protocol = "ws:";
+  return url.toString();
 }

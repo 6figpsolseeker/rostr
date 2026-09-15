@@ -21,6 +21,7 @@
 
 import { PrivyProvider, usePrivy } from "@privy-io/react-auth";
 import { useSignMessage, useSignTransaction, useWallets } from "@privy-io/react-auth/solana";
+import { createSolanaRpc, createSolanaRpcSubscriptions } from "@solana/kit";
 import {
   createContext,
   useCallback,
@@ -34,7 +35,12 @@ import type { ReactNode } from "react";
 import { parseCluster } from "@rostr/escrow";
 import type { AccountGap } from "@/lib/account";
 import { privySyncKey } from "@/lib/privy-sync";
-import { embeddedSolanaAddress, privyChain } from "@/lib/privy-wallet";
+import {
+  browserRpcEndpoint,
+  embeddedSolanaAddress,
+  privyChain,
+  websocketEndpoint,
+} from "@/lib/privy-wallet";
 
 const APP_ID = process.env["NEXT_PUBLIC_PRIVY_APP_ID"]?.trim() ?? "";
 
@@ -42,7 +48,25 @@ const APP_ID = process.env["NEXT_PUBLIC_PRIVY_APP_ID"]?.trim() ?? "";
  * The Privy chain for this build, from the same declaration `WalletProviders`
  * reads — with the same devnet fallback, for the same reason given there.
  */
-const CHAIN = privyChain(parseCluster(process.env["NEXT_PUBLIC_SOLANA_CLUSTER"]) ?? "devnet");
+const CLUSTER = parseCluster(process.env["NEXT_PUBLIC_SOLANA_CLUSTER"]) ?? "devnet";
+const CHAIN = privyChain(CLUSTER);
+
+/**
+ * The RPC Privy uses for this build's chain — the same endpoint the wallet
+ * adapter sends through (`browserRpcEndpoint`). Privy refuses to sign for a
+ * chain with no RPC configured, so without this every anchor failed with "No RPC
+ * configuration found for chain solana:devnet".
+ */
+const ENDPOINT = browserRpcEndpoint(CLUSTER, process.env["NEXT_PUBLIC_SOLANA_RPC_URL"]);
+const SOLANA_RPCS =
+  CHAIN === null
+    ? {}
+    : {
+        [CHAIN]: {
+          rpc: createSolanaRpc(ENDPOINT),
+          rpcSubscriptions: createSolanaRpcSubscriptions(websocketEndpoint(ENDPOINT)),
+        },
+      };
 
 export function PrivyAuthProvider({ children }: { children: ReactNode }) {
   // Unset, the app renders exactly as before rather than crashing every page:
@@ -61,6 +85,7 @@ export function PrivyAuthProvider({ children }: { children: ReactNode }) {
           ethereum: { createOnLogin: "off" },
           solana: { createOnLogin: "all-users" },
         },
+        solana: { rpcs: SOLANA_RPCS },
       }}
     >
       <SessionExchange>{children}</SessionExchange>

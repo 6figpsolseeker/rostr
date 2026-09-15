@@ -7,7 +7,13 @@ import {
   TransactionMessage,
   VersionedTransaction,
 } from "@solana/web3.js";
-import { embeddedSolanaAddress, privyChain, signTransactionWithBytes } from "./privy-wallet";
+import {
+  browserRpcEndpoint,
+  embeddedSolanaAddress,
+  privyChain,
+  signTransactionWithBytes,
+  websocketEndpoint,
+} from "./privy-wallet";
 
 const BLOCKHASH = "EETubP5AKHgjPAhzPAFcb8BAY1hMH639CWCFTqi3hq1k";
 
@@ -132,5 +138,31 @@ describe("embeddedSolanaAddress", () => {
 
   it("is null for an account with no wallet yet", () => {
     expect(embeddedSolanaAddress({ linkedAccounts: [] })).toBeNull();
+  });
+});
+
+describe("browserRpcEndpoint", () => {
+  it("uses the configured endpoint when there is one", () => {
+    expect(browserRpcEndpoint("devnet", "https://devnet.helius-rpc.com/?api-key=k")).toBe(
+      "https://devnet.helius-rpc.com/?api-key=k",
+    );
+  });
+
+  it("falls back to the cluster's public endpoint, including for a blank override", () => {
+    expect(browserRpcEndpoint("devnet", undefined)).toBe("https://api.devnet.solana.com");
+    expect(browserRpcEndpoint("devnet", "  ")).toBe("https://api.devnet.solana.com");
+    expect(browserRpcEndpoint("localnet", undefined)).toBe("http://127.0.0.1:8899");
+  });
+});
+
+describe("websocketEndpoint", () => {
+  it("swaps the scheme and keeps the host, path and API key", () => {
+    expect(websocketEndpoint("https://api.devnet.solana.com")).toBe(
+      "wss://api.devnet.solana.com/",
+    );
+    expect(websocketEndpoint("https://devnet.helius-rpc.com/?api-key=k")).toBe(
+      "wss://devnet.helius-rpc.com/?api-key=k",
+    );
+    expect(websocketEndpoint("http://127.0.0.1:8899")).toBe("ws://127.0.0.1:8899/");
   });
 });
