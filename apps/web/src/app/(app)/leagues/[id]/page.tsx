@@ -59,7 +59,12 @@ export default async function LeaguePage({ params }: { params: Promise<{ id: str
   // transactions with a wallet popup between them — a reload in that gap would
   // otherwise leave a member with no control that reaches the second half.
   const myWallet = user ? await memberWallet(client, id, user.id) : null;
-  const resumable = myWallet !== null && (await getOnChainJoin(client, id, myWallet)) === null;
+  // Pot leagues only: a free league's join ends at the rules signature (see
+  // `JoinPanel`), so it never owes an on-chain record and must not be offered one.
+  const resumable =
+    stored.rules.pot !== null &&
+    myWallet !== null &&
+    (await getOnChainJoin(client, id, myWallet)) === null;
 
   const anchored = chain?.anchoredAt !== null && chain?.anchoredAt !== undefined;
   const isCommissioner = user !== null && commissioner?.commissioner_id === user.id;
@@ -90,6 +95,7 @@ export default async function LeaguePage({ params }: { params: Promise<{ id: str
     anchored,
     hasTeam: myWallet !== null,
     onChainJoined: myWallet !== null && !resumable,
+    hasPot: stored.rules.pot !== null,
     leagueState: league.state,
     seatsFree: taken < stored.rules.league.maxTeams,
     fieldLocked: Date.now() >= stored.rules.draft.scheduledAt * 1000,

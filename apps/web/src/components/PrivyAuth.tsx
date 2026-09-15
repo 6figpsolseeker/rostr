@@ -20,12 +20,29 @@
  */
 
 import { PrivyProvider, usePrivy } from "@privy-io/react-auth";
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { useSignMessage, useSignTransaction, useWallets } from "@privy-io/react-auth/solana";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { ReactNode } from "react";
+import { parseCluster } from "@rostr/escrow";
 import type { AccountGap } from "@/lib/account";
 import { privySyncKey } from "@/lib/privy-sync";
+import { embeddedSolanaAddress, privyChain } from "@/lib/privy-wallet";
 
 const APP_ID = process.env["NEXT_PUBLIC_PRIVY_APP_ID"]?.trim() ?? "";
+
+/**
+ * The Privy chain for this build, from the same declaration `WalletProviders`
+ * reads — with the same devnet fallback, for the same reason given there.
+ */
+const CHAIN = privyChain(parseCluster(process.env["NEXT_PUBLIC_SOLANA_CLUSTER"]) ?? "devnet");
 
 export function PrivyAuthProvider({ children }: { children: ReactNode }) {
   // Unset, the app renders exactly as before rather than crashing every page:
@@ -60,6 +77,15 @@ export type PrivySessionStatus =
   | "signed-in"
   | "error";
 
+/** A Privy embedded wallet reduced to the two things this app asks of a wallet. */
+export interface PrivyEmbeddedWallet {
+  readonly address: string;
+  /** Shows Privy's confirmation, then returns the ed25519 signature. */
+  signMessage(message: Uint8Array): Promise<Uint8Array>;
+  /** Signs serialised transaction bytes for this build's chain, without sending them. */
+  signTransaction(serialized: Uint8Array): Promise<Uint8Array>;
+}
+
 export interface PrivySession {
   readonly status: PrivySessionStatus;
   /** What the account still needs, as the server reported it. Empty until signed in. */
@@ -70,6 +96,12 @@ export interface PrivySession {
   readonly error: { readonly code: string; readonly message: string } | null;
   /** The X handle Privy has linked, or `null`. */
   readonly xUsername: string | null;
+  /**
+   * The Solana wallet Privy generated for this user, ready to sign — or `null`
+   * while signed out, while Privy is still creating it, or on a build with no
+   * Privy app. Screens reach it through `useLeagueWallet`, not directly.
+   */
+  readonly wallet: PrivyEmbeddedWallet | null;
   signIn(): void;
   /** Post the current Privy login to the server again, after an `error`. */
   retry(): void;
@@ -84,6 +116,7 @@ const NOT_CONFIGURED: PrivySession = {
   isNew: false,
   error: { code: "NOT_CONFIGURED", message: "Sign-in is not configured here" },
   xUsername: null,
+  wallet: null,
   signIn: () => {},
   retry: () => {},
   // No Privy here, but there may still be a rostr session to end.
@@ -191,6 +224,36 @@ function useConfiguredSession(): PrivySession {
 
   const twitter = privy.user?.twitter ?? null;
 
+  // The embedded wallet, matched by address against what Privy's user record
+  // says it generated — not "the first Solana wallet Privy can see", which
+  // would include an external one connected through Privy's own modal.
+  const { wallets: solanaWallets } = useWallets();
+  const { signMessage } = useSignMessage();
+  const { signTransaction } = useSignTransaction();
+  const embeddedAddress =
+    privy.authenticated && privy.user ? embeddedSolanaAddress(privy.user) : null;
+  const connected = embeddedAddress
+    ? (solanaWallets.find((candidate) => candidate.address === embeddedAddress) ?? null)
+    : null;
+
+  const wallet = useMemo<PrivyEmbeddedWallet | null>(() => {
+    if (!connected) return null;
+    return {
+      address: connected.address,
+      signMessage: async (message) =>
+        (await signMessage({ message, wallet: connected })).signature,
+      signTransaction: async (transaction) => {
+        if (CHAIN === null) {
+          throw new Error(
+            "A Privy wallet cannot sign on a local validator. Use a keypair or an extension wallet there.",
+          );
+        }
+        return (await signTransaction({ transaction, wallet: connected, chain: CHAIN }))
+          .signedTransaction;
+      },
+    };
+  }, [connected, signMessage, signTransaction]);
+
   const status: PrivySessionStatus = !privy.ready
     ? "loading"
     : !privy.authenticated
@@ -207,6 +270,7 @@ function useConfiguredSession(): PrivySession {
     isNew: exchange?.isNew ?? false,
     error,
     xUsername: twitter?.username ?? null,
+    wallet,
     signIn: () => privy.login(),
     retry: () => {
       posted.current = null;

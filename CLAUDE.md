@@ -3024,8 +3024,29 @@ login on every page load, so a sign-out that only revoked our session would sign
 person straight back in on the next page. `usePrivySession().signOut` does both; use it
 rather than calling `DELETE /api/auth/session` alone.
 
-**Still open:** the join and anchor panels sign through the wallet adapter, so a Privy
-embedded wallet cannot yet sign a join or anchor a league. The owner designs the screens.
+**The Privy wallet signs joins and anchors, as of 2026-09-15.** `useLeagueWallet()` hands
+`JoinPanel` and `AnchorPanel` the same `{ publicKey, signMessage, signTransaction }` shape
+they took from `useWallet()`, backed by the Privy embedded wallet when there is one and by
+the adapter otherwise. Three things in it are load-bearing:
+
+- **The chain is passed on every Privy signature** (`privyChain` in `lib/privy-wallet.ts`),
+  from `NEXT_PUBLIC_SOLANA_CLUSTER`. The adapter's own standard-wallet bridge passes none to
+  `signTransaction`, which is why this is a hook rather than registering Privy's wallet with
+  the adapter. Localnet has no Privy chain and refuses.
+- **The embedded wallet is matched by address** against what Privy's user record says it
+  generated, never "the first Solana wallet Privy can see".
+- **`@privy-io/react-auth/solana` needs `@solana-program/memo`, `system` and `token`
+  installed** — optional peers that are not optional for that entry point. Without them every
+  page 500s with `Module not found`, in dev and in the build.
+
+**A free league's join ends at the rules signature** — owner's rule, 2026-09-13: "for signing
+the free message signature only commisioners need sol." `join_league` costs the member rent
+and nothing reads its account in a free league, so `JoinPanel` stops at consent there, the
+league page offers no on-chain resume step, and `commissionerSetup` lists three steps
+(`hasPot`). Pot leagues are unchanged. `/join-onchain` still exists and still works.
+
+**Not moved to the Privy wallet:** `DepositPanel`, `SettlementPanel` and `DraftLobby`'s
+`start_season` — all pot-only, and pots are out of v1. They still need an extension wallet.
 
 **Wallets:** Phantom, Solflare, and Coinbase adapters are registered explicitly, but most
 wallets — including Seed Vault on Seeker — auto-register via the Wallet Standard and need

@@ -93,6 +93,16 @@ export interface CommissionerSetupInput {
   readonly hasTeam: boolean;
   /** The `Membership` PDA exists and is recorded in `league_onchain_joins`. */
   readonly onChainJoined: boolean;
+  /**
+   * The league plays for a pot, so the on-chain membership is owed at all.
+   *
+   * **A free league has three steps, not four** (owner, 2026-09-13: only the
+   * commissioner needs SOL for a free league). `join_league` costs the member
+   * rent and nothing reads its account in a free league, so `JoinPanel` stops at
+   * the rules signature there — and a checklist that still listed ONCHAIN would
+   * name a step with no button, or tick one that never happened.
+   */
+  readonly hasPot: boolean;
   /** `leagues.state`. Only `FORMING` accepts members. */
   readonly leagueState: string;
   /** `taken < maxTeams`. */
@@ -157,7 +167,7 @@ export function commissionerSetupStep(input: CommissionerSetupInput): SetupStep 
   if (!input.anchored) return "ANCHOR";
   if (!input.hasLinkedWallet) return "LINK";
   if (!input.hasTeam) return "SEAT";
-  if (!input.onChainJoined) return "ONCHAIN";
+  if (input.hasPot && !input.onChainJoined) return "ONCHAIN";
   return "DONE";
 }
 
@@ -212,11 +222,13 @@ export function commissionerSetup(input: CommissionerSetupInput): CommissionerSe
   const complete = step === "DONE";
   const next = complete || blocker !== null ? null : step;
 
-  const items = SETUP_ORDER.map((key): SetupItem => ({
-    key,
-    done: satisfied(input, key),
-    current: key === next,
-  }));
+  const items = SETUP_ORDER.filter((key) => input.hasPot || key !== "ONCHAIN").map(
+    (key): SetupItem => ({
+      key,
+      done: satisfied(input, key),
+      current: key === next,
+    }),
+  );
 
   return {
     next,
