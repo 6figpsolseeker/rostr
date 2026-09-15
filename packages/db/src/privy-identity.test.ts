@@ -1,11 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import {
-  beginEmailSignIn,
-  createUser,
-  findUserByWallet,
-  getWallets,
-  linkWallet,
-} from "./identity.js";
+import { createUser, findUserByWallet, getWallets, linkWallet } from "./identity.js";
 import {
   PrivySignInError,
   signInWithPrivy,
@@ -122,7 +116,7 @@ describe("signInWithPrivy — which account", () => {
 
   it("keeps the first verification time when attaching an already-verified account", async () => {
     const client = await fresh();
-    await beginEmailSignIn(client, "alice@example.com");
+    await createUser(client, "alice@example.com", "Alice");
     const earlier = "2026-08-01T00:00:00.000Z";
     await client.query("UPDATE users SET email_verified_at = $1", [earlier]);
 

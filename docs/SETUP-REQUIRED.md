@@ -176,9 +176,14 @@ with no check.
 
 Devnet SOL is free and worth nothing; this is a rate limit, not a cost.
 
-### ⬜ Email provider (`RESEND_API_KEY`, `EMAIL_FROM`)
+### ✅ Email provider (`RESEND_API_KEY`, `EMAIL_FROM`) — no longer needed
 
-**Blocks:** anyone signing in who is not sitting at the dev server.
+**Retired 2026-09-14.** Sign-in moved to Privy, which sends the code itself, and the
+emailed-code routes and `apps/web/src/lib/email.ts` were deleted. Nothing reads these two
+variables now; they can be removed from Vercel. The text below is the original entry, kept
+as a record.
+
+**Blocked:** anyone signing in who is not sitting at the dev server.
 **Needed by:** before anyone but you uses the app — so, before the first real league.
 **Cost:** Resend's free tier is 3,000 emails a month, which is far more than this needs.
 

@@ -4,7 +4,7 @@ import {
   consumeRateLimit,
   hashedIp,
   purgeIdleRateLimits,
-  SIGN_IN_PER_EMAIL,
+  PRIVY_SIGN_IN_PER_IP,
 } from "./rate-limit.js";
 import type { RateLimitRule } from "./rate-limit.js";
 import { createTestDatabase } from "./testing.js";
@@ -149,12 +149,14 @@ describe("consumeRateLimit", () => {
   it("survives the real sign-in rule", async () => {
     db = await createTestDatabase();
 
-    for (let i = 0; i < SIGN_IN_PER_EMAIL.limit; i++) {
-      expect((await consumeRateLimit(db, SIGN_IN_PER_EMAIL, "a@b.com", NOW)).allowed).toBe(
-        true,
-      );
+    for (let i = 0; i < PRIVY_SIGN_IN_PER_IP.limit; i++) {
+      expect(
+        (await consumeRateLimit(db, PRIVY_SIGN_IN_PER_IP, "203.0.113.7", NOW)).allowed,
+      ).toBe(true);
     }
-    expect((await consumeRateLimit(db, SIGN_IN_PER_EMAIL, "a@b.com", NOW)).allowed).toBe(false);
+    expect((await consumeRateLimit(db, PRIVY_SIGN_IN_PER_IP, "203.0.113.7", NOW)).allowed).toBe(
+      false,
+    );
   });
 });
 

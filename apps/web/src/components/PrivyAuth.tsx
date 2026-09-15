@@ -86,7 +86,10 @@ const NOT_CONFIGURED: PrivySession = {
   xUsername: null,
   signIn: () => {},
   retry: () => {},
-  signOut: async () => {},
+  // No Privy here, but there may still be a rostr session to end.
+  signOut: async () => {
+    await fetch("/api/auth/session", { method: "DELETE" }).catch(() => undefined);
+  },
   linkX: () => {},
   unlinkX: async () => {},
 };

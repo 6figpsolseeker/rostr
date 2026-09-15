@@ -1,13 +1,15 @@
 /**
- * Users, email verification, and wallet linking.
+ * Users and wallet linking.
+ *
+ * Signing in lives in `privy-identity.ts` since 2026-09-14; the emailed-code
+ * functions that used to be here were removed with it.
  *
  * A wallet is an address, not a person. Email gives an identity that exists
  * before someone opens the app — which invites, display names, and time-boxed
  * notifications all need.
  */
 
-import { randomInt, timingSafeEqual } from "node:crypto";
-import { isValidWalletAddress, sha256Hex } from "@rostr/core";
+import { isValidWalletAddress } from "@rostr/core";
 import type { SqlClient } from "./client.js";
 import { isUniqueViolation } from "./pg-errors.js";
 
@@ -19,8 +21,6 @@ export class IdentityError extends Error {
       | "USER_NOT_FOUND"
       | "INVALID_WALLET"
       | "WALLET_TAKEN"
-      | "TOKEN_INVALID"
-      | "TOKEN_EXPIRED"
       | "INVALID_USERNAME"
       | "USERNAME_TAKEN",
   ) {
@@ -43,8 +43,8 @@ export interface User {
    * join or invite. What it cannot be is a precondition of *signing in*, because
    * every account created before this column existed has none, and because
    * demanding it during sign-in would mean the flow behaves differently for a
-   * new email than for a known one — which is exactly the tell
-   * `beginEmailSignIn` goes to some trouble not to give.
+   * new email than for a known one — a tell that would reveal which emails
+   * already have accounts here.
    */
   readonly username: string | null;
 }
@@ -103,205 +103,6 @@ export async function findUserByEmail(db: SqlClient, email: string): Promise<Use
     [email],
   );
   return row ? toUser(row) : null;
-}
-
-// ---------------------------------------------------------------------------
-// Email verification
-// ---------------------------------------------------------------------------
-
-/**
- * How long a sign-in code stays usable.
- *
- * Ten minutes, where the link it replaced lasted twenty-four hours. The link
- * could afford that: `randomBytes(32)` is 2^256 possibilities and guessing was
- * never the threat. A six-digit code is 1,000,000, so the window in which
- * guessing is possible at all is part of what keeps it safe — along with
- * {@link MAX_CODE_ATTEMPTS} and the per-address limit in the rate limiter.
- *
- * Ten minutes is also about as long as anyone waits for an email before giving
- * up and asking for another, so it costs almost nothing in practice.
- */
-export const VERIFICATION_TTL_MS = 10 * 60 * 1000;
-
-/**
- * Wrong guesses before a code is destroyed.
- *
- * With this, an attacker gets five tries per issued code rather than unlimited
- * tries against a million possibilities — and issuing codes is itself capped by
- * `SIGN_IN_PER_EMAIL`. Without it, six digits would be guessable in an
- * afternoon and this whole change would be a downgrade.
- *
- * Five rather than three: people mistype, and a code that dies on a fat-fingered
- * digit sends them back to their inbox for another one, which is its own kind of
- * broken.
- */
-export const MAX_CODE_ATTEMPTS = 5;
-
-/**
- * Six digits, uniformly random.
- *
- * `randomInt` rather than `randomBytes` and a modulo: taking a byte modulo 10
- * makes the low digits likelier than the high ones, which shrinks the search
- * space for free. Padded, so `000042` stays six characters and cannot be
- * confused with a shorter code.
- */
-function generateCode(): string {
-  return randomInt(0, 1_000_000).toString().padStart(6, "0");
-}
-
-/**
- * Compare two hex digests without leaking how far they matched.
- *
- * Both sides are SHA-256 of something, so they are always the same length and
- * `timingSafeEqual` cannot throw here. Comparing hashes rather than the codes
- * themselves already blunts a timing attack — but the attacker supplies one
- * side, and an early-exit `===` over a value they control is the shape worth
- * never writing.
- */
-function sameHash(a: string, b: string): boolean {
-  return timingSafeEqual(Buffer.from(a, "hex"), Buffer.from(b, "hex"));
-}
-
-export interface VerificationToken {
-  /** Send this to the user. It is never stored — only its SHA-256 is. */
-  readonly token: string;
-  readonly expiresAt: Date;
-}
-
-/**
- * Issue a sign-in code.
- *
- * Only the SHA-256 is stored, so a database leak does not hand an attacker
- * working credentials — the same reasoning as password hashing. The attempt
- * counter resets here by construction, since the row is deleted and rewritten:
- * a fresh code deserves a fresh five tries.
- */
-export async function issueVerificationToken(
-  db: SqlClient,
-  userId: string,
-  now: Date = new Date(),
-): Promise<VerificationToken> {
-  const user = await getUser(db, userId);
-  if (!user) throw new IdentityError("User not found", "USER_NOT_FOUND");
-
-  const token = generateCode();
-  const expiresAt = new Date(now.getTime() + VERIFICATION_TTL_MS);
-
-  // Supersede any outstanding token so an old link cannot be reused.
-  await db.query("DELETE FROM email_verification_tokens WHERE user_id = $1", [userId]);
-  await db.query(
-    `INSERT INTO email_verification_tokens (user_id, token_hash, expires_at)
-     VALUES ($1, $2, $3)`,
-    [userId, sha256Hex(token), expiresAt.toISOString()],
-  );
-
-  return { token, expiresAt };
-}
-
-/**
- * Consume a sign-in code and mark the email verified.
- *
- * ## Looked up by user, not by credential
- *
- * The link version found its row by hashing the token, which works when the
- * token is unguessable and cannot work here: a wrong guess simply matches no
- * row, and there would be nothing to count the attempt against. So this takes
- * the address as well, finds that user's outstanding code, and compares.
- *
- * ## A wrong guess costs an attempt, not the code
- *
- * Deleting on the first mistake would make a mistyped digit indistinguishable
- * from an expired code, and send people back to their inbox constantly. The row
- * survives until {@link MAX_CODE_ATTEMPTS} is reached and is then destroyed —
- * which is what makes six digits safe.
- *
- * ## Every failure says the same thing
- *
- * Wrong code, no code outstanding, unknown address, too many attempts: all
- * `TOKEN_INVALID`. Distinguishing them would say whether an account exists, and
- * `beginEmailSignIn` goes to some trouble not to. Expiry is the one exception —
- * it is reported, because the user's next action differs and it reveals nothing
- * they did not already know.
- */
-export async function verifySignInCode(
-  db: SqlClient,
-  email: string,
-  code: string,
-  now: Date = new Date(),
-): Promise<User> {
-  const user = await findUserByEmail(db, email);
-  if (!user) throw new IdentityError("That code is not valid", "TOKEN_INVALID");
-
-  const [row] = await db.query<{
-    user_id: string;
-    expires_at: string;
-    token_hash: string;
-    attempts: number;
-  }>(
-    `SELECT user_id, expires_at, token_hash, attempts
-       FROM email_verification_tokens WHERE user_id = $1`,
-    [user.id],
-  );
-  if (!row) throw new IdentityError("That code is not valid", "TOKEN_INVALID");
-
-  if (!sameHash(row.token_hash, sha256Hex(code.trim()))) {
-    const attempts = Number(row.attempts) + 1;
-    if (attempts >= MAX_CODE_ATTEMPTS) {
-      await db.query("DELETE FROM email_verification_tokens WHERE user_id = $1", [user.id]);
-    } else {
-      await db.query("UPDATE email_verification_tokens SET attempts = $2 WHERE user_id = $1", [
-        user.id,
-        attempts,
-      ]);
-    }
-    throw new IdentityError("That code is not valid", "TOKEN_INVALID");
-  }
-
-  // Correct: single use, gone whether or not it had expired.
-  await db.query("DELETE FROM email_verification_tokens WHERE user_id = $1", [user.id]);
-
-  if (new Date(row.expires_at).getTime() < now.getTime()) {
-    throw new IdentityError("That code has expired", "TOKEN_EXPIRED");
-  }
-
-  const [updated] = await db.query<UserRow>(
-    // COALESCE, not assignment: these tokens double as sign-in links, so this
-    // runs on every login. Overwriting would keep resetting "verified since" to
-    // the most recent sign-in.
-    `UPDATE users SET email_verified_at = COALESCE(email_verified_at, $2) WHERE id = $1
-     RETURNING id, email, display_name, email_verified_at, username`,
-    [row.user_id, now.toISOString()],
-  );
-  return toUser(updated!);
-}
-
-/**
- * Start an email sign-in, registering the account if it is new.
- *
- * One entry point for both cases on purpose. Separate "register" and "sign in"
- * routes would differ in their responses, and the difference tells anyone who
- * asks whether a given email has an account here.
- */
-export async function beginEmailSignIn(
-  db: SqlClient,
-  email: string,
-  displayName?: string,
-  now: Date = new Date(),
-): Promise<{ user: User; token: VerificationToken; isNew: boolean }> {
-  const trimmed = email.trim();
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
-    throw new IdentityError("Not a valid email address", "TOKEN_INVALID");
-  }
-
-  const existing = await findUserByEmail(db, trimmed);
-  const user =
-    existing ?? (await createUser(db, trimmed, displayName?.trim() || trimmed.split("@")[0]!));
-
-  return {
-    user,
-    token: await issueVerificationToken(db, user.id, now),
-    isNew: existing === null,
-  };
 }
 
 // ---------------------------------------------------------------------------

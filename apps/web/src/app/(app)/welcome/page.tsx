@@ -8,11 +8,13 @@ import { currentUser, safeRedirect } from "@/lib/session";
 /**
  * The rest of signing up.
  *
- * An account is an email, a username and a wallet. Sign-in collects the first
- * and this collects the other two — **not** because it is tidier, but because
- * `beginEmailSignIn` answers identically whether or not an address is already
- * registered, and a sign-up form that asked for a username up front would
- * publish which emails have accounts here to anyone who tried one.
+ * An account is an email, a username and a wallet. Since 2026-09-14 Privy
+ * sign-in supplies the email and the wallet, so for most people this collects
+ * only the username. The wallet step stays for accounts that predate Privy and
+ * for anyone who wants to link an external wallet as well.
+ *
+ * The username is still asked for *after* sign-in rather than during it, so the
+ * sign-in screen never reveals which emails already have accounts here.
  *
  * A finished account is bounced straight through, so this is safe to link to
  * from anywhere and safe to land on twice.

@@ -159,9 +159,6 @@ export {
   consumeRateLimit,
   hashedIp,
   purgeIdleRateLimits,
-  SIGN_IN_ATTEMPT_PER_IP,
-  SIGN_IN_PER_EMAIL,
-  SIGN_IN_PER_IP,
   PRIVY_SIGN_IN_PER_IP,
   WALLET_CHALLENGE_PER_IP,
   WALLET_CHALLENGE_PER_USER,
@@ -189,20 +186,14 @@ export {
 } from "./sessions.js";
 
 export {
-  beginEmailSignIn,
   createUser,
   findUserByEmail,
   findUserByWallet,
   getUser,
   getWallets,
   IdentityError,
-  issueVerificationToken,
   linkWallet,
-  verifySignInCode,
-  MAX_CODE_ATTEMPTS,
-  VERIFICATION_TTL_MS,
   type User,
-  type VerificationToken,
   type Wallet,
 } from "./identity.js";
 
@@ -358,9 +349,3 @@ export { activateFromIr, IrError, moveToIr } from "./injured-reserve.js";
 export { lastWaiverRun, type WaiverRun, type WaiverRunClaim } from "./waiver-run.js";
 
 export { syncInjuries, type InjurySyncResult } from "./injuries.js";
-
-export {
-  issueWalletSignInChallenge,
-  signInWithWallet,
-  type WalletSignInChallenge,
-} from "./wallet-signin.js";

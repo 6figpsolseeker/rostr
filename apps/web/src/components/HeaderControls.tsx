@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import useSWR from "swr";
+import { usePrivySession } from "@/components/PrivyAuth";
 
 /**
  * The bell and the account menu — drop 9's header.
@@ -28,11 +29,14 @@ import useSWR from "swr";
  *
  * The design says *Disconnect wallet*, on the premise that the wallet is the
  * account. It is not, in this app, and the owner confirmed keeping it that way
- * on 2026-08-23: sign-in is an emailed code and the wallet is linked afterwards
- * by signature. Disconnecting the adapter does not end a session and ending a
- * session does not disconnect the adapter, so a single row doing both would be
- * labelled untruthfully. Signing out does land on `/`, which the design is
- * right about.
+ * on 2026-08-23. Since 2026-09-14 sign-in is Privy — an email and a code — and
+ * the wallet comes with the account, so there is still nothing to "disconnect".
+ * Signing out does land on `/`, which the design is right about.
+ *
+ * **Signing out ends the Privy login as well as the rostr session.** Ending
+ * only ours was a bug the day Privy landed: `PrivyAuthProvider` exchanges a
+ * live Privy login for a session on every page load, so the next page would
+ * have signed the person straight back in.
  */
 
 interface Notification {
@@ -93,6 +97,7 @@ export function HeaderControls({
   const [open, setOpen] = useState<"none" | "bell" | "account">("none");
   const [signingOut, setSigningOut] = useState(false);
   const wrapper = useRef<HTMLDivElement>(null);
+  const privy = usePrivySession();
 
   const { data } = useSWR<Notification[]>("/api/me/notifications", fetcher, {
     revalidateOnFocus: true,
@@ -132,7 +137,7 @@ export function HeaderControls({
 
   async function signOut(): Promise<void> {
     setSigningOut(true);
-    await fetch("/api/auth/session", { method: "DELETE" });
+    await privy.signOut();
     // The design is right that this lands on the landing page: the app's other
     // screens all need a session, so staying put would mean an immediate bounce.
     window.location.href = "/";
@@ -146,10 +151,10 @@ export function HeaderControls({
   if (!email) {
     return (
       <a
-        href="/welcome"
+        href="/signin"
         className="flex items-center gap-2 text-[13px] text-nocturne-neutral-400 transition-colors hover:text-nocturne-text"
       >
-        Connect wallet
+        Sign in
       </a>
     );
   }

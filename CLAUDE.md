@@ -525,6 +525,10 @@ because the two prove the same fact and authorise different things: one message
 would let a linking prompt — approved by somebody already inside the account —
 double as a session for it.
 
+**Wallet sign-in was removed on 2026-09-14**, with `SIGNIN_PREFIX`, when sign-in moved
+to Privy — see "Sign-in moves to Privy". Linking by signature stays, as the "advanced"
+external wallet. The confirmation above is a dated record, not a live feature.
+
 ### Handoff, 2026-08-23 — the design audit, and the crons are real
 
 Seven PRs landed (#207–#213), all from a three-agent audit of `docs/design/` against what
@@ -2912,7 +2916,8 @@ to accept a `userId` the client supplied, which meant anyone could join any leag
 anyone — the wallet signature proved they held a key, but nothing tied that key to the
 account being credited. If you find yourself reading an identifier out of a body, stop.
 
-Sign-in is an emailed link. `beginEmailSignIn` handles registration and sign-in through
+**Superseded 2026-09-14 — sign-in is Privy now; see the section below. This paragraph and
+the emailed-code routes it names are a record.** Sign-in was an emailed link. `beginEmailSignIn` handled registration and sign-in through
 one path on purpose: separate routes respond differently, and the difference tells anyone
 who asks whether an email has an account here. `/api/auth/request` answers identically
 either way for the same reason.
@@ -3000,9 +3005,27 @@ sign-in. Users fund their own SOL — no server signer, so "no private key of ou
 anywhere" stands. For free leagues only the commissioner needs SOL; for a pot league
 everyone does.
 
-**Not done yet:** the browser half (`@privy-io/react-auth`), and deleting what this
-replaces — `/api/auth/request`, `/api/auth/code`, `/api/auth/wallet-signin` and
-link-by-signature. The owner designs the screens. Owner setup is in `SETUP-REQUIRED.md`.
+**Done since, 2026-09-14.** The browser half is `components/PrivyAuth.tsx`: the provider in
+the root layout, and `usePrivySession()`, which exchanges a live Privy login for a rostr
+session **once, in the provider**, and re-posts only when the linked accounts change —
+how the wallet created after a first login and a later X link reach the server. The owner
+signed in through it against the hosted database the same day: existing account attached
+by email, embedded wallet recorded as primary.
+
+`/api/auth/request`, `/api/auth/code`, `/api/auth/wallet-signin`, `lib/email.ts` and their
+`@rostr/db` and `@rostr/core` halves were **deleted**. `/signin` is now one Privy button.
+
+**Link-by-signature was kept, and the line that listed it for deletion was wrong.** The
+owner chose to keep external wallets as an "advanced" linked wallet, and
+`/api/auth/wallet` plus `linkWalletWithSignature` are exactly that.
+
+**Signing out must end the Privy login too.** The provider re-exchanges any live Privy
+login on every page load, so a sign-out that only revoked our session would sign the
+person straight back in on the next page. `usePrivySession().signOut` does both; use it
+rather than calling `DELETE /api/auth/session` alone.
+
+**Still open:** the join and anchor panels sign through the wallet adapter, so a Privy
+embedded wallet cannot yet sign a join or anchor a league. The owner designs the screens.
 
 **Wallets:** Phantom, Solflare, and Coinbase adapters are registered explicitly, but most
 wallets — including Seed Vault on Seeker — auto-register via the Wallet Standard and need
