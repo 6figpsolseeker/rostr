@@ -181,10 +181,17 @@ describe("privyWalletStatus", () => {
     expect(privyWalletStatus(base)).toBe("ready");
   });
 
-  it("is loading while Privy starts, and while a new wallet is still being created", () => {
+  it("is loading while Privy or its wallet list starts up", () => {
     expect(privyWalletStatus({ ...base, ready: false, found: false })).toBe("loading");
     expect(privyWalletStatus({ ...base, walletsReady: false, found: false })).toBe("loading");
-    expect(privyWalletStatus({ ...base, embeddedAddress: null, found: false })).toBe("loading");
+  });
+
+  it("is creating, not loading, once Privy has loaded and there is no wallet yet", () => {
+    // A failed creation is only retried on a fresh login, so this has to be a
+    // state a screen can offer to fix rather than an endless spinner.
+    expect(privyWalletStatus({ ...base, embeddedAddress: null, found: false })).toBe(
+      "creating",
+    );
   });
 
   it("is none when nobody is logged in to Privy", () => {
@@ -193,7 +200,7 @@ describe("privyWalletStatus", () => {
     ).toBe("none");
   });
 
-  it("is missing, not loading, when Privy has loaded and the wallet is not there", () => {
+  it("is missing when Privy has loaded and the wallet it generated is not there", () => {
     expect(privyWalletStatus({ ...base, found: false })).toBe("missing");
   });
 });

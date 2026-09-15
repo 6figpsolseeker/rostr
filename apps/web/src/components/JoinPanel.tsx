@@ -15,7 +15,9 @@ import {
 } from "@rostr/escrow";
 import { AnchorProvider, type Wallet } from "@coral-xyz/anchor";
 import bs58 from "bs58";
+import { usePrivySession } from "@/components/PrivyAuth";
 import { useLeagueWallet } from "@/components/useLeagueWallet";
+import type { PrivyWalletStatus } from "@/lib/privy-wallet";
 
 /**
  * The join flow.
@@ -641,14 +643,40 @@ export function JoinPanel({
  * Never an extension wallet's connect button: someone logged in to Privy has a
  * wallet coming, and offering Phantom in that gap is how a member was asked to
  * sign with the wrong wallet. Shared with `AnchorPanel`.
+ *
+ * `creating` offers to create the wallet, because Privy retries a failed or
+ * interrupted creation only on a fresh login — without the button a person
+ * whose creation failed would read "getting ready" forever.
  */
-export function WalletPreparing({ status }: { status: "loading" | "ready" | "missing" }) {
-  return status === "missing" ? (
-    <p className="text-sm text-amber-200">
-      Your wallet could not be loaded. Reload the page; if it is still missing, sign out and
-      sign back in.
-    </p>
-  ) : (
-    <p className="text-sm text-nocturne-neutral-400">Getting your wallet ready…</p>
+export function WalletPreparing({ status }: { status: PrivyWalletStatus }) {
+  const privy = usePrivySession();
+  const [asked, setAsked] = useState(false);
+
+  if (status === "missing") {
+    return (
+      <p className="text-sm text-amber-200">
+        Your wallet could not be loaded. Reload the page; if it is still missing, sign out and
+        sign back in.
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <p className="text-sm text-nocturne-neutral-400">Getting your wallet ready…</p>
+      {status === "creating" && (
+        <button
+          type="button"
+          disabled={asked}
+          onClick={() => {
+            setAsked(true);
+            void privy.createWallet().finally(() => setAsked(false));
+          }}
+          className="text-xs text-nocturne-accent-300 hover:underline disabled:opacity-40"
+        >
+          {asked ? "Creating…" : "Taking a while? Create my wallet"}
+        </button>
+      )}
+    </div>
   );
 }

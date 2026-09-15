@@ -32,9 +32,9 @@ export interface LeagueWallet {
   /** Which wallet is answering, or `null` when there is none to sign with. */
   readonly kind: "privy" | "extension" | null;
   /**
-   * The Privy wallet's state when `kind` is not `privy`: `loading` and
-   * `missing` mean a Privy wallet is expected and the panel should say so rather
-   * than offer an extension. `none` means an extension is the right offer.
+   * The Privy wallet's state when `kind` is not `privy`: anything but `none` means
+   * a Privy wallet is expected and the panel should say so rather than offer an
+   * extension. `none` means an extension is the right offer.
    */
   readonly privyStatus: PrivyWalletStatus;
   readonly connected: boolean;
@@ -65,7 +65,7 @@ export function useLeagueWallet(): LeagueWallet {
       };
     }
 
-    if (privyStatus === "loading" || privyStatus === "missing") {
+    if (privyStatus !== "none") {
       return {
         kind: null,
         privyStatus,

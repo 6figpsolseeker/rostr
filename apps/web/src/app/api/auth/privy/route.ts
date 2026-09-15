@@ -42,7 +42,6 @@ const STATUS: Record<string, number> = {
   EMAIL_REQUIRED: 422,
   ACCOUNT_CONFLICT: 409,
   WALLET_TAKEN: 409,
-  X_TAKEN: 409,
 };
 
 export async function POST(request: Request): Promise<NextResponse> {
@@ -75,7 +74,9 @@ export async function POST(request: Request): Promise<NextResponse> {
       username: user.username,
       verifiedWallets: (await getWallets(db(), user.id)).length,
     });
-    const response = NextResponse.json({ signedIn: true, isNew, gaps });
+    // `userId` is the caller's own id, returned so the tab can tell on a later
+    // page load whether rostr's session is still this account (`canSkipExchange`).
+    const response = NextResponse.json({ signedIn: true, isNew, gaps, userId: user.id });
 
     if ((await currentUser())?.id !== user.id) {
       const session = await createSession(db(), user.id);

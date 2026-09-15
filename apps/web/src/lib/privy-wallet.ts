@@ -137,20 +137,22 @@ export function websocketEndpoint(httpEndpoint: string): string {
  * The embedded wallet's state, as a screen should describe it.
  *
  * - `none` — nobody is logged in to Privy, so there is no wallet to wait for.
- * - `loading` — Privy is starting up, or the wallet has not been created yet.
- *   A new person's wallet is made a moment *after* login.
+ * - `loading` — Privy, or its list of wallets, is still starting up.
+ * - `creating` — Privy has loaded and this user has no embedded wallet yet. A new
+ *   person's wallet is made a moment *after* login, so this is normally brief;
+ *   but if that creation failed or was interrupted Privy only tries again on a
+ *   fresh login, so a screen offers to create it rather than waiting forever.
  * - `ready` — it can sign.
- * - `missing` — Privy has loaded its wallets and says it generated one, but it
- *   is not among them. Nothing will fix this by waiting, so it is reported
- *   rather than shown as a spinner forever.
+ * - `missing` — Privy says it generated a wallet and it is not among the wallets
+ *   Privy loaded. Waiting will not fix it, so it is reported.
  *
- * **`loading` is why a league screen never falls back to an extension wallet
- * while someone is logged in to Privy.** The adapter auto-connects Phantom in a
- * browser that used it before, and it does so faster than Privy loads — so a
- * fallback taken during `loading` asked a member to sign with Phantom in place
- * of the wallet their account was given (seen 2026-09-15).
+ * **Anything but `none` and `ready` is why a league screen never falls back to an
+ * extension wallet while someone is logged in to Privy.** The adapter
+ * auto-connects Phantom in a browser that used it before, faster than Privy
+ * loads — a fallback taken in that gap asked a member to sign with Phantom in
+ * place of the wallet their account was given (seen 2026-09-15).
  */
-export type PrivyWalletStatus = "none" | "loading" | "ready" | "missing";
+export type PrivyWalletStatus = "none" | "loading" | "creating" | "ready" | "missing";
 
 export function privyWalletStatus(input: {
   readonly ready: boolean;
@@ -162,6 +164,7 @@ export function privyWalletStatus(input: {
   if (!input.ready) return "loading";
   if (!input.authenticated) return "none";
   if (input.found) return "ready";
-  if (!input.walletsReady || input.embeddedAddress === null) return "loading";
+  if (!input.walletsReady) return "loading";
+  if (input.embeddedAddress === null) return "creating";
   return "missing";
 }

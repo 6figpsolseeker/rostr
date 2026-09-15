@@ -3045,6 +3045,32 @@ and nothing reads its account in a free league, so `JoinPanel` stops at consent 
 league page offers no on-chain resume step, and `commissionerSetup` lists three steps
 (`hasPot`). Pot leagues are unchanged. `/join-onchain` still exists and still works.
 
+**Three-agent review, 2026-09-15 — seven findings, all fixed, none a security hole.**
+Worth knowing because each is easy to reintroduce:
+
+- **Two overlapping sign-ins of one pre-Privy account refused it as `ACCOUNT_CONFLICT`.**
+  Found independently by two reviewers. Both requests miss on the Privy id; the second waits
+  on the first's row lock and, at READ COMMITTED, re-reads a row already carrying _this_
+  Privy id. `signInWithPrivy` now carries on when the id is its own. The test stages the
+  race on PGlite's single connection by making the first lookup miss.
+- **A stale X link locked people out** (`X_TAKEN` rolled back the whole sign-in). X is
+  optional, so the stale holder is cleared instead; Privy allows one X account per Privy user.
+- **`/signin` redirected before a new person's wallet existed**, landing them on `/welcome`
+  offering Phantom and risking an aborted wallet creation. It now waits for the wallet, and
+  `status` is `signed-in` only for an exchange answered for the _current_ linked accounts.
+- **A failed wallet creation showed "getting ready" forever** — Privy retries only on a fresh
+  login. `walletStatus` has a `creating` state and the panels offer "Create my wallet".
+- **A refused sign-in had no way out**: the Privy login persists and re-fails on every page.
+  `/signin` offers "Use a different email", which signs out of Privy.
+- **Every full page load re-verified with Privy** and spent the 60/hour per-address bucket.
+  A tab now skips the POST when its linked accounts are unchanged _and_ `/api/me` confirms
+  the rostr session is still that account (`canSkipExchange`) — asked, never remembered.
+- The retry in `signInWithPrivy` had no test; it does now.
+
+"Privy generated" in the notes above is slightly strong: `isEmbeddedWalletLinkedAccount` also
+accepts a key imported into Privy. Its holder still proved control of the key, so the trust
+argument for `verified_at` is unchanged.
+
 **Not moved to the Privy wallet:** `DepositPanel`, `SettlementPanel` and `DraftLobby`'s
 `start_season` — all pot-only, and pots are out of v1. They still need an extension wallet.
 

@@ -36,3 +36,52 @@ export function privySyncKey(user: PrivySyncUser): string {
   );
   return [user.id, ...parts.sort()].join("\n");
 }
+
+/** What this tab remembers about its last successful exchange. */
+export interface ExchangeMemo {
+  readonly key: string;
+  readonly userId: string;
+}
+
+/**
+ * Whether a page load can skip `POST /api/auth/privy`.
+ *
+ * Every full page load remounts the provider, and without this each one cost a
+ * token from the per-address sign-in bucket, a call to Privy's API and a locking
+ * transaction — enough, on a shared address, to lock the next person out.
+ *
+ * Skipping is safe only when **both** still hold: the linked accounts are the
+ * ones this tab last exchanged (so there is nothing new for the server to
+ * record), **and** rostr's session is still that same account. The second is
+ * checked against the server rather than remembered, because a session can be
+ * revoked or replaced by another tab — and a remembered "already signed in"
+ * would then leave someone logged in to Privy with no rostr session at all.
+ */
+export function canSkipExchange(
+  memo: ExchangeMemo | null,
+  key: string,
+  sessionUserId: string | null,
+): boolean {
+  return (
+    memo !== null && sessionUserId !== null && memo.key === key && memo.userId === sessionUserId
+  );
+}
+
+/** Parse a stored memo, treating anything malformed as absent. */
+export function parseExchangeMemo(raw: string | null): ExchangeMemo | null {
+  if (raw === null) return null;
+  try {
+    const value = JSON.parse(raw) as unknown;
+    if (
+      typeof value === "object" &&
+      value !== null &&
+      typeof (value as ExchangeMemo).key === "string" &&
+      typeof (value as ExchangeMemo).userId === "string"
+    ) {
+      return { key: (value as ExchangeMemo).key, userId: (value as ExchangeMemo).userId };
+    }
+  } catch {
+    // fall through
+  }
+  return null;
+}

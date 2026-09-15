@@ -151,6 +151,66 @@ describe("signInWithPrivy — which account", () => {
     expect(await count(client, JOINED)).toBe(0);
   });
 
+  it("carries on when the email's account was attached by this same login's other request", async () => {
+    // Staged on one connection: the lookup by Privy id misses — it ran before the
+    // other request committed — and the lookup by email then sees that request's
+    // committed attach. Without the carve-out this is ACCOUNT_CONFLICT against
+    // the account this login owns.
+    const client = await fresh();
+    const existing = await createUser(client, "alice@example.com", "Alice");
+    await client.query("UPDATE users SET privy_user_id = $1 WHERE id = $2", [
+      "did:privy:alice",
+      existing.id,
+    ]);
+
+    let missed = false;
+    const racing = {
+      exec: (sql: string) => client.exec(sql),
+      query: async <T>(sql: string, params?: unknown[]): Promise<T[]> => {
+        if (!missed && sql.includes("WHERE privy_user_id = $1 FOR UPDATE")) {
+          missed = true;
+          return [];
+        }
+        return client.query<T>(sql, params);
+      },
+    } as unknown as typeof client;
+
+    const { user, isNew } = await signInWithPrivy(racing, account(), NOW);
+    expect(missed).toBe(true);
+    expect(user.id).toBe(existing.id);
+    expect(isNew).toBe(false);
+  });
+
+  it("retries once when a concurrent sign-in wins a unique index", async () => {
+    // PGlite is one connection, so the race is staged: the first INSERT fails the
+    // way the loser of two concurrent first sign-ins does, after the winner has
+    // committed its row.
+    const client = await fresh();
+    let raced = false;
+    const racing = {
+      exec: (sql: string) => client.exec(sql),
+      query: async <T>(sql: string, params?: unknown[]): Promise<T[]> => {
+        if (!raced && sql.trimStart().startsWith("INSERT INTO users")) {
+          raced = true;
+          await client.exec("ROLLBACK");
+          await client.query(
+            "INSERT INTO users (email, display_name, email_verified_at, privy_user_id) VALUES ('alice@example.com', 'alice', now(), 'did:privy:alice')",
+          );
+          await client.exec("BEGIN");
+          throw Object.assign(new Error("duplicate key value"), { code: "23505" });
+        }
+        return client.query<T>(sql, params);
+      },
+    } as unknown as typeof client;
+
+    const { user, isNew } = await signInWithPrivy(racing, account(), NOW);
+
+    expect(raced).toBe(true);
+    expect(isNew).toBe(false);
+    expect(user.email).toBe("alice@example.com");
+    expect(await count(client, "SELECT count(*)::int AS n FROM users")).toBe(1);
+  });
+
   it("signs a joined account in without an email", async () => {
     const client = await fresh();
     const first = await signInWithPrivy(client, account(), NOW);
@@ -255,24 +315,32 @@ describe("signInWithPrivy — X", () => {
     expect(await columns(client, user.id)).toMatchObject({ x_subject: null, x_username: null });
   });
 
-  it("refuses an X account already linked to someone else", async () => {
+  it("moves an X account off a stale holder instead of refusing the sign-in", async () => {
+    // Privy lets one X account belong to one Privy user, so a second rostr row
+    // still holding the subject holds a leftover — an unlink whose sync never
+    // landed. It must not lock the person who holds it now out of rostr.
     const client = await fresh();
-    await signInWithPrivy(client, account({ x: { subject: "12345", username: "alice" } }), NOW);
+    const old = await signInWithPrivy(
+      client,
+      account({ x: { subject: "12345", username: "alice" } }),
+      NOW,
+    );
 
-    expect(
-      await refusal(
-        signInWithPrivy(
-          client,
-          account({
-            privyUserId: "did:privy:bob",
-            verifiedEmail: "bob@example.com",
-            x: { subject: "12345", username: "alice" },
-          }),
-          NOW,
-        ),
-      ),
-    ).toBe("X_TAKEN");
-    expect(await count(client, "SELECT count(*)::int AS n FROM users")).toBe(1);
+    const { user } = await signInWithPrivy(
+      client,
+      account({
+        privyUserId: "did:privy:bob",
+        verifiedEmail: "bob@example.com",
+        x: { subject: "12345", username: "alice" },
+      }),
+      NOW,
+    );
+
+    expect(await columns(client, user.id)).toMatchObject({ x_subject: "12345" });
+    expect(await columns(client, old.user.id)).toMatchObject({
+      x_subject: null,
+      x_username: null,
+    });
   });
 });
 

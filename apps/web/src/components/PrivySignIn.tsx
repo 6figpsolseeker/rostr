@@ -18,7 +18,6 @@ const MESSAGES: Record<string, string> = {
   ACCOUNT_CONFLICT:
     "That email belongs to an account that signs in another way. Contact support.",
   WALLET_TAKEN: "Your wallet is linked to a different account. Contact support.",
-  X_TAKEN: "That X account is linked to a different rostr account.",
   TOKEN_INVALID: "That sign-in did not go through. Try again.",
   PRIVY_UNAVAILABLE: "Sign-in is unavailable right now. Try again in a minute.",
   NOT_CONFIGURED: "Sign-in is not configured on this deployment.",
@@ -27,15 +26,21 @@ const MESSAGES: Record<string, string> = {
 export function PrivySignIn({ next }: { next: string }) {
   const session = usePrivySession();
 
+  // Wait for the wallet as well as the session. Privy creates a new person's
+  // wallet only after login, and navigating away mid-creation both sent them to
+  // `/welcome` to "connect a wallet" and could abort the creation. `missing` is
+  // let through: it will not resolve by waiting, and `/welcome` can still finish.
+  const walletSettled = session.walletStatus === "ready" || session.walletStatus === "missing";
+
   useEffect(() => {
-    if (session.status !== "signed-in") return;
+    if (session.status !== "signed-in" || !walletSettled) return;
     // An account is an email, a username and a wallet. Privy supplies the first
     // and the third; a missing username is asked for at `/welcome`, with `next`
     // carried through. A full navigation, because the session cookie was set by
     // a response the server component cache has not seen.
     window.location.href =
       session.gaps.length > 0 ? `/welcome?next=${encodeURIComponent(next)}` : next;
-  }, [session.status, session.gaps, next]);
+  }, [session.status, session.gaps, walletSettled, next]);
 
   const busy = session.status === "loading" || session.status === "syncing";
   const unconfigured = session.error?.code === "NOT_CONFIGURED";
@@ -54,10 +59,28 @@ export function PrivySignIn({ next }: { next: string }) {
             : "Sign in with email"}
       </button>
 
+      {session.status === "signed-in" && !walletSettled && (
+        <p className="text-sm text-nocturne-neutral-400">Setting up your wallet…</p>
+      )}
+
       {session.error && (
-        <p className="text-sm text-amber-200">
-          {MESSAGES[session.error.code] ?? session.error.message}
-        </p>
+        <div className="space-y-2">
+          <p className="text-sm text-amber-200">
+            {MESSAGES[session.error.code] ?? session.error.message}
+          </p>
+          {!unconfigured && (
+            // A refusal survives a reload — the Privy login is still there and is
+            // exchanged again on every page — so retrying alone cannot get
+            // someone out of, say, ACCOUNT_CONFLICT. Signing out of Privy can.
+            <button
+              type="button"
+              onClick={() => void session.signOut()}
+              className="text-xs text-nocturne-accent-300 hover:underline"
+            >
+              Use a different email
+            </button>
+          )}
+        </div>
       )}
     </div>
   );

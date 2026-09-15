@@ -20,7 +20,12 @@
  */
 
 import { PrivyProvider, usePrivy } from "@privy-io/react-auth";
-import { useSignMessage, useSignTransaction, useWallets } from "@privy-io/react-auth/solana";
+import {
+  useCreateWallet,
+  useSignMessage,
+  useSignTransaction,
+  useWallets,
+} from "@privy-io/react-auth/solana";
 import { createSolanaRpc, createSolanaRpcSubscriptions } from "@solana/kit";
 import {
   createContext,
@@ -34,7 +39,12 @@ import {
 import type { ReactNode } from "react";
 import { parseCluster } from "@rostr/escrow";
 import type { AccountGap } from "@/lib/account";
-import { privySyncKey } from "@/lib/privy-sync";
+import {
+  canSkipExchange,
+  parseExchangeMemo,
+  privySyncKey,
+  type ExchangeMemo,
+} from "@/lib/privy-sync";
 import {
   browserRpcEndpoint,
   embeddedSolanaAddress,
@@ -139,6 +149,8 @@ export interface PrivySession {
   signIn(): void;
   /** Post the current Privy login to the server again, after an `error`. */
   retry(): void;
+  /** Ask Privy to create the embedded wallet, for a `walletStatus` of `creating` that has stalled. */
+  createWallet(): Promise<void>;
   signOut(): Promise<void>;
   linkX(): void;
   unlinkX(): Promise<void>;
@@ -155,6 +167,7 @@ const NOT_CONFIGURED: PrivySession = {
   configured: false,
   signIn: () => {},
   retry: () => {},
+  createWallet: async () => {},
   // No Privy here, but there may still be a rostr session to end.
   signOut: async () => {
     await fetch("/api/auth/session", { method: "DELETE" }).catch(() => undefined);
@@ -176,6 +189,8 @@ function SessionExchange({ children }: { children: ReactNode }) {
 }
 
 interface ExchangeResult {
+  /** The sync key this result answered for — see `status`. */
+  readonly key: string;
   readonly gaps: readonly AccountGap[];
   readonly isNew: boolean;
 }
@@ -184,7 +199,6 @@ function useConfiguredSession(): PrivySession {
   const privy = usePrivy();
   const [exchange, setExchange] = useState<ExchangeResult | null>(null);
   const [error, setError] = useState<PrivySession["error"]>(null);
-  const [syncing, setSyncing] = useState(false);
   const posted = useRef<string | null>(null);
   const [attempt, setAttempt] = useState(0);
 
@@ -200,9 +214,28 @@ function useConfiguredSession(): PrivySession {
     posted.current = key;
 
     let cancelled = false;
-    setSyncing(true);
     void (async () => {
       try {
+        // A page load whose linked accounts this tab already exchanged, against a
+        // rostr session that is still that account, has nothing to tell the
+        // server — see `canSkipExchange`. The session is asked, not remembered.
+        const memo = parseExchangeMemo(readMemo());
+        if (memo !== null && memo.key === key) {
+          const me = (await fetch("/api/me", { cache: "no-store" })
+            .then((response) => response.json())
+            .catch(() => null)) as {
+            user?: { id?: string } | null;
+            gaps?: AccountGap[];
+          } | null;
+          if (canSkipExchange(memo, key, me?.user?.id ?? null)) {
+            if (!cancelled) {
+              setExchange({ key, gaps: me?.gaps ?? [], isNew: false });
+              setError(null);
+            }
+            return;
+          }
+        }
+
         const token = await privy.getAccessToken();
         if (!token) throw new ExchangeError("TOKEN_INVALID", "Privy returned no access token");
 
@@ -214,6 +247,7 @@ function useConfiguredSession(): PrivySession {
         const body = (await response.json().catch(() => ({}))) as {
           gaps?: AccountGap[];
           isNew?: boolean;
+          userId?: string;
           error?: string;
           code?: string;
         };
@@ -223,8 +257,9 @@ function useConfiguredSession(): PrivySession {
             body.error ?? "Sign-in failed",
           );
         }
+        if (typeof body.userId === "string") writeMemo({ key, userId: body.userId });
         if (!cancelled) {
-          setExchange({ gaps: body.gaps ?? [], isNew: body.isNew === true });
+          setExchange({ key, gaps: body.gaps ?? [], isNew: body.isNew === true });
           setError(null);
         }
       } catch (caught) {
@@ -238,8 +273,6 @@ function useConfiguredSession(): PrivySession {
               : { code: "NETWORK", message: "Could not reach the server" },
           );
         }
-      } finally {
-        if (!cancelled) setSyncing(false);
       }
     })();
 
@@ -252,6 +285,7 @@ function useConfiguredSession(): PrivySession {
   const signOut = useCallback(async () => {
     // Our session first: a failed Privy logout must not leave a rostr session.
     await fetch("/api/auth/session", { method: "DELETE" }).catch(() => undefined);
+    writeMemo(null);
     await privy.logout();
     posted.current = null;
     setExchange(null);
@@ -266,44 +300,66 @@ function useConfiguredSession(): PrivySession {
   const { wallets: solanaWallets, ready: walletsReady } = useWallets();
   const { signMessage } = useSignMessage();
   const { signTransaction } = useSignTransaction();
+  const { createWallet } = useCreateWallet();
   const embeddedAddress =
     privy.authenticated && privy.user ? embeddedSolanaAddress(privy.user) : null;
   const connected = embeddedAddress
     ? (solanaWallets.find((candidate) => candidate.address === embeddedAddress) ?? null)
     : null;
 
+  // Privy's signing hooks return new functions on every render, and `connected`
+  // is rebuilt too. Read them through refs, so the wallet object below changes
+  // only when the wallet's address does — an effect keyed on it would otherwise
+  // refire on every render.
+  const latest = useRef({ signMessage, signTransaction, connected });
+  latest.current = { signMessage, signTransaction, connected };
+  const connectedAddress = connected?.address ?? null;
+
   const wallet = useMemo<PrivyEmbeddedWallet | null>(() => {
-    if (!connected) return null;
+    if (connectedAddress === null) return null;
+    const current = () => {
+      const target = latest.current.connected;
+      if (!target || target.address !== connectedAddress) {
+        throw new Error("Your wallet changed. Reload the page and try again.");
+      }
+      return target;
+    };
     return {
-      address: connected.address,
+      address: connectedAddress,
       signMessage: async (message) =>
-        (await signMessage({ message, wallet: connected })).signature,
+        (await latest.current.signMessage({ message, wallet: current() })).signature,
       signTransaction: async (transaction) => {
         if (CHAIN === null) {
           throw new Error(
             "A Privy wallet cannot sign on a local validator. Use a keypair or an extension wallet there.",
           );
         }
-        return (await signTransaction({ transaction, wallet: connected, chain: CHAIN }))
-          .signedTransaction;
+        return (
+          await latest.current.signTransaction({ transaction, wallet: current(), chain: CHAIN })
+        ).signedTransaction;
       },
     };
-  }, [connected, signMessage, signTransaction]);
+  }, [connectedAddress]);
 
+  // Signed in only once the exchange answered for *these* linked accounts. A
+  // result for an earlier key is stale: it predates the wallet or the X link that
+  // changed the key, and a screen acting on it would, for instance, send a new
+  // person to set up a wallet that is already there.
+  const current = exchange !== null && exchange.key === key;
   const status: PrivySessionStatus = !privy.ready
     ? "loading"
     : !privy.authenticated
       ? "signed-out"
       : error
         ? "error"
-        : syncing || exchange === null
-          ? "syncing"
-          : "signed-in";
+        : current
+          ? "signed-in"
+          : "syncing";
 
   return {
     status,
-    gaps: exchange?.gaps ?? [],
-    isNew: exchange?.isNew ?? false,
+    gaps: current ? exchange.gaps : [],
+    isNew: current ? exchange.isNew : false,
     error,
     xUsername: twitter?.username ?? null,
     wallet,
@@ -321,12 +377,37 @@ function useConfiguredSession(): PrivySession {
       setError(null);
       setAttempt((n) => n + 1);
     },
+    createWallet: async () => {
+      // Privy refuses when a wallet already exists, which is the outcome wanted,
+      // so that refusal is not an error worth showing.
+      await createWallet().catch(() => undefined);
+    },
     signOut,
     linkX: () => privy.linkTwitter(),
     unlinkX: async () => {
       if (twitter) await privy.unlinkTwitter(twitter.subject);
     },
   };
+}
+
+const MEMO_KEY = "rostr:privy-exchange";
+
+/** Storage can throw (private mode, blocked site data); a missing memo just means "post". */
+function readMemo(): string | null {
+  try {
+    return window.sessionStorage.getItem(MEMO_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function writeMemo(memo: ExchangeMemo | null): void {
+  try {
+    if (memo === null) window.sessionStorage.removeItem(MEMO_KEY);
+    else window.sessionStorage.setItem(MEMO_KEY, JSON.stringify(memo));
+  } catch {
+    // Not remembering only costs the next page load a POST.
+  }
 }
 
 class ExchangeError extends Error {

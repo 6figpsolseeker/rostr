@@ -22,9 +22,7 @@ export class PrivySignInError extends Error {
       /** The email belongs to a rostr account already joined to a different Privy account. */
       | "ACCOUNT_CONFLICT"
       /** The embedded wallet is linked to another rostr account. */
-      | "WALLET_TAKEN"
-      /** The X account is linked to another rostr account. */
-      | "X_TAKEN",
+      | "WALLET_TAKEN",
   ) {
     super(message);
     this.name = "PrivySignInError";
@@ -100,6 +98,18 @@ function toUser(row: UserRow): User {
  * both find nothing and both insert; the unique indexes refuse the loser, and
  * it runs once more, now finding the winner's row. One retry, because the second
  * attempt cannot meet the same race: the row it lost to is committed.
+ *
+ * The retry wraps the whole attempt rather than one statement, against the advice
+ * in `pg-errors.ts`, and that is deliberate: every unique index this attempt can
+ * trip — a users email or Privy id, an X subject — is the trace of a concurrent
+ * sign-in, and the fix in each case is to re-read. A wallet collision is not one
+ * of them; `linkWallet` turns it into `WALLET_TAKEN` before it gets here.
+ *
+ * **Two posts for one existing account race differently, and that case is not a
+ * unique violation.** Both miss on the Privy id; the first locks the row by email
+ * and attaches it; the second waits on that lock and, at READ COMMITTED, re-reads
+ * the committed row — already carrying this same Privy id. That is the account
+ * this login owns, so it is carried on with, not refused as a conflict.
  */
 export async function signInWithPrivy(
   db: SqlClient,
@@ -162,6 +172,8 @@ async function resolveAccount(
     [email],
   );
   if (byEmail) {
+    // Attached a moment ago by this same login's other request — see above.
+    if (byEmail.privy_user_id === account.privyUserId) return { row: byEmail, isNew: false };
     if (byEmail.privy_user_id !== null) {
       throw new PrivySignInError(
         "This email belongs to an account that signs in another way",
@@ -194,15 +206,17 @@ async function syncX(
   userId: string,
   x: VerifiedPrivyAccount["x"],
 ): Promise<void> {
-  const [holder] =
-    x === null
-      ? []
-      : await tx.query<{ id: string }>(
-          "SELECT id FROM users WHERE x_subject = $1 AND id <> $2",
-          [x.subject, userId],
-        );
-  if (holder) {
-    throw new PrivySignInError("That X account is linked to another account", "X_TAKEN");
+  // Another account still holding this X subject is holding a stale copy. Privy
+  // lets one X account belong to one Privy user at a time, and this record — read
+  // from Privy with our app secret — says it belongs to this login now; the other
+  // copy is left over from an unlink or a deleted Privy user whose follow-up sync
+  // never landed. It is cleared rather than refused: X is optional and never a
+  // way in, so an old copy of it must not be able to lock somebody out.
+  if (x !== null) {
+    await tx.query(
+      "UPDATE users SET x_subject = NULL, x_username = NULL WHERE x_subject = $1 AND id <> $2",
+      [x.subject, userId],
+    );
   }
 
   await tx.query("UPDATE users SET x_subject = $2, x_username = $3 WHERE id = $1", [
