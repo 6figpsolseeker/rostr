@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import useSWR from "swr";
 import { PlayerAvatar } from "./PlayerAvatar";
 import { PlayerCard } from "./PlayerCard";
-import { buildBoard, focusRound, picksUntilTurn } from "@/lib/draft-board";
+import { buildBoard, byDraftValue, focusRound, picksUntilTurn } from "@/lib/draft-board";
 import type { BoardCell, BoardRow } from "@/lib/draft-board";
 import {
   POSITION_ORDER,
@@ -39,6 +39,8 @@ interface Player {
   name: string;
   positions: string[];
   rank: number;
+  /** Whether his NFL club still has him. See `byDraftValue`. */
+  active: boolean;
   /** Milli-points, scored with this league's rules. Null when unprojected. */
   projectedMilliPoints: number | null;
   /** Display only — see the board route. Null on a pool synced before `0032`. */
@@ -46,25 +48,6 @@ interface Player {
   teamRef: string | null;
   byeWeek: number | null;
   injuryDesignation: string | null;
-}
-
-/**
- * Best projection first, then ADP.
- *
- * ADP is the fallback rather than the primary sort. It measures where a player
- * is *being taken*, which is a crowd's opinion filtered through other people's
- * league settings; a projection scored against this league's own rules is a
- * statement about what he is worth here. Unprojected players sort last but stay
- * draftable — a late flier on someone unranked is a legitimate pick.
- */
-function byProjection(a: Player, b: Player): number {
-  const left = a.projectedMilliPoints;
-  const right = b.projectedMilliPoints;
-
-  if (left === null && right === null) return a.rank - b.rank;
-  if (left === null) return 1;
-  if (right === null) return -1;
-  return right - left || a.rank - b.rank;
 }
 
 interface Pick {
@@ -190,7 +173,7 @@ export function DraftRoom({ leagueId, leagueName }: { leagueId: string; leagueNa
         .filter((player) => !drafted.has(player.id))
         .filter((player) => term === "" || player.name.toLowerCase().includes(term))
         .filter((player) => position === "ALL" || positionGroup(player.positions) === position)
-        .sort(byProjection)
+        .sort(byDraftValue)
         // Deep enough that nobody runs out mid-draft, short enough to render.
         .slice(0, 200)
     );
@@ -201,6 +184,12 @@ export function DraftRoom({ leagueId, leagueName }: { leagueId: string; leagueNa
     const counts = new Map<string, number>();
     for (const player of players) {
       if (drafted.has(player.id)) continue;
+      // Deliberately narrower than the list below it. This row is read as
+      // "how thin is the position getting", and a player no NFL club has is
+      // not an answer to that — counting him would say RB is deep when the
+      // choosable ones have run out. He is still in the list, at the bottom,
+      // and still draftable for anyone who wants the stash.
+      if (!player.active) continue;
       const group = positionGroup(player.positions);
       counts.set(group, (counts.get(group) ?? 0) + 1);
     }
@@ -882,7 +871,7 @@ function PlayerTable({
                     >
                       {group}
                     </span>
-                    {player.teamRef ?? "FA"}
+                    {player.active ? (player.teamRef ?? "FA") : "No NFL club"}
                   </span>
                 </span>
               </button>
@@ -890,8 +879,21 @@ function PlayerTable({
               <span className="text-right text-xs text-nocturne-neutral-600 tabular-nums">
                 {player.byeWeek ?? "—"}
               </span>
-              <span className="text-right text-xs text-nocturne-neutral-600 tabular-nums">
-                {player.rank}
+              <span
+                className="text-right text-xs text-nocturne-neutral-600 tabular-nums"
+                title={
+                  player.active
+                    ? undefined
+                    : "No ADP: he is not on an NFL roster, so his place here is the bottom of the board rather than where anyone is drafting him"
+                }
+              >
+                {/*
+                   `rank` is a dense index over the board, and since cut players
+                   sort last it no longer tracks ADP for them — printing it under
+                   an "ADP" header would be inventing a number. Active players
+                   keep ranks 1..n and are unaffected.
+                */}
+                {player.active ? player.rank : "—"}
               </span>
               <span
                 className="text-right text-sm font-medium tabular-nums"
@@ -995,6 +997,16 @@ function Queue({
               <span className="min-w-0 flex-1 truncate text-xs">
                 {player?.name ?? playerId}
                 {gone && <span className="ml-1 text-nocturne-neutral-600">— taken</span>}
+                {/*
+                   Auto-pick skips him now (see `autoPick`), so a manager whose
+                   clock expires gets their next choice instead. Saying so beats
+                   letting the entry look ordinary until it is silently passed
+                   over — the queue is the one place a stale choice survives from
+                   before the club released him.
+                */}
+                {player && !player.active && !gone && (
+                  <span className="ml-1 text-nocturne-neutral-600">— no NFL club</span>
+                )}
               </span>
             </button>
             <button

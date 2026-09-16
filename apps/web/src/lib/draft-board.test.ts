@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { buildBoard, focusRound, picksUntilTurn, type BoardPick } from "./draft-board.js";
+import {
+  buildBoard,
+  byDraftValue,
+  focusRound,
+  picksUntilTurn,
+  type BoardPick,
+  type DraftValue,
+} from "./draft-board.js";
 
 /**
  * Four teams, so a reversal is visible in two rows and the fixture stays
@@ -135,5 +142,83 @@ describe("picksUntilTurn", () => {
 
   it("answers null when a team has no picks left", () => {
     expect(picksUntilTurn(rows, "a", 13)).toBeNull();
+  });
+});
+
+describe("byDraftValue", () => {
+  const value = (
+    active: boolean,
+    rank: number,
+    projectedMilliPoints: number | null,
+  ): DraftValue => ({ active, rank, projectedMilliPoints });
+
+  /** Names, so a failure says which ordering broke rather than which index. */
+  const order = (...players: [string, DraftValue][]): string[] =>
+    [...players].sort((x, y) => byDraftValue(x[1], y[1])).map(([name]) => name);
+
+  it("puts a player his club has cut last, however good his projection", () => {
+    /*
+      The reason this function exists.
+
+      `loadDraftBoard` already returns cut players last, but the room re-sorts on
+      projections — and `loadProjections` does not filter on `players.active`
+      while `syncProjections` never deletes a row. So a receiver projected for
+      180 points who is cut in September keeps that number for ever, and a sort
+      that consulted only the projection would put him in the top handful.
+
+      The server's demotion reaches the draft *engine*, which ranks on `rank`.
+      It does not reach the *screen* unless it is restated here.
+    */
+    expect(
+      order(
+        ["cut star", value(false, 40, 180_000)],
+        ["ordinary starter", value(true, 900, 10_000)],
+      ),
+    ).toEqual(["ordinary starter", "cut star"]);
+  });
+
+  it("puts a cut player below even an active one nobody projected", () => {
+    // The null-projection branch is the one an `active` check placed after the
+    // projection comparison would get wrong.
+    expect(
+      order(["cut", value(false, 5, 200_000)], ["unprojected", value(true, 800, null)]),
+    ).toEqual(["unprojected", "cut"]);
+  });
+
+  it("orders active players on projection, then ADP", () => {
+    // A lock on the behaviour moved out of `DraftRoom.tsx`, so the extraction
+    // is provably faithful rather than a rewrite.
+    expect(
+      order(
+        ["lesser", value(true, 2, 8_000)],
+        ["better", value(true, 90, 12_000)],
+        ["unprojected", value(true, 3, null)],
+      ),
+    ).toEqual(["better", "lesser", "unprojected"]);
+  });
+
+  it("orders two unprojected players on ADP", () => {
+    /*
+      The branch that had no test, and the widening makes it matter more rather
+      than less: the ~570 players it admits are overwhelmingly unprojected, so
+      this now orders a materially larger tail of the board.
+    */
+    expect(order(["later", value(true, 120, null)], ["earlier", value(true, 7, null)])).toEqual(
+      ["earlier", "later"],
+    );
+  });
+
+  it("breaks an equal projection on ADP", () => {
+    expect(
+      order(["later adp", value(true, 50, 9_000)], ["earlier adp", value(true, 12, 9_000)]),
+    ).toEqual(["earlier adp", "later adp"]);
+  });
+
+  it("orders two cut players against each other on the same rules", () => {
+    // Being cut decides the group, not the order within it — a manager taking a
+    // stash still wants the better of two.
+    expect(
+      order(["worse", value(false, 300, 4_000)], ["better", value(false, 900, 9_000)]),
+    ).toEqual(["better", "worse"]);
   });
 });

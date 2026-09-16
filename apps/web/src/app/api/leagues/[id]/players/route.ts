@@ -60,10 +60,11 @@ export async function GET(
       key: string;
       image_url: string | null;
       team_ref: string | null;
+      on_nfl_roster: boolean;
       injury_designation: string | null;
     }>(
       `SELECT r.player_id, r.on_ir, p.full_name, pos.key,
-              p.image_url, p.team_ref, p.injury_designation
+              p.image_url, p.team_ref, p.active AS on_nfl_roster, p.injury_designation
          FROM roster_entries r
          JOIN players p ON p.id = r.player_id
          JOIN positions pos ON pos.id = p.primary_position_id
@@ -79,6 +80,7 @@ export async function GET(
         positions: player.positions,
         availability: player.availability,
         clearsAt: player.clearsAt?.toISOString() ?? null,
+        onNflRoster: player.onNflRoster,
         imageUrl: player.imageUrl,
         teamRef: player.teamRef,
         injuryDesignation: player.injuryDesignation,
@@ -93,6 +95,11 @@ export async function GET(
       roster: roster.map((row) => ({
         playerId: row.player_id,
         onIr: row.on_ir,
+        // The same fact the available list carries. Without it the roster row
+        // for a player somebody has just stashed falls back to "FA", which on a
+        // roster is false twice over — he is rostered, and that is not why his
+        // club column is empty.
+        onNflRoster: row.on_nfl_roster,
         name: row.full_name,
         position: row.key,
         imageUrl: row.image_url,

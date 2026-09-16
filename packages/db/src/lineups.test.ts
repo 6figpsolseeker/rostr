@@ -2144,6 +2144,46 @@ describe("the autofill ranks an injured player behind a healthy one — #269", (
     }
   });
 
+  it("marks a player with no NFL club unavailable, and a null kickoff does not", async () => {
+    /*
+      **The trap this test exists for: `kickoffAt` is not null for a cut player,
+      and reading the code quickly says it is.**
+
+      `loadKickoffs` is the lock oracle and fails closed. A player whose club has
+      no games in the season — which is every player with `team_ref IS NULL` — hits
+      its third branch and is handed the *week's first kickoff*, so his slot
+      freezes rather than staying open all Sunday. Correct for a lock, and exactly
+      wrong as a proxy for "will he play": it made him read as available and then
+      ranked him on a projection nothing expires.
+
+      So this asserts the state as well as the conclusion. Without the
+      `kickoffAt` line the test would pass against a `teamRef`-only check by
+      accident, and a reader would go on believing the null-kickoff story.
+    */
+    const fx = await setup();
+    await fx.client.query("UPDATE players SET team_ref = NULL, active = false WHERE id = $1", [
+      fx.player("sun-qb"),
+    ]);
+
+    const roster = await loadRosterForWeek(fx.client, fx.teamId, SEASON, WEEK);
+    const player = roster.get(fx.player("sun-qb"))!;
+
+    // The premise, stated so it cannot rot silently.
+    expect(player.kickoffAt).not.toBeNull();
+    expect(player.teamRef).toBeNull();
+
+    const candidate = autolineupCandidate(player, {
+      // A stale projection from before he was released is exactly the input
+      // that makes this dangerous: it would outrank a fit bench player.
+      averageMilliPoints: 18_000,
+      projectedMilliPoints: 18_000,
+    });
+
+    // A sort key, not an exclusion — a team with nobody else still fields him.
+    expect(candidate.unavailable).toBe(true);
+    expect(candidate.playerId).toBe(fx.player("sun-qb"));
+  });
+
   it("marks one who is ruled out unavailable, without excluding him", async () => {
     const fx = await setup();
     await designate(fx, "sun-qb", "Doubtful");

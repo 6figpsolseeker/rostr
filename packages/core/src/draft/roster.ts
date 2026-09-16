@@ -28,12 +28,19 @@ import type { RosterRules } from "../rules/types.js";
  * does it hold — and neither needs to know what he plays.
  *
  * **It is a separate type from `DraftablePlayer` because sharing that one made
- * the draft board the only convenient way to build a roster**, and the board is
- * filtered on `players.active`, which the daily sync clears for anyone the
- * provider reports as an NFL free agent. So a rostered player his club had cut
- * fell out of the array and off his own roster: a valid drop was refused, and a
- * claim with no drop was counted against a roster one short of its true size
- * and awarded past the limit. Issue #238.
+ * the draft board the only convenient way to build a roster**, and the board
+ * filtered on `players.active` then — a flag the daily sync clears for anyone
+ * the provider reports as an NFL free agent. So a rostered player his club had
+ * cut fell out of the array and off his own roster: a valid drop was refused,
+ * and a claim with no drop was counted against a roster one short of its true
+ * size and awarded past the limit. Issue #238.
+ *
+ * That filter is gone as of 2026-09-16 — a cut player stays on the board, at the
+ * bottom — so this particular trigger cannot fire again. **Keep the two types
+ * apart anyway.** The argument never depended on that filter: a board is a
+ * statement about who may be *acquired*, and no statement of that kind is
+ * evidence about who is already *held*. Rejoining them would make the next
+ * narrowing of the board silently subtract from everyone's roster.
  *
  * Ownership is a `roster_entries` question; the board answers availability. A
  * type narrow enough to be satisfied from the roster table is what keeps them
@@ -50,6 +57,17 @@ export interface DraftablePlayer {
   readonly positions: readonly string[];
   /** Lower is better. Ranking comes from the provider, not from here. */
   readonly rank: number;
+  /**
+   * Whether his NFL club still has him. Optional: absent means yes.
+   *
+   * The ranking already carries this — a cut player sits at the tail of the
+   * board's dense order, so best-available reaches him only once nothing else
+   * fits. It is here for the **queue**, which is consulted before the ranking
+   * and therefore cannot see it. Optional rather than required because most
+   * callers build a pool by hand and an absent flag has to mean the ordinary
+   * case, not a silent demotion of every fixture in the repo.
+   */
+  readonly active?: boolean;
 }
 
 /** One concrete starting slot — expanded, so `RB x2` becomes two entries. */

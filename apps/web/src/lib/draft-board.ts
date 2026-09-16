@@ -155,3 +155,46 @@ export function picksUntilTurn(
 
   return next ? next.pickNumber - currentPickNumber : null;
 }
+
+/** Only the fields the ordering reads, so a test needs no board row. */
+export interface DraftValue {
+  readonly active: boolean;
+  readonly rank: number;
+  readonly projectedMilliPoints: number | null;
+}
+
+/**
+ * Board order: on an NFL roster first, then best projection, then ADP.
+ *
+ * **`active` is the outer key and cannot be folded into either inner one.**
+ * Projections are not filtered on it and are never deleted, and
+ * `player_rankings_current` is the latest ADP ever recorded with no expiry — so
+ * a player cut in September carries July's projection *and* July's ADP, and both
+ * inner keys would put him near the top. The owner ruled on 2026-09-16 that he
+ * stays draftable and sorts to the bottom; this is the half of that the screen
+ * owns.
+ *
+ * It agrees with `loadDraftBoard`'s own `ORDER BY p.active DESC, …` by
+ * construction rather than by coincidence — the server's `rank` already encodes
+ * it. But the inner keys genuinely differ, because the server ranks on ADP and
+ * the room ranks on projections, so the outer key has to be restated here or
+ * re-sorting silently discards it. That is the whole reason this function
+ * exists rather than the room sorting on `rank`.
+ *
+ * ADP is the inner fallback rather than the primary: it measures where a player
+ * is *being taken*, which is a crowd's opinion filtered through other people's
+ * league settings, while a projection scored against this league's own rules is
+ * a statement about what he is worth here. Unprojected players sort last but
+ * stay draftable — a late flier on someone unranked is a legitimate pick.
+ */
+export function byDraftValue(a: DraftValue, b: DraftValue): number {
+  if (a.active !== b.active) return a.active ? -1 : 1;
+
+  const left = a.projectedMilliPoints;
+  const right = b.projectedMilliPoints;
+
+  if (left === null && right === null) return a.rank - b.rank;
+  if (left === null) return 1;
+  if (right === null) return -1;
+  return right - left || a.rank - b.rank;
+}

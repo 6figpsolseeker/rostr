@@ -92,11 +92,14 @@ export function rosterFor(
           refuses a player the pool does not contain — so a miss here means the
           caller's pool is not the pool this draft was played from. The
           `.filter(defined)` that used to be here could therefore only ever
-          discard somebody legally drafted, and it did: the board is filtered on
-          `players.active`, which the daily sync clears for anyone the provider
-          reports as an NFL free agent, so a player cut overnight fell out of his
-          own team's roster mid-draft and the count went on without him. Issue
-          #253.
+          discard somebody legally drafted, and it did: the board filtered on
+          `players.active` then, which the daily sync clears for anyone the
+          provider reports as an NFL free agent, so a player cut overnight fell
+          out of his own team's roster mid-draft and the count went on without
+          him. Issue #253. The filter went in 2026-09-16 — he sorts last now
+          rather than disappearing — but the throw stays: it says the caller's
+          pool is not this draft's pool, which is a claim about the caller and
+          not about any one flag.
 
           Loud is only safe because the caller now hands over a pool that includes
           this draft's own picks. On its own this would turn a quiet undercount
@@ -140,11 +143,14 @@ export interface MakePickInput {
  *
  * **The pool must contain this draft's own picks.** `rosterFor` throws
  * `POOL_INCOMPLETE` on one it cannot rebuild a roster from, and the only pool a
- * route holds is `draftBoard(...).pool` — filtered on `players.active`, so it
- * loses anyone cut since he was drafted. `recordPick` widens inside its own
- * transaction (issue #253); nothing widens for a read. Wiring this to the draft
- * room as it stands would turn a cut player into a 500 in a room that polls
- * every second, which is the failure that throw is meant to prevent, not cause.
+ * route holds is `draftBoard(...).pool`. That pool used to be filtered on
+ * `players.active` and so lost anyone cut since he was drafted; since 2026-09-16
+ * it is not, which makes the gap far narrower — but not empty. The board is
+ * cached for 60 seconds, so a player inserted by a sync inside that window is
+ * still absent. `recordPick` widens inside its own transaction (issue #253) and
+ * nothing widens for a read, so wiring this to the draft room without one would
+ * turn that narrow case into a 500 in a room polling every second, which is the
+ * failure that throw exists to prevent rather than cause.
  *
  * Note the asymmetry directly below: a pool missing the *subject* of the pick
  * is tolerated, and a pool missing an *earlier* pick is not. The first is a

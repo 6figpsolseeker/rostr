@@ -102,13 +102,30 @@ export function autoPick(context: AutoPickContext): AutoPickResult | null {
   const isSafe = (player: DraftablePlayer): boolean =>
     isLegal(player) && !wouldStrandStarters(roster, player, shape, picksRemainingAfter);
 
-  // 1. The queue. Persistent across the draft, so entries taken by other
-  //    managers are skipped rather than treated as an empty queue. A queued
-  //    player who would strand the lineup is skipped too — the queue was written
-  //    before the board looked like this.
+  /*
+    1. The queue. Persistent across the draft, so entries taken by other managers
+    are skipped rather than treated as an empty queue. A queued player who would
+    strand the lineup is skipped too — the queue was written before the board
+    looked like this.
+
+    **And one his NFL club has released is skipped for the same reason.** That is
+    the whole of it: a manager queues a player in August, the club cuts him in
+    September, and the queue still names him. Taking him at full queue priority
+    spends a first-round pick on somebody who will score nothing, on behalf of a
+    manager who chose a player who had a club at the time.
+
+    This only became reachable on 2026-09-16, when the board stopped filtering on
+    `players.active`. Before that a cut player was absent from the pool, `byId`
+    missed, and the entry was skipped by accident. Doing it on purpose is the
+    same outcome with a reason attached — and a reason is what stops the next
+    person "simplifying" it back.
+
+    Skipped rather than pruned: he stays in the queue, because a club may sign
+    him again and the manager may still want him. This decides one auto-pick.
+  */
   for (const playerId of queue) {
     const queued = byId.get(playerId);
-    if (queued && isSafe(queued)) {
+    if (queued && queued.active !== false && isSafe(queued)) {
       return { player: queued, source: "QUEUE" };
     }
   }

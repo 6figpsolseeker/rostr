@@ -1705,14 +1705,19 @@ describe("the draw refuses a pot league whose season has not started", () => {
 describe("a player cut by his club stays on the roster he was drafted to", () => {
   /*
     Issue #253. The engine rebuilt a drafting roster by looking each pick up in
-    the draft board, and the board filters on `players.active` — a flag the daily
-    sync clears for anyone the provider reports as an NFL free agent. So a player
-    drafted in round 2 and cut overnight fell out of his own team's roster: the
-    count went on without him, letting the team take one more than the limit, and
-    letting a bot double up at a position it had already filled.
+    the draft board, and the board filtered on `players.active` then — a flag the
+    daily sync clears for anyone the provider reports as an NFL free agent. So a
+    player drafted in round 2 and cut overnight fell out of his own team's roster:
+    the count went on without him, letting the team take one more than the limit,
+    and letting a bot double up at a position it had already filled.
 
-    Deleting him from the fixture's `pool` is exactly what the sync produces —
-    the board is rebuilt from a query he no longer matches.
+    **The board stopped filtering on 2026-09-16**, so a cut player no longer
+    leaves it and this exact route is closed. These tests stay, and they stay
+    honest, because they drive the `pool` map directly rather than through
+    `loadDraftBoard`: what they pin is that a pick missing from *any* pool is
+    survivable, which is a property of the engine and not of one flag. The
+    backstop they lock — `poolWithDraftedPlayers` — exists for the next
+    narrowing of the board, not for the one just removed.
   */
 
   it("keeps drafting when its own earlier pick has left the board", async () => {

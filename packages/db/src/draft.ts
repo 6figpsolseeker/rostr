@@ -871,9 +871,9 @@ const OFF_BOARD_RANK = Number.MAX_SAFE_INTEGER;
  * The board, plus every player this draft has already taken.
  *
  * `rosterFor` rebuilds a drafting roster by looking each pick up in the pool, and
- * the pool comes from `loadDraftBoard`, which filters `WHERE p.sport_id = $1 AND
- * p.active` — a flag the daily sync clears for anyone the provider reports as an
- * NFL free agent. So a player drafted in round 2 and cut by his club overnight
+ * the pool comes from `loadDraftBoard`, which filtered `WHERE p.sport_id = $1 AND
+ * p.active` when this was written — a flag the daily sync clears for anyone the
+ * provider reports as an NFL free agent. So a player drafted in round 2 and cut by his club overnight
  * fell out of his own team's roster mid-draft: `canDraft` undercounted and let the
  * team take `totalSlots + 1`, `isAtPositionCap` under-counted his position so
  * auto-pick doubled up on it, and `unfilledStarterSlots` went on naming a need the
@@ -905,6 +905,21 @@ const OFF_BOARD_RANK = Number.MAX_SAFE_INTEGER;
  *
  * Costs nothing in the ordinary case: with nobody cut, `missing` is empty and no
  * query runs.
+ *
+ * **Nearly dead since 2026-09-16, and kept deliberately.** The board no longer
+ * filters on `players.active`, so the case this was written for — a player
+ * drafted in round 2 and cut overnight — cannot arise any more, and `missing`
+ * is now empty in every ordinary draft. What is left is narrower: a player with
+ * no mapped position row drops out of the board's inner positions join, and the
+ * route's board is cached for sixty seconds. Neither is reachable from a normal
+ * pick, and both are cheap to survive.
+ *
+ * It is not deleted because it is a **backstop against a filter, not against one
+ * flag**. Every argument above still holds for whatever narrowing the board
+ * acquires next — a season scope is already being discussed — and this is the
+ * only thing standing between such a narrowing and a bot miscounting a roster
+ * mid-draft. Retiring it would move that risk from "handled" to "nobody is
+ * looking", which is this repo's named failure mode.
  */
 async function poolWithDraftedPlayers(
   db: SqlClient,
@@ -916,9 +931,10 @@ async function poolWithDraftedPlayers(
   );
   if (missing.length === 0) return pool;
 
-  // The same positions join `loadDraftBoard` uses, without its `active` filter —
-  // which is the whole point — and without its sport filter, which here could only
-  // ever hide a row that belongs: these ids come from this draft's own picks.
+  // The same positions join `loadDraftBoard` uses, and without its sport filter,
+  // which here could only ever hide a row that belongs: these ids come from this
+  // draft's own picks. It used to drop the board's `active` filter too, and that
+  // was the whole point until 2026-09-16, when the board stopped carrying one.
   const rows = await db.query<{ id: string; positions: string[] }>(
     `SELECT p.id, array_agg(DISTINCT pos.key) AS positions
        FROM players p

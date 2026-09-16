@@ -5,9 +5,14 @@ import { draftBoard, draftContext, DraftContextError } from "@/lib/draft-context
 /**
  * The full player pool, once.
  *
- * A thousand players is around 80 KB, and it changes only when the stats sync
- * runs. Sending it on every poll of the draft state would be wasteful, so it is
- * fetched separately and the client subtracts drafted players itself.
+ * Roughly 1,600 players is around 150 KB, and it changes only when the stats
+ * sync runs. Sending it on every poll of the draft state would be wasteful, so
+ * it is fetched separately and the client subtracts drafted players itself.
+ *
+ * It was ~1,000 players and ~80 KB until 2026-09-16, when players their clubs
+ * had released stopped being filtered out and started sorting last instead. That
+ * tail is not bounded — nothing prunes `players` and it carries no season — so
+ * this number is a measurement with a date on it rather than a budget.
  */
 export async function GET(
   _request: Request,
@@ -29,6 +34,12 @@ export async function GET(
         name: entry.fullName,
         positions: entry.positions,
         rank: entry.rank,
+        // Whether his NFL club still has him. The array already arrives with
+        // the cut players last, but the room re-sorts on projections — which
+        // are not filtered on this column and are never deleted, so a star cut
+        // in September keeps July's number and would sort to the *top* without
+        // it. See `byDraftValue` in `lib/draft-board.ts`.
+        active: entry.active,
         // Milli-points, scored with *this league's* rules. Null where the
         // provider has no projection — a deep-bench flier is still draftable,
         // and showing a confident zero would be worse than showing nothing.

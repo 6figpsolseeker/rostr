@@ -18,6 +18,21 @@ describe("whyClaimFailed", () => {
     expect(whyClaimFailed("ALREADY_ROSTERED")).toContain("already held him");
   });
 
+  it("does not name a cause it can no longer know", () => {
+    /*
+      This string used to read "he is no longer on an NFL roster", because the
+      resolver's pool came from a board filtered on `players.active`. That filter
+      went on 2026-09-16 when a cut player became acquirable, so the sentence
+      would now confidently explain the wrong thing — the remaining causes are an
+      id from another sport or a player with no mapped position row, neither of
+      which is worth naming to a manager.
+    */
+    expect(whyClaimFailed("PLAYER_UNAVAILABLE")).toContain("player pool");
+    expect(whyClaimFailed("PLAYER_UNAVAILABLE")).not.toContain("NFL roster");
+    // Still a distinct sentence from losing a contest, which is the #238 point.
+    expect(whyClaimFailed("PLAYER_UNAVAILABLE")).not.toBe(whyClaimFailed("PLAYER_TAKEN"));
+  });
+
   it("admits an unrecorded reason rather than inventing one", () => {
     // A claim settled before `0039`. Making up a cause would be the silent
     // restatement this project exists to prevent.
