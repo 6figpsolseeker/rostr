@@ -1357,7 +1357,15 @@ export async function ensureLineups(
     */
     const overage = await overageFor(db, team.id, stored.rules);
     if (overage.over) {
-      await autoFillLineup(db, leagueId, team.id, week, now, { fillEmptySlots: false });
+      // Tidying materialises the rest of the slots as empty, so on an early pass
+      // it reaches the same manager the skip above protects — an autofill-off
+      // team, over the limit, would be told days early that it has nine empty
+      // slots. Their scoring-time pass still tidies, which is the one that
+      // matters: nothing has kicked off yet here.
+      const tidy = options.optedOutRows !== "skip" || team.is_bot || team.autofill_enabled;
+      if (tidy) {
+        await autoFillLineup(db, leagueId, team.id, week, now, { fillEmptySlots: false });
+      }
       teamsOverLimit.push(team.id);
       continue;
     }
@@ -1544,4 +1552,40 @@ export async function setAutofillEnabled(
   enabled: boolean,
 ): Promise<void> {
   await db.query("UPDATE teams SET autofill_enabled = $1 WHERE id = $2", [enabled, teamId]);
+}
+
+/**
+ * How many teams would gain a lineup row from filling `week` right now.
+ *
+ * The early pass (issue #288) runs on every ten-minute tick from the Wednesday
+ * until the week's first kickoff — around 250 runs — and after the first one it
+ * writes nothing while still doing the full autofill per team: the roster, the
+ * averages, a whole-week projections scan and a locking transaction each. This
+ * is the guard that makes the other 249 a single query.
+ *
+ * Counted as "fillable teams with no row for this week", matching what
+ * `ensureLineups` would do on that pass: a team that opted out is skipped there,
+ * so it never gains a row and must not be counted here — it would make the
+ * answer permanently non-zero.
+ *
+ * **It does not notice a gap opened later**, such as a released player leaving a
+ * slot empty. That is unchanged from before this pass existed: the scoring-time
+ * fill, which runs from the week's first kickoff, is what closes those.
+ */
+export async function teamsAwaitingLineups(
+  db: SqlClient,
+  leagueId: string,
+  week: number,
+): Promise<number> {
+  const [row] = await db.query<{ n: number }>(
+    `SELECT count(*)::int AS n
+       FROM teams t
+      WHERE t.league_id = $1
+        AND (t.is_bot OR t.autofill_enabled)
+        AND NOT EXISTS (
+          SELECT 1 FROM lineups ln WHERE ln.team_id = t.id AND ln.week = $2
+        )`,
+    [leagueId, week],
+  );
+  return Number(row?.n ?? 0);
 }

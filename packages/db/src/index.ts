@@ -138,6 +138,7 @@ export {
 export {
   autoFillLineup,
   ensureLineups,
+  teamsAwaitingLineups,
   LineupError,
   loadByeWeeks,
   loadLineup,
