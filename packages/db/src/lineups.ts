@@ -1299,6 +1299,23 @@ export async function ensureLineups(
   leagueId: string,
   week: number,
   now: number,
+  options: {
+    /**
+     * What to do about teams that turned the autofill off.
+     *
+     * `"write"` materialises their empty slots, which is what scoring needs:
+     * `resolveWeek` throws on a team with no lineup rows at all, and scoring a
+     * missing team as zero hands its opponent a free win off our own bug.
+     *
+     * `"skip"` leaves them alone, and is for filling a week **before** its games
+     * — where there is nothing to score yet and the rows would do harm: the
+     * "empty slots, and autofill is off" notice counts every null row a member
+     * has, in any week (`unsetLineups` in `notifications.ts`, no week predicate),
+     * so writing them days early tells a manager they are late for a deadline
+     * that has not arrived, for the one group the early fill cannot help.
+     */
+    readonly optedOutRows?: "write" | "skip";
+  } = {},
 ): Promise<{
   teamsFilled: number;
   teamsOptedOut: number;
@@ -1340,7 +1357,15 @@ export async function ensureLineups(
     */
     const overage = await overageFor(db, team.id, stored.rules);
     if (overage.over) {
-      await autoFillLineup(db, leagueId, team.id, week, now, { fillEmptySlots: false });
+      // Tidying materialises the rest of the slots as empty, so on an early pass
+      // it reaches the same manager the skip above protects — an autofill-off
+      // team, over the limit, would be told days early that it has nine empty
+      // slots. Their scoring-time pass still tidies, which is the one that
+      // matters: nothing has kicked off yet here.
+      const tidy = options.optedOutRows !== "skip" || team.is_bot || team.autofill_enabled;
+      if (tidy) {
+        await autoFillLineup(db, leagueId, team.id, week, now, { fillEmptySlots: false });
+      }
       teamsOverLimit.push(team.id);
       continue;
     }
@@ -1356,7 +1381,10 @@ export async function ensureLineups(
     // with none, and scoring a missing team as zero would hand its opponent a
     // free win off our own bug. Whatever they set stands; anything they left
     // empty stays empty and scores nothing, which is what the switch means.
-    await writeEmptySlots(db, leagueId, team.id, week);
+    //
+    // Unless this is an early pass, which scores nothing and would only make
+    // their "empty slots" notice fire days before the deadline — see `options`.
+    if (options.optedOutRows !== "skip") await writeEmptySlots(db, leagueId, team.id, week);
     teamsOptedOut++;
   }
 
@@ -1524,4 +1552,67 @@ export async function setAutofillEnabled(
   enabled: boolean,
 ): Promise<void> {
   await db.query("UPDATE teams SET autofill_enabled = $1 WHERE id = $2", [enabled, teamId]);
+}
+
+/**
+ * How many teams still have lineup work for `week` — none means an early pass
+ * would write nothing, so it can be skipped.
+ *
+ * The early pass (issue #288) runs on every ten-minute tick from the Wednesday
+ * until the week's first kickoff — around 250 runs — and each one otherwise does
+ * the full autofill per team: the roster, the averages, a whole-week projections
+ * scan and a locking transaction each. This turns the quiet ones into a query.
+ *
+ * Three things count as work, and the third is the one worth explaining:
+ *
+ * - **No rows at all**, which is every team on the first pass of a week.
+ * - **An empty starting slot**, which the fill may be able to close now even if
+ *   it could not before — a waiver claim or a trade has landed since.
+ * - **A player in the lineup who is no longer on the roster.** `autoFillLineup`
+ *   evicts him, and nothing else does. Leaving him there is not merely untidy:
+ *   his slot locks at his kickoff around a player nobody rosters, and he goes on
+ *   scoring for the team that cut him.
+ *
+ * That third clause is why this is not simply "has any row". For weeks 1-14 the
+ * scoring-time fill would catch a Saturday drop anyway, since it runs from the
+ * week's first kickoff — but **week 15 cannot be scored until week 14 finalises
+ * on the Monday**, which is the whole of #288, so nothing else would reach it
+ * before that week's slate had been played.
+ *
+ * The cost of being exact: a team whose roster genuinely cannot fill a slot —
+ * one quarterback, nine starting slots — counts every time, so its league keeps
+ * doing the work each tick. That is what every league did before this guard
+ * existed, so it is never worse than the alternative, and it is rare in a league
+ * that drafted.
+ */
+export async function teamsWithLineupWork(
+  db: SqlClient,
+  leagueId: string,
+  week: number,
+): Promise<number> {
+  const [row] = await db.query<{ n: number }>(
+    `SELECT count(*)::int AS n
+       FROM teams t
+      WHERE t.league_id = $1
+        AND (t.is_bot OR t.autofill_enabled)
+        AND (
+          NOT EXISTS (SELECT 1 FROM lineups ln WHERE ln.team_id = t.id AND ln.week = $2)
+          OR EXISTS (
+            SELECT 1 FROM lineups ln
+             WHERE ln.team_id = t.id AND ln.week = $2 AND ln.player_id IS NULL
+          )
+          OR EXISTS (
+            SELECT 1 FROM lineups ln
+             WHERE ln.team_id = t.id AND ln.week = $2 AND ln.player_id IS NOT NULL
+               AND NOT EXISTS (
+                 SELECT 1 FROM roster_entries re
+                  WHERE re.team_id = t.id
+                    AND re.player_id = ln.player_id
+                    AND re.released_at IS NULL
+               )
+          )
+        )`,
+    [leagueId, week],
+  );
+  return Number(row?.n ?? 0);
 }

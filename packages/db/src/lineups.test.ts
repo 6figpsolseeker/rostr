@@ -19,6 +19,7 @@ import {
   autoFillLineup,
   autolineupCandidate,
   ensureLineups,
+  teamsWithLineupWork,
   loadAverages,
   LineupError,
   loadKickoffs,
@@ -757,6 +758,57 @@ describe("ensureLineups", () => {
     const lineup = await loadLineup(fx.client, fx.teamId, WEEK, fx.rules);
     expect(lineup).toHaveLength(9);
     expect(lineup.every((slot) => slot.playerId === null)).toBe(true);
+  });
+
+  it("writes no rows for an opted-out team on an early pass", async () => {
+    /*
+      Issue #288's fix fills the *coming* week before its games start, and that
+      pass scores nothing — so an opted-out team's empty rows would do nothing
+      but make their "empty slots, and autofill is off" notice fire days before
+      the deadline. `unsetLineups` counts every null row a member holds, in any
+      week, so those rows are indistinguishable from being late for this one.
+    */
+    const fx = await setup();
+    await fx.client.query("UPDATE teams SET autofill_enabled = false WHERE id = $1", [
+      fx.teamId,
+    ]);
+
+    const result = await ensureLineups(fx.client, fx.leagueId, WEEK, BEFORE_ANYTHING, {
+      optedOutRows: "skip",
+    });
+
+    // Still counted, so the cron's report does not pretend they were filled.
+    expect(result).toMatchObject({ teamsFilled: 1, teamsOptedOut: 1 });
+
+    const [row] = await fx.client.query<{ n: number }>(
+      "SELECT count(*)::int AS n FROM lineups WHERE team_id = $1 AND week = $2",
+      [fx.teamId, WEEK],
+    );
+    expect(row?.n).toBe(0);
+
+    // The teams that are filled are filled exactly as before.
+    const other = await loadLineup(fx.client, fx.otherTeamId, WEEK, fx.rules);
+    expect(other.filter((slot) => slot.playerId !== null).length).toBeGreaterThan(0);
+  });
+
+  it("fills a week that has no fixtures yet, which is what playoff week 15 is", async () => {
+    /*
+      The heart of #288: the first autofill pass for a playoff week used to run
+      only once that week had `matchups` rows, and those arrive after the
+      previous week finalises — for week 15, after its own games have kicked off.
+      `ensureLineups` itself never reads `matchups`, and this pins that, so a
+      caller can fill a week the fixtures have not reached yet.
+    */
+    const fx = await setup();
+    const [fixtures] = await fx.client.query<{ n: number }>(
+      "SELECT count(*)::int AS n FROM matchups WHERE league_id = $1 AND week = $2",
+      [fx.leagueId, WEEK],
+    );
+    expect(fixtures?.n).toBe(0);
+
+    const result = await ensureLineups(fx.client, fx.leagueId, WEEK, BEFORE_ANYTHING);
+    expect(result.teamsFilled).toBe(2);
+    expect(await loadLineup(fx.client, fx.teamId, WEEK, fx.rules)).toHaveLength(9);
   });
 
   it("fills a slot whose row already exists holding null", async () => {
@@ -1848,6 +1900,50 @@ describe("a roster over the limit is frozen, and nobody is picked for it", () =>
     ).resolves.toBeDefined();
   });
 
+  it("writes nothing for an over-limit team that opted out, on an early pass", async () => {
+    /*
+      The tidy above materialises the remaining slots as empty, so on the early
+      pass (#288) it reaches exactly the manager `optedOutRows: "skip"` exists to
+      protect: autofill off, told days before kickoff that nine slots are empty,
+      by a pass that cannot help them. Their scoring-time pass still tidies, and
+      nothing has kicked off yet here, so nothing is lost by waiting.
+    */
+    const fx = await setup();
+    await fx.client.query("UPDATE teams SET autofill_enabled = false WHERE id = $1", [
+      fx.teamId,
+    ]);
+    await fillTo(fx, SHAPE.totalSlots + 1);
+
+    const outcome = await ensureLineups(fx.client, fx.leagueId, WEEK, BEFORE_ANYTHING, {
+      optedOutRows: "skip",
+    });
+
+    // Still reported, so an operator can still name the team.
+    expect(outcome.teamsOverLimit).toEqual([fx.teamId]);
+
+    const [rows] = await fx.client.query<{ n: number }>(
+      "SELECT count(*)::int AS n FROM lineups WHERE team_id = $1 AND week = $2",
+      [fx.teamId, WEEK],
+    );
+    expect(rows!.n).toBe(0);
+  });
+
+  it("still tidies an over-limit team whose autofill is on, on an early pass", async () => {
+    const fx = await setup();
+    await fillTo(fx, SHAPE.totalSlots + 1);
+
+    const outcome = await ensureLineups(fx.client, fx.leagueId, WEEK, BEFORE_ANYTHING, {
+      optedOutRows: "skip",
+    });
+
+    expect(outcome.teamsOverLimit).toEqual([fx.teamId]);
+    const [rows] = await fx.client.query<{ n: number }>(
+      "SELECT count(*)::int AS n FROM lineups WHERE team_id = $1 AND week = $2",
+      [fx.teamId, WEEK],
+    );
+    expect(rows!.n).toBe(SHAPE.starters.length);
+  });
+
   it("still writes a lineup, so the league's week can be scored", async () => {
     /*
       The regression this must never cause. `resolveWeek` throws on a team with
@@ -2189,5 +2285,85 @@ describe("the autofill ranks on something real in week 1 — #287", () => {
     // Each run starts the receiver its own projections favour.
     expect(await startedWr(first)).toContain(first.player("wr-a"));
     expect(await startedWr(second)).toContain(second.player("wr-b"));
+  });
+});
+
+describe("teamsWithLineupWork", () => {
+  it("counts every team before a fill, and the under-rostered one after", async () => {
+    // The guard that keeps the ~250 ticks between the Wednesday and kickoff from
+    // re-running the whole autofill per team when there is nothing to write.
+    // The fixture's other team holds one quarterback, so eight of its slots stay
+    // empty however often this runs — and it goes on counting, deliberately: the
+    // next waiver claim is exactly what would fill them.
+    const fx = await setup();
+    expect(await teamsWithLineupWork(fx.client, fx.leagueId, WEEK)).toBe(2);
+
+    await ensureLineups(fx.client, fx.leagueId, WEEK, BEFORE_ANYTHING);
+    expect(await teamsWithLineupWork(fx.client, fx.leagueId, WEEK)).toBe(1);
+  });
+
+  it("is zero once a full roster is filled, which is what lets the pass skip", async () => {
+    const fx = await setup();
+    await ensureLineups(fx.client, fx.leagueId, WEEK, BEFORE_ANYTHING);
+
+    const [row] = await fx.client.query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM lineups
+        WHERE team_id = $1 AND week = $2 AND player_id IS NULL`,
+      [fx.teamId, WEEK],
+    );
+    expect(row?.n).toBe(0);
+
+    // Only the under-rostered other team is left, so a league of full rosters
+    // reaches zero and the tick does one query instead of two autofills.
+    await fx.client.query("UPDATE teams SET autofill_enabled = false WHERE id = $1", [
+      fx.otherTeamId,
+    ]);
+    expect(await teamsWithLineupWork(fx.client, fx.leagueId, WEEK)).toBe(0);
+  });
+
+  it("counts a team holding a player it has released", async () => {
+    /*
+      The reason this is not simply "has any row". `autoFillLineup` is the only
+      thing that evicts a released player, and his slot otherwise locks at his
+      kickoff around a player nobody rosters — who then scores for the team that
+      cut him. For weeks 1-14 the scoring-time fill would catch it; week 15
+      cannot be scored until week 14 finalises on the Monday, which is #288, so
+      nothing else reaches it before that week is played.
+    */
+    const fx = await setup();
+    await ensureLineups(fx.client, fx.leagueId, WEEK, BEFORE_ANYTHING);
+    await fx.client.query("UPDATE teams SET autofill_enabled = false WHERE id = $1", [
+      fx.otherTeamId,
+    ]);
+    expect(await teamsWithLineupWork(fx.client, fx.leagueId, WEEK)).toBe(0);
+
+    const [started] = await fx.client.query<{ player_id: string }>(
+      `SELECT player_id FROM lineups
+        WHERE team_id = $1 AND week = $2 AND player_id IS NOT NULL LIMIT 1`,
+      [fx.teamId, WEEK],
+    );
+    await fx.client.query(
+      "UPDATE roster_entries SET released_at = now() WHERE team_id = $1 AND player_id = $2",
+      [fx.teamId, started!.player_id],
+    );
+
+    expect(await teamsWithLineupWork(fx.client, fx.leagueId, WEEK)).toBe(1);
+  });
+
+  it("does not count a team that opted out, which the early fill skips", async () => {
+    // Counting it would leave the answer permanently non-zero, and the guard
+    // would then never skip anything.
+    const fx = await setup();
+    await fx.client.query("UPDATE teams SET autofill_enabled = false WHERE id IN ($1, $2)", [
+      fx.teamId,
+      fx.otherTeamId,
+    ]);
+    expect(await teamsWithLineupWork(fx.client, fx.leagueId, WEEK)).toBe(0);
+  });
+
+  it("counts each week separately", async () => {
+    const fx = await setup();
+    await ensureLineups(fx.client, fx.leagueId, WEEK, BEFORE_ANYTHING);
+    expect(await teamsWithLineupWork(fx.client, fx.leagueId, WEEK + 1)).toBe(2);
   });
 });

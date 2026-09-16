@@ -242,6 +242,8 @@ export {
   type TeamLineup,
 } from "./season/results.js";
 
+export { lastPlayedWeek, weekToPrefill, type PrefillInput } from "./season/prefill.js";
+
 export {
   isVetoed,
   pastTradeDeadline,

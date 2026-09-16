@@ -1,13 +1,17 @@
 import { NextResponse } from "next/server";
-import { BracketError, NFL } from "@rostr/core";
+import { BracketError, lastPlayedWeek, NFL, weekToPrefill } from "@rostr/core";
 import {
   currentWeek,
   advancePlayoffs,
+  ensureLineups,
   enterPlayoffs,
+  teamsWithLineupWork,
+  getLeagueRules,
   PlayoffError,
   resolveLeagueWeek,
   recordCronRun,
   resolveLeagueWeeksThrough,
+  transactionWeek,
   WeekError,
 } from "@rostr/db";
 import type { SqlClient } from "@rostr/db";
@@ -111,11 +115,90 @@ async function run(client: SqlClient, now: Date, request: Request): Promise<Next
     deferredWeeks?: readonly number[];
     bracketGames?: number;
     bracketProblem?: string;
+    prefilled?: { week: number; teams: number };
+    prefillProblem?: string;
     skipped?: string;
     awaitingKickoff?: boolean;
   }[] = [];
 
   let anyWeek = false;
+  let prefillProblems = 0;
+
+  /** What the early fill did for one league, spread straight into its row. */
+  type PrefillOutcome = {
+    prefilled?: { week: number; teams: number };
+    prefillProblem?: string;
+  };
+
+  /*
+    Fill the *coming* week's lineups, before its games start (issue #288).
+
+    The autofill otherwise runs only while a week is being scored, so its first
+    pass for a week lands at that week's first kickoff — and for playoff week 15,
+    days after it. Week 15's fixtures are written by `advancePlayoffs`, which
+    refuses until every regular-season matchup is finalised, and week 14 is a
+    paying week held 168 hours; so the first fill for the round that decides the
+    pot happened on the Monday, with that week's whole slate already kicked off.
+    `autoFillLineup` excludes players whose games have started, so an abandoned
+    team fielded about one starter of nine.
+
+    Four properties are load-bearing:
+
+    - **The week comes from `games`, never `matchups`.** `transactionWeek` is
+      exactly that, and it is why this closes week 15 at all: the fixtures are
+      what arrive late, and kickoff times are known months ahead.
+    - **`ensureLineups` directly, never `resolveLeagueWeek`.** That would score an
+      unplayed week and write `0` into `home_milli_points`, which
+      `loadWeekResults` reads as played — a phantom 0-0 in the standings and in
+      playoff seeding.
+    - **After the scoring sweep, not before it.** This is optimistic work and
+      scoring is not; ordering it first would let a slow pass eat the function's
+      budget and take the week's scoring with it.
+    - **Its own guard.** Per-league work outside the scoring catch is the shape
+      #131 was: a throw here would take the run down for every league after it in
+      a query with no `ORDER BY`.
+  */
+  const prefill = async (
+    client: SqlClient,
+    league: { id: string; season: number },
+    now: Date,
+  ): Promise<PrefillOutcome> => {
+    try {
+      const stored = await getLeagueRules(client, league.id);
+      if (!stored) return {};
+
+      const week = weekToPrefill({
+        ahead: await transactionWeek(client, stored.rules, now),
+        lagging: await currentWeek(client, NFL.key, league.season, now),
+        lastPlayedWeek: lastPlayedWeek(stored.rules.schedule),
+        now,
+        waivers: stored.rules.waivers,
+      });
+      if (week === null) return {};
+
+      // From the Wednesday to the week's first kickoff is ~250 ticks, and most
+      // of them have nothing to write. One query rather than a full autofill per
+      // team — but it counts a lineup holding a released player as work, because
+      // for week 15 no later pass would evict him before the games are played.
+      if ((await teamsWithLineupWork(client, league.id, week)) === 0) return {};
+
+      // `optedOutRows: "skip"`: nothing is scored here, and materialising a
+      // manager's empty slots days early makes their "empty slots, and autofill
+      // is off" notice fire before the deadline exists — for the one group this
+      // pass cannot help anyway.
+      const outcome = await ensureLineups(
+        client,
+        league.id,
+        week,
+        Math.floor(now.getTime() / 1000),
+        { optedOutRows: "skip" },
+      );
+      return { prefilled: { week, teams: outcome.teamsFilled } };
+    } catch (error) {
+      prefillProblems++;
+      return { prefillProblem: error instanceof Error ? error.message : String(error) };
+    }
+  };
 
   for (const league of leagues) {
     let bracketGames = 0;
@@ -147,7 +230,15 @@ async function run(client: SqlClient, now: Date, request: Request): Promise<Next
         wearing the other label; `cronJobState` reads any non-null outcome as
         FAILING before it looks at staleness.
       */
-      scored.push({ leagueId: league.id, name: league.name, awaitingKickoff: true });
+      // Prefilled all the same: a league whose season has not started is
+      // precisely the one waiting for week 1, and skipping it here is what made
+      // the first week the one week this pass never reached.
+      scored.push({
+        leagueId: league.id,
+        name: league.name,
+        awaitingKickoff: true,
+        ...(await prefill(client, league, now)),
+      });
       continue;
     }
     anyWeek = true;
@@ -243,6 +334,11 @@ async function run(client: SqlClient, now: Date, request: Request): Promise<Next
               : String(error),
       });
     }
+
+    // Attached to the row this iteration just pushed: every path through the
+    // body above pushes exactly once, and the loop is sequential.
+    const last = scored[scored.length - 1];
+    if (last) Object.assign(last, await prefill(client, league, now));
   }
 
   // The outcome, not merely the fact of running. A league is counted as failed
@@ -275,6 +371,12 @@ async function run(client: SqlClient, now: Date, request: Request): Promise<Next
 
   const notes = [
     ...(failed > 0 ? [`${failed} of ${scored.length} leagues had a problem`] : []),
+    // Recorded rather than left in the response body: Vercel keeps no cron
+    // response bodies, so a prefill that has been failing for a week would
+    // otherwise read as a quiet Tuesday — the failure this file already names.
+    ...(prefillProblems > 0
+      ? [`${prefillProblems} of ${scored.length} leagues could not prefill next week's lineups`]
+      : []),
     ...(onFallback > 0
       ? [
           `${onFallback} of ${scored.length} leagues permanently settled a week on the ` +
