@@ -2288,6 +2288,157 @@ describe("the autofill ranks on something real in week 1 — #287", () => {
   });
 });
 
+describe("the autofill records what it decided on", () => {
+  /*
+    Four places promise this — RULES.md §8, autolineup.ts, DECISIONS.md, and the
+    doc on the hashed `autofill` rule field itself — and until migration 0047
+    nothing recorded anything. The promise cannot be withdrawn: `roster.autofill`
+    is frozen per league, so for every league that already exists the mode cannot
+    be changed and the sentence members signed stands. See issue #267.
+  */
+
+  const stored = async (fx: Fixture, teamId: string, week = WEEK) =>
+    fx.client.query<{
+      player_id: string | null;
+      autofilled_at: string | null;
+      ranked_milli_points: number | null;
+      ranked_on: string | null;
+      ranked_source: string | null;
+    }>(
+      `SELECT player_id, autofilled_at, ranked_milli_points, ranked_on, ranked_source
+         FROM lineups WHERE team_id = $1 AND week = $2`,
+      [teamId, week],
+    );
+
+  it("stores the number it ranked on, and where the number came from", async () => {
+    const fx = await setup();
+    await ensureLineups(fx.client, fx.leagueId, WEEK, BEFORE_ANYTHING);
+
+    const rows = await stored(fx, fx.teamId);
+    const filled = rows.filter((row) => row.player_id !== null);
+    expect(filled.length).toBeGreaterThan(0);
+
+    for (const row of filled) {
+      expect(row.autofilled_at).not.toBeNull();
+      // Per player, not per league: a player with no projection is ranked on his
+      // average even under WEEKLY_PROJECTION, so both answers are legal here —
+      // what is not legal is a value with no basis, or a basis with no value.
+      expect(["PROJECTION", "AVERAGE", null]).toContain(row.ranked_on);
+      expect(row.ranked_milli_points === null).toBe(row.ranked_on === null);
+      if (row.ranked_on !== "PROJECTION") expect(row.ranked_source).toBeNull();
+    }
+  });
+
+  it("survives a projections resync, which is what made this unreconstructable", async () => {
+    /*
+      `player_projections` is upserted `DO UPDATE SET value = EXCLUDED.value` on a
+      key with no revision and no `as_of`, so the number the autofill ranked on is
+      destroyed by the next sync. That is why reading the decision back out of the
+      inputs is not merely unimplemented but impossible, and why this column is
+      the only place the answer can live.
+    */
+    const fx = await setup();
+
+    // 300 passing yards at 0.04/yd is 12 points — a number to be ranked on, and
+    // then to be destroyed by the resync below.
+    const [statKey] = await fx.client.query<{ id: string }>(
+      `SELECT k.id FROM stat_keys k JOIN sports s ON s.id = k.sport_id
+        WHERE s.key = $1 AND k.key = 'pass_yd'`,
+      [NFL.key],
+    );
+    await fx.client.query(
+      `INSERT INTO player_projections (player_id, season, week, source, stat_key_id, value)
+       VALUES ($1, $2, $3, $4, $5, 300)`,
+      [fx.player("sun-qb"), SEASON, WEEK, PRIMARY_PROJECTION_SOURCE, statKey!.id],
+    );
+
+    await ensureLineups(fx.client, fx.leagueId, WEEK, BEFORE_ANYTHING);
+
+    const before = await stored(fx, fx.teamId);
+    const qb = before.find((row) => row.player_id === fx.player("sun-qb"));
+    expect(qb?.ranked_milli_points).toBe(12_000);
+    expect(qb?.ranked_on).toBe("PROJECTION");
+    expect(qb?.ranked_source).toBe(PRIMARY_PROJECTION_SOURCE);
+
+    // The resync: same key, new number, in place. Nothing records the old one.
+    await fx.client.query(
+      "UPDATE player_projections SET value = value + 100, updated_at = now()",
+    );
+    const [projection] = await fx.client.query<{ value: number }>(
+      "SELECT value FROM player_projections WHERE player_id = $1",
+      [fx.player("sun-qb")],
+    );
+    expect(Number(projection!.value)).toBe(400);
+
+    const after = await stored(fx, fx.teamId);
+    expect(
+      after.find((row) => row.player_id === fx.player("sun-qb"))?.ranked_milli_points,
+    ).toBe(12_000);
+  });
+
+  it("leaves a slot a person set alone", async () => {
+    // A manual save writes through a different insert, so these columns stay
+    // null — which is itself the signal that the autofill did not decide it.
+    const fx = await setup();
+
+    await setLineup(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: fx.teamId,
+      week: WEEK,
+      assignments: lineupOf(fx, FULL),
+      now: BEFORE_ANYTHING,
+    });
+
+    const rows = await stored(fx, fx.teamId);
+    const mine = rows.find((row) => row.player_id === fx.player("sun-qb"));
+    expect(mine).toBeDefined();
+    expect(mine?.autofilled_at).toBeNull();
+    expect(mine?.ranked_milli_points).toBeNull();
+  });
+
+  it("does not overwrite the record of a slot it merely kept", async () => {
+    /*
+      A second pass copies an already-filled slot through without ranking
+      anything, so its ranked value is null — and writing that over the first
+      pass's record erases the decision these columns exist to keep.
+
+      **The projection below is what makes this test able to fail.** Without it
+      every slot is ranked on null anyway, nulls overwrite nulls, and the bug is
+      invisible: which is exactly what happened when this test was first written.
+      A mutation that always overwrote passed against it, and the defect it hid
+      was real — `chosen` did not exist yet, and a kept slot was being stamped as
+      freshly decided.
+    */
+    const fx = await setup();
+    const [statKey] = await fx.client.query<{ id: string }>(
+      `SELECT k.id FROM stat_keys k JOIN sports s ON s.id = k.sport_id
+        WHERE s.key = $1 AND k.key = 'pass_yd'`,
+      [NFL.key],
+    );
+    await fx.client.query(
+      `INSERT INTO player_projections (player_id, season, week, source, stat_key_id, value)
+       VALUES ($1, $2, $3, $4, $5, 300)`,
+      [fx.player("sun-qb"), SEASON, WEEK, PRIMARY_PROJECTION_SOURCE, statKey!.id],
+    );
+
+    await ensureLineups(fx.client, fx.leagueId, WEEK, BEFORE_ANYTHING);
+    const first = await stored(fx, fx.teamId);
+    const qbFirst = first.find((row) => row.player_id === fx.player("sun-qb"));
+    expect(qbFirst?.ranked_milli_points).toBe(12_000);
+
+    await ensureLineups(fx.client, fx.leagueId, WEEK, BEFORE_ANYTHING);
+    const qbSecond = (await stored(fx, fx.teamId)).find(
+      (row) => row.player_id === fx.player("sun-qb"),
+    );
+
+    expect(qbSecond?.ranked_milli_points).toBe(12_000);
+    expect(qbSecond?.ranked_on).toBe("PROJECTION");
+    // Compared by value: the driver hands back Date objects, so identity fails
+    // on two reads of the same row.
+    expect(String(qbSecond?.autofilled_at)).toBe(String(qbFirst?.autofilled_at));
+  });
+});
+
 describe("teamsWithLineupWork", () => {
   it("counts every team before a fill, and the under-rostered one after", async () => {
     // The guard that keeps the ~250 ticks between the Wednesday and kickoff from

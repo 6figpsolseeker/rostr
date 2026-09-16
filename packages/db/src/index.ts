@@ -137,6 +137,7 @@ export {
 
 export {
   autoFillLineup,
+  clearReleasedFromLineups,
   ensureLineups,
   teamsWithLineupWork,
   LineupError,

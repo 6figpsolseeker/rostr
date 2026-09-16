@@ -711,7 +711,8 @@ Which of the two a league uses is frozen at creation, like every other rule.
 > § 7 requires before a week's scores finalise. That is the right bar for **facts** — did
 > he score? — because two providers can disagree about what happened. Filling a slot is a
 > **decision** standing in for the manager's own start/sit call, and nobody asks two
-> providers to agree on one of those. The projection used is recorded with the lineup, so
+> providers to agree on one of those. The projection used is recorded with the lineup — its value, whether it was a
+> projection or a season average, and the source it came from — so
 > the decision is checkable after the fact.
 
 **It does not pick anyone while your roster is over the limit.** § 6 sets that out, and this

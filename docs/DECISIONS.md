@@ -805,12 +805,42 @@ silent in exactly the Sunday case.
 
 **Owed, and not yet paid.** The projections precedent below was granted on a
 condition — _"store the projection used, with its source, and the decision is as
-reproducible as anything else in the system"_ — and nothing records either the
-projection or this designation. Issue #267 is that debt. This exception is
-taken on the narrower ground that a demotion cannot overturn a manager's
-choice, but the recording is still owed and both inputs should land together.
+reproducible as anything else in the system"_ — and nothing recorded either the
+projection or this designation. Issue #267 was that debt.
 
-**Not decided here: whether an injured-reserve designation should exclude a
-player outright.** That would change § 8's "Who is eligible", which is frozen
-text existing leagues have signed, and it is what issue #270 would need. Left
-open deliberately.
+**Half paid, 2026-09-16.** Migration 0047 stores what the autofill ranked on:
+`lineups.ranked_milli_points`, with `ranked_on` (PROJECTION or AVERAGE, per
+player rather than per league) and `ranked_source`, plus `autofilled_at` to say
+the autofill decided the slot at all. Recording rather than recomputing is the
+whole point — `player_projections` is upserted in place on a key with no
+revision, so a resync destroys the number the decision was taken on.
+
+**Still owed: the designation.** Nothing records that a candidate was demoted for
+being OUT, DOUBTFUL or on injured reserve, so a lineup that looks eccentric
+cannot be explained by the row alone. Weeks played before 0047 are not
+reconstructable at all, and no backfill is possible.
+
+**Decided 2026-09-16 by the owner: it stays a sort key. An injured-reserve
+designation does not exclude a player from the autofill's pool.**
+
+The question left open below was whether it should. It should not, for the
+reason the demotion was granted on in the first place: the ordering can only
+ever change _which_ player fills a slot the manager left empty, while an
+exclusion changes whether the slot is filled at all. With one quarterback, one
+kicker and one defence in a default roster, excluding the only body available
+manufactures a permanently empty slot — which scores exactly the zero the
+injured player would have scored, and reads to the manager as the product
+failing rather than as their own roster being thin.
+
+It also spends a change to § 8's "Who is eligible", frozen text that existing
+leagues have signed, to buy nothing measurable.
+
+What this does **not** settle is the recording debt named just above: issue #267
+is still owed, and the owner chose on the same day to pay it.
+
+The original text, kept because it is the question that was asked:
+
+> **Not decided here: whether an injured-reserve designation should exclude a
+> player outright.** That would change § 8's "Who is eligible", which is frozen
+> text existing leagues have signed, and it is what issue #270 would need. Left
+> open deliberately.

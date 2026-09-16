@@ -26,7 +26,11 @@
  * gate that settlement requires. That is fine here and would not be for scoring:
  * this is a **decision** standing in for a manager's start/sit call, and nobody
  * demands two providers agree on one of those either. What makes it honest is
- * that the number used is recorded, so the decision stays checkable.
+ * that the number used is recorded, so the decision stays checkable: every
+ * chosen slot stores it as `lineups.ranked_milli_points`, with `ranked_on` and
+ * `ranked_source` saying which number it was (migration 0047). It has to be
+ * stored rather than recomputed, because `player_projections` is overwritten in
+ * place on every resync.
  *
  * The tiebreak is the player ID, which is arbitrary — deliberately. Every real
  * criterion has already come up equal, and what matters at that point is only
@@ -180,6 +184,57 @@ export interface AutolineupChoice extends LineupAssignment {
    */
   readonly runnerUpId: string | null;
   readonly runnerUpReason: RunnerUpReason | null;
+  /**
+   * The number this player was ranked on, and which number it was.
+   *
+   * **Per player, not per league.** Under `WEEKLY_PROJECTION` a player with no
+   * projection is ranked on his season average rather than dumped to the
+   * bottom, so the league's mode does not tell you what decided a given slot.
+   *
+   * Both null for a slot nobody was picked for, and for a player with no record
+   * at all — which is itself why he sorted where he did.
+   *
+   * The caller stores these: four places in this repo promise the number used
+   * is recorded with the lineup, and `player_projections` is overwritten in
+   * place on every resync, so nothing can be reconstructed afterwards from the
+   * inputs. See issue #267 and migration 0047.
+   */
+  readonly rankedMilliPoints: number | null;
+  readonly rankedOn: RankedOn | null;
+  /**
+   * Whether this pass picked the player, rather than copying him through.
+   *
+   * **Not `playerId !== null`**, which is the tempting reading and is wrong: a
+   * locked or already-filled slot also carries a player, and it was decided by
+   * some earlier pass. The caller stores the decision, so treating a kept slot
+   * as a fresh one overwrites the record of the pass that actually made it —
+   * with this pass's nulls, since nothing was ranked here.
+   *
+   * It is also not `rankedMilliPoints !== null`: a player with no projection and
+   * no games played is genuinely chosen, on no number at all, and that is a
+   * decision worth recording as having happened.
+   */
+  readonly chosen: boolean;
+}
+
+/** Which number ranked a player: the week's projection, or his season average. */
+export type RankedOn = "PROJECTION" | "AVERAGE";
+
+/**
+ * Which of the two numbers `rankingValue` actually returned for this candidate.
+ *
+ * Kept beside `rankingValue` because they answer the same question and must
+ * not drift: one returns the number, the other names it.
+ */
+export function rankedOn(
+  candidate: AutolineupCandidate,
+  mode: AutofillMode = "SEASON_AVERAGE",
+): RankedOn | null {
+  if (rankingValue(candidate, mode) === null) return null;
+  if (mode === "SEASON_AVERAGE") return "AVERAGE";
+  return candidate.projectedMilliPoints !== null && candidate.projectedMilliPoints !== undefined
+    ? "PROJECTION"
+    : "AVERAGE";
 }
 
 /**
@@ -258,6 +313,12 @@ export function autolineupChoices(input: AutolineupInput): readonly AutolineupCh
       ...entry,
       runnerUpId: null,
       runnerUpReason: null,
+      // No ranking happened here — the slot was preserved, not chosen. `chosen`
+      // is what stops the writer overwriting the record of the pass that did
+      // choose it with these nulls.
+      rankedMilliPoints: null,
+      rankedOn: null,
+      chosen: false,
     });
     if (entry.playerId) used.add(entry.playerId);
   }
@@ -298,6 +359,9 @@ export function autolineupChoices(input: AutolineupInput): readonly AutolineupCh
         playerId: best.playerId,
         runnerUpId: null,
         runnerUpReason: null,
+        rankedMilliPoints: rankingValue(best, mode),
+        rankedOn: rankedOn(best, mode),
+        chosen: true,
       });
     } else {
       assignments.set(key, {
@@ -306,6 +370,9 @@ export function autolineupChoices(input: AutolineupInput): readonly AutolineupCh
         playerId: null,
         runnerUpId: null,
         runnerUpReason: null,
+        rankedMilliPoints: null,
+        rankedOn: null,
+        chosen: false,
       });
     }
   }
@@ -338,6 +405,9 @@ export function autolineupChoices(input: AutolineupInput): readonly AutolineupCh
       playerId: null,
       runnerUpId: null,
       runnerUpReason: null,
+      rankedMilliPoints: null,
+      rankedOn: null,
+      chosen: false,
     };
 
     // A locked slot was not chosen by the autofill, and an empty one had nobody

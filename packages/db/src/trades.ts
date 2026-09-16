@@ -42,6 +42,7 @@ import type { SqlClient } from "./client.js";
 import { getLeagueRules } from "./leagues.js";
 import { withTransaction } from "./transaction.js";
 import { isUniqueViolation } from "./pg-errors.js";
+import { clearReleasedFromLineups } from "./lineups.js";
 import { transactionWeek } from "./week.js";
 
 export class TradeError extends Error {
@@ -1365,6 +1366,33 @@ async function resolveTrade(
         RETURNING id`,
         [asset.from_team_id, asset.player_id, now.toISOString()],
       );
+
+      /*
+        And out of the sending team's lineup.
+
+        A trade is the one release the losing manager does not perform by hand:
+        it executes from the hourly cron, hours after they accepted, and a
+        player they no longer own would otherwise stand in their lineup and
+        score for them — while also scoring for the team that now rosters him.
+        The clearing is keyed on that team and that player, so the receiving
+        team's own lineup is untouched.
+
+        Unlike `dropPlayer`, execution cannot refuse when the player's game has
+        started — the league already approved the trade — so the week filter
+        inside `clearReleasedFromLineups` is what protects a slot that has
+        already locked around him.
+      */
+      const week = await transactionWeek(tx, rules, now);
+      if (week !== null) {
+        await clearReleasedFromLineups(
+          tx,
+          asset.from_team_id,
+          asset.player_id,
+          rules.seasonYear,
+          week,
+          now,
+        );
+      }
 
       // **Nothing is created that was not destroyed.** The insert used to be
       // unconditional, so if the release matched no row — the player having left
