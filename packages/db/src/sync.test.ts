@@ -651,10 +651,7 @@ describe("loadDraftBoard", () => {
     // The density contract `OFF_BOARD_RANK` leans on has to survive the
     // widening: every board rank stays finite and 1..n.
     const client = await fresh();
-    const provider = new FakeProvider([
-      player("1", "Active", "RB"),
-      player("2", "Cut", "WR"),
-    ]);
+    const provider = new FakeProvider([player("1", "Active", "RB"), player("2", "Cut", "WR")]);
     await syncPlayers(client, provider, "nfl", 2026);
     await client.query("UPDATE players SET active = false WHERE external_ref = $1", ["2"]);
 

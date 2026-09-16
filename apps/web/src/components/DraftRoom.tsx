@@ -879,8 +879,21 @@ function PlayerTable({
               <span className="text-right text-xs text-nocturne-neutral-600 tabular-nums">
                 {player.byeWeek ?? "—"}
               </span>
-              <span className="text-right text-xs text-nocturne-neutral-600 tabular-nums">
-                {player.rank}
+              <span
+                className="text-right text-xs text-nocturne-neutral-600 tabular-nums"
+                title={
+                  player.active
+                    ? undefined
+                    : "No ADP: he is not on an NFL roster, so his place here is the bottom of the board rather than where anyone is drafting him"
+                }
+              >
+                {/*
+                   `rank` is a dense index over the board, and since cut players
+                   sort last it no longer tracks ADP for them — printing it under
+                   an "ADP" header would be inventing a number. Active players
+                   keep ranks 1..n and are unaffected.
+                */}
+                {player.active ? player.rank : "—"}
               </span>
               <span
                 className="text-right text-sm font-medium tabular-nums"
@@ -984,6 +997,16 @@ function Queue({
               <span className="min-w-0 flex-1 truncate text-xs">
                 {player?.name ?? playerId}
                 {gone && <span className="ml-1 text-nocturne-neutral-600">— taken</span>}
+                {/*
+                   Auto-pick skips him now (see `autoPick`), so a manager whose
+                   clock expires gets their next choice instead. Saying so beats
+                   letting the entry look ordinary until it is silently passed
+                   over — the queue is the one place a stale choice survives from
+                   before the club released him.
+                */}
+                {player && !player.active && !gone && (
+                  <span className="ml-1 text-nocturne-neutral-600">— no NFL club</span>
+                )}
               </span>
             </button>
             <button

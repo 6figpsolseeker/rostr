@@ -356,6 +356,55 @@ describe("resolveWaiverClaims", () => {
     expect(loser?.reason).toBe("PLAYER_TAKEN");
   });
 
+  it("does not blame another team for a player nobody claimed — #238", () => {
+    /*
+      **The guarantee that lost its only test.**
+
+      `taken` is checked before the pool lookup so that the pool branch means
+      strictly "not in the pool" — a player awarded earlier in this same run is
+      necessarily in it. Reverse the two and a player absent from the pool is
+      reported as `PLAYER_TAKEN`: "a team with better priority claimed him
+      first", which is a statement about other managers that is false, told to
+      somebody with no way to check it, about a player nobody holds.
+
+      This used to be covered by a database test asserting `PLAYER_UNAVAILABLE`
+      for a player his club had cut. That route is gone — the board stopped
+      filtering on `players.active` on 2026-09-16, so a cut player is in the
+      pool and awardable — and the ordering it incidentally pinned was left with
+      nothing on it. What can still miss the pool is narrow (an id from another
+      sport, a player with no mapped position row), so the test asks for it
+      directly rather than through a fixture that no longer produces one.
+    */
+    const result = resolveWaiverClaims({
+      claims: [claim("c1", "team-a", "not-in-this-sport")],
+      priority,
+      rosters: emptyRosters,
+      pool: POOL,
+      shape: SHAPE,
+      irExempt: NO_IR,
+    });
+
+    const outcome = result.outcomes[0];
+    expect(outcome?.awarded).toBe(false);
+    expect(outcome?.reason).toBe("PLAYER_UNAVAILABLE");
+    expect(outcome?.reason).not.toBe("PLAYER_TAKEN");
+  });
+
+  it("still blames priority when a better team really did take him — #238", () => {
+    // The other half of the pair. Both branches are reachable and they must not
+    // collapse into one message, in either direction.
+    const result = resolveWaiverClaims({
+      claims: [claim("c1", "team-a", "star"), claim("c2", "team-b", "star")],
+      priority,
+      rosters: emptyRosters,
+      pool: POOL,
+      shape: SHAPE,
+      irExempt: NO_IR,
+    });
+
+    expect(result.outcomes.find((o) => o.teamId === "team-b")?.reason).toBe("PLAYER_TAKEN");
+  });
+
   it("sends a winner to the back of the order", () => {
     const result = resolveWaiverClaims({
       claims: [claim("c1", "team-a", "star")],

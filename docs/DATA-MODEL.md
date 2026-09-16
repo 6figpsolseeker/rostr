@@ -66,11 +66,13 @@ stat_lines        id, player_id, season, week, stat_key_id, value,
 
 **`players.active` is the only liveness flag, and `players.status` is dead.**
 `active` means exactly one thing — the provider currently lists him on an NFL
-club — and the daily sync re-asserts it in both directions every run. It is a
+club. The daily sync re-asserts it in both directions for every player the
+provider still lists; a player it stops listing altogether is never updated
+again and keeps whatever value he last had. It is a
 **sort key, never a filter**: a player his club has cut stays draftable and
 addable and sorts to the bottom of the board and the free-agent list (owner's
 ruling, 2026-09-16, issue #276). The one reader that keeps the opposite polarity
-is the notification telling the manager *holding* him, which asks a different
+is the notification telling the manager _holding_ him, which asks a different
 question.
 
 `status` is written by nothing and read by nothing. It was added in `0003` with

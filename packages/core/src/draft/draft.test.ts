@@ -290,6 +290,46 @@ describe("autoPick", () => {
     expect(result?.source).toBe("QUEUE");
   });
 
+  it("skips a queued player his NFL club has released", () => {
+    /*
+      The queue is consulted before the ranking, so the demotion that keeps a cut
+      player off the top of the board does not reach it. A manager queues someone
+      in August, his club cuts him in September, and without this the clock
+      expiring in round one spends the pick on a guaranteed zero.
+
+      Reachable only since 2026-09-16: before that the board filtered cut players
+      out, so `byId` missed and the entry was skipped by accident. The pick must
+      fall through to the next queued player, not to best-available, or the
+      manager's second choice is discarded along with the first.
+    */
+    const cut = { ...player("qb1", ["QB"], 1), active: false };
+    const result = autoPick({
+      available: [cut, ...available.filter((p) => p.playerId !== "qb1")],
+      roster: [],
+      queue: ["qb1", "rb1"],
+      shape: SHAPE,
+      picksRemainingAfter: 14,
+    });
+
+    expect(result?.player.playerId).toBe("rb1");
+    expect(result?.source).toBe("QUEUE");
+  });
+
+  it("still takes a queued player the flag says nothing about", () => {
+    // `active` is optional and absent means yes — most pools are built by hand.
+    // Treating undefined as "cut" would silently demote every fixture.
+    const result = autoPick({
+      available,
+      roster: [],
+      queue: ["qb1"],
+      shape: SHAPE,
+      picksRemainingAfter: 14,
+    });
+
+    expect(result?.player.playerId).toBe("qb1");
+    expect(result?.source).toBe("QUEUE");
+  });
+
   it("takes the best player available when the queue is exhausted", () => {
     // Not the first unfilled roster slot. An earlier version filled slots in
     // order, so every bot opened with a quarterback — twelve teams taking a QB

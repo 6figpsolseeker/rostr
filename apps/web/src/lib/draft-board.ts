@@ -156,7 +156,6 @@ export function picksUntilTurn(
   return next ? next.pickNumber - currentPickNumber : null;
 }
 
-
 /** Only the fields the ordering reads, so a test needs no board row. */
 export interface DraftValue {
   readonly active: boolean;

@@ -989,6 +989,7 @@ export function autolineupCandidate(
     readonly playerId: string;
     readonly positions: readonly string[];
     readonly kickoffAt: number | null;
+    readonly teamRef: string | null;
     readonly injuryDesignation: string | null;
   },
   ranking: {
@@ -1014,8 +1015,31 @@ export function autolineupCandidate(
       `"ACTIVE"` against out-codes and never matched once. `RULES.md` §8 has
       promised this behaviour to every member who signed, and it did nothing.
       Issue #269.
+
+      **`teamRef` is checked as well as `kickoffAt`, and a null kickoff does not
+      imply the other.** It reads as though it should: no club, no fixture, no
+      kickoff. But `loadKickoffs` is the *lock* oracle and fails **closed** — a
+      player whose club has no games in the season at all gets the week's first
+      kickoff rather than null, so that an unknown player's slot freezes rather
+      than staying open all Sunday. That is right for a lock and exactly wrong
+      here: it made a player with no NFL club read as **available**, and then
+      ranked him on a projection nothing expires. A receiver cut in week 6 after
+      two good games carries a high season average into week 7 and would be
+      started over a fit bench player, for a guaranteed zero, on an abandoned
+      team whose results move other people's playoff seeds.
+
+      Latent while a cut player could only arrive by being cut *while* rostered.
+      Not latent since 2026-09-16, when he became someone a manager can go and
+      sign on purpose.
+
+      Still a sort key rather than an exclusion, like everything else here: a
+      team with nobody else at the position fields him and scores the zero it
+      would have scored with an empty slot.
     */
-    unavailable: player.kickoffAt === null || unlikelyToPlay(player.injuryDesignation),
+    unavailable:
+      player.kickoffAt === null ||
+      player.teamRef === null ||
+      unlikelyToPlay(player.injuryDesignation),
   };
 }
 

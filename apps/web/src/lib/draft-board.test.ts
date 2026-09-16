@@ -197,6 +197,17 @@ describe("byDraftValue", () => {
     ).toEqual(["better", "lesser", "unprojected"]);
   });
 
+  it("orders two unprojected players on ADP", () => {
+    /*
+      The branch that had no test, and the widening makes it matter more rather
+      than less: the ~570 players it admits are overwhelmingly unprojected, so
+      this now orders a materially larger tail of the board.
+    */
+    expect(order(["later", value(true, 120, null)], ["earlier", value(true, 7, null)])).toEqual(
+      ["earlier", "later"],
+    );
+  });
+
   it("breaks an equal projection on ADP", () => {
     expect(
       order(["later adp", value(true, 50, 9_000)], ["earlier adp", value(true, 12, 9_000)]),

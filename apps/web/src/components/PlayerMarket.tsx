@@ -47,6 +47,8 @@ interface Rostered {
   position: string;
   imageUrl: string | null;
   teamRef: string | null;
+  /** Whether his NFL club still has him. See `Available.onNflRoster`. */
+  onNflRoster: boolean;
   injuryDesignation: string | null;
   onIr: boolean;
 }
@@ -358,7 +360,11 @@ export function PlayerMarket({ leagueId }: { leagueId: string }) {
                     >
                       {player.position}
                     </span>
-                    {player.teamRef ?? "FA"}
+                    {player.onNflRoster ? (
+                      (player.teamRef ?? "FA")
+                    ) : (
+                      <span className="text-nocturne-neutral-500">Not on an NFL roster</span>
+                    )}
                   </span>
                 </span>
               </button>

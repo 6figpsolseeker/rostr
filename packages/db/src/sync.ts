@@ -630,9 +630,19 @@ export interface DraftBoardEntry {
  * September still carries the ADP he had in July: un-filtering alone would put
  * him near the *top*. `p.active` is NOT NULL, so `DESC` needs no NULLS clause.
  *
- * **`rank` shifts for everybody, and nothing stores one.** It is a dense index
- * over this array, consumed only by comparison — `OFF_BOARD_RANK` in `draft.ts`
- * depends on exactly that.
+ * **No active player's rank moves, and that is stronger than it looks.**
+ * `p.active DESC` is the *first* key and the ones after it are untouched, so the
+ * active prefix of the result is the old board in the old order; the change
+ * strictly appends. Cut players take ranks after the last active one. `rank`
+ * stays a dense index over this array either way, consumed only by comparison —
+ * `OFF_BOARD_RANK` in `draft.ts` depends on its finiteness.
+ *
+ * Dense over **rows**, which is not quite dense over players: the ranking join
+ * uses `COALESCE($3, r.source)`, so omitting the argument filters nothing and a
+ * player with two ranking sources returns twice. Latent — one source exists —
+ * and the sibling defect in `loadProjections` above has already been fixed this
+ * way once. Filed rather than fixed here, because choosing the default wrongly
+ * empties every ADP on the live board and that needs checking against it.
  */
 export async function loadDraftBoard(
   db: SqlClient,

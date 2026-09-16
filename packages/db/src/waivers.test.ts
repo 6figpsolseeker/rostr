@@ -67,7 +67,6 @@ interface Fixture {
   players: Map<string, string>;
 }
 
-/** Four teams; one holds a small roster, the rest are empty. */
 /*
   A player his NFL club has cut.
 
@@ -84,6 +83,7 @@ interface Fixture {
 const deactivate = (fx: Fixture, playerId: string) =>
   fx.client.query("UPDATE players SET active = false WHERE id = $1", [playerId]);
 
+/** Four teams; one holds a small roster, the rest are empty. */
 async function setup(): Promise<Fixture> {
   db = await createTestDatabase();
   await seedSport(db, NFL);
@@ -410,9 +410,11 @@ describe("processing", () => {
   it("counts a rostered player his club has cut — #238", async () => {
     /*
       **The silent direction.** The resolver built each roster by looking every
-      row up in the draft-board pool, and that board filters on `active` — so a
-      cut player fell out of the array, the team read one short of its true size,
-      and a claim with no drop was awarded past the roster limit members signed.
+      row up in the draft-board pool, and that board filtered on `active` then —
+      so a cut player fell out of the array, the team read one short of its true
+      size, and a claim with no drop was awarded past the roster limit members
+      signed. (The board stopped filtering on 2026-09-16; ownership coming from
+      `roster_entries` rather than from any pool is what this still pins.)
 
       Nothing would have caught it afterwards: there is no capacity constraint in
       the schema, no trigger, and nothing trims. The team simply holds one more

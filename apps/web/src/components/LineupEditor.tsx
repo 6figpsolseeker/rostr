@@ -749,9 +749,14 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
                           // reason: reaching `players.active` means widening
                           // `loadRosterForWeek`, which is `validateLineup`'s
                           // ownership oracle and must not gain columns to serve
-                          // a tooltip. The proxy is exact anyway — the adapter
-                          // derives `active` and `teamRef` from one provider
-                          // field, so there is no state where they disagree.
+                          // a tooltip.
+                          //
+                          // `teamRef` is a proxy and not an exact one — the
+                          // adapter reads `team` and `isFreeAgent` separately,
+                          // so a blank club on a listed player reads as null
+                          // here too. That is why this names the observable
+                          // ("not listed with an NFL club") rather than the
+                          // cause, which is the right sentence either way.
                           "He is not listed with an NFL club, so no fixture is stored for him."
                         : "No fixture stored for his team this week, and it is not their bye. Check back once the schedule syncs."
                   }

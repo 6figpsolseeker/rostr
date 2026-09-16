@@ -5,9 +5,14 @@ import { draftBoard, draftContext, DraftContextError } from "@/lib/draft-context
 /**
  * The full player pool, once.
  *
- * A thousand players is around 80 KB, and it changes only when the stats sync
- * runs. Sending it on every poll of the draft state would be wasteful, so it is
- * fetched separately and the client subtracts drafted players itself.
+ * Roughly 1,600 players is around 150 KB, and it changes only when the stats
+ * sync runs. Sending it on every poll of the draft state would be wasteful, so
+ * it is fetched separately and the client subtracts drafted players itself.
+ *
+ * It was ~1,000 players and ~80 KB until 2026-09-16, when players their clubs
+ * had released stopped being filtered out and started sorting last instead. That
+ * tail is not bounded — nothing prunes `players` and it carries no season — so
+ * this number is a measurement with a date on it rather than a budget.
  */
 export async function GET(
   _request: Request,

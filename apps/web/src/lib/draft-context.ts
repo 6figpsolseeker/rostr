@@ -144,7 +144,14 @@ export async function draftBoard(season: number, rules: LeagueRules): Promise<Ca
     pool: new Map(
       entries.map((entry) => [
         entry.playerId,
-        { playerId: entry.playerId, positions: entry.positions, rank: entry.rank },
+        {
+          playerId: entry.playerId,
+          positions: entry.positions,
+          rank: entry.rank,
+          // Read only by the queue, which is consulted before the ranking that
+          // already demotes him. See `autoPick`.
+          active: entry.active,
+        },
       ]),
     ),
     projected,
