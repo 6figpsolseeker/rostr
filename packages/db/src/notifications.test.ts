@@ -279,6 +279,105 @@ describe("notificationsForUser", () => {
     expect(items.map((i) => i.kind)).toContain("LINEUP_UNSET");
   });
 
+  describe("a slot the autofill could not fill", () => {
+    /*
+      The counterpart of the two messages above, and the reason migration 0047
+      exists: before it, "the autofill reached this slot and failed" and "nobody
+      has been near this slot" were the same empty row, so the obvious widening
+      of `unsetLineups` warned every autofill-on team every week and was
+      withdrawn. `autofilled_at` is what tells them apart.
+    */
+
+    /** An empty slot in week 1, optionally stamped as one the autofill visited. */
+    const emptySlot = async (
+      fx: Awaited<ReturnType<typeof fixture>>,
+      options: { visited: boolean; week?: number },
+    ): Promise<void> => {
+      await fx.client.query("UPDATE leagues SET state = 'IN_SEASON' WHERE id = $1", [
+        fx.leagueId,
+      ]);
+      await fx.client.query(
+        `INSERT INTO lineups (team_id, week, slot_type_id, slot_index, player_id, autofilled_at)
+         SELECT $1, $3, st.id, 0, NULL, $2 FROM slot_types st LIMIT 1`,
+        [fx.seats[0]!.teamId, options.visited ? NOW.toISOString() : null, options.week ?? 1],
+      );
+    };
+
+    /** A week-1 kickoff in the past, so the league has a current week at all. */
+    const played = async (fx: Awaited<ReturnType<typeof fixture>>): Promise<void> => {
+      await fx.client.query(
+        `INSERT INTO games (sport_id, external_ref, season, week, home_team_ref, away_team_ref, kickoff_at)
+         SELECT s.id, 'wk1', 2026, 1, 'CIN', 'BAL', $1 FROM sports s WHERE s.key = 'nfl'`,
+        [new Date(NOW.getTime() - 3600_000).toISOString()],
+      );
+    };
+
+    it("says so, on a team with the autofill on", async () => {
+      const fx = await fixture();
+      await played(fx);
+      await emptySlot(fx, { visited: true });
+
+      const items = await notificationsForUser(fx.client, fx.seats[0]!.userId, NOW);
+      expect(items.map((i) => i.kind)).toContain("AUTOFILL_COULD_NOT_FILL");
+      // And not the other message, which would blame the manager for a switch
+      // they never touched.
+      expect(items.map((i) => i.kind)).not.toContain("LINEUP_UNSET");
+    });
+
+    it("leaves an autofill-off team to the other message", async () => {
+      /*
+        Both messages ask for the same action and mean opposite things about
+        whose doing it was, so a manager must get one or the other, never both
+        and never the wrong one. An autofill-off team's empty slot is theirs;
+        this message would tell them the product tried and failed, which is
+        false — it was never going to try.
+
+        A row can still carry `autofilled_at` here: the switch can be turned off
+        after a pass has already run.
+      */
+      const fx = await fixture();
+      await played(fx);
+      await emptySlot(fx, { visited: true });
+      await fx.client.query("UPDATE teams SET autofill_enabled = false WHERE id = $1", [
+        fx.seats[0]!.teamId,
+      ]);
+
+      const items = await notificationsForUser(fx.client, fx.seats[0]!.userId, NOW);
+      expect(items.map((i) => i.kind)).toContain("LINEUP_UNSET");
+      expect(items.map((i) => i.kind)).not.toContain("AUTOFILL_COULD_NOT_FILL");
+    });
+
+    it("stays quiet about a slot the autofill has not reached", async () => {
+      // Every autofill-on team holds these before the first pass of a week.
+      // This is the false positive that sank the one-line version.
+      const fx = await fixture();
+      await played(fx);
+      await emptySlot(fx, { visited: false });
+
+      const items = await notificationsForUser(fx.client, fx.seats[0]!.userId, NOW);
+      expect(items.map((i) => i.kind)).not.toContain("AUTOFILL_COULD_NOT_FILL");
+    });
+
+    it("stays quiet about a week that has not started", async () => {
+      // A future week's gaps are not news: the next pass fills them. Without the
+      // week scope this would fire all season.
+      const fx = await fixture();
+      await played(fx);
+      await emptySlot(fx, { visited: true, week: 2 });
+
+      const items = await notificationsForUser(fx.client, fx.seats[0]!.userId, NOW);
+      expect(items.map((i) => i.kind)).not.toContain("AUTOFILL_COULD_NOT_FILL");
+    });
+
+    it("stays quiet before the season has a kickoff at all", async () => {
+      const fx = await fixture();
+      await emptySlot(fx, { visited: true });
+
+      const items = await notificationsForUser(fx.client, fx.seats[0]!.userId, NOW);
+      expect(items.map((i) => i.kind)).not.toContain("AUTOFILL_COULD_NOT_FILL");
+    });
+  });
+
   describe("a player who is no longer on an NFL roster", () => {
     /*
       Issue #254. `season-sync` clears `players.active` for anyone the provider

@@ -45,6 +45,7 @@ export type NotificationKind =
   | "DRAFT_SOON"
   | "ROSTER_OVER_LIMIT"
   | "LINEUP_UNSET"
+  | "AUTOFILL_COULD_NOT_FILL"
   | "PLAYER_OFF_NFL_ROSTER"
   | "INVITATION";
 
@@ -78,6 +79,11 @@ export const NOTIFICATION_URGENCY: readonly NotificationKind[] = [
   // the window shuts at the same kickoff.
   "ROSTER_OVER_LIMIT",
   "LINEUP_UNSET",
+  // Below an unset lineup, above a dead player: this manager has the autofill
+  // on, so the product tried and could not — which is worth less of their
+  // attention than a slot nothing will ever fill, and more than a player whose
+  // zero is already permanent.
+  "AUTOFILL_COULD_NOT_FILL",
   "PLAYER_OFF_NFL_ROSTER",
   "INVITATION",
 ];
@@ -297,15 +303,17 @@ export async function notificationsForUser(
   userId: string,
   now: Date,
 ): Promise<readonly Notification[]> {
-  const [drafts, trades, vetoes, invitations, lineups, cut, overLimit] = await Promise.all([
-    draftNotifications(db, userId, now),
-    tradesAwaitingYou(db, userId),
-    vetoWindows(db, userId, now),
-    invitationNotifications(db, userId),
-    unsetLineups(db, userId),
-    playersOffNflRosters(db, userId),
-    rostersOverLimit(db, userId),
-  ]);
+  const [drafts, trades, vetoes, invitations, lineups, unfilled, cut, overLimit] =
+    await Promise.all([
+      draftNotifications(db, userId, now),
+      tradesAwaitingYou(db, userId),
+      vetoWindows(db, userId, now),
+      invitationNotifications(db, userId),
+      unsetLineups(db, userId),
+      autofillCouldNotFill(db, userId, now),
+      playersOffNflRosters(db, userId),
+      rostersOverLimit(db, userId),
+    ]);
 
   const all = [
     ...drafts,
@@ -313,6 +321,7 @@ export async function notificationsForUser(
     ...vetoes,
     ...invitations,
     ...lineups,
+    ...unfilled,
     ...cut,
     ...overLimit,
   ];
@@ -521,17 +530,17 @@ async function invitationNotifications(db: SqlClient, userId: string): Promise<N
  * a thing the product already handles. With it off, an empty slot scores zero
  * and the warning is true.
  *
- * **That premise is now conditional and this filter has not caught up.** The
- * autofill will not start a player whose own game has kicked off, so a slot
- * where everyone eligible is already playing is left empty on purpose — on an
- * autofill-*on* team, which this query never looks at. That manager is told
- * nothing, while the slot is still fillable from free agency.
+ * **The gap that used to be described here is closed by `autofillCouldNotFill`
+ * below**, which is the other half of this pair rather than a widening of this
+ * query. The note read: the autofill will not start a player whose own game has
+ * kicked off, so a slot where everyone eligible is already playing is left empty
+ * on purpose — on an autofill-*on* team, which this query never looks at.
  *
- * The one-line widening is worse than the gap: the join above already selects
- * only `player_id IS NULL` rows, so dropping the autofill predicate warns every
- * team with any empty row — which, before the week's first kickoff, is every
- * autofill-on team every week. Telling the two apart needs a record of what the
- * autofill decided, and nothing stores one. Tracked separately.
+ * Widening this one was tried and withdrawn, and the reason still holds: the
+ * join selects only `player_id IS NULL` rows, so dropping the autofill predicate
+ * warns every autofill-on team, every week, before the first kickoff. What made
+ * the second message possible was migration 0047 — a slot the autofill visited
+ * carries `autofilled_at`, and one nobody has been near does not.
  */
 async function unsetLineups(db: SqlClient, userId: string): Promise<Notification[]> {
   const rows = await db.query<{
@@ -557,6 +566,83 @@ async function unsetLineups(db: SqlClient, userId: string): Promise<Notification
     leagueName: row.league_name,
     href: `/leagues/${row.league_id}/lineup`,
     text: `${row.empty} empty ${Number(row.empty) === 1 ? "slot" : "slots"} in ${row.league_name}, and autofill is off`,
+    deadline: null,
+    needsSignature: false,
+  }));
+}
+
+/**
+ * A slot the autofill reached and could not fill.
+ *
+ * The counterpart of the message above, and deliberately a different one: "you
+ * turned the autofill off" and "the autofill tried and failed" ask for the same
+ * action and mean opposite things about whose doing it was. One message covering
+ * both would be wrong for whichever manager received it.
+ *
+ * **Only possible since migration 0047.** A slot the autofill visited carries
+ * `autofilled_at`; one nobody has been near carries nothing. Before that column
+ * the two were indistinguishable — every empty row looked identical — which is
+ * why the obvious one-line widening of `unsetLineups` was tried and withdrawn.
+ *
+ * It happens when every eligible player left is already playing: the autofill
+ * will not start a player whose own game has kicked off, so it writes the slot
+ * empty rather than taking a decision the manager still holds. The slot is still
+ * fillable from free agency, by them, which is the whole reason to say so.
+ *
+ * Scoped to the week being played, per league — the week of that league's most
+ * recent kickoff, which is what `currentWeek` answers in TypeScript. A future
+ * week's gaps are not news: the next pass fills them, and saying otherwise would
+ * make this fire all season.
+ *
+ * The season and sport come from the league's **frozen rules**, never
+ * `leagues.season` — that column is a denormalised copy written once at creation
+ * and carries no immutability trigger, and the same argument moved `visibility`
+ * off its column.
+ */
+async function autofillCouldNotFill(
+  db: SqlClient,
+  userId: string,
+  now: Date,
+): Promise<Notification[]> {
+  const rows = await db.query<{
+    league_id: string;
+    league_name: string;
+    week: number;
+    empty: number;
+  }>(
+    `SELECT l.id AS league_id, l.name AS league_name, ln.week, count(*)::int AS empty
+       FROM league_memberships m
+       JOIN leagues l ON l.id = m.league_id
+       JOIN league_rules lr ON lr.league_id = l.id
+       JOIN teams t ON t.id = m.team_id
+       JOIN lineups ln ON ln.team_id = t.id
+                      AND ln.player_id IS NULL
+                      AND ln.autofilled_at IS NOT NULL
+      WHERE m.user_id = $1
+        AND l.state IN ('IN_SEASON', 'PLAYOFFS')
+        AND (t.is_bot OR t.autofill_enabled)
+        AND ln.week = (
+          SELECT g.week
+            FROM games g
+            JOIN sports s ON s.id = g.sport_id
+           WHERE s.key = lr.rule_json->>'sportKey'
+             AND g.season = (lr.rule_json->>'seasonYear')::int
+             AND g.kickoff_at <= $2
+           ORDER BY g.kickoff_at DESC
+           LIMIT 1
+        )
+      GROUP BY l.id, l.name, ln.week`,
+    [userId, now.toISOString()],
+  );
+
+  return rows.map((row) => ({
+    kind: "AUTOFILL_COULD_NOT_FILL" as const,
+    leagueId: row.league_id,
+    leagueName: row.league_name,
+    href: `/leagues/${row.league_id}/lineup?week=${row.week}`,
+    text: `Autofill could not fill ${row.empty} ${
+      Number(row.empty) === 1 ? "slot" : "slots"
+    } in ${row.league_name} — everyone eligible is already playing`,
     deadline: null,
     needsSignature: false,
   }));
