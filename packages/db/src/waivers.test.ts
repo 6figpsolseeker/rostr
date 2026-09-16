@@ -2005,6 +2005,34 @@ describe("choosing which leagues are due — #131", () => {
       addPlayerId: fx.players.get("held")!,
       now: MONDAY,
     });
+
+    /*
+      **Pin the submission time, or this fixture expires.**
+
+      `submitClaim` deliberately leaves `created_at` to the database rather than
+      writing it from `input.now` — now that submission order decides which of a
+      team's own claims is tried first, a caller-settable timestamp would be a way
+      to file a claim and then move it to the front of your own queue. So the row
+      lands with the **wall clock**, while every assertion below is taken against
+      a fixed `WEDNESDAY`.
+
+      Those two agreed until 2026-09-16T07:00Z and stopped agreeing at that
+      instant, with no commit: `leaguesDueForWaivers` asks
+      `nextProcessingAt(oldest.created_at) <= now`, and once real time passed that
+      Wednesday's 03:00 ET processing moment the answer rolled forward a week and
+      this league stopped being due. Four tests went red on a clean tree and would
+      have stayed red every day after.
+
+      `secondLeague` never had the problem because it writes the column itself,
+      which is why the failure output showed that league present and this one
+      missing — reading like a selection bug rather than a clock one.
+
+      Do **not** repair this by giving `submitClaim` a settable `created_at`.
+    */
+    await fx.client.query("UPDATE waiver_claims SET created_at = $1 WHERE league_id = $2", [
+      MONDAY,
+      fx.leagueId,
+    ]);
     // Already in season — `setup` puts it there, because since #279 nothing
     // here could transact otherwise. This used to set it.
   }
