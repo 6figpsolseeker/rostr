@@ -1555,24 +1555,37 @@ export async function setAutofillEnabled(
 }
 
 /**
- * How many teams would gain a lineup row from filling `week` right now.
+ * How many teams still have lineup work for `week` — none means an early pass
+ * would write nothing, so it can be skipped.
  *
  * The early pass (issue #288) runs on every ten-minute tick from the Wednesday
- * until the week's first kickoff — around 250 runs — and after the first one it
- * writes nothing while still doing the full autofill per team: the roster, the
- * averages, a whole-week projections scan and a locking transaction each. This
- * is the guard that makes the other 249 a single query.
+ * until the week's first kickoff — around 250 runs — and each one otherwise does
+ * the full autofill per team: the roster, the averages, a whole-week projections
+ * scan and a locking transaction each. This turns the quiet ones into a query.
  *
- * Counted as "fillable teams with no row for this week", matching what
- * `ensureLineups` would do on that pass: a team that opted out is skipped there,
- * so it never gains a row and must not be counted here — it would make the
- * answer permanently non-zero.
+ * Three things count as work, and the third is the one worth explaining:
  *
- * **It does not notice a gap opened later**, such as a released player leaving a
- * slot empty. That is unchanged from before this pass existed: the scoring-time
- * fill, which runs from the week's first kickoff, is what closes those.
+ * - **No rows at all**, which is every team on the first pass of a week.
+ * - **An empty starting slot**, which the fill may be able to close now even if
+ *   it could not before — a waiver claim or a trade has landed since.
+ * - **A player in the lineup who is no longer on the roster.** `autoFillLineup`
+ *   evicts him, and nothing else does. Leaving him there is not merely untidy:
+ *   his slot locks at his kickoff around a player nobody rosters, and he goes on
+ *   scoring for the team that cut him.
+ *
+ * That third clause is why this is not simply "has any row". For weeks 1-14 the
+ * scoring-time fill would catch a Saturday drop anyway, since it runs from the
+ * week's first kickoff — but **week 15 cannot be scored until week 14 finalises
+ * on the Monday**, which is the whole of #288, so nothing else would reach it
+ * before that week's slate had been played.
+ *
+ * The cost of being exact: a team whose roster genuinely cannot fill a slot —
+ * one quarterback, nine starting slots — counts every time, so its league keeps
+ * doing the work each tick. That is what every league did before this guard
+ * existed, so it is never worse than the alternative, and it is rare in a league
+ * that drafted.
  */
-export async function teamsAwaitingLineups(
+export async function teamsWithLineupWork(
   db: SqlClient,
   leagueId: string,
   week: number,
@@ -1582,8 +1595,22 @@ export async function teamsAwaitingLineups(
        FROM teams t
       WHERE t.league_id = $1
         AND (t.is_bot OR t.autofill_enabled)
-        AND NOT EXISTS (
-          SELECT 1 FROM lineups ln WHERE ln.team_id = t.id AND ln.week = $2
+        AND (
+          NOT EXISTS (SELECT 1 FROM lineups ln WHERE ln.team_id = t.id AND ln.week = $2)
+          OR EXISTS (
+            SELECT 1 FROM lineups ln
+             WHERE ln.team_id = t.id AND ln.week = $2 AND ln.player_id IS NULL
+          )
+          OR EXISTS (
+            SELECT 1 FROM lineups ln
+             WHERE ln.team_id = t.id AND ln.week = $2 AND ln.player_id IS NOT NULL
+               AND NOT EXISTS (
+                 SELECT 1 FROM roster_entries re
+                  WHERE re.team_id = t.id
+                    AND re.player_id = ln.player_id
+                    AND re.released_at IS NULL
+               )
+          )
         )`,
     [leagueId, week],
   );

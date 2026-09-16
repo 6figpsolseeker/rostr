@@ -5,7 +5,7 @@ import {
   advancePlayoffs,
   ensureLineups,
   enterPlayoffs,
-  teamsAwaitingLineups,
+  teamsWithLineupWork,
   getLeagueRules,
   PlayoffError,
   resolveLeagueWeek,
@@ -176,11 +176,11 @@ async function run(client: SqlClient, now: Date, request: Request): Promise<Next
       });
       if (week === null) return {};
 
-      // From the Wednesday to the week's first kickoff is ~250 ticks, and after
-      // the first one there is nothing to write. One query rather than a full
-      // autofill per team, every ten minutes, for two days.
-      const awaiting = await teamsAwaitingLineups(client, league.id, week);
-      if (awaiting === 0) return {};
+      // From the Wednesday to the week's first kickoff is ~250 ticks, and most
+      // of them have nothing to write. One query rather than a full autofill per
+      // team — but it counts a lineup holding a released player as work, because
+      // for week 15 no later pass would evict him before the games are played.
+      if ((await teamsWithLineupWork(client, league.id, week)) === 0) return {};
 
       // `optedOutRows: "skip"`: nothing is scored here, and materialising a
       // manager's empty slots days early makes their "empty slots, and autofill
@@ -203,7 +203,6 @@ async function run(client: SqlClient, now: Date, request: Request): Promise<Next
   for (const league of leagues) {
     let bracketGames = 0;
     let bracketProblem: string | null = null;
-    let prefilled: PrefillOutcome = {};
 
     /*
       The lagging answer, for this league's season.
@@ -336,9 +335,10 @@ async function run(client: SqlClient, now: Date, request: Request): Promise<Next
       });
     }
 
-    prefilled = await prefill(client, league, now);
+    // Attached to the row this iteration just pushed: every path through the
+    // body above pushes exactly once, and the loop is sequential.
     const last = scored[scored.length - 1];
-    if (last) Object.assign(last, prefilled);
+    if (last) Object.assign(last, await prefill(client, league, now));
   }
 
   // The outcome, not merely the fact of running. A league is counted as failed
