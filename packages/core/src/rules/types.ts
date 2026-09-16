@@ -100,7 +100,8 @@ export type RosterRules = {
    * **`WEEKLY_PROJECTION` falls back to `SEASON_AVERAGE` per player**, not per
    * league: a rookie with no projection, or a week the provider has not
    * published yet, must not stop the rest of the lineup being filled well. The
-   * projection actually used is recorded with the lineup, so the choice stays
+   * projection actually used is recorded with the lineup — `ranked_milli_points`
+   * and `ranked_on`, since migration 0047 — so the choice stays
    * reproducible by anyone — which is the property that matters, since these
    * results move other people's playoff seeds.
    *

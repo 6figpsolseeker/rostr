@@ -26,7 +26,11 @@
  * gate that settlement requires. That is fine here and would not be for scoring:
  * this is a **decision** standing in for a manager's start/sit call, and nobody
  * demands two providers agree on one of those either. What makes it honest is
- * that the number used is recorded, so the decision stays checkable.
+ * that the number used is recorded, so the decision stays checkable: every
+ * chosen slot stores it as `lineups.ranked_milli_points`, with `ranked_on` and
+ * `ranked_source` saying which number it was (migration 0047). It has to be
+ * stored rather than recomputed, because `player_projections` is overwritten in
+ * place on every resync.
  *
  * The tiebreak is the player ID, which is arbitrary — deliberately. Every real
  * criterion has already come up equal, and what matters at that point is only
