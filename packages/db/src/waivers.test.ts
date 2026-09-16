@@ -515,6 +515,69 @@ describe("processing", () => {
     expect(row?.released_at).not.toBeNull();
   });
 
+  it("takes the claim's dropped player out of that team's lineup", async () => {
+    /*
+      The waiver run drops on the manager's behalf at 03:00, while they are
+      asleep, so this is the release least likely to be noticed — and scoring
+      reads the stored lineup without asking who owns the player. Same clearing
+      as every other release site; this pins the one inside the cron.
+
+      Games are seeded so the clearing has a week to work in: without a schedule
+      `transactionWeek` answers null and nothing is cleared, which is correct and
+      would make this test silently vacuous.
+    */
+    const fx = await setup();
+    const [sport] = await fx.client.query<{ id: string }>(
+      "SELECT id FROM sports WHERE key = $1",
+      [NFL.key],
+    );
+    await fx.client.query(
+      `INSERT INTO games (sport_id, external_ref, season, week, home_team_ref, away_team_ref, kickoff_at)
+       VALUES ($1, 'wk-claim', 2026, 1, 'CIN', 'BAL', $2)`,
+      [sport!.id, new Date("2026-09-17T17:00:00Z")],
+    );
+
+    const claimant = fx.teams[0]!;
+    const dropped = fx.players.get("fresh")!;
+    const [slotType] = await fx.client.query<{ id: string }>(
+      `SELECT st.id FROM slot_types st
+         JOIN sports s ON s.id = st.sport_id
+        WHERE s.key = $1 AND st.key = 'WR'`,
+      [NFL.key],
+    );
+    const [slot] = await fx.client.query<{ id: string }>(
+      `INSERT INTO lineups (team_id, week, slot_type_id, slot_index, player_id)
+       VALUES ($1, 1, $2, 0, $3) RETURNING id`,
+      [claimant, slotType!.id, dropped],
+    );
+
+    // Someone else's cut player goes to waivers, and this team claims him,
+    // dropping the starter above to make room.
+    const wanted = fx.players.get("target")!;
+    await fx.client.query(
+      `INSERT INTO roster_entries (team_id, player_id, acquired_via, acquired_at)
+       VALUES ($1, $2, 'DRAFT', $3)`,
+      [fx.teams[1]!, wanted, new Date(MONDAY.getTime() - 7 * DAY)],
+    );
+    await dropPlayer(fx.client, fx.leagueId, fx.teams[1]!, wanted, MONDAY);
+    await submitClaim(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: claimant,
+      addPlayerId: wanted,
+      dropPlayerId: dropped,
+      now: MONDAY,
+    });
+
+    const outcome = await processWaivers(fx.client, fx.leagueId, WEDNESDAY);
+    expect(outcome.awarded).toBe(1);
+
+    const [row] = await fx.client.query<{ player_id: string | null }>(
+      "SELECT player_id FROM lineups WHERE id = $1",
+      [slot!.id],
+    );
+    expect(row?.player_id).toBeNull();
+  });
+
   it("says the add player is unavailable rather than blaming another team — #238", async () => {
     /*
       `PLAYER_TAKEN` reads "a team with better priority claimed him first". When
@@ -1462,6 +1525,127 @@ describe("RULES.md §6 — a player whose game has kicked off cannot be moved", 
     await expect(
       dropPlayer(fx.client, fx.leagueId, fx.teams[0]!, fx.players.get("held")!, DURING),
     ).rejects.toMatchObject({ code: "GAME_STARTED" });
+  });
+
+  /** Stand `held` in this team's week-1 lineup, the way a manager would. */
+  async function startHim(fx: Fixture, teamId: string, week = 1): Promise<string> {
+    const [slotType] = await fx.client.query<{ id: string }>(
+      `SELECT st.id FROM slot_types st
+         JOIN sports s ON s.id = st.sport_id
+        WHERE s.key = $1 AND st.key = 'RB'`,
+      [NFL.key],
+    );
+    const [row] = await fx.client.query<{ id: string }>(
+      `INSERT INTO lineups (team_id, week, slot_type_id, slot_index, player_id)
+       VALUES ($1, $2, $3, 0, $4) RETURNING id`,
+      [teamId, week, slotType!.id, fx.players.get("held")!],
+    );
+    return row!.id;
+  }
+
+  const standing = async (fx: Fixture, lineupId: string): Promise<string | null> => {
+    const [row] = await fx.client.query<{ player_id: string | null }>(
+      "SELECT player_id FROM lineups WHERE id = $1",
+      [lineupId],
+    );
+    return row!.player_id;
+  };
+
+  it("takes a dropped player out of the lineup he was standing in", async () => {
+    /*
+      Releasing and standing in a lineup are two records, and only one used to be
+      written. Scoring reads the stored lineup and never asks who owns the
+      player, and the slot locks at *his* kickoff with him still in it — so a
+      manager could drop him on the Friday and be paid his Sunday points by a
+      team that no longer rostered him, while everyone else was free to sign him.
+
+      `autoFillLineup` evicts him, which is why this was invisible: it covers
+      every team with the autofill on. A team that turned it off gets
+      `writeEmptySlots`, which evicts nobody, so for those teams nothing ever
+      removed him — in any week.
+    */
+    const fx = await setup();
+    await withSchedule(fx);
+    const slot = await startHim(fx, fx.teams[0]!);
+
+    await dropPlayer(fx.client, fx.leagueId, fx.teams[0]!, fx.players.get("held")!, BEFORE);
+
+    expect(await standing(fx, slot)).toBeNull();
+  });
+
+  it("leaves the slot empty rather than filling it", async () => {
+    // Filling is the autofill's decision, under its own rules, on its own pass —
+    // and a team that turned the autofill off has asked for neither.
+    const fx = await setup();
+    await withSchedule(fx);
+    const slot = await startHim(fx, fx.teams[0]!);
+    await fx.client.query("UPDATE teams SET autofill_enabled = false WHERE id = $1", [
+      fx.teams[0]!,
+    ]);
+
+    await dropPlayer(fx.client, fx.leagueId, fx.teams[0]!, fx.players.get("held")!, BEFORE);
+
+    const [rows] = await fx.client.query<{ n: number }>(
+      "SELECT count(*)::int AS n FROM lineups WHERE team_id = $1 AND player_id IS NOT NULL",
+      [fx.teams[0]!],
+    );
+    expect(rows?.n).toBe(0);
+    expect(await standing(fx, slot)).toBeNull();
+  });
+
+  it("does not touch a week he has already played", async () => {
+    /*
+      That lineup is history: in a finalised week it decided a result, and in a
+      live one the slot locked at his kickoff, which is the rule that stops a
+      manager reacting to a performance. A drop is refused once his own game has
+      started, so the week being played is always safe to clear; the weeks behind
+      it are not.
+    */
+    const fx = await setup();
+    const [sport] = await fx.client.query<{ id: string }>(
+      "SELECT id FROM sports WHERE key = $1",
+      [NFL.key],
+    );
+    // Week 1 played last Sunday; week 2 kicks off next Sunday.
+    await fx.client.query(
+      `INSERT INTO games (sport_id, external_ref, season, week, home_team_ref, away_team_ref, kickoff_at)
+       VALUES ($1, 'wk1', 2026, 1, 'CIN', 'BAL', $2), ($1, 'wk2', 2026, 2, 'CIN', 'PIT', $3)`,
+      [sport!.id, new Date("2026-09-13T17:00:00Z"), new Date("2026-09-20T17:00:00Z")],
+    );
+    const played = await startHim(fx, fx.teams[0]!, 1);
+    const coming = await startHim(fx, fx.teams[0]!, 2);
+
+    // Tuesday between the two weeks — week 1 is over, week 2 has not kicked off.
+    await dropPlayer(
+      fx.client,
+      fx.leagueId,
+      fx.teams[0]!,
+      fx.players.get("held")!,
+      new Date("2026-09-15T18:00:00Z"),
+    );
+
+    expect(await standing(fx, played)).toBe(fx.players.get("held")!);
+    expect(await standing(fx, coming)).toBeNull();
+  });
+
+  it("takes the dropped half of a swap out of the lineup too", async () => {
+    // `addFreeAgent` releases through its own UPDATE rather than through
+    // `dropPlayer`, so it needs the clearing of its own — the manager who swaps
+    // a starter for a free agent is exactly who would otherwise be paid for a
+    // player they no longer hold.
+    const fx = await setup();
+    await withSchedule(fx);
+    const slot = await startHim(fx, fx.teams[0]!);
+
+    await addFreeAgent(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: fx.teams[0]!,
+      addPlayerId: fx.players.get("target")!,
+      dropPlayerId: fx.players.get("held")!,
+      now: BEFORE,
+    });
+
+    expect(await standing(fx, slot)).toBeNull();
   });
 
   it("still allows the drop before kickoff", async () => {

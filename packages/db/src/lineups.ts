@@ -1616,3 +1616,64 @@ export async function teamsWithLineupWork(
   );
   return Number(row?.n ?? 0);
 }
+
+/**
+ * Empty every slot still holding a player this team has just released.
+ *
+ * **Releasing a player and standing him in a lineup are two different records,
+ * and only one of them was being written.** `roster_entries.released_at` marks
+ * him gone; the `lineups` row naming him stays exactly as it was. Scoring reads
+ * the stored lineup and never asks who owns the player (`loadWeekLineups`), and
+ * the slot locks at *his* kickoff with him still in it — so a manager could drop
+ * a player on the Friday, keep him in Sunday's lineup, and be paid his points by
+ * a team that no longer rostered him while everyone else was free to sign him.
+ *
+ * `autoFillLineup` already evicts him, which is why this was invisible: it
+ * covers every team with the autofill on. A team that turned it off got
+ * `writeEmptySlots`, which only materialises missing rows and evicts nobody — so
+ * for those teams nothing ever removed him, in any week. Fixing it at the moment
+ * of release covers both, and covers the weeks the autofill has not reached yet.
+ *
+ * ## What it may not touch
+ *
+ * **A week whose game he has already played.** That lineup is history — in a
+ * finalised week it has decided a result, and in a live one the slot locked at
+ * his kickoff, which is the rule that stops a manager reacting to a performance.
+ * Releasing is refused after his own game starts (`GAME_STARTED`), so the week
+ * being played is always safe to clear; what this excludes is the weeks behind
+ * it. Hence both conditions: the week is not in the past, and no game of his
+ * club's in that week has kicked off.
+ *
+ * The slot is left **empty**, never refilled. Filling it is the autofill's
+ * decision to make on its own next pass, under its own rules, and a team that
+ * turned the autofill off has said it wants neither.
+ */
+export async function clearReleasedFromLineups(
+  db: SqlClient,
+  teamId: string,
+  playerId: string,
+  season: number,
+  fromWeek: number,
+  now: Date,
+): Promise<number> {
+  const rows = await db.query<{ id: string }>(
+    `UPDATE lineups ln
+        SET player_id = NULL
+      WHERE ln.team_id = $1
+        AND ln.player_id = $2
+        AND ln.week >= $4
+        AND NOT EXISTS (
+          SELECT 1
+            FROM games g
+            JOIN players p ON p.id = $2
+           WHERE g.sport_id = p.sport_id
+             AND g.season = $3
+             AND g.week = ln.week
+             AND (g.home_team_ref = p.team_ref OR g.away_team_ref = p.team_ref)
+             AND g.kickoff_at <= $5
+        )
+      RETURNING ln.id`,
+    [teamId, playerId, season, fromWeek, now.toISOString()],
+  );
+  return rows.length;
+}

@@ -1300,6 +1300,47 @@ describe("resolution", () => {
     expect(resolution?.required).toBe(2);
   });
 
+  it("takes a traded-away player out of the sending team's lineup", async () => {
+    /*
+      The one release the losing manager does not perform by hand: execution
+      runs from the hourly cron, hours after they accepted. Scoring reads the
+      stored lineup and never asks who owns the player, so without this he
+      scores for the team that traded him away *and* for the team that now
+      rosters him — and `autoFillLineup` only evicts him for a team that left
+      the autofill on.
+    */
+    const fx = await setup();
+    const [slotType] = await fx.client.query<{ id: string }>(
+      `SELECT st.id FROM slot_types st
+         JOIN sports s ON s.id = st.sport_id
+        WHERE s.key = $1 AND st.key = 'RB'`,
+      [NFL.key],
+    );
+    // The week this trade executes in — the one whose games come next when the
+    // veto window closes. A week already played is deliberately left alone,
+    // which is what the sibling test in waivers.test.ts pins.
+    const [next] = await fx.client.query<{ week: number }>(
+      "SELECT week FROM games WHERE kickoff_at > $1 ORDER BY kickoff_at LIMIT 1",
+      [AFTER_WINDOW.toISOString()],
+    );
+    const [slot] = await fx.client.query<{ id: string }>(
+      `INSERT INTO lineups (team_id, week, slot_type_id, slot_index, player_id)
+       VALUES ($1, $4, $2, 0, $3) RETURNING id`,
+      [fx.teams[0]!, slotType!.id, fx.players.get("p1")!, next!.week],
+    );
+
+    const tradeId = await propose(fx);
+    await acceptTrade(fx.client, tradeId, fx.teams[1]!, MONDAY);
+    const [resolution] = await settle(fx.client, fx.leagueId, AFTER_WINDOW);
+    expect(resolution?.outcome).toBe("EXECUTED");
+
+    const [row] = await fx.client.query<{ player_id: string | null }>(
+      "SELECT player_id FROM lineups WHERE id = $1",
+      [slot!.id],
+    );
+    expect(row?.player_id).toBeNull();
+  });
+
   it("executes a trade one vote short", async () => {
     const fx = await setup();
     const tradeId = await propose(fx);

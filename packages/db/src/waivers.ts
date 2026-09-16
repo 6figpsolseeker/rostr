@@ -57,6 +57,7 @@ import { loadDraftBoard } from "./sync.js";
 import { isTransacting } from "./league-state.js";
 import { committedTradeMoves, lockedByTrade } from "./trades.js";
 import { withTransaction } from "./transaction.js";
+import { clearReleasedFromLineups } from "./lineups.js";
 import { transactionWeek } from "./week.js";
 
 export class WaiverError extends Error {
@@ -476,6 +477,26 @@ async function refuseIfFrozen(
   }
 }
 
+/**
+ * Take a released player out of this team's lineups, from the current week on.
+ *
+ * Wrapped rather than called directly so every release site names the same week
+ * the kickoff refusal above uses — `transactionWeek`, the week whose games are
+ * next. A release is refused once his own game has started, so the current week
+ * is always still open to him being removed from it.
+ */
+async function clearReleased(
+  db: SqlClient,
+  rules: LeagueRules,
+  teamId: string,
+  playerId: string,
+  now: Date,
+): Promise<void> {
+  const week = await transactionWeek(db, rules, now);
+  if (week === null) return;
+  await clearReleasedFromLineups(db, teamId, playerId, rules.seasonYear, week, now);
+}
+
 async function refuseIfKickedOff(
   db: SqlClient,
   rules: LeagueRules,
@@ -569,6 +590,12 @@ export async function dropPlayer(
       entry.id,
       now.toISOString(),
     ]);
+
+    // And out of the lineup, or he goes on scoring for the team that cut him —
+    // see `clearReleasedFromLineups`. In the same transaction as the release,
+    // so there is no instant at which he is unrostered and still standing in a
+    // slot.
+    await clearReleased(tx, stored.rules, teamId, playerId, now);
 
     const destination = dropDestination(new Date(entry.acquired_at), now, stored.rules.waivers);
 
@@ -702,6 +729,8 @@ export async function addFreeAgent(db: SqlClient, input: AddInput): Promise<void
         "UPDATE roster_entries SET released_at = $2, on_ir = false WHERE id = $1",
         [entry.id, input.now.toISOString()],
       );
+
+      await clearReleased(tx, stored.rules, input.teamId, input.dropPlayerId, input.now);
     }
 
     /*
@@ -1360,6 +1389,10 @@ export async function processWaivers(
             WHERE team_id = $1 AND player_id = $2 AND released_at IS NULL`,
           [claim.team_id, claim.drop_player_id, now.toISOString()],
         );
+        // Out of the lineup with him, as at every other release site: the
+        // manager who filed this claim is asleep at 03:00, and a player their
+        // own claim dropped must not go on scoring for them.
+        await clearReleased(tx, stored.rules, claim.team_id, claim.drop_player_id, now);
         dropped.push(claim.drop_player_id);
       }
 
