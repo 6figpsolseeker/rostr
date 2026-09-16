@@ -1299,6 +1299,23 @@ export async function ensureLineups(
   leagueId: string,
   week: number,
   now: number,
+  options: {
+    /**
+     * What to do about teams that turned the autofill off.
+     *
+     * `"write"` materialises their empty slots, which is what scoring needs:
+     * `resolveWeek` throws on a team with no lineup rows at all, and scoring a
+     * missing team as zero hands its opponent a free win off our own bug.
+     *
+     * `"skip"` leaves them alone, and is for filling a week **before** its games
+     * — where there is nothing to score yet and the rows would do harm: the
+     * "empty slots, and autofill is off" notice counts every null row a member
+     * has, in any week (`unsetLineups` in `notifications.ts`, no week predicate),
+     * so writing them days early tells a manager they are late for a deadline
+     * that has not arrived, for the one group the early fill cannot help.
+     */
+    readonly optedOutRows?: "write" | "skip";
+  } = {},
 ): Promise<{
   teamsFilled: number;
   teamsOptedOut: number;
@@ -1356,7 +1373,10 @@ export async function ensureLineups(
     // with none, and scoring a missing team as zero would hand its opponent a
     // free win off our own bug. Whatever they set stands; anything they left
     // empty stays empty and scores nothing, which is what the switch means.
-    await writeEmptySlots(db, leagueId, team.id, week);
+    //
+    // Unless this is an early pass, which scores nothing and would only make
+    // their "empty slots" notice fire days before the deadline — see `options`.
+    if (options.optedOutRows !== "skip") await writeEmptySlots(db, leagueId, team.id, week);
     teamsOptedOut++;
   }
 

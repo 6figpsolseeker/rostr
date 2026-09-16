@@ -759,6 +759,57 @@ describe("ensureLineups", () => {
     expect(lineup.every((slot) => slot.playerId === null)).toBe(true);
   });
 
+  it("writes no rows for an opted-out team on an early pass", async () => {
+    /*
+      Issue #288's fix fills the *coming* week before its games start, and that
+      pass scores nothing — so an opted-out team's empty rows would do nothing
+      but make their "empty slots, and autofill is off" notice fire days before
+      the deadline. `unsetLineups` counts every null row a member holds, in any
+      week, so those rows are indistinguishable from being late for this one.
+    */
+    const fx = await setup();
+    await fx.client.query("UPDATE teams SET autofill_enabled = false WHERE id = $1", [
+      fx.teamId,
+    ]);
+
+    const result = await ensureLineups(fx.client, fx.leagueId, WEEK, BEFORE_ANYTHING, {
+      optedOutRows: "skip",
+    });
+
+    // Still counted, so the cron's report does not pretend they were filled.
+    expect(result).toMatchObject({ teamsFilled: 1, teamsOptedOut: 1 });
+
+    const [row] = await fx.client.query<{ n: number }>(
+      "SELECT count(*)::int AS n FROM lineups WHERE team_id = $1 AND week = $2",
+      [fx.teamId, WEEK],
+    );
+    expect(row?.n).toBe(0);
+
+    // The teams that are filled are filled exactly as before.
+    const other = await loadLineup(fx.client, fx.otherTeamId, WEEK, fx.rules);
+    expect(other.filter((slot) => slot.playerId !== null).length).toBeGreaterThan(0);
+  });
+
+  it("fills a week that has no fixtures yet, which is what playoff week 15 is", async () => {
+    /*
+      The heart of #288: the first autofill pass for a playoff week used to run
+      only once that week had `matchups` rows, and those arrive after the
+      previous week finalises — for week 15, after its own games have kicked off.
+      `ensureLineups` itself never reads `matchups`, and this pins that, so a
+      caller can fill a week the fixtures have not reached yet.
+    */
+    const fx = await setup();
+    const [fixtures] = await fx.client.query<{ n: number }>(
+      "SELECT count(*)::int AS n FROM matchups WHERE league_id = $1 AND week = $2",
+      [fx.leagueId, WEEK],
+    );
+    expect(fixtures?.n).toBe(0);
+
+    const result = await ensureLineups(fx.client, fx.leagueId, WEEK, BEFORE_ANYTHING);
+    expect(result.teamsFilled).toBe(2);
+    expect(await loadLineup(fx.client, fx.teamId, WEEK, fx.rules)).toHaveLength(9);
+  });
+
   it("fills a slot whose row already exists holding null", async () => {
     /*
       **The case `IS NOT DISTINCT FROM` exists for in `setLineup`, and the one
