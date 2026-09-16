@@ -182,7 +182,25 @@ export async function availabilityOf(
   return new Date(wire.clears_at) <= now ? "FREE_AGENT" : "ON_WAIVERS";
 }
 
-/** Everyone unrostered in a league, with their state and when they clear. */
+/**
+ * Everyone unrostered in a league, with their state and when they clear.
+ *
+ * **Ordered on `p.active`, and that ordering is load-bearing.** This list used
+ * to filter cut players out; the owner ruled on 2026-09-16 that a player his NFL
+ * club has released stays acquirable, because clubs sign people again and
+ * stashing one is a bet a manager is entitled to make. But roughly a third of
+ * the synced pool is inactive at any time, and the market screen renders the
+ * first hundred rows it is given — so admitting them with no ordering would fill
+ * a third of the visible window with players nobody can field, at random,
+ * pushing real free agents off the screen. Un-filtering and ordering are one
+ * change here, not two.
+ *
+ * There is deliberately no second sort key. Within a group the order is still
+ * whatever Postgres returns, which is unhelpful and pre-existing; alphabetical
+ * would make the visible hundred *deterministically* wrong instead of
+ * arbitrarily so. Ordering this list by projection is worth doing and is its own
+ * piece of work.
+ */
 export async function availablePlayers(
   db: SqlClient,
   leagueId: string,
@@ -194,6 +212,15 @@ export async function availablePlayers(
     positions: readonly string[];
     availability: Exclude<Availability, "ROSTERED">;
     clearsAt: Date | null;
+    /**
+     * Whether his NFL club still has him.
+     *
+     * Named for the fact, not for `players.active`, on purpose: a field called
+     * `active` in a list of acquirable players invites a reader to infer "can
+     * be added", and that inference is exactly what issue #276 existed to end.
+     * He can be added. This says only that nobody is currently playing him.
+     */
+    onNflRoster: boolean;
     /** Display only. Nothing in the waiver rules reads any of these. */
     imageUrl: string | null;
     teamRef: string | null;
@@ -208,6 +235,7 @@ export async function availablePlayers(
     full_name: string;
     positions: string[];
     clears_at: string | null;
+    on_nfl_roster: boolean;
     image_url: string | null;
     team_ref: string | null;
     injury_designation: string | null;
@@ -216,6 +244,7 @@ export async function availablePlayers(
             p.full_name,
             array_agg(DISTINCT pos.key) AS positions,
             w.clears_at,
+            p.active AS on_nfl_roster,
             p.image_url,
             p.team_ref,
             p.injury_designation
@@ -225,14 +254,14 @@ export async function availablePlayers(
          OR pos.id IN (SELECT position_id FROM player_eligible_positions WHERE player_id = p.id)
        JOIN leagues l ON l.id = $1 AND l.sport_id = p.sport_id
        LEFT JOIN waiver_wire w ON w.league_id = l.id AND w.player_id = p.id
-      WHERE p.active
-        AND NOT EXISTS (
+      WHERE NOT EXISTS (
           SELECT 1 FROM roster_entries r
             JOIN teams t ON t.id = r.team_id
            WHERE t.league_id = l.id AND r.player_id = p.id AND r.released_at IS NULL
         )
-      GROUP BY p.id, p.full_name, w.clears_at,
-               p.image_url, p.team_ref, p.injury_designation`,
+      GROUP BY p.id, p.full_name, w.clears_at, p.active,
+               p.image_url, p.team_ref, p.injury_designation
+      ORDER BY p.active DESC`,
     [leagueId],
   );
 
@@ -247,11 +276,20 @@ export async function availablePlayers(
       // The exact complement of `availabilityOf`, including the weekly lock —
       // the two must not be able to disagree, because this decides what the
       // screen offers and that decides what the server accepts.
+      //
+      // That sentence was false until 2026-09-16 and is true now. This query
+      // filtered on `players.active` and `availabilityOf` never has, so a cut
+      // player was hidden from the screen and accepted by the server: issue
+      // #276. The fix went here rather than there, because `availabilityOf` is
+      // the ownership oracle and a rostered-but-cut player reading FREE_AGENT
+      // would be a second owner (migration 0022's index is the backstop, and
+      // wanting a constraint violation to be your guard is the wrong shape).
       availability:
         (clearsAt && clearsAt > now) || locked
           ? ("ON_WAIVERS" as const)
           : ("FREE_AGENT" as const),
       clearsAt,
+      onNflRoster: row.on_nfl_roster,
       imageUrl: row.image_url,
       teamRef: row.team_ref,
       injuryDesignation: row.injury_designation,
@@ -1150,13 +1188,19 @@ export async function processWaivers(
       Ownership comes from `rosterRows` and from nothing else.
 
       This loop used to look each row up in the draft-board pool and drop it when
-      the lookup missed — and `loadDraftBoard` filters on `players.active`, which
-      the daily sync clears for anyone the provider reports as an NFL free agent.
-      So a rostered player cut by his club vanished from his own fantasy roster:
+      the lookup missed — and `loadDraftBoard` filtered on `players.active` then,
+      which the daily sync clears for anyone the provider reports as an NFL free
+      agent. So a rostered player cut by his club vanished from his own roster:
       a valid drop was refused as `DROP_NOT_ON_ROSTER`, and a claim with no drop
       was counted against a roster one short of its true size and awarded past
       `totalSlots`. Issue #238. Ownership is a `roster_entries` question; the
       pool answers availability, and they are not the same map.
+
+      That filter is gone as of 2026-09-16 — a cut player stays on the board, at
+      the bottom — so the specific trigger above can no longer fire. The
+      separation still stands on its own: a pool is a statement about who may be
+      acquired, and no statement of that kind is ever evidence about who already
+      holds somebody.
 
       **An earlier note here credited the exemption's safety to this loop's
       shape**, claiming that exempting a pool-absent player would subtract him

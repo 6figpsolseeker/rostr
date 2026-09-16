@@ -79,6 +79,7 @@ export async function GET(
         positions: player.positions,
         availability: player.availability,
         clearsAt: player.clearsAt?.toISOString() ?? null,
+        onNflRoster: player.onNflRoster,
         imageUrl: player.imageUrl,
         teamRef: player.teamRef,
         injuryDesignation: player.injuryDesignation,

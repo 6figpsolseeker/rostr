@@ -588,6 +588,19 @@ export interface DraftBoardEntry {
   readonly externalRef: string;
   readonly fullName: string;
   readonly positions: readonly string[];
+  /**
+   * Whether his NFL club still has him.
+   *
+   * Already folded into `rank` — it is the first key the board is ordered on,
+   * so a cut player sorts below every active one however good his last ADP.
+   * Carried separately because a dense integer cannot say *why* somebody is
+   * 1,200th, and the draft room has to re-sort for itself: it ranks on
+   * projections rather than ADP, and those are not filtered on this column.
+   *
+   * Deliberately not in `summary`. That block is display-only by contract, and
+   * this decides an ordering.
+   */
+  readonly active: boolean;
   /** Lower is better, as the draft engine expects. */
   readonly rank: number;
   /** Display only. Nothing in the draft engine reads it. */
@@ -600,6 +613,26 @@ export interface DraftBoardEntry {
  * Shaped to drop straight into the draft engine's `DraftablePlayer`. Players
  * with no ranking sort last but are still draftable — a late-round flier on
  * someone unranked is a legitimate pick, not an error.
+ *
+ * ## A player his club has cut stays on the board, at the bottom
+ *
+ * `players.active` is cleared by the daily sync for anyone the provider reports
+ * as an NFL free agent. It used to be a **filter**, and that decided a rules
+ * question by omission — a drafted player cut overnight vanished from the room
+ * rendering his name (#275) and from the pool trying to award him (#238), while
+ * `addFreeAgent` went on accepting him, because `availabilityOf` has never read
+ * this column. Three doors, three answers. The owner ruled on 2026-09-16: keep
+ * him acquirable, and on a draft board put him at the bottom.
+ *
+ * So it is the **first sort key** rather than a filter, and it has to be stated
+ * rather than left to the ranking. `player_rankings_current` is
+ * `DISTINCT ON … as_of DESC` and nothing ever expires a row, so a star cut in
+ * September still carries the ADP he had in July: un-filtering alone would put
+ * him near the *top*. `p.active` is NOT NULL, so `DESC` needs no NULLS clause.
+ *
+ * **`rank` shifts for everybody, and nothing stores one.** It is a dense index
+ * over this array, consumed only by comparison — `OFF_BOARD_RANK` in `draft.ts`
+ * depends on exactly that.
  */
 export async function loadDraftBoard(
   db: SqlClient,
@@ -614,6 +647,7 @@ export async function loadDraftBoard(
     external_ref: string;
     full_name: string;
     positions: string[];
+    active: boolean;
     overall_milli: number | null;
     image_url: string | null;
     team_ref: string | null;
@@ -624,6 +658,7 @@ export async function loadDraftBoard(
             p.external_ref,
             p.full_name,
             array_agg(DISTINCT pos.key) AS positions,
+            p.active,
             r.overall_milli,
             p.image_url,
             p.team_ref,
@@ -644,10 +679,10 @@ export async function loadDraftBoard(
         AND r.season = $2
         AND r.source = COALESCE($3, r.source)
         AND r.ranking_type = COALESCE($4, r.ranking_type)
-      WHERE p.sport_id = $1 AND p.active
-      GROUP BY p.id, p.external_ref, p.full_name, r.overall_milli,
+      WHERE p.sport_id = $1
+      GROUP BY p.id, p.external_ref, p.full_name, p.active, r.overall_milli,
                p.image_url, p.team_ref, ps.bye_week, p.injury_designation
-      ORDER BY r.overall_milli NULLS LAST, p.full_name`,
+      ORDER BY p.active DESC, r.overall_milli NULLS LAST, p.full_name`,
     [ids.sportId, season, options.source ?? null, options.rankingType ?? null],
   );
 
@@ -656,6 +691,7 @@ export async function loadDraftBoard(
     externalRef: row.external_ref,
     fullName: row.full_name,
     positions: row.positions,
+    active: row.active,
     // Dense 1..n ordering. The engine only compares ranks, so the ADP value
     // itself does not need to survive — but the ordering does.
     rank: index + 1,

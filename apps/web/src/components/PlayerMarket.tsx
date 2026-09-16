@@ -25,6 +25,16 @@ interface Available {
   positions: string[];
   availability: "ON_WAIVERS" | "FREE_AGENT";
   clearsAt: string | null;
+  /**
+   * Whether his NFL club still has him.
+   *
+   * He is acquirable either way — that was decided on 2026-09-16 — and the list
+   * already puts these last. This is here so the row can say which kind of
+   * player it is, because nothing else on it can: every player in this list is
+   * a fantasy free agent, so the "FA" the club column falls back to means the
+   * wrong thing precisely where it matters.
+   */
+  onNflRoster: boolean;
   /** Display only. Null on a pool synced before migration `0032`. */
   imageUrl: string | null;
   teamRef: string | null;
@@ -276,7 +286,14 @@ export function PlayerMarket({ leagueId }: { leagueId: string }) {
                     >
                       {positionGroup(player.positions)}
                     </span>
-                    {player.teamRef ?? "FA"}
+                    {player.onNflRoster ? (
+                      (player.teamRef ?? "FA")
+                    ) : (
+                      /* States the observable and gives no advice — he may be
+                         signed on Wednesday. Same convention as the off-roster
+                         notification and `whyClaimFailed`. */
+                      <span className="text-nocturne-neutral-500">Not on an NFL roster</span>
+                    )}
                   </span>
                 </span>
               </button>

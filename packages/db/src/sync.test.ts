@@ -589,6 +589,81 @@ describe("loadDraftBoard", () => {
     expect(await loadDraftBoard(client, "nfl", 2026)).toHaveLength(1);
   });
 
+  it("keeps a player his club has cut on the board", async () => {
+    /*
+      He used to be filtered out, and that quietly decided a rules question the
+      owner had not been asked: a drafted player cut overnight vanished from the
+      room rendering his name (#275) while `addFreeAgent` went on accepting him,
+      because `availabilityOf` has never read this column. Ruled 2026-09-16:
+      he stays acquirable.
+    */
+    const client = await fresh();
+    const provider = new FakeProvider([player("1", "Cut Loose", "RB")]);
+    await syncPlayers(client, provider, "nfl", 2026);
+    await client.query("UPDATE players SET active = false");
+
+    const board = await loadDraftBoard(client, "nfl", 2026);
+
+    expect(board.map((entry) => entry.fullName)).toEqual(["Cut Loose"]);
+    expect(board[0]?.active).toBe(false);
+  });
+
+  it("sorts a cut player below every active one, however good his last ADP", async () => {
+    /*
+      **The half of the ruling that un-filtering alone does not deliver.**
+
+      `player_rankings_current` is `DISTINCT ON … as_of DESC` over an
+      append-only table and `syncRankings` only ever inserts what the provider
+      still lists, so a player ranked in July keeps that row for ever. Drop the
+      filter without the new ordering key and the best ADP in this fixture —
+      which belongs to the cut man — puts him *first*.
+
+      So the cut player here is deliberately given the strongest ranking of the
+      three. A version of this test where he is unranked passes against the
+      broken fix, because `NULLS LAST` sinks him for the wrong reason.
+    */
+    const client = await fresh();
+    const provider = new FakeProvider([
+      player("1", "Cut Star", "RB"),
+      player("2", "Active Ranked", "RB"),
+      player("3", "Active Unranked", "WR"),
+    ]);
+    await syncPlayers(client, provider, "nfl", 2026);
+
+    provider.setAdp([
+      { externalRef: "1", fullName: "Cut Star", overallMilli: 1000, positionRank: "RB1" },
+      { externalRef: "2", fullName: "Active Ranked", overallMilli: 3200, positionRank: "RB2" },
+    ]);
+    await syncRankings(client, provider, "nfl", 2026);
+    await client.query("UPDATE players SET active = false WHERE external_ref = $1", ["1"]);
+
+    const board = await loadDraftBoard(client, "nfl", 2026);
+
+    expect(board.map((entry) => entry.fullName)).toEqual([
+      "Active Ranked",
+      // No ADP at all, and still above the cut man — which is the point.
+      "Active Unranked",
+      "Cut Star",
+    ]);
+  });
+
+  it("gives a cut player a rank, so nothing downstream has to invent one", async () => {
+    // The density contract `OFF_BOARD_RANK` leans on has to survive the
+    // widening: every board rank stays finite and 1..n.
+    const client = await fresh();
+    const provider = new FakeProvider([
+      player("1", "Active", "RB"),
+      player("2", "Cut", "WR"),
+    ]);
+    await syncPlayers(client, provider, "nfl", 2026);
+    await client.query("UPDATE players SET active = false WHERE external_ref = $1", ["2"]);
+
+    const board = await loadDraftBoard(client, "nfl", 2026);
+
+    expect(board.map((entry) => entry.rank)).toEqual([1, 2]);
+    expect(board.at(-1)?.active).toBe(false);
+  });
+
   it("carries positions, so the engine can check slot eligibility", async () => {
     const client = await fresh();
     const provider = new FakeProvider([player("1", "Jalen Hurts", "QB")]);

@@ -153,9 +153,18 @@ const DRAFT_SOON_MS = 60 * 60 * 1000;
  *
  * **No advice in the text.** Not "drop him", not "replace him".
  * `waiver-run.ts` set this convention for the identical fact — state what is
- * observable, imply no permanence — and it holds here for two more reasons: a
- * cut player may be signed again on Wednesday, and whether he should be
- * acquirable at all is what issue #276 exists to decide. The link is the advice.
+ * observable, imply no permanence — and it holds here for a reason that has
+ * outlived the one it was written with: a cut player may be signed again on
+ * Wednesday. The other reason was that whether he should be acquirable was
+ * undecided; it was decided on 2026-09-16, and **in favour of keeping him**, so
+ * advice to drop him would now be advice against a move the product allows. The
+ * link is the advice.
+ *
+ * This query keeps `NOT p.active` and is the one reader of the flag that did.
+ * It asks the opposite question from the board and the market — not "may anyone
+ * sign him" but "should the manager holding him be told" — so the widening
+ * elsewhere leaves it untouched. A future refactor that hides `active` behind a
+ * single availability oracle breaks this notification; there is a test.
  */
 async function playersOffNflRosters(db: SqlClient, userId: string): Promise<Notification[]> {
   const rows = await db.query<{

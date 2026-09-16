@@ -565,8 +565,11 @@ describe("the freeze between acceptance and execution", () => {
   /**
    * A player rostered by nobody, so he can be added or claimed.
    *
-   * `active` matters: `availablePlayers` and the draft board both filter on it,
-   * and a player who is not active cannot be claimed at all.
+   * The column defaults true and this helper leaves it there, which is now
+   * simply the ordinary case rather than a precondition. It used to be one:
+   * `availablePlayers` and the draft board both filtered on `active`, so an
+   * inactive player could not be claimed at all. Since 2026-09-16 neither
+   * filters — he sorts last instead — so nothing in this fixture depends on it.
    */
   async function unrostered(fx: Fixture, handle: string): Promise<string> {
     const [sport] = await fx.client.query<{ id: string }>(

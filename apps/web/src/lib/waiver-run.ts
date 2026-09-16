@@ -31,10 +31,23 @@
 export function whyClaimFailed(reason: string | null): string {
   switch (reason) {
     case "PLAYER_UNAVAILABLE":
-      // States the observable fact and implies no permanence. Whether such a
-      // player should be claimable is undecided, so this must not read as a
-      // rule — no "cannot be claimed", no advice to stop trying.
-      return "he is no longer on an NFL roster, so the run could not award him";
+      /*
+        **This used to name a cause that can no longer produce it.**
+
+        It read "he is no longer on an NFL roster", because the resolver's pool
+        came from a board filtered on `players.active`. That filter went on
+        2026-09-16 when the owner ruled a cut player stays acquirable, so the
+        sentence would now be a confident explanation of the wrong thing.
+
+        What can still miss the pool is narrow and has nothing to do with clubs:
+        an id from another sport, or a player carrying no mapped position row —
+        the board's positions join is inner. Neither is worth naming to a
+        manager, so this says what is true and stops.
+
+        Kept rather than deleted. `failure_reason` is free text and this
+        function's contract is to degrade rather than show a raw code.
+      */
+      return "he is not in this league's player pool, so the run could not award him";
     case "PLAYER_TAKEN":
       return "a team with better priority claimed him first";
     case "ROSTER_FULL":

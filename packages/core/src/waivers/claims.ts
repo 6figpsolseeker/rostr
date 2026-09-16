@@ -193,9 +193,10 @@ export function resolveWaiverClaims(input: ResolveInput): WaiverResolution {
 
       `taken` means a better-priority team won him earlier in this same run —
       the system working exactly as the rules describe. Absent from the pool
-      means he is not a player this league can acquire at all: the board filters
-      on `players.active`, which the daily sync clears for anyone the provider
-      reports as an NFL free agent.
+      means he is not a player this league can acquire at all, which since
+      2026-09-16 is a narrow thing: the pool is every player in the league's
+      sport, so a miss is an id from the wrong game or a player carrying no
+      mapped position row, rather than any judgement about the player himself.
 
       Collapsed, the second was reported as "a team with better priority claimed
       him first" — a statement about other managers that is simply false, told to
@@ -204,11 +205,19 @@ export function resolveWaiverClaims(input: ResolveInput): WaiverResolution {
       `taken` is tested first so the branch below means strictly "not in the
       pool": a player awarded earlier in this run is necessarily in it.
 
-      **A reason, not a filter.** Whether a cut player should be claimable at all
-      is a rules question nobody has decided, and adding a pre-resolution filter
-      would decide it here. Reporting the outcome honestly does not — and it
-      makes the question countable, since `failure_reason` is permanent and the
-      answer becomes a `SELECT count(*)` rather than an extrapolation.
+      **A cut player is awardable, and that is now a decision rather than a
+      side effect.** This comment used to say the opposite — that whether such a
+      player should be claimable was undecided, and that the refusal here was an
+      accident of which query built the pool, deliberately left as a reason
+      rather than made into a filter. The owner decided it on 2026-09-16: a
+      player his club has released stays visible, addable and claimable, because
+      clubs sign people again and stashing one is a bet a manager is entitled to
+      make. Spending waiver priority on him is the same bet.
+
+      The decision is implemented where it belongs — one predicate, in the
+      loader — and this branch says nothing about it. **Do not reintroduce a
+      pre-resolution filter here**; it would put a second, quieter answer beside
+      the first, and the quiet one would win.
     */
     if (taken.has(claim.addPlayerId)) {
       outcomes.push({ ...base, awarded: false, reason: "PLAYER_TAKEN" });

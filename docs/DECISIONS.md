@@ -844,3 +844,74 @@ The original text, kept because it is the question that was asked:
 > player outright.** That would change § 8's "Who is eligible", which is frozen
 > text existing leagues have signed, and it is what issue #270 would need. Left
 > open deliberately.
+
+## A player his NFL club has cut stays acquirable, and sorts to the bottom
+
+**Decided 2026-09-16 by the owner**, closing issue #276 and, as a side effect,
+#275. Asked whether a released player should still be addable, he answered:
+_"keep him addable is the right answer, but during a draft these players would
+obviously be at the bottom, since it goes by projected adp for draft."_
+
+`players.active` means one thing — the provider currently lists him on an NFL
+club — and it had become the answer to five different questions by accident of
+which query happened to consult it. He was **hidden** from the draft board and
+the free-agent list, **refused** at the Wednesday waiver run, **accepted** by
+`addFreeAgent`, and correctly ignored by ownership. Three doors, three answers,
+and the permissive one was the door with no screen in front of it: the market
+hid a player the server would happily have added to a roster.
+
+So the column is now a **sort key, never a filter** — the same shape the owner
+chose for injury designations a day earlier, and for the same reason. A
+designation changes where a player ranks; it does not change whether he exists.
+
+**This matches ESPN and Sleeper.** Clubs re-sign people, and a manager who wants
+to spend a roster spot on that bet is entitled to make it. Spending waiver
+priority on it is the same bet, which is why the ruling was extended to claims
+rather than stopping at free agency — splitting them would have rebuilt the
+inconsistency this closes, with the lock window as the new seam.
+
+### The demotion has to be stated, because nothing else states it
+
+Three separate stores keep a cut player looking good, and none of them expires:
+
+- `player_rankings_current` is `DISTINCT ON … as_of DESC` over an append-only
+  table, so a player ranked 45th in July keeps that ADP for ever.
+- `player_projections` is upserted in place and never deleted, and
+  `loadProjections` does not join `players` at all.
+- `players` rows are never deleted, and a player the provider stops listing
+  entirely is never re-asserted either way.
+
+So "un-filter and let the ranking sort it out" delivers the opposite of the
+ruling. The demotion is explicit in three places: `ORDER BY p.active DESC` in the
+draft-board loader, the same in the free-agent market, and `byDraftValue` in the
+browser — which is needed because the draft room re-sorts on projections, so the
+server's ordering does not survive the trip.
+
+**The market's ordering is not cosmetic.** That query had no `ORDER BY` at all
+and the screen renders the first hundred rows it is given. Roughly a third of the
+synced pool is inactive, so admitting cut players unordered would have filled a
+third of the visible window at random and pushed real free agents off the screen.
+
+### What was rejected
+
+**Splitting the column into two flags**, one per question. More faithful and more
+work than the problem justifies: the five readers do not want five answers, they
+want two, and the two are "may anyone sign him" and "should the manager holding
+him be told". The second is one query with the opposite polarity, and it keeps it.
+
+**Narrowing the widened pool to players with a ranking or a projection this
+season.** Tempting, because the pool is unbounded across seasons and nothing
+prunes it. Rejected because it reintroduces #275 for precisely the players most
+likely to cause it — a late-round flier nobody ranked and nobody projected is
+exactly who renders as a bare UUID, and this narrowing would drop him back off
+the board. When the tail does need cutting, the honest key is when the provider
+last listed a player, which is a fact about him rather than about whether anyone
+had an opinion. Filed, not built.
+
+### The cost, stated rather than discovered later
+
+The draft board grows by roughly 55% — about 570 rows on today's pool, ~80KB to
+~150KB, fetched once per room load and never on the poll. The free-agent market
+grows the same way. Both are tolerable now and neither is bounded: `syncPlayers`
+upserts and never deletes, and `players` carries no season, so the inactive stock
+accretes every year. This is the trade the ruling was taken on.

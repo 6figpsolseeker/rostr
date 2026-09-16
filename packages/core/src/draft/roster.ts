@@ -28,12 +28,19 @@ import type { RosterRules } from "../rules/types.js";
  * does it hold — and neither needs to know what he plays.
  *
  * **It is a separate type from `DraftablePlayer` because sharing that one made
- * the draft board the only convenient way to build a roster**, and the board is
- * filtered on `players.active`, which the daily sync clears for anyone the
- * provider reports as an NFL free agent. So a rostered player his club had cut
- * fell out of the array and off his own roster: a valid drop was refused, and a
- * claim with no drop was counted against a roster one short of its true size
- * and awarded past the limit. Issue #238.
+ * the draft board the only convenient way to build a roster**, and the board
+ * filtered on `players.active` then — a flag the daily sync clears for anyone
+ * the provider reports as an NFL free agent. So a rostered player his club had
+ * cut fell out of the array and off his own roster: a valid drop was refused,
+ * and a claim with no drop was counted against a roster one short of its true
+ * size and awarded past the limit. Issue #238.
+ *
+ * That filter is gone as of 2026-09-16 — a cut player stays on the board, at the
+ * bottom — so this particular trigger cannot fire again. **Keep the two types
+ * apart anyway.** The argument never depended on that filter: a board is a
+ * statement about who may be *acquired*, and no statement of that kind is
+ * evidence about who is already *held*. Rejoining them would make the next
+ * narrowing of the board silently subtract from everyone's roster.
  *
  * Ownership is a `roster_entries` question; the board answers availability. A
  * type narrow enough to be satisfied from the roster table is what keeps them

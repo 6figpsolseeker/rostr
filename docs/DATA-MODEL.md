@@ -64,6 +64,24 @@ stat_lines        id, player_id, season, week, stat_key_id, value,
                   source, revision
 ```
 
+**`players.active` is the only liveness flag, and `players.status` is dead.**
+`active` means exactly one thing — the provider currently lists him on an NFL
+club — and the daily sync re-asserts it in both directions every run. It is a
+**sort key, never a filter**: a player his club has cut stays draftable and
+addable and sorts to the bottom of the board and the free-agent list (owner's
+ruling, 2026-09-16, issue #276). The one reader that keeps the opposite polarity
+is the notification telling the manager *holding* him, which asks a different
+question.
+
+`status` is written by nothing and read by nothing. It was added in `0003` with
+`NOT NULL DEFAULT 'ACTIVE'`, is absent from `syncPlayers`' insert list, and
+therefore holds that one string on every row in the table. It is left in place
+rather than dropped by migration — migrations here are forward-only and
+permanent, and the column costs a short string per row — but **do not reach for
+it**. Somebody looking for "is this player available" will find a column called
+`status` before they find `active`, and that is the confusion #276 existed to
+end.
+
 `external_ref` is the provider's ID. `stat_lines.revision` exists because the NFL
 revises box scores after games — a reclassified fumble can flip a matchup days later.
 Rows are versioned rather than overwritten, so a settled week can always be audited

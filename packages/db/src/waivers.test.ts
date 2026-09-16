@@ -68,6 +68,22 @@ interface Fixture {
 }
 
 /** Four teams; one holds a small roster, the rest are empty. */
+/*
+  A player his NFL club has cut.
+
+  `season-sync` writes `active = false` for anyone the provider reports as an
+  NFL free agent — 562 of 1,586 players carry it today, and roughly thirteen a
+  day arrive. Nothing releases such a player from a fantasy roster: he stays
+  until his manager drops him, and since 2026-09-16 anyone else may sign him.
+
+  Set directly because no fixture can reach this through the product — the
+  column defaults true and only the daily sync writes it. Same pattern
+  `league-read.test.ts` uses to rewrite `leagues.visibility` and assert the
+  answer does not move.
+*/
+const deactivate = (fx: Fixture, playerId: string) =>
+  fx.client.query("UPDATE players SET active = false WHERE id = $1", [playerId]);
+
 async function setup(): Promise<Fixture> {
   db = await createTestDatabase();
   await seedSport(db, NFL);
@@ -391,22 +407,6 @@ describe("processing", () => {
 
   const WEDNESDAY = new Date(MONDAY.getTime() + 2 * DAY);
 
-  /*
-    A rostered player his NFL club has cut. Issue #238.
-
-    `season-sync` writes `active = false` for anyone the provider reports as an
-    NFL free agent — 562 of 1,586 players carry it today, and roughly thirteen a
-    day arrive. Nothing releases such a player from a fantasy roster: he stays
-    until his manager drops him.
-
-    Set directly because no fixture can reach this through the product — the
-    column defaults true and only the daily sync writes it. Same pattern
-    `league-read.test.ts` uses to rewrite `leagues.visibility` and assert the
-    answer does not move.
-  */
-  const deactivate = (fx: Fixture, playerId: string) =>
-    fx.client.query("UPDATE players SET active = false WHERE id = $1", [playerId]);
-
   it("counts a rostered player his club has cut — #238", async () => {
     /*
       **The silent direction.** The resolver built each roster by looking every
@@ -578,16 +578,21 @@ describe("processing", () => {
     expect(row?.player_id).toBeNull();
   });
 
-  it("says the add player is unavailable rather than blaming another team — #238", async () => {
+  it("awards a claim for a player his club has cut — #276", async () => {
     /*
-      `PLAYER_TAKEN` reads "a team with better priority claimed him first". When
-      the add player is simply absent from the board, nobody claimed him at all —
-      a false statement about other managers, told to somebody who cannot check
-      it.
+      **The open question in the test this replaces has been answered.**
 
-      A reason, not a filter: the claim is still resolved, still recorded, and
-      whether such a player should be claimable stays an open question this does
-      not answer.
+      That test asserted `PLAYER_UNAVAILABLE` for exactly this case and said so
+      in its own words — "whether such a player should be claimable stays an open
+      question this does not answer". The refusal was a side effect of which
+      query built the pool rather than a decision anybody had taken. The owner
+      took it on 2026-09-16: a player his club has released stays acquirable,
+      because clubs sign people again and stashing one is a bet a manager is
+      entitled to make. Spending waiver priority on him is the same bet.
+
+      #238's message quality is not lost with it. `PLAYER_TAKEN` must still never
+      be reported for a player nobody claimed — what changed is that a cut player
+      is no longer the way to reach that branch.
     */
     const fx = await setup();
 
@@ -607,7 +612,16 @@ describe("processing", () => {
       "SELECT failure_reason FROM waiver_claims WHERE add_player_id = $1",
       [wanted],
     );
-    expect(claim?.failure_reason).toBe("PLAYER_UNAVAILABLE");
+    expect(claim?.failure_reason).toBeNull();
+
+    // Awarded, not merely un-refused: the roster row is the thing he was
+    // claiming, and a claim that "succeeds" without one is the worse failure.
+    const [held] = await fx.client.query<{ team_id: string }>(
+      `SELECT team_id FROM roster_entries
+        WHERE player_id = $1 AND released_at IS NULL`,
+      [wanted],
+    );
+    expect(held?.team_id).toBe(fx.teams[1]);
   });
 
   it("lets a team whose only room is an IR exemption win a claim — #237", async () => {
@@ -1273,6 +1287,93 @@ describe("availablePlayers", () => {
     expect(held?.availability).toBe("ON_WAIVERS");
     expect(held?.clearsAt).toBeInstanceOf(Date);
     expect(available.filter((p) => p.availability === "FREE_AGENT")).toHaveLength(3);
+  });
+
+  it("lists a player his club has cut", async () => {
+    /*
+      This list filtered him out and `availabilityOf` never has, so the screen
+      hid a player the server would happily have added — issue #276, decided
+      2026-09-16 in favour of keeping him acquirable. The screen is what moved,
+      because the alternative is teaching the ownership oracle about NFL rosters.
+    */
+    const fx = await setup();
+    const cut = fx.players.get("target")!;
+    await deactivate(fx, cut);
+
+    const available = await availablePlayers(fx.client, fx.leagueId, MONDAY);
+
+    expect(available.map((p) => p.playerId)).toContain(cut);
+    expect(available.find((p) => p.playerId === cut)?.onNflRoster).toBe(false);
+  });
+
+  it("sorts a cut player below everyone still on a club", async () => {
+    /*
+      **Not cosmetic, and this is the half a UI preference could not deliver.**
+
+      Roughly a third of the synced pool is inactive at any time and the market
+      screen renders the first hundred rows it is handed, so admitting these with
+      no ordering fills a third of the visible window at random with players
+      nobody can field — pushing real free agents off the screen entirely. The
+      query had no `ORDER BY` at all before this.
+    */
+    const fx = await setup();
+    // `target` deliberately: he is the first of the three unrostered players in
+    // insert order, so with the ordering removed he comes back *first* and this
+    // test goes red. Switch him for `spare` — the last — and the mutant passes,
+    // because the natural order already puts that one at the bottom. Verified by
+    // removing the ORDER BY and watching this fail.
+    await deactivate(fx, fx.players.get("target")!);
+
+    const available = await availablePlayers(fx.client, fx.leagueId, MONDAY);
+    const roster = available.map((p) => p.onNflRoster);
+
+    // Every still-signed player comes before every cut one, whatever the
+    // arbitrary order within each group.
+    expect(roster).toEqual([...roster].sort((x, y) => Number(y) - Number(x)));
+    expect(roster.at(-1)).toBe(false);
+  });
+
+  it("never lets a cut player read as unowned", async () => {
+    /*
+      **The guard that matters most here, and the reason the fix went into this
+      query rather than into `availabilityOf`.**
+
+      `availabilityOf` is the ownership oracle. Teach it about `players.active`
+      and a rostered player whose club cut him answers `FREE_AGENT` — so someone
+      else adds him while his manager still holds him, and two teams score the
+      same player. Migration `0022`'s unique index is the backstop, but wanting a
+      constraint violation to be your guard is the wrong shape.
+    */
+    const fx = await setup();
+    const owned = fx.players.get("held")!;
+    await deactivate(fx, owned);
+
+    expect(await availabilityOf(fx.client, fx.leagueId, owned, MONDAY)).toBe("ROSTERED");
+
+    const available = await availablePlayers(fx.client, fx.leagueId, MONDAY);
+    expect(available.map((p) => p.playerId)).not.toContain(owned);
+  });
+
+  it("keeps him addable, which the list now agrees with", async () => {
+    /*
+      Passes before this change as well as after, and that is the point: the
+      server has always accepted him, and a later tidy-up that "fixes" the
+      inconsistency by teaching `addFreeAgent` about `active` would reverse the
+      owner's ruling while looking like housekeeping. This goes red if it does.
+    */
+    const fx = await setup();
+    const cut = fx.players.get("target")!;
+    await deactivate(fx, cut);
+
+    await addFreeAgent(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: fx.teams[2]!,
+      addPlayerId: cut,
+      dropPlayerId: null,
+      now: MONDAY,
+    });
+
+    expect(await availabilityOf(fx.client, fx.leagueId, cut, MONDAY)).toBe("ROSTERED");
   });
 });
 

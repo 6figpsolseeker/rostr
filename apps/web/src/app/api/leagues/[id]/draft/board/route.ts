@@ -29,6 +29,12 @@ export async function GET(
         name: entry.fullName,
         positions: entry.positions,
         rank: entry.rank,
+        // Whether his NFL club still has him. The array already arrives with
+        // the cut players last, but the room re-sorts on projections — which
+        // are not filtered on this column and are never deleted, so a star cut
+        // in September keeps July's number and would sort to the *top* without
+        // it. See `byDraftValue` in `lib/draft-board.ts`.
+        active: entry.active,
         // Milli-points, scored with *this league's* rules. Null where the
         // provider has no projection — a deep-bench flier is still draftable,
         // and showing a confident zero would be worse than showing nothing.
