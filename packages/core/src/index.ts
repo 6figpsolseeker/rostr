@@ -177,7 +177,9 @@ export {
 export {
   autolineup,
   autolineupChoices,
+  rankedOn,
   type AutolineupChoice,
+  type RankedOn,
   type RunnerUpReason,
   rankingValue,
   seasonAverage,
