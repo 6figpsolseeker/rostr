@@ -4,7 +4,7 @@ import type { DraftRules, LeagueRules } from "@rostr/core";
 import { createLeague } from "./leagues.js";
 import { createUser } from "./identity.js";
 import { seedSport } from "./sports.js";
-import { addTestTeam, createTestDatabase } from "./testing.js";
+import { addTestTeam, createTestDatabase, recordStatements } from "./testing.js";
 import type { PGliteClient } from "./testing.js";
 import { activateFromIr, IrError, moveToIr } from "./injured-reserve.js";
 import { dropPlayer } from "./waivers.js";
@@ -197,6 +197,52 @@ describe("moveToIr", () => {
 });
 
 describe("activateFromIr", () => {
+  it("takes the capacity key before reading the roster — #277", async () => {
+    /*
+      **This function's `FOR UPDATE` is not enough, and its own comment used to
+      say it was.**
+
+      `heldForCapacity(..., { lock: true })` locks the rows already visible to
+      its snapshot, which stops two activations racing each other. It cannot stop
+      a concurrent `addFreeAgent`, because that one contributes an *insert* — a
+      row that does not exist yet is a phantom, and no row lock under READ
+      COMMITTED blocks one. Both read the same roster, both find room, and the
+      team lands one over.
+
+      Asserted as a statement rather than an outcome for the reason given in
+      `roster-capacity.test.ts`: PGlite is one connection, so the contention
+      itself is unobservable here.
+    */
+    const fx = await setup();
+    await moveToIr(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: fx.teamId,
+      playerId: fx.players.get("hurt")!,
+      week: 2,
+      now: NOW,
+    });
+    const rec = recordStatements(fx.client);
+
+    await activateFromIr(rec.client, {
+      leagueId: fx.leagueId,
+      teamId: fx.teamId,
+      playerId: fx.players.get("hurt")!,
+    });
+
+    const begin = rec.statements.findIndex((sql) => sql.trim() === "BEGIN");
+    const commit = rec.statements.findIndex((sql) => sql.trim() === "COMMIT");
+    const lock = rec.statements.findIndex((sql) => sql.includes("pg_advisory_xact_lock"));
+    const rosterRead = rec.statements.findIndex(
+      (sql, index) => index > begin && sql.includes("FOR UPDATE OF r"),
+    );
+
+    expect(lock, "a key is taken at all").toBeGreaterThan(begin);
+    expect(lock).toBeLessThan(commit);
+    expect(rosterRead, "the roster is read inside the transaction").toBeGreaterThan(begin);
+    expect(rosterRead, "the roster is read after the key").toBeGreaterThan(lock);
+    expect(rec.params[lock]?.[0]).toBe(fx.teamId);
+  });
+
   it("brings a player back", async () => {
     const fx = await setup();
     await moveToIr(fx.client, {

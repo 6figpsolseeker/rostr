@@ -88,7 +88,13 @@ export {
   type RosterMove,
 } from "./waivers.js";
 
-export { overageFor, overLimitNotice, heldForCapacity } from "./roster-capacity.js";
+export {
+  overageFor,
+  overLimitNotice,
+  heldForCapacity,
+  lockRosterCapacity,
+  capacityLockOrder,
+} from "./roster-capacity.js";
 
 export {
   getAutofillEnabled,

@@ -101,3 +101,63 @@ export async function addTestTeam(
 
   return { teamId: team!.id, userId: user!.id, slot: Number(team!.slot) };
 }
+
+/**
+ * A client that records every statement it is asked to run, and runs them.
+ *
+ * ## What this is for, and what it is not
+ *
+ * PGlite is one connection, so nothing in this repo can produce two overlapping
+ * transactions — a lock never blocks, and any test claiming to demonstrate
+ * serialisation is theatre. What *can* be established is that the production
+ * code path emits the statement at all, inside its transaction, before the reads
+ * it has to dominate. That is the regression this catches: someone moving a
+ * `pg_advisory_xact_lock` above `withTransaction`, where it runs in its own
+ * autocommit transaction and is released before the next line, with no error
+ * and no failing test.
+ *
+ * `migrate.pool.test.ts` is the precedent — it asserts which connection received
+ * each statement for the same reason, because the property it cares about is
+ * about dispatch rather than about results.
+ *
+ * Positions are recorded for `exec` as well as `query` because `BEGIN` and
+ * `COMMIT` go through `exec`, and "inside the transaction" is an assertion about
+ * where the statement sits between those two.
+ */
+export function recordStatements(inner: SqlClient): {
+  client: SqlClient;
+  statements: string[];
+  params: (readonly unknown[] | undefined)[];
+} {
+  const statements: string[] = [];
+  const params: (readonly unknown[] | undefined)[] = [];
+
+  const wrap = (target: SqlClient): SqlClient => ({
+    async exec(sql: string): Promise<void> {
+      statements.push(sql);
+      params.push(undefined);
+      return target.exec(sql);
+    },
+    async query<T = Record<string, unknown>>(
+      sql: string,
+      values?: readonly unknown[],
+    ): Promise<T[]> {
+      statements.push(sql);
+      params.push(values);
+      return target.query<T>(sql, values);
+    },
+    // Wrapped through, so a transaction's own handle records too — without this
+    // the interesting half is invisible, since `withTransaction` runs its
+    // callback against whatever `connect` hands back.
+    ...(target.connect
+      ? {
+          connect: async (): Promise<{ client: SqlClient; release: () => void }> => {
+            const checked = await target.connect!();
+            return { client: wrap(checked.client), release: checked.release };
+          },
+        }
+      : {}),
+  });
+
+  return { client: wrap(inner), statements, params };
+}

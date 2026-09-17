@@ -4,7 +4,7 @@ import type { DraftRules, LeagueRules } from "@rostr/core";
 import { createLeague } from "./leagues.js";
 import { createUser } from "./identity.js";
 import { seedSport } from "./sports.js";
-import { addTestTeam, createTestDatabase } from "./testing.js";
+import { addTestTeam, createTestDatabase, recordStatements } from "./testing.js";
 import type { PGliteClient } from "./testing.js";
 import {
   addFreeAgent,
@@ -433,6 +433,118 @@ describe("proposing", () => {
     ).rejects.toBeInstanceOf(TradeError);
 
     expect(await listTrades(fx.client, fx.leagueId)).toHaveLength(0);
+  });
+});
+
+describe("the capacity key — #277", () => {
+  /*
+    **Read the header of `roster-capacity.test.ts` before adding to this block.**
+
+    Capacity is a fact about a *team*; every other lock `acceptTrade` takes is
+    about an *asset*. So two acceptances naming disjoint players contend on
+    nothing, both read a roster neither has changed, and both pass a check only
+    one of them may pass — and no constraint refuses the second, because
+    `roster_entries_one_owner_per_league` caps *which* player a team may hold and
+    never *how many*.
+
+    **The obvious test for this passes without the fix**, which is why it is not
+    written here: accept one trade, then accept a second, and expect the second
+    to be refused. That is a sequential history, the reservation arithmetic has
+    always been correct against those, and it goes green on the commit before
+    this one. Nor does `interleaveAtFirstBegin` reach it — that hook fires
+    before `BEGIN`, and this race lives entirely inside the transaction, where
+    PGlite's single connection would nest the two and let the inner `COMMIT`
+    commit the outer's work.
+
+    So these assert the statement rather than the outcome: that the real code
+    path emits the lock, inside its transaction, before anything it must
+    dominate. That catches the regression actually worth catching — someone
+    moving it above `withTransaction`, where it runs in its own autocommit
+    transaction and is released before the next line, silently.
+  */
+
+  const LOCK = "pg_advisory_xact_lock";
+
+  it("takes both teams' keys inside the transaction", async () => {
+    const fx = await setup();
+    const tradeId = await propose(fx);
+    const rec = recordStatements(fx.client);
+
+    await acceptTrade(rec.client, tradeId, fx.teams[1]!, MONDAY);
+
+    const locks = rec.statements
+      .map((sql, index) => ({ sql, index }))
+      .filter((entry) => entry.sql.includes(LOCK));
+    const begin = rec.statements.findIndex((sql) => sql.trim() === "BEGIN");
+    const commit = rec.statements.findIndex((sql) => sql.trim() === "COMMIT");
+
+    expect(locks).toHaveLength(2);
+    expect(begin).toBeGreaterThanOrEqual(0);
+    expect(commit).toBeGreaterThan(begin);
+    for (const lock of locks) {
+      expect(lock.index).toBeGreaterThan(begin);
+      expect(lock.index).toBeLessThan(commit);
+    }
+  });
+
+  it("takes them before every read the capacity decision rests on", async () => {
+    /*
+      A lock taken after the read it protects is decoration. The two reads are
+      `projectedSizeFor` (`roster_entries JOIN players`) and
+      `committedTradeMoves` (`trades`/`trade_assets`), and the league's own
+      `FOR SHARE` is included because the deadlock argument depends on this key
+      being the *first* lock in the transaction — a transaction waiting here must
+      hold nothing, or it can close a cycle.
+    */
+    const fx = await setup();
+    const tradeId = await propose(fx);
+    const rec = recordStatements(fx.client);
+
+    await acceptTrade(rec.client, tradeId, fx.teams[1]!, MONDAY);
+
+    const begin = rec.statements.findIndex((sql) => sql.trim() === "BEGIN");
+    const lastLock = rec.statements.map((s) => s.includes(LOCK)).lastIndexOf(true);
+
+    // Without this the rest of the test passes vacuously on a build that takes
+    // no lock at all: `lastIndexOf` answers -1 and every statement is "after"
+    // it. Confirmed by running this block against the commit before the fix —
+    // two of the three went red and this one did not, until this line.
+    expect(lastLock, "a key is taken at all").toBeGreaterThan(begin);
+
+    /*
+      Scoped to statements inside the transaction on purpose. `acceptTrade`
+      reads the trade, its league and its rules on the bare `db` first —
+      `trade_assets` among them — and those are not what the key protects: they
+      are re-read or re-validated inside, and the capacity decision rests only on
+      what is read after `BEGIN`. An unscoped assertion fails on `loadTrade` and
+      would tempt someone to "fix" it by moving the lock out of the transaction,
+      which is the exact regression this block exists to catch.
+    */
+    const firstInsideTransaction = (fragment: string): number =>
+      rec.statements.findIndex((sql, index) => index > begin && sql.includes(fragment));
+
+    for (const fragment of ["roster_entries", "FROM leagues", "trade_assets"]) {
+      const at = firstInsideTransaction(fragment);
+      expect(at, `${fragment} is read inside the transaction`).toBeGreaterThan(begin);
+      expect(at, `${fragment} is read after the key`).toBeGreaterThan(lastLock);
+    }
+  });
+
+  it("takes them in ascending team order, whichever way the trade points", async () => {
+    // Two acceptances between one pair of teams, proposed in opposite
+    // directions, would otherwise take the two keys in opposite orders and
+    // deadlock on each other with no other function involved.
+    const fx = await setup();
+    const tradeId = await propose(fx);
+    const rec = recordStatements(fx.client);
+
+    await acceptTrade(rec.client, tradeId, fx.teams[1]!, MONDAY);
+
+    const keyed = rec.params.filter((_, index) => rec.statements[index]!.includes(LOCK));
+    const ids = keyed.map((params) => params![0] as string);
+
+    expect(new Set(ids)).toEqual(new Set([fx.teams[0], fx.teams[1]]));
+    expect(ids).toEqual([...ids].sort());
   });
 });
 

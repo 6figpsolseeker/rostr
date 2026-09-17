@@ -4,7 +4,7 @@ import type { DraftRules, LeagueRules } from "@rostr/core";
 import { createLeague } from "./leagues.js";
 import { createUser } from "./identity.js";
 import { seedSport } from "./sports.js";
-import { addTestTeam, createTestDatabase } from "./testing.js";
+import { addTestTeam, createTestDatabase, recordStatements } from "./testing.js";
 import { moveToIr } from "./injured-reserve.js";
 import type { PGliteClient } from "./testing.js";
 import {
@@ -236,6 +236,47 @@ describe("dropping", () => {
 });
 
 describe("free agency", () => {
+  it("takes the capacity key before counting the roster — #277", async () => {
+    /*
+      The count and the insert are two statements, and nothing between them
+      stopped a second add: the league's `FOR SHARE` deliberately does not
+      conflict with itself, and `roster_entries_one_owner_per_league` arbitrates
+      *which* player a team may hold, never *how many*. Two tabs, two different
+      free agents, both passed.
+
+      A statement assertion rather than an outcome one — see
+      `roster-capacity.test.ts` for why an outcome test here would be theatre.
+    */
+    const fx = await setup();
+    const rec = recordStatements(fx.client);
+
+    await addFreeAgent(rec.client, {
+      leagueId: fx.leagueId,
+      teamId: fx.teams[2]!,
+      addPlayerId: fx.players.get("target")!,
+      dropPlayerId: null,
+      now: MONDAY,
+    });
+
+    const begin = rec.statements.findIndex((sql) => sql.trim() === "BEGIN");
+    const commit = rec.statements.findIndex((sql) => sql.trim() === "COMMIT");
+    const lock = rec.statements.findIndex((sql) => sql.includes("pg_advisory_xact_lock"));
+    const after = (fragment: string): number =>
+      rec.statements.findIndex((sql, index) => index > begin && sql.includes(fragment));
+
+    expect(lock, "a key is taken at all").toBeGreaterThan(begin);
+    expect(lock).toBeLessThan(commit);
+    expect(rec.params[lock]?.[0]).toBe(fx.teams[2]);
+
+    // Both halves of the capacity decision, and the league lock — the key has to
+    // be the first lock in the transaction for the deadlock argument to hold.
+    for (const fragment of ["roster_entries", "FROM leagues"]) {
+      const at = after(fragment);
+      expect(at, `${fragment} inside the transaction`).toBeGreaterThan(begin);
+      expect(at, `${fragment} after the key`).toBeGreaterThan(lock);
+    }
+  });
+
   it("adds a free agent immediately", async () => {
     const fx = await setup();
 

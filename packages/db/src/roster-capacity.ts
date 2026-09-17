@@ -105,3 +105,85 @@ export function overLimitNotice(overage: RosterOverage): string | null {
     `pick anyone for you, and you cannot add anybody.`
   );
 }
+
+/**
+ * The serialisation point for every capacity check in this repo.
+ *
+ * ## Why an advisory key and not `teams … FOR UPDATE`
+ *
+ * `membership.ts` asked this exact question for the league's seat count (#73)
+ * and answered it: a row lock there "would put a `teams`-then-`leagues` edge in
+ * reach of the draft path", so it took a private advisory key instead, because
+ * "nothing takes this advisory key anywhere else in the schema, so no cycle
+ * through it can exist at all". The same holds here, and the cycle a `teams` row
+ * lock would open is already written down at `lockRosterRow` in `waivers.ts`:
+ * `processWaivers` runs leagues → roster_entries → **teams**, ending by writing
+ * every team's waiver priority, while `activateFromIr` takes no league lock at
+ * all and would run teams → roster_entries straight into it. That is `40P01`,
+ * hourly, and a waiver run rolls back a whole league's cycle when it aborts.
+ *
+ * ## Why a lock at all, when `heldForCapacity({ lock: true })` exists
+ *
+ * `FOR UPDATE OF r` locks rows already visible to the statement's snapshot. That
+ * stops two writers flipping the same rows — which is the write skew it was
+ * added for — and it cannot stop an **insert**, because a row that does not yet
+ * exist is a phantom and no row lock under READ COMMITTED blocks one. So an
+ * `addFreeAgent` and an `activateFromIr` on one team both read the same roster,
+ * both find room, and land the team one over.
+ *
+ * Two transactions raising one team's counted size therefore need an object they
+ * are guaranteed to contend for *whatever rows they touch*, and the team's
+ * identity is the only such object.
+ *
+ * ## Call it first, before every other lock in the transaction
+ *
+ * That is the whole deadlock argument, and it is why this goes above the
+ * league's `FOR SHARE` rather than in a tidier spot below it:
+ *
+ * 1. A transaction **waiting** here holds nothing, so this key can never be the
+ *    closing edge of a cycle.
+ * 2. Two transactions **holding** keys took them in ascending id order from one
+ *    namespace, so neither can hold one the other wants.
+ *
+ * Neither half survives moving the call later. If you are tempted to tidy it
+ * below the league lock, the first half is what you are spending.
+ *
+ * ## What no test here can show
+ *
+ * PGlite is a single connection, so nothing in this repo exercises the
+ * contention this exists for — a second transaction never runs. What is
+ * testable is that the statement is issued, inside the transaction, before every
+ * read it has to dominate, in a deterministic order; `capacityLockOrder` is
+ * split out so the ordering itself can be checked without a database. The rest
+ * is a Postgres guarantee plus the argument above, and has to be got right by
+ * reading. Same position `membership.ts` is in, for the same reason.
+ *
+ * `hashtext` is 32 bits, so two team ids can collide on a key. A collision
+ * serialises two unrelated teams and costs nothing else — the trade
+ * `membership.ts` already makes.
+ */
+export async function lockRosterCapacity(
+  tx: SqlClient,
+  ...teamIds: readonly string[]
+): Promise<void> {
+  for (const teamId of capacityLockOrder(teamIds)) {
+    await tx.query("SELECT pg_advisory_xact_lock(hashtext('roster.capacity'), hashtext($1))", [
+      teamId,
+    ]);
+  }
+}
+
+/**
+ * The order the keys are taken in: sorted, deduplicated, total.
+ *
+ * Split out because it is the only part of the above a test in this repo can
+ * establish. Sorted, because two accepts between the same pair of teams would
+ * otherwise take the two keys in whichever order each proposer happened to sit;
+ * deduplicated, because a caller passing one team twice would otherwise wait on
+ * a key it already holds — harmless for `pg_advisory_xact_lock`, which is
+ * re-entrant within a transaction, but it would make the round trip twice and
+ * read as though it meant something.
+ */
+export function capacityLockOrder(teamIds: readonly string[]): readonly string[] {
+  return [...new Set(teamIds)].sort();
+}
