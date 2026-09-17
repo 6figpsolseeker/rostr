@@ -18,7 +18,7 @@
     },
     {
       "path": "/api/cron/trades",
-      "schedule": "0 * * * *"
+      "schedule": "30 * * * *"
     },
     {
       "path": "/api/cron/injuries",

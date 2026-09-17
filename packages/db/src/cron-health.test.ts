@@ -108,6 +108,46 @@ describe("expectedJobs", () => {
       { name: "season-sync", everyMinutes: 1440 },
     ]);
   });
+
+  it("does not start the waiver run and trade execution on the same minute", () => {
+    /*
+      **These two block each other, so scheduling them together is a designed
+      collision rather than a coincidence.**
+
+      Trade execution takes `leagues … FOR SHARE` (#277) and a waiver run holds
+      `FOR UPDATE` on the same row for its whole per-league transaction, so one
+      waits for the other. Both were on `0 * * * *` until #312 moved trades to
+      `:30`. The wait is short — the run loads the draft board *outside* its
+      transaction precisely so the lock is held for as little as possible, and
+      it locks one league at a time — so this was never an outage. It was two
+      jobs queueing behind each other every hour for no reason.
+
+      Nothing orders them. `RULES.md` ties execution to the veto window and to
+      the trade deadline's *week*, never to a waiver run, and the window is 48
+      hours — so the offset cannot be noticed by any rule.
+
+      Asserted on the **minute field**, not on `everyMinutes`: both are hourly
+      and always will be, so the cadence says nothing about whether they
+      collide. This is what a future reader would otherwise have to rediscover
+      by reading two lock acquisition orders.
+    */
+    const path = fileURLToPath(new URL("../../../apps/web/vercel.json", import.meta.url));
+    const config = JSON.parse(readFileSync(path, "utf8")) as CronConfig;
+
+    const startMinute = (name: string): string => {
+      const entry = (config.crons ?? []).find(
+        (cron) => typeof cron.path === "string" && cron.path.endsWith(`/${name}`),
+      );
+      const schedule = typeof entry?.schedule === "string" ? entry.schedule : "";
+      const minute = schedule.split(" ")[0] ?? "";
+      // A job that is not scheduled, or whose expression this cannot read, must
+      // not pass by looking different from the other one.
+      expect(minute, `${name} has a readable start minute`).toMatch(/^[0-9*/,-]+$/);
+      return minute;
+    };
+
+    expect(startMinute("waivers")).not.toBe(startMinute("trades"));
+  });
 });
 
 describe("cronHealth", () => {
