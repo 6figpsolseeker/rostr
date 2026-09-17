@@ -167,9 +167,11 @@ export const CAPACITY_LOCK_NAMESPACE = "roster.capacity";
  * took ⟨hB, hA⟩ — the exact cycle the sort exists to make unconstructible, with
  * no other function involved. So the keys are read back and sorted as keys.
  *
- * That costs one round trip, and only for a caller naming more than one team —
- * a single key is trivially ordered. A collision then costs what it should:
- * two unrelated teams serialised, and nothing else.
+ * That costs a round trip, and it is paid by every caller rather than only by
+ * the two that name a pair: the key is Postgres's to compute, so even one has
+ * to be read back before it can be taken. Taking it inline was cheaper and was
+ * wrong. A collision then costs what it should — two unrelated teams
+ * serialised, and nothing else.
  *
  * ## What no test here can show
  *
@@ -197,9 +199,12 @@ export async function lockRosterCapacity(
  * The keys for these teams, in the order they must be taken.
  *
  * One statement, because `hashtext` is Postgres's and there is no honest way to
- * compute it here. Skipped entirely for a single team, which is every caller but
- * `acceptTrade` — one key needs no ordering, and the round trip would be spent
- * on nothing.
+ * compute it here.
+ *
+ * A single team still costs a statement — the key has to come from the database
+ * either way. What it skips is the `unnest` and the ordering, which would be
+ * arranging one element. `acceptTrade` and `resolveTrade` are the two callers
+ * that name more than one.
  */
 async function lockKeysFor(
   tx: SqlClient,

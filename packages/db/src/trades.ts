@@ -731,8 +731,10 @@ export async function acceptTrade(
       Both teams' capacity keys, first, before any other lock this transaction
       takes. Issue #277.
 
-      Every *row* locked below is about an **asset**; capacity is a fact about
-      a **team**. So two acceptances naming disjoint players never contend, both
+      The rows locked below are this trade's **assets**, and the league; capacity
+      is a fact about a **team**, which neither of those stands in for. So two
+      acceptances naming disjoint players never contend — the league lock is
+      `FOR SHARE` and does not conflict with itself — both
       read a roster neither has changed yet, and both pass a check only one of
       them may pass — the receiver ends the pair over the limit its members
       signed for, permanently, with no constraint behind it to refuse the second.

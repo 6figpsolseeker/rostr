@@ -572,8 +572,31 @@ describe("the capacity key — #277", () => {
 
     const locks = locksIn(rec);
     const keys = locks.map((lock) => lock.params?.[1] as number);
-    expect(keys).toHaveLength(2);
-    expect(keys).toEqual([...keys].sort((a, b) => a - b));
+
+    /*
+      Compared against the keys this database actually produces, not against
+      `keys` sorted.
+
+      `expect(keys).toEqual([...keys].sort(…))` looks equivalent and is a coin
+      flip: with two elements it is satisfied whenever they happen to come out
+      ascending, and team ids are database-generated UUIDs. Measured — stripping
+      the ordering left that form green on two runs of three.
+
+      This form is better and still not the guard. Both sides of the comparison
+      come from the same place, so against an unordered implementation it fails
+      only when this pair happens to invert. **The deterministic check lives in
+      `roster-capacity.test.ts`**, which searches for a pair whose id order and
+      key order disagree and asserts on that. What this one is for is that the
+      keys locked are the keys of these two teams.
+    */
+    const expected = (
+      await fx.client.query<{ key: number }>(
+        "SELECT hashtext(id) AS key FROM unnest($1::text[]) AS t(id) ORDER BY 1",
+        [[fx.teams[0], fx.teams[1]]],
+      )
+    ).map((row) => row.key);
+
+    expect(keys).toEqual(expected);
     expect(hashed).toBeLessThan(locks[0]!.index);
   });
 
@@ -594,9 +617,34 @@ describe("the capacity key — #277", () => {
 
     const locks = locksIn(rec);
     expect(locks.length, "execution takes the keys too").toBe(2);
+
+    const begin = rec.statements.findIndex((sql) => sql.trim() === "BEGIN");
+    const league = rec.statements.findIndex(
+      (sql, index) => index > begin && sql === "SELECT id FROM leagues WHERE id = $1 FOR SHARE",
+    );
+    const roster = rec.statements.findIndex(
+      (sql, index) => index > begin && sql.includes("roster_entries"),
+    );
+
     for (const lock of locks) {
       expect(lock.params?.[0]).toBe("roster.capacity");
       expect(lock.conn).not.toBe("outer");
+      expect(lock.conn).toBe(rec.connections[begin]);
+      expect(lock.index).toBeGreaterThan(begin);
+      /*
+        **Before the league lock, and this is the assertion that was missing.**
+
+        Everywhere else the key precedes the league's `FOR SHARE` and a test says
+        so; here nothing did, so moving the call below it passed the whole suite
+        — and that spends the half of the deadlock argument that matters most:
+        a transaction *waiting* on the key must hold nothing, or the key can be
+        a cycle's closing edge. It is not hypothetical on this path. Execution
+        waits on that league row behind a waiver run, which is exactly when it
+        would otherwise be holding two capacity keys while blocked.
+      */
+      expect(league, "the league is locked inside the transaction").toBeGreaterThan(begin);
+      expect(lock.index, "the key comes before the league lock").toBeLessThan(league);
+      expect(roster, "rosters are written after the key").toBeGreaterThan(lock.index);
     }
   });
 

@@ -134,9 +134,16 @@ export async function moveToIr(
       has decided, and deciding it here by accident is what this repo keeps
       paying for. Filed as #311.
 
-      Every path that *decides capacity* now holds this row. `setLineup` and
-      `submitClaim` are member-facing and still hold nothing, deliberately —
-      neither changes a roster, so neither can move a counted size.
+      Every path that *decides capacity against `roster_entries`* now holds this
+      row. `recordPick` is the exception and does not: the draft decides
+      capacity in memory against its own picks, and is kept away from the other
+      writers by the league-state gate — which these two functions pointedly do
+      not read, so a pick can still race an activation. That is the second
+      consequence of #311 rather than something a lock here can fix.
+
+      `setLineup` and `submitClaim` are member-facing and take no league lock
+      either, deliberately: neither changes a roster, so neither can move a
+      counted size.
 
       Why the lock is needed anyway: the waiver run resolves against one
       league-wide snapshot, and the exemption it reads is a fact about IR flags.
@@ -258,9 +265,16 @@ export async function activateFromIr(
       has decided, and deciding it here by accident is what this repo keeps
       paying for. Filed as #311.
 
-      Every path that *decides capacity* now holds this row. `setLineup` and
-      `submitClaim` are member-facing and still hold nothing, deliberately —
-      neither changes a roster, so neither can move a counted size.
+      Every path that *decides capacity against `roster_entries`* now holds this
+      row. `recordPick` is the exception and does not: the draft decides
+      capacity in memory against its own picks, and is kept away from the other
+      writers by the league-state gate — which these two functions pointedly do
+      not read, so a pick can still race an activation. That is the second
+      consequence of #311 rather than something a lock here can fix.
+
+      `setLineup` and `submitClaim` are member-facing and take no league lock
+      either, deliberately: neither changes a roster, so neither can move a
+      counted size.
 
       Why the lock is needed anyway: the waiver run resolves against one
       league-wide snapshot, and the exemption it reads is a fact about IR flags.
