@@ -16,6 +16,18 @@ import { cronForbidden } from "@/lib/cron";
  * `resolveDueTrades` skips open windows and a resolved trade leaves the
  * `ACCEPTED` state, so it is never settled twice.
  *
+ * **On the half hour, not the hour, and that is deliberate.** Execution takes
+ * `leagues … FOR SHARE` (#277), which conflicts with the `FOR UPDATE` a waiver
+ * run holds — and `/api/cron/waivers` is hourly on the hour. Scheduling both at
+ * the same instant meant one waited for the other every hour, for no reason:
+ * nothing orders these two. `RULES.md` ties trade execution to the veto window
+ * and to the trade deadline's *week*, never to a waiver run, and the window is
+ * 48 hours, so half an hour of offset is not a rule anyone can notice.
+ *
+ * It shares the minute with `/api/cron/stats`, which is fine — that job writes
+ * `stat_lines` and `games` and takes no league lock, so there is nothing for
+ * them to contend on. The collision worth avoiding was the one on a row lock.
+ *
  * That last clause was true of one run at a time and false under overlap, which
  * is what a sentence inviting more frequent runs ought not to be. Two runs could
  * both select the same trade; one executed it and the other, finding the assets
