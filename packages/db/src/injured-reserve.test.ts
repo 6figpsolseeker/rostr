@@ -231,7 +231,9 @@ describe("activateFromIr", () => {
 
     const begin = rec.statements.findIndex((sql) => sql.trim() === "BEGIN");
     const commit = rec.statements.findIndex((sql) => sql.trim() === "COMMIT");
-    const lock = rec.statements.findIndex((sql) => sql.includes("pg_advisory_xact_lock"));
+    const lock = rec.statements.findIndex(
+      (sql) => sql === "SELECT pg_advisory_xact_lock(hashtext($1), $2)",
+    );
     const rosterRead = rec.statements.findIndex(
       (sql, index) => index > begin && sql.includes("FOR UPDATE OF r"),
     );
@@ -240,7 +242,62 @@ describe("activateFromIr", () => {
     expect(lock).toBeLessThan(commit);
     expect(rosterRead, "the roster is read inside the transaction").toBeGreaterThan(begin);
     expect(rosterRead, "the roster is read after the key").toBeGreaterThan(lock);
-    expect(rec.params[lock]?.[0]).toBe(fx.teamId);
+    expect(rec.params[lock]?.[0], "the shared namespace").toBe("roster.capacity");
+    // Matched on the exact statement rather than a substring, because the name
+    // of the shared variant contains the whole of the exclusive one and does
+    // not conflict with itself. And on the connection, because handing this the
+    // outer client where the transaction handle was meant is invisible in a
+    // statement log and releases the lock immediately against a pool.
+    expect(rec.connections[lock]).toBe(rec.connections[begin]);
+    expect(rec.connections[lock]).not.toBe("outer");
+
+    // The league lock goes after the key, never before it: a transaction
+    // waiting on the key must hold nothing, or the key can close a cycle.
+    const league = rec.statements.findIndex(
+      (sql, index) => index > begin && sql === "SELECT id FROM leagues WHERE id = $1 FOR SHARE",
+    );
+    expect(league, "the league is locked inside the transaction").toBeGreaterThan(begin);
+    expect(league, "after the capacity key").toBeGreaterThan(lock);
+  });
+
+  it("holds the league while stashing, and takes no capacity key", async () => {
+    /*
+      Two assertions in one because the second is the interesting one: a
+      placement can only *lower* counted size, so it cannot carry a team over
+      its limit and has no business holding the key that exists for writers
+      which raise it. A future reader adding one here for symmetry would be
+      adding contention for nothing.
+
+      The league lock is needed for the other direction: the waiver run resolves
+      against one league-wide snapshot, and a placement committing mid-run makes
+      its exemption count wrong by one — failing a legitimate claim.
+    */
+    const fx = await setup();
+    const rec = recordStatements(fx.client);
+
+    await moveToIr(rec.client, {
+      leagueId: fx.leagueId,
+      teamId: fx.teamId,
+      playerId: fx.players.get("hurt")!,
+      week: 2,
+      now: NOW,
+    });
+
+    const begin = rec.statements.findIndex((sql) => sql.trim() === "BEGIN");
+    const league = rec.statements.findIndex(
+      (sql, index) => index > begin && sql === "SELECT id FROM leagues WHERE id = $1 FOR SHARE",
+    );
+    const roster = rec.statements.findIndex(
+      (sql, index) => index > begin && sql.includes("FOR UPDATE OF r"),
+    );
+
+    expect(league, "the league is locked inside the transaction").toBeGreaterThan(begin);
+    expect(roster, "the roster is read after it").toBeGreaterThan(league);
+    expect(rec.connections[league]).toBe(rec.connections[begin]);
+    expect(
+      rec.statements.some((sql) => sql === "SELECT pg_advisory_xact_lock(hashtext($1), $2)"),
+      "a placement takes no capacity key",
+    ).toBe(false);
   });
 
   it("brings a player back", async () => {

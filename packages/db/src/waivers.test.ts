@@ -260,13 +260,22 @@ describe("free agency", () => {
 
     const begin = rec.statements.findIndex((sql) => sql.trim() === "BEGIN");
     const commit = rec.statements.findIndex((sql) => sql.trim() === "COMMIT");
-    const lock = rec.statements.findIndex((sql) => sql.includes("pg_advisory_xact_lock"));
+    const lock = rec.statements.findIndex(
+      (sql) => sql === "SELECT pg_advisory_xact_lock(hashtext($1), $2)",
+    );
     const after = (fragment: string): number =>
       rec.statements.findIndex((sql, index) => index > begin && sql.includes(fragment));
 
     expect(lock, "a key is taken at all").toBeGreaterThan(begin);
     expect(lock).toBeLessThan(commit);
-    expect(rec.params[lock]?.[0]).toBe(fx.teams[2]);
+    expect(rec.params[lock]?.[0], "the shared namespace").toBe("roster.capacity");
+    // Matched on the exact statement rather than a substring, because the name
+    // of the shared variant contains the whole of the exclusive one and does
+    // not conflict with itself. And on the connection, because handing this the
+    // outer client where the transaction handle was meant is invisible in a
+    // statement log and releases the lock immediately against a pool.
+    expect(rec.connections[lock]).toBe(rec.connections[begin]);
+    expect(rec.connections[lock]).not.toBe("outer");
 
     // Both halves of the capacity decision, and the league lock — the key has to
     // be the first lock in the transaction for the deadlock argument to hold.

@@ -132,18 +132,21 @@ export async function moveToIr(
       `processWaivers`. The state is deliberately **not** read: whether an IR
       move should be refused outside `IN_SEASON` is a product question nobody
       has decided, and deciding it here by accident is what this repo keeps
-      paying for. Filed separately.
+      paying for. Filed as #311.
+
+      Every path that *decides capacity* now holds this row. `setLineup` and
+      `submitClaim` are member-facing and still hold nothing, deliberately —
+      neither changes a roster, so neither can move a counted size.
 
       Why the lock is needed anyway: the waiver run resolves against one
       league-wide snapshot, and the exemption it reads is a fact about IR flags.
-      An IR move committing mid-run makes that snapshot wrong by one, so a claim
-      is awarded into a slot that is no longer free — or a legitimate claim is
-      failed. Every other member-facing path already holds this row; these two
-      were the exceptions.
+      A placement committing mid-run makes that snapshot wrong by one in the
+      direction that **fails a legitimate claim** — this lowers counted size, so
+      it can only ever make a team look fuller than it is, never emptier. The
+      opposite half of that sentence belongs to `activateFromIr`, not here.
 
-      After the capacity key, never before it: a transaction waiting on the key
-      must hold nothing, or the key can close a deadlock cycle. See
-      `lockRosterCapacity`.
+      No capacity key: a move that can only lower the count cannot carry a team
+      over its limit, and the key exists for the writers that raise it.
     */
     await tx.query("SELECT id FROM leagues WHERE id = $1 FOR SHARE", [input.leagueId]);
 
@@ -253,14 +256,17 @@ export async function activateFromIr(
       `processWaivers`. The state is deliberately **not** read: whether an IR
       move should be refused outside `IN_SEASON` is a product question nobody
       has decided, and deciding it here by accident is what this repo keeps
-      paying for. Filed separately.
+      paying for. Filed as #311.
+
+      Every path that *decides capacity* now holds this row. `setLineup` and
+      `submitClaim` are member-facing and still hold nothing, deliberately —
+      neither changes a roster, so neither can move a counted size.
 
       Why the lock is needed anyway: the waiver run resolves against one
       league-wide snapshot, and the exemption it reads is a fact about IR flags.
-      An IR move committing mid-run makes that snapshot wrong by one, so a claim
-      is awarded into a slot that is no longer free — or a legitimate claim is
-      failed. Every other member-facing path already holds this row; these two
-      were the exceptions.
+      An activation committing mid-run makes that snapshot wrong by one in the
+      direction that **awards into a slot that is no longer free** — this raises
+      counted size. The mirror half belongs to `moveToIr`.
 
       After the capacity key, never before it: a transaction waiting on the key
       must hold nothing, or the key can close a deadlock cycle. See

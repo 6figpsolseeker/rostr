@@ -88,13 +88,11 @@ export {
   type RosterMove,
 } from "./waivers.js";
 
-export {
-  overageFor,
-  overLimitNotice,
-  heldForCapacity,
-  lockRosterCapacity,
-  capacityLockOrder,
-} from "./roster-capacity.js";
+// `lockRosterCapacity` and `capacityLockOrder` are deliberately not exported.
+// Their correctness rests entirely on being called on a transaction handle, as
+// the first statement — a contract nothing outside this package can honour,
+// since `apps/web` holds no `tx` to pass.
+export { overageFor, overLimitNotice, heldForCapacity } from "./roster-capacity.js";
 
 export {
   getAutofillEnabled,

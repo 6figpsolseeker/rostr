@@ -731,8 +731,8 @@ export async function acceptTrade(
       Both teams' capacity keys, first, before any other lock this transaction
       takes. Issue #277.
 
-      Everything locked below is about an **asset**; capacity is a fact about a
-      **team**. So two acceptances naming disjoint players never contend, both
+      Every *row* locked below is about an **asset**; capacity is a fact about
+      a **team**. So two acceptances naming disjoint players never contend, both
       read a roster neither has changed yet, and both pass a check only one of
       them may pass — the receiver ends the pair over the limit its members
       signed for, permanently, with no constraint behind it to refuse the second.
@@ -1346,7 +1346,26 @@ async function resolveTrade(
 
   await withTransaction(db, async (tx) => {
     /*
-      The league, shared, first — and this one is taken purely to be mutually
+      Both teams' capacity keys, first.
+
+      Execution **raises** counted size — it inserts the arriving players — and
+      the league lock below does not serialise it against the two paths that read
+      capacity and then write: `addFreeAgent` and `activateFromIr` hold the same
+      row `FOR SHARE`, which does not conflict with itself. So without this key,
+      an add reads a roster of fourteen, an execution commits and makes it
+      fifteen, the add then reads the accepted trades and finds this one already
+      `EXECUTED` — so it reserves nothing for it — and inserts a sixteenth.
+
+      Neither read is wrong on its own. They are two statements and, at READ
+      COMMITTED, two snapshots: the arriving players are invisible to the first
+      and no longer pending to the second, so they are counted by neither. It is
+      the same shape as the waiver-run interleave below, one path over, and it is
+      the reason the league lock alone was not enough.
+    */
+    await lockRosterCapacity(tx, trade.receiverTeamId, trade.proposerTeamId);
+
+    /*
+      The league, shared — and this one is taken purely to be mutually
       exclusive with `processWaivers`. The state is deliberately not read: the
       league has already approved this trade, and execution refusing on state
       would strand it `ACCEPTED` with both sides frozen, retried hourly, for

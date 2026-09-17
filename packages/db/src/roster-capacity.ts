@@ -107,6 +107,17 @@ export function overLimitNotice(overage: RosterOverage): string | null {
 }
 
 /**
+ * The namespace every roster-capacity key is taken in.
+ *
+ * A constant so one grep finds every site, and so a call site cannot drift onto
+ * a namespace of its own — which would leave each path serialised against itself
+ * and against nothing else, with every test still green. `membership.ts` holds
+ * the only other namespace in the schema, `teams.slot`, and the two are never
+ * held in one transaction.
+ */
+export const CAPACITY_LOCK_NAMESPACE = "roster.capacity";
+
+/**
  * The serialisation point for every capacity check in this repo.
  *
  * ## Why an advisory key and not `teams … FOR UPDATE`
@@ -118,16 +129,16 @@ export function overLimitNotice(overage: RosterOverage): string | null {
  * through it can exist at all". The same holds here, and the cycle a `teams` row
  * lock would open is already written down at `lockRosterRow` in `waivers.ts`:
  * `processWaivers` runs leagues → roster_entries → **teams**, ending by writing
- * every team's waiver priority, while `activateFromIr` takes no league lock at
- * all and would run teams → roster_entries straight into it. That is `40P01`,
- * hourly, and a waiver run rolls back a whole league's cycle when it aborts.
+ * every team's waiver priority, and a path holding a `teams` row while waiting on
+ * the league closes it. That is `40P01`, hourly, and a waiver run rolls back a
+ * whole league's cycle when it aborts.
  *
  * ## Why a lock at all, when `heldForCapacity({ lock: true })` exists
  *
  * `FOR UPDATE OF r` locks rows already visible to the statement's snapshot. That
- * stops two writers flipping the same rows — which is the write skew it was
- * added for — and it cannot stop an **insert**, because a row that does not yet
- * exist is a phantom and no row lock under READ COMMITTED blocks one. So an
+ * stops two writers flipping the same rows — the write skew it was added for —
+ * and it cannot stop an **insert**, because a row that does not yet exist is a
+ * phantom and no row lock under READ COMMITTED blocks one. So an
  * `addFreeAgent` and an `activateFromIr` on one team both read the same roster,
  * both find room, and land the team one over.
  *
@@ -137,52 +148,93 @@ export function overLimitNotice(overage: RosterOverage): string | null {
  *
  * ## Call it first, before every other lock in the transaction
  *
- * That is the whole deadlock argument, and it is why this goes above the
- * league's `FOR SHARE` rather than in a tidier spot below it:
+ * Two independent properties, and only the first is positional:
  *
  * 1. A transaction **waiting** here holds nothing, so this key can never be the
- *    closing edge of a cycle.
- * 2. Two transactions **holding** keys took them in ascending id order from one
- *    namespace, so neither can hold one the other wants.
+ *    closing edge of a cycle. This is what is spent by moving the call below the
+ *    league's `FOR SHARE` — which is why it goes above it, rather than in the
+ *    tidier-looking spot.
+ * 2. Two transactions **holding** keys took them in ascending key order from one
+ *    namespace, so neither can hold one the other wants. That one survives
+ *    moving the call; it is `lockKeysFor` that carries it.
  *
- * Neither half survives moving the call later. If you are tempted to tidy it
- * below the league lock, the first half is what you are spending.
+ * ## Ordered on the keys, not on the team ids
+ *
+ * The lock object is `hashtext(teamId)`, and `hashtext` is 32 bits, so the map
+ * from id to key is not injective. Sorting the **ids** would therefore only order
+ * the keys when no two collide: with `hashtext(B) = hashtext(C)` and `C < A < B`,
+ * an acceptance between A and B would take ⟨hA, hB⟩ while one between A and C
+ * took ⟨hB, hA⟩ — the exact cycle the sort exists to make unconstructible, with
+ * no other function involved. So the keys are read back and sorted as keys.
+ *
+ * That costs one round trip, and only for a caller naming more than one team —
+ * a single key is trivially ordered. A collision then costs what it should:
+ * two unrelated teams serialised, and nothing else.
  *
  * ## What no test here can show
  *
  * PGlite is a single connection, so nothing in this repo exercises the
  * contention this exists for — a second transaction never runs. What is
- * testable is that the statement is issued, inside the transaction, before every
- * read it has to dominate, in a deterministic order; `capacityLockOrder` is
- * split out so the ordering itself can be checked without a database. The rest
- * is a Postgres guarantee plus the argument above, and has to be got right by
- * reading. Same position `membership.ts` is in, for the same reason.
- *
- * `hashtext` is 32 bits, so two team ids can collide on a key. A collision
- * serialises two unrelated teams and costs nothing else — the trade
- * `membership.ts` already makes.
+ * testable is that the statement is issued, on the transaction's own handle,
+ * before every read it has to dominate, in a deterministic order.
+ * `capacityLockOrder` is split out so the ordering can be checked without a
+ * database. The rest is a Postgres guarantee plus the argument above, and has to
+ * be got right by reading — the same position `membership.ts` is in.
  */
 export async function lockRosterCapacity(
   tx: SqlClient,
   ...teamIds: readonly string[]
 ): Promise<void> {
-  for (const teamId of capacityLockOrder(teamIds)) {
-    await tx.query("SELECT pg_advisory_xact_lock(hashtext('roster.capacity'), hashtext($1))", [
-      teamId,
+  for (const key of await lockKeysFor(tx, teamIds)) {
+    await tx.query("SELECT pg_advisory_xact_lock(hashtext($1), $2)", [
+      CAPACITY_LOCK_NAMESPACE,
+      key,
     ]);
   }
 }
 
 /**
- * The order the keys are taken in: sorted, deduplicated, total.
+ * The keys for these teams, in the order they must be taken.
  *
- * Split out because it is the only part of the above a test in this repo can
- * establish. Sorted, because two accepts between the same pair of teams would
- * otherwise take the two keys in whichever order each proposer happened to sit;
- * deduplicated, because a caller passing one team twice would otherwise wait on
- * a key it already holds — harmless for `pg_advisory_xact_lock`, which is
- * re-entrant within a transaction, but it would make the round trip twice and
- * read as though it meant something.
+ * One statement, because `hashtext` is Postgres's and there is no honest way to
+ * compute it here. Skipped entirely for a single team, which is every caller but
+ * `acceptTrade` — one key needs no ordering, and the round trip would be spent
+ * on nothing.
+ */
+async function lockKeysFor(
+  tx: SqlClient,
+  teamIds: readonly string[],
+): Promise<readonly number[]> {
+  const ids = capacityLockOrder(teamIds);
+  if (ids.length === 0) return [];
+  if (ids.length === 1) {
+    const [row] = await tx.query<{ key: number }>("SELECT hashtext($1) AS key", [ids[0]]);
+    return [row!.key];
+  }
+
+  const rows = await tx.query<{ key: number }>(
+    "SELECT hashtext(id) AS key FROM unnest($1::text[]) AS t(id) ORDER BY 1",
+    [ids],
+  );
+  // Sorted here as well as in SQL. `ORDER BY` fixes the order of the rows this
+  // statement returns, and that is what is relied on — but the ordering is the
+  // whole of the deadlock argument, so it is cheap to make it independent of how
+  // the rows arrive.
+  return rows.map((row) => row.key).sort((a, b) => a - b);
+}
+
+/**
+ * The teams, deduplicated and in a stable order.
+ *
+ * Deduplicated because a caller naming one team twice would otherwise wait on a
+ * key it already holds — harmless, since `pg_advisory_xact_lock` is re-entrant
+ * within a transaction, but it would spend a round trip and read as though the
+ * second call meant something.
+ *
+ * The order here is **not** the order the locks are taken in; `lockKeysFor`
+ * re-orders on the keys, because the id-to-key map is not injective. This exists
+ * to make the input to that deterministic, so two callers naming the same pair
+ * hand it the same array.
  */
 export function capacityLockOrder(teamIds: readonly string[]): readonly string[] {
   return [...new Set(teamIds)].sort();

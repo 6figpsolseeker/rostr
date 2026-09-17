@@ -448,53 +448,72 @@ describe("the capacity key — #277", () => {
     never *how many*.
 
     **The obvious test for this passes without the fix**, which is why it is not
-    written here: accept one trade, then accept a second, and expect the second
-    to be refused. That is a sequential history, the reservation arithmetic has
-    always been correct against those, and it goes green on the commit before
-    this one. Nor does `interleaveAtFirstBegin` reach it — that hook fires
-    before `BEGIN`, and this race lives entirely inside the transaction, where
-    PGlite's single connection would nest the two and let the inner `COMMIT`
-    commit the outer's work.
+    written here: accept one trade, then accept a second, and expect a refusal.
+    That is a sequential history, the reservation arithmetic has always been
+    correct against those, and it goes green on the commit before this one. Nor
+    does `interleaveAtFirstBegin` reach it — that hook fires before `BEGIN`, and
+    this race lives inside the transaction, where PGlite's single connection
+    would nest the two and let the inner `COMMIT` commit the outer's work.
 
-    So these assert the statement rather than the outcome: that the real code
-    path emits the lock, inside its transaction, before anything it must
-    dominate. That catches the regression actually worth catching — someone
-    moving it above `withTransaction`, where it runs in its own autocommit
-    transaction and is released before the next line, silently.
+    So these assert the statement rather than the outcome, and they assert it
+    **exactly**. Matching `pg_advisory_xact_lock` as a substring would go green
+    against `pg_advisory_xact_lock_shared`, which does not conflict with itself
+    and reopens the bug completely — a one-word edit that reads like a reasonable
+    widening. Matching the namespace parameter is what stops one call site
+    drifting onto a key of its own, serialised against itself and nothing else.
+    And the connection is asserted because passing `db` where `tx` was meant is
+    two characters, is invisible in a list of statements, and has already shipped
+    once in `waivers.ts`.
   */
 
-  const LOCK = "pg_advisory_xact_lock";
+  const LOCK = "SELECT pg_advisory_xact_lock(hashtext($1), $2)";
 
-  it("takes both teams' keys inside the transaction", async () => {
+  /** Every recorded lock statement, with where it ran and what it locked. */
+  const locksIn = (rec: ReturnType<typeof recordStatements>) =>
+    rec.statements
+      .map((sql, index) => ({
+        sql,
+        index,
+        conn: rec.connections[index]!,
+        params: rec.params[index],
+      }))
+      .filter((entry) => entry.sql === LOCK);
+
+  it("takes both teams' keys, on the transaction's own connection", async () => {
     const fx = await setup();
     const tradeId = await propose(fx);
     const rec = recordStatements(fx.client);
 
     await acceptTrade(rec.client, tradeId, fx.teams[1]!, MONDAY);
 
-    const locks = rec.statements
-      .map((sql, index) => ({ sql, index }))
-      .filter((entry) => entry.sql.includes(LOCK));
+    const locks = locksIn(rec);
     const begin = rec.statements.findIndex((sql) => sql.trim() === "BEGIN");
     const commit = rec.statements.findIndex((sql) => sql.trim() === "COMMIT");
 
     expect(locks).toHaveLength(2);
-    expect(begin).toBeGreaterThanOrEqual(0);
     expect(commit).toBeGreaterThan(begin);
+
     for (const lock of locks) {
       expect(lock.index).toBeGreaterThan(begin);
       expect(lock.index).toBeLessThan(commit);
+      expect(lock.params?.[0]).toBe("roster.capacity");
+      // The half a statement log cannot show on its own: the lock has to run on
+      // the handle the transaction runs on. Against a pool, `db` is a different
+      // connection and the lock is released before the next line.
+      expect(lock.conn, "the lock ran on the transaction's connection").toBe(
+        rec.connections[begin],
+      );
+      expect(lock.conn).not.toBe("outer");
     }
   });
 
   it("takes them before every read the capacity decision rests on", async () => {
     /*
-      A lock taken after the read it protects is decoration. The two reads are
-      `projectedSizeFor` (`roster_entries JOIN players`) and
-      `committedTradeMoves` (`trades`/`trade_assets`), and the league's own
-      `FOR SHARE` is included because the deadlock argument depends on this key
-      being the *first* lock in the transaction — a transaction waiting here must
-      hold nothing, or it can close a cycle.
+      A lock taken after the read it protects is decoration. The reads are
+      `projectedSizeFor` (`roster_entries JOIN players`) and `committedTradeMoves`
+      (`trade_assets`), and the league's own `FOR SHARE` is included because the
+      deadlock argument needs this key to be the *first* lock in the transaction
+      — a transaction waiting here must hold nothing.
     */
     const fx = await setup();
     const tradeId = await propose(fx);
@@ -503,22 +522,20 @@ describe("the capacity key — #277", () => {
     await acceptTrade(rec.client, tradeId, fx.teams[1]!, MONDAY);
 
     const begin = rec.statements.findIndex((sql) => sql.trim() === "BEGIN");
-    const lastLock = rec.statements.map((s) => s.includes(LOCK)).lastIndexOf(true);
+    const lastLock = locksIn(rec).at(-1)?.index ?? -1;
 
-    // Without this the rest of the test passes vacuously on a build that takes
-    // no lock at all: `lastIndexOf` answers -1 and every statement is "after"
-    // it. Confirmed by running this block against the commit before the fix —
-    // two of the three went red and this one did not, until this line.
+    // Without this the rest passes vacuously against a build taking no lock at
+    // all: every statement is "after" an index of -1. Confirmed by running this
+    // block against the commit before the fix — two of three went red, and this
+    // one did not until this line existed.
     expect(lastLock, "a key is taken at all").toBeGreaterThan(begin);
 
     /*
-      Scoped to statements inside the transaction on purpose. `acceptTrade`
-      reads the trade, its league and its rules on the bare `db` first —
-      `trade_assets` among them — and those are not what the key protects: they
-      are re-read or re-validated inside, and the capacity decision rests only on
-      what is read after `BEGIN`. An unscoped assertion fails on `loadTrade` and
-      would tempt someone to "fix" it by moving the lock out of the transaction,
-      which is the exact regression this block exists to catch.
+      Scoped to statements inside the transaction on purpose. `acceptTrade` reads
+      the trade, its league and its rules on the bare `db` first — `trade_assets`
+      among them — and those are not what the key protects. An unscoped assertion
+      fails on `loadTrade` and would tempt someone to "fix" it by moving the lock
+      out of the transaction, which is the regression this block exists to catch.
     */
     const firstInsideTransaction = (fragment: string): number =>
       rec.statements.findIndex((sql, index) => index > begin && sql.includes(fragment));
@@ -530,21 +547,93 @@ describe("the capacity key — #277", () => {
     }
   });
 
-  it("takes them in ascending team order, whichever way the trade points", async () => {
-    // Two acceptances between one pair of teams, proposed in opposite
-    // directions, would otherwise take the two keys in opposite orders and
-    // deadlock on each other with no other function involved.
+  it("orders the keys by the key, not by the team id", async () => {
+    /*
+      Two acceptances between one pair of teams, proposed in opposite directions,
+      would otherwise take the two keys in opposite orders and deadlock with no
+      other function involved.
+
+      Ordered on `hashtext(teamId)` rather than on `teamId`, because that map is
+      32 bits and not injective — sorting the ids orders the keys only while no
+      two collide. So the ids are hashed first, and both teams must appear in
+      that one statement.
+    */
     const fx = await setup();
     const tradeId = await propose(fx);
     const rec = recordStatements(fx.client);
 
     await acceptTrade(rec.client, tradeId, fx.teams[1]!, MONDAY);
 
-    const keyed = rec.params.filter((_, index) => rec.statements[index]!.includes(LOCK));
-    const ids = keyed.map((params) => params![0] as string);
+    const hashed = rec.statements.findIndex((sql) => sql.includes("unnest($1::text[])"));
+    expect(hashed, "the keys are read back before being taken").toBeGreaterThanOrEqual(0);
+    expect(new Set(rec.params[hashed]?.[0] as string[])).toEqual(
+      new Set([fx.teams[0], fx.teams[1]]),
+    );
 
-    expect(new Set(ids)).toEqual(new Set([fx.teams[0], fx.teams[1]]));
-    expect(ids).toEqual([...ids].sort());
+    const locks = locksIn(rec);
+    const keys = locks.map((lock) => lock.params?.[1] as number);
+    expect(keys).toHaveLength(2);
+    expect(keys).toEqual([...keys].sort((a, b) => a - b));
+    expect(hashed).toBeLessThan(locks[0]!.index);
+  });
+
+  it("takes the keys when a trade executes, not only when it is accepted", async () => {
+    /*
+      Execution raises counted size — it inserts the arriving players — and the
+      league lock does not serialise it against `addFreeAgent` or
+      `activateFromIr`, which hold the same row `FOR SHARE`. Without the key, an
+      add reads fourteen, this commits fifteen, the add then finds the trade
+      already `EXECUTED` and reserves nothing for it, and inserts a sixteenth.
+    */
+    const fx = await setup();
+    const tradeId = await propose(fx);
+    await acceptTrade(fx.client, tradeId, fx.teams[1]!, MONDAY);
+    const rec = recordStatements(fx.client);
+
+    await settle(rec.client, fx.leagueId, AFTER_WINDOW);
+
+    const locks = locksIn(rec);
+    expect(locks.length, "execution takes the keys too").toBe(2);
+    for (const lock of locks) {
+      expect(lock.params?.[0]).toBe("roster.capacity");
+      expect(lock.conn).not.toBe("outer");
+    }
+  });
+
+  it("holds the league while executing, so a waiver run cannot interleave", async () => {
+    /*
+      Execution held no league lock at all until #277, and that cost two things.
+
+      `processWaivers` reads every roster in the league, then reads the accepted
+      trades four statements later; at READ COMMITTED those are two snapshots. A
+      trade committing between them is gone from `ACCEPTED` by the second read
+      and not yet in the roster of the first, so its arriving players are counted
+      by neither and the run awards into a slot already spoken for — writing a
+      row indistinguishable afterwards from a legitimate award.
+
+      And the two locked `roster_entries` in different orders: this by
+      `player_id`, the run in claim-resolution order. Both crons fire on the
+      hour. The run holds this row `FOR UPDATE`, so taking it `FOR SHARE` here
+      makes both unreachable.
+    */
+    const fx = await setup();
+    const tradeId = await propose(fx);
+    await acceptTrade(fx.client, tradeId, fx.teams[1]!, MONDAY);
+    const rec = recordStatements(fx.client);
+
+    await settle(rec.client, fx.leagueId, AFTER_WINDOW);
+
+    const begin = rec.statements.findIndex((sql) => sql.trim() === "BEGIN");
+    const league = rec.statements.findIndex(
+      (sql, index) => index > begin && sql === "SELECT id FROM leagues WHERE id = $1 FOR SHARE",
+    );
+    const roster = rec.statements.findIndex(
+      (sql, index) => index > begin && sql.includes("roster_entries"),
+    );
+
+    expect(league, "the league is locked inside the transaction").toBeGreaterThan(begin);
+    expect(roster, "rosters are written after it").toBeGreaterThan(league);
+    expect(rec.connections[league]).toBe(rec.connections[begin]);
   });
 });
 
