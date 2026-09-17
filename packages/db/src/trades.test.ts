@@ -4,7 +4,7 @@ import type { DraftRules, LeagueRules } from "@rostr/core";
 import { createLeague } from "./leagues.js";
 import { createUser } from "./identity.js";
 import { seedSport } from "./sports.js";
-import { addTestTeam, createTestDatabase } from "./testing.js";
+import { addTestTeam, createTestDatabase, recordStatements } from "./testing.js";
 import type { PGliteClient } from "./testing.js";
 import {
   addFreeAgent,
@@ -433,6 +433,255 @@ describe("proposing", () => {
     ).rejects.toBeInstanceOf(TradeError);
 
     expect(await listTrades(fx.client, fx.leagueId)).toHaveLength(0);
+  });
+});
+
+describe("the capacity key — #277", () => {
+  /*
+    **Read the header of `roster-capacity.test.ts` before adding to this block.**
+
+    Capacity is a fact about a *team*; every other lock `acceptTrade` takes is
+    about an *asset*. So two acceptances naming disjoint players contend on
+    nothing, both read a roster neither has changed, and both pass a check only
+    one of them may pass — and no constraint refuses the second, because
+    `roster_entries_one_owner_per_league` caps *which* player a team may hold and
+    never *how many*.
+
+    **The obvious test for this passes without the fix**, which is why it is not
+    written here: accept one trade, then accept a second, and expect a refusal.
+    That is a sequential history, the reservation arithmetic has always been
+    correct against those, and it goes green on the commit before this one. Nor
+    does `interleaveAtFirstBegin` reach it — that hook fires before `BEGIN`, and
+    this race lives inside the transaction, where PGlite's single connection
+    would nest the two and let the inner `COMMIT` commit the outer's work.
+
+    So these assert the statement rather than the outcome, and they assert it
+    **exactly**. Matching `pg_advisory_xact_lock` as a substring would go green
+    against `pg_advisory_xact_lock_shared`, which does not conflict with itself
+    and reopens the bug completely — a one-word edit that reads like a reasonable
+    widening. Matching the namespace parameter is what stops one call site
+    drifting onto a key of its own, serialised against itself and nothing else.
+    And the connection is asserted because passing `db` where `tx` was meant is
+    two characters, is invisible in a list of statements, and has already shipped
+    once in `waivers.ts`.
+  */
+
+  const LOCK = "SELECT pg_advisory_xact_lock(hashtext($1), $2)";
+
+  /** Every recorded lock statement, with where it ran and what it locked. */
+  const locksIn = (rec: ReturnType<typeof recordStatements>) =>
+    rec.statements
+      .map((sql, index) => ({
+        sql,
+        index,
+        conn: rec.connections[index]!,
+        params: rec.params[index],
+      }))
+      .filter((entry) => entry.sql === LOCK);
+
+  it("takes both teams' keys, on the transaction's own connection", async () => {
+    const fx = await setup();
+    const tradeId = await propose(fx);
+    const rec = recordStatements(fx.client);
+
+    await acceptTrade(rec.client, tradeId, fx.teams[1]!, MONDAY);
+
+    const locks = locksIn(rec);
+    const begin = rec.statements.findIndex((sql) => sql.trim() === "BEGIN");
+    const commit = rec.statements.findIndex((sql) => sql.trim() === "COMMIT");
+
+    expect(locks).toHaveLength(2);
+    expect(commit).toBeGreaterThan(begin);
+
+    for (const lock of locks) {
+      expect(lock.index).toBeGreaterThan(begin);
+      expect(lock.index).toBeLessThan(commit);
+      expect(lock.params?.[0]).toBe("roster.capacity");
+      // The half a statement log cannot show on its own: the lock has to run on
+      // the handle the transaction runs on. Against a pool, `db` is a different
+      // connection and the lock is released before the next line.
+      expect(lock.conn, "the lock ran on the transaction's connection").toBe(
+        rec.connections[begin],
+      );
+      expect(lock.conn).not.toBe("outer");
+    }
+  });
+
+  it("takes them before every read the capacity decision rests on", async () => {
+    /*
+      A lock taken after the read it protects is decoration. The reads are
+      `projectedSizeFor` (`roster_entries JOIN players`) and `committedTradeMoves`
+      (`trade_assets`), and the league's own `FOR SHARE` is included because the
+      deadlock argument needs this key to be the *first* lock in the transaction
+      — a transaction waiting here must hold nothing.
+    */
+    const fx = await setup();
+    const tradeId = await propose(fx);
+    const rec = recordStatements(fx.client);
+
+    await acceptTrade(rec.client, tradeId, fx.teams[1]!, MONDAY);
+
+    const begin = rec.statements.findIndex((sql) => sql.trim() === "BEGIN");
+    const lastLock = locksIn(rec).at(-1)?.index ?? -1;
+
+    // Without this the rest passes vacuously against a build taking no lock at
+    // all: every statement is "after" an index of -1. Confirmed by running this
+    // block against the commit before the fix — two of three went red, and this
+    // one did not until this line existed.
+    expect(lastLock, "a key is taken at all").toBeGreaterThan(begin);
+
+    /*
+      Scoped to statements inside the transaction on purpose. `acceptTrade` reads
+      the trade, its league and its rules on the bare `db` first — `trade_assets`
+      among them — and those are not what the key protects. An unscoped assertion
+      fails on `loadTrade` and would tempt someone to "fix" it by moving the lock
+      out of the transaction, which is the regression this block exists to catch.
+    */
+    const firstInsideTransaction = (fragment: string): number =>
+      rec.statements.findIndex((sql, index) => index > begin && sql.includes(fragment));
+
+    for (const fragment of ["roster_entries", "FROM leagues", "trade_assets"]) {
+      const at = firstInsideTransaction(fragment);
+      expect(at, `${fragment} is read inside the transaction`).toBeGreaterThan(begin);
+      expect(at, `${fragment} is read after the key`).toBeGreaterThan(lastLock);
+    }
+  });
+
+  it("orders the keys by the key, not by the team id", async () => {
+    /*
+      Two acceptances between one pair of teams, proposed in opposite directions,
+      would otherwise take the two keys in opposite orders and deadlock with no
+      other function involved.
+
+      Ordered on `hashtext(teamId)` rather than on `teamId`, because that map is
+      32 bits and not injective — sorting the ids orders the keys only while no
+      two collide. So the ids are hashed first, and both teams must appear in
+      that one statement.
+    */
+    const fx = await setup();
+    const tradeId = await propose(fx);
+    const rec = recordStatements(fx.client);
+
+    await acceptTrade(rec.client, tradeId, fx.teams[1]!, MONDAY);
+
+    const hashed = rec.statements.findIndex((sql) => sql.includes("unnest($1::text[])"));
+    expect(hashed, "the keys are read back before being taken").toBeGreaterThanOrEqual(0);
+    expect(new Set(rec.params[hashed]?.[0] as string[])).toEqual(
+      new Set([fx.teams[0], fx.teams[1]]),
+    );
+
+    const locks = locksIn(rec);
+    const keys = locks.map((lock) => lock.params?.[1] as number);
+
+    /*
+      Compared against the keys this database actually produces, not against
+      `keys` sorted.
+
+      `expect(keys).toEqual([...keys].sort(…))` looks equivalent and is a coin
+      flip: with two elements it is satisfied whenever they happen to come out
+      ascending, and team ids are database-generated UUIDs. Measured — stripping
+      the ordering left that form green on two runs of three.
+
+      This form is better and still not the guard. Both sides of the comparison
+      come from the same place, so against an unordered implementation it fails
+      only when this pair happens to invert. **The deterministic check lives in
+      `roster-capacity.test.ts`**, which searches for a pair whose id order and
+      key order disagree and asserts on that. What this one is for is that the
+      keys locked are the keys of these two teams.
+    */
+    const expected = (
+      await fx.client.query<{ key: number }>(
+        "SELECT hashtext(id) AS key FROM unnest($1::text[]) AS t(id) ORDER BY 1",
+        [[fx.teams[0], fx.teams[1]]],
+      )
+    ).map((row) => row.key);
+
+    expect(keys).toEqual(expected);
+    expect(hashed).toBeLessThan(locks[0]!.index);
+  });
+
+  it("takes the keys when a trade executes, not only when it is accepted", async () => {
+    /*
+      Execution raises counted size — it inserts the arriving players — and the
+      league lock does not serialise it against `addFreeAgent` or
+      `activateFromIr`, which hold the same row `FOR SHARE`. Without the key, an
+      add reads fourteen, this commits fifteen, the add then finds the trade
+      already `EXECUTED` and reserves nothing for it, and inserts a sixteenth.
+    */
+    const fx = await setup();
+    const tradeId = await propose(fx);
+    await acceptTrade(fx.client, tradeId, fx.teams[1]!, MONDAY);
+    const rec = recordStatements(fx.client);
+
+    await settle(rec.client, fx.leagueId, AFTER_WINDOW);
+
+    const locks = locksIn(rec);
+    expect(locks.length, "execution takes the keys too").toBe(2);
+
+    const begin = rec.statements.findIndex((sql) => sql.trim() === "BEGIN");
+    const league = rec.statements.findIndex(
+      (sql, index) => index > begin && sql === "SELECT id FROM leagues WHERE id = $1 FOR SHARE",
+    );
+    const roster = rec.statements.findIndex(
+      (sql, index) => index > begin && sql.includes("roster_entries"),
+    );
+
+    for (const lock of locks) {
+      expect(lock.params?.[0]).toBe("roster.capacity");
+      expect(lock.conn).not.toBe("outer");
+      expect(lock.conn).toBe(rec.connections[begin]);
+      expect(lock.index).toBeGreaterThan(begin);
+      /*
+        **Before the league lock, and this is the assertion that was missing.**
+
+        Everywhere else the key precedes the league's `FOR SHARE` and a test says
+        so; here nothing did, so moving the call below it passed the whole suite
+        — and that spends the half of the deadlock argument that matters most:
+        a transaction *waiting* on the key must hold nothing, or the key can be
+        a cycle's closing edge. It is not hypothetical on this path. Execution
+        waits on that league row behind a waiver run, which is exactly when it
+        would otherwise be holding two capacity keys while blocked.
+      */
+      expect(league, "the league is locked inside the transaction").toBeGreaterThan(begin);
+      expect(lock.index, "the key comes before the league lock").toBeLessThan(league);
+      expect(roster, "rosters are written after the key").toBeGreaterThan(lock.index);
+    }
+  });
+
+  it("holds the league while executing, so a waiver run cannot interleave", async () => {
+    /*
+      Execution held no league lock at all until #277, and that cost two things.
+
+      `processWaivers` reads every roster in the league, then reads the accepted
+      trades four statements later; at READ COMMITTED those are two snapshots. A
+      trade committing between them is gone from `ACCEPTED` by the second read
+      and not yet in the roster of the first, so its arriving players are counted
+      by neither and the run awards into a slot already spoken for — writing a
+      row indistinguishable afterwards from a legitimate award.
+
+      And the two locked `roster_entries` in different orders: this by
+      `player_id`, the run in claim-resolution order. Both crons fire on the
+      hour. The run holds this row `FOR UPDATE`, so taking it `FOR SHARE` here
+      makes both unreachable.
+    */
+    const fx = await setup();
+    const tradeId = await propose(fx);
+    await acceptTrade(fx.client, tradeId, fx.teams[1]!, MONDAY);
+    const rec = recordStatements(fx.client);
+
+    await settle(rec.client, fx.leagueId, AFTER_WINDOW);
+
+    const begin = rec.statements.findIndex((sql) => sql.trim() === "BEGIN");
+    const league = rec.statements.findIndex(
+      (sql, index) => index > begin && sql === "SELECT id FROM leagues WHERE id = $1 FOR SHARE",
+    );
+    const roster = rec.statements.findIndex(
+      (sql, index) => index > begin && sql.includes("roster_entries"),
+    );
+
+    expect(league, "the league is locked inside the transaction").toBeGreaterThan(begin);
+    expect(roster, "rosters are written after it").toBeGreaterThan(league);
+    expect(rec.connections[league]).toBe(rec.connections[begin]);
   });
 });
 

@@ -57,6 +57,7 @@ import { loadDraftBoard } from "./sync.js";
 import { isTransacting } from "./league-state.js";
 import { committedTradeMoves, lockedByTrade } from "./trades.js";
 import { withTransaction } from "./transaction.js";
+import { lockRosterCapacity } from "./roster-capacity.js";
 import { clearReleasedFromLineups } from "./lineups.js";
 import { transactionWeek } from "./week.js";
 
@@ -694,6 +695,23 @@ export async function addFreeAgent(db: SqlClient, input: AddInput): Promise<void
   }
 
   await withTransaction(db, async (tx) => {
+    /*
+      This team's capacity key, first, before any other lock this transaction
+      takes. Issue #277.
+
+      The count and the insert below are two statements, and nothing between
+      them stops a second add — the league lock does not conflict with itself
+      (deliberately, see below), and the one-owner index arbitrates *which*
+      player a team may hold, never *how many*. Two tabs, two different free
+      agents, both pass.
+
+      Keyed per team rather than per league for exactly the reason the league
+      lock is shared: this serialises a manager against themselves, against
+      their own trades and against their own IR activations, and against nobody
+      else in the league.
+    */
+    await lockRosterCapacity(tx, input.teamId);
+
     // A shared lock on the league, held for the whole add.
     //
     // It does not exclude other adds — `FOR SHARE` does not conflict with itself,

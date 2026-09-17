@@ -9,7 +9,7 @@ import type { IrPlacementRefusal } from "@rostr/core";
 import { getLeagueRules } from "./leagues.js";
 import type { SqlClient } from "./client.js";
 import { withTransaction } from "./transaction.js";
-import { heldForCapacity } from "./roster-capacity.js";
+import { heldForCapacity, lockRosterCapacity } from "./roster-capacity.js";
 import { committedTradeMoves } from "./trades.js";
 
 /**
@@ -127,6 +127,36 @@ export async function moveToIr(
   const shape = buildRosterShape(stored.rules.roster, NFL);
 
   return withTransaction(db, async (tx) => {
+    /*
+      The league, shared, and taken purely to be mutually exclusive with
+      `processWaivers`. The state is deliberately **not** read: whether an IR
+      move should be refused outside `IN_SEASON` is a product question nobody
+      has decided, and deciding it here by accident is what this repo keeps
+      paying for. Filed as #311.
+
+      Every path that *decides capacity against `roster_entries`* now holds this
+      row. `recordPick` is the exception and does not: the draft decides
+      capacity in memory against its own picks, and is kept away from the other
+      writers by the league-state gate — which these two functions pointedly do
+      not read, so a pick can still race an activation. That is the second
+      consequence of #311 rather than something a lock here can fix.
+
+      `setLineup` and `submitClaim` are member-facing and take no league lock
+      either, deliberately: neither changes a roster, so neither can move a
+      counted size.
+
+      Why the lock is needed anyway: the waiver run resolves against one
+      league-wide snapshot, and the exemption it reads is a fact about IR flags.
+      A placement committing mid-run makes that snapshot wrong by one in the
+      direction that **fails a legitimate claim** — this lowers counted size, so
+      it can only ever make a team look fuller than it is, never emptier. The
+      opposite half of that sentence belongs to `activateFromIr`, not here.
+
+      No capacity key: a move that can only lower the count cannot carry a team
+      over its limit, and the key exists for the writers that raise it.
+    */
+    await tx.query("SELECT id FROM leagues WHERE id = $1 FOR SHARE", [input.leagueId]);
+
     const held = await heldRoster(tx, input.teamId, stored.rules.seasonYear, input.week);
 
     const refusal = refuseIrPlacement({
@@ -213,11 +243,57 @@ export async function activateFromIr(
 
   return withTransaction(db, async (tx) => {
     /*
+      The capacity key, first — and without it the comment below is wrong about
+      the case that matters. Issue #277.
+
+      `FOR UPDATE OF r` does stop two activations, which is the write skew it
+      was written for. It cannot stop a concurrent `addFreeAgent`, because that
+      one's contribution is an **insert**: a row that does not yet exist is a
+      phantom, and no row lock under READ COMMITTED blocks one. Both read twelve
+      rows, both find room, and the team lands one over.
+
+      That case is also why the key is on the team's identity rather than on its
+      rows — two writers raising one team's counted size have to contend on
+      something whatever rows they happen to touch.
+    */
+    await lockRosterCapacity(tx, input.teamId);
+
+    /*
+      The league, shared, and taken purely to be mutually exclusive with
+      `processWaivers`. The state is deliberately **not** read: whether an IR
+      move should be refused outside `IN_SEASON` is a product question nobody
+      has decided, and deciding it here by accident is what this repo keeps
+      paying for. Filed as #311.
+
+      Every path that *decides capacity against `roster_entries`* now holds this
+      row. `recordPick` is the exception and does not: the draft decides
+      capacity in memory against its own picks, and is kept away from the other
+      writers by the league-state gate — which these two functions pointedly do
+      not read, so a pick can still race an activation. That is the second
+      consequence of #311 rather than something a lock here can fix.
+
+      `setLineup` and `submitClaim` are member-facing and take no league lock
+      either, deliberately: neither changes a roster, so neither can move a
+      counted size.
+
+      Why the lock is needed anyway: the waiver run resolves against one
+      league-wide snapshot, and the exemption it reads is a fact about IR flags.
+      An activation committing mid-run makes that snapshot wrong by one in the
+      direction that **awards into a slot that is no longer free** — this raises
+      counted size. The mirror half belongs to `moveToIr`.
+
+      After the capacity key, never before it: a transaction waiting on the key
+      must hold nothing, or the key can close a deadlock cycle. See
+      `lockRosterCapacity`.
+    */
+    await tx.query("SELECT id FROM leagues WHERE id = $1 FOR SHARE", [input.leagueId]);
+
+    /*
       Locked, because this reads every row of the roster and then writes one of
-      them. Two managers cannot do this at once, but one manager with two tabs
-      can: both reads see a roster where only their own flip is pending, both
-      compute the same room, and the two `UPDATE`s touch different rows so
-      nothing conflicts. Textbook write skew, and `FOR UPDATE` is what stops it.
+      them — one manager with two tabs, where both reads see a roster with only
+      their own flip pending and the two `UPDATE`s touch different rows, so
+      nothing conflicts. Textbook write skew, and `FOR UPDATE` is what stops
+      that half of it. The key above is what stops the insert.
     */
     const roster = await heldForCapacity(tx, input.teamId, { lock: true });
 

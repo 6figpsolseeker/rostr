@@ -41,6 +41,7 @@ import { isTransacting } from "./league-state.js";
 import type { SqlClient } from "./client.js";
 import { getLeagueRules } from "./leagues.js";
 import { withTransaction } from "./transaction.js";
+import { lockRosterCapacity } from "./roster-capacity.js";
 import { isUniqueViolation } from "./pg-errors.js";
 import { clearReleasedFromLineups } from "./lineups.js";
 import { transactionWeek } from "./week.js";
@@ -727,6 +728,26 @@ export async function acceptTrade(
 
   return withTransaction(db, async (tx) => {
     /*
+      Both teams' capacity keys, first, before any other lock this transaction
+      takes. Issue #277.
+
+      The rows locked below are this trade's **assets**, and the league; capacity
+      is a fact about a **team**, which neither of those stands in for. So two
+      acceptances naming disjoint players never contend — the league lock is
+      `FOR SHARE` and does not conflict with itself — both
+      read a roster neither has changed yet, and both pass a check only one of
+      them may pass — the receiver ends the pair over the limit its members
+      signed for, permanently, with no constraint behind it to refuse the second.
+      The `FOR SHARE` below is no help: it deliberately does not conflict with
+      itself.
+
+      See `lockRosterCapacity` for why this is an advisory key rather than
+      `teams … FOR UPDATE`, and why it has to sit above the league lock rather
+      than below it.
+    */
+    await lockRosterCapacity(tx, trade.receiverTeamId, trade.proposerTeamId);
+
+    /*
       The league state, locked, and this is the gate that matters.
 
       Acceptance is the moment the assets freeze and the moment capacity is
@@ -1326,6 +1347,61 @@ async function resolveTrade(
   }
 
   await withTransaction(db, async (tx) => {
+    /*
+      Both teams' capacity keys, first.
+
+      Execution **raises** counted size — it inserts the arriving players — and
+      the league lock below does not serialise it against the two paths that read
+      capacity and then write: `addFreeAgent` and `activateFromIr` hold the same
+      row `FOR SHARE`, which does not conflict with itself. So without this key,
+      an add reads a roster of fourteen, an execution commits and makes it
+      fifteen, the add then reads the accepted trades and finds this one already
+      `EXECUTED` — so it reserves nothing for it — and inserts a sixteenth.
+
+      Neither read is wrong on its own. They are two statements and, at READ
+      COMMITTED, two snapshots: the arriving players are invisible to the first
+      and no longer pending to the second, so they are counted by neither. It is
+      the same shape as the waiver-run interleave below, one path over, and it is
+      the reason the league lock alone was not enough.
+    */
+    await lockRosterCapacity(tx, trade.receiverTeamId, trade.proposerTeamId);
+
+    /*
+      The league, shared — and this one is taken purely to be mutually
+      exclusive with `processWaivers`. The state is deliberately not read: the
+      league has already approved this trade, and execution refusing on state
+      would strand it `ACCEPTED` with both sides frozen, retried hourly, for
+      ever.
+
+      Execution used to hold no league lock at all, and that cost two things.
+
+      **A waiver run could award a claim onto a team a trade was mid-way through
+      filling.** `processWaivers` reads every roster in the league, then reads
+      the accepted trades four statements later; at READ COMMITTED those are two
+      snapshots. A trade committing between them is gone from `ACCEPTED` by the
+      second read and not yet in the roster of the first, so the arriving players
+      are counted by neither and the run awards into a slot that is already
+      spoken for. Nobody double-clicked anything, and the row it writes is
+      indistinguishable afterwards from a legitimate award.
+
+      **And the two locked `roster_entries` in different orders.** This function
+      takes them by `player_id` (below); the waiver run takes them in
+      claim-resolution order. Two rows touched in opposite orders is a cycle, and
+      `/api/cron/waivers` and `/api/cron/trades` are both scheduled on the hour.
+
+      Both stop being reachable once the two cannot overlap at all: the run holds
+      `FOR UPDATE` on this row for its whole transaction, so one of the pair
+      waits and neither sees the other's half-finished work. The cost is that a
+      trade execution can wait out a waiver run, which is the correct direction —
+      the run rolls back a whole league's cycle if it aborts, and this rolls back
+      one trade that will be retried next hour.
+
+      `FOR SHARE` rather than `FOR UPDATE` so that two trades in one league
+      still execute concurrently; they already order their row locks by
+      `player_id` with respect to each other.
+    */
+    await tx.query("SELECT id FROM leagues WHERE id = $1 FOR SHARE", [trade.leagueId]);
+
     // `ORDER BY player_id`, the same key `acceptTrade` takes its locks in. Two
     // functions that lock the same rows in different orders can deadlock, and
     // this one used to take them in whatever order the plan produced — so the

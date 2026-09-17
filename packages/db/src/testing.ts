@@ -101,3 +101,90 @@ export async function addTestTeam(
 
   return { teamId: team!.id, userId: user!.id, slot: Number(team!.slot) };
 }
+
+/**
+ * A client that records every statement it is asked to run, **and which
+ * connection ran it**, then runs it.
+ *
+ * ## What this is for, and what it is not
+ *
+ * PGlite is one connection, so nothing in this repo can produce two overlapping
+ * transactions — a lock never blocks, and any test claiming to demonstrate
+ * serialisation is theatre. What *can* be established is that the production
+ * code path emits the statement at all, on the transaction's own handle, before
+ * the reads it has to dominate.
+ *
+ * ## Why the connection is recorded and not just the SQL
+ *
+ * There are two spellings of the same production bug and only one of them is
+ * visible in a list of statements.
+ *
+ * The first is textual: hoist the call above `withTransaction` and the lock runs
+ * in its own autocommit transaction, released before the next line. A position
+ * assertion catches that.
+ *
+ * The second is not. `withTransaction` only checks out a dedicated connection
+ * when the client has `connect`; `PGliteClient` does not define one, so in every
+ * test in this repo the transaction handle **is** the outer client. Pass `db`
+ * where `tx` was meant — two characters, and `db` is in scope at all three call
+ * sites — and the statement still appears in the log, in the right place, while
+ * in production it lands on an arbitrary pooled connection and its lock is gone
+ * before the next statement runs. `waivers.ts` records that this has already
+ * shipped here once: *"Inside the transaction, not before it. Read on `db` and
+ * written on `tx`…"*.
+ *
+ * So this supplies a `connect` that PGlite lacks, handing back a distinctly
+ * tagged wrapper over the same database. The transaction then runs on a handle a
+ * test can tell apart from the outer one, which is the property
+ * `migrate.pool.test.ts` drives a real `pg-pool` to establish. Everything still
+ * executes against the one PGlite connection underneath — this buys identity,
+ * not isolation, and no test here should claim otherwise.
+ *
+ * Positions are recorded for `exec` as well as `query` because `BEGIN` and
+ * `COMMIT` go through `exec`, and "inside the transaction" is an assertion about
+ * where a statement sits between those two.
+ */
+export function recordStatements(inner: SqlClient): {
+  client: SqlClient;
+  statements: string[];
+  params: (readonly unknown[] | undefined)[];
+  /** Which handle ran each statement. `"outer"` is the un-checked-out client. */
+  connections: string[];
+} {
+  const statements: string[] = [];
+  const params: (readonly unknown[] | undefined)[] = [];
+  const connections: string[] = [];
+  let checkouts = 0;
+
+  const wrap = (target: SqlClient, conn: string): SqlClient => ({
+    async exec(sql: string): Promise<void> {
+      statements.push(sql);
+      params.push(undefined);
+      connections.push(conn);
+      return target.exec(sql);
+    },
+    async query<T = Record<string, unknown>>(
+      sql: string,
+      values?: readonly unknown[],
+    ): Promise<T[]> {
+      statements.push(sql);
+      params.push(values);
+      connections.push(conn);
+      return target.query<T>(sql, values);
+    },
+    /*
+      Always supplied, even when the inner client has none. That is the point:
+      it makes `withTransaction` take the checked-out branch under PGlite, so
+      `tx` is a different object from `db` here exactly as it is in production,
+      and a test can tell which one a statement went to.
+    */
+    connect: async (): Promise<{ client: SqlClient; release: () => void }> => {
+      const id = `tx#${++checkouts}`;
+      if (!target.connect) return { client: wrap(target, id), release: () => {} };
+      const checked = await target.connect();
+      return { client: wrap(checked.client, id), release: checked.release };
+    },
+  });
+
+  return { client: wrap(inner, "outer"), statements, params, connections };
+}
