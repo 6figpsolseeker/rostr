@@ -169,8 +169,13 @@ export async function POST(
       if (!body.claimId) {
         return NextResponse.json({ error: "claimId is required" }, { status: 400 });
       }
-      await cancelClaim(client, id, context.myTeamId, body.claimId);
-      return NextResponse.json({ cancelled: true });
+      // Answered honestly rather than optimistically. A cancel arriving while
+      // the waiver run holds the claim waits for it and then finds the claim
+      // already decided — the right outcome, since the players have moved by
+      // then. Reporting `true` anyway showed a manager a confirmation for
+      // something that did not happen, about a roster that had just changed.
+      const cancelled = await cancelClaim(client, id, context.myTeamId, body.claimId);
+      return NextResponse.json({ cancelled });
     }
 
     if (!body.playerId) {

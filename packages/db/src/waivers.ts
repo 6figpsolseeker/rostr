@@ -1036,12 +1036,31 @@ export async function cancelClaim(
   leagueId: string,
   teamId: string,
   claimId: string,
-): Promise<void> {
-  await db.query(
+): Promise<boolean> {
+  /*
+    Answers whether it actually cancelled anything, and the caller is expected
+    to say so.
+
+    Since #90 item 3 the waiver run holds `FOR UPDATE` on the claims it is
+    deciding, so a cancel arriving mid-run waits and then finds the claim
+    `AWARDED` or `FAILED` — the right outcome, because by then the players have
+    moved. What is not right is telling the manager it worked: this returned
+    `void` and the route answered `{ cancelled: true }` unconditionally, so a
+    manager who lost that race was shown a confirmation for something that did
+    not happen, about a roster that had just changed under them.
+
+    `RETURNING id` because `SqlClient.query` hands back rows and discards
+    `rowCount`, so an unobserved guard would be unreadable — the pattern the
+    trade state writes established.
+  */
+  const cancelled = await db.query<{ id: string }>(
     `UPDATE waiver_claims SET state = 'CANCELLED'
-      WHERE id = $1 AND league_id = $2 AND team_id = $3 AND state = 'PENDING'`,
+      WHERE id = $1 AND league_id = $2 AND team_id = $3 AND state = 'PENDING'
+    RETURNING id`,
     [claimId, leagueId, teamId],
   );
+
+  return cancelled.length > 0;
 }
 
 /**
@@ -1159,8 +1178,32 @@ export async function processWaivers(
       drop_player_id: string | null;
       created_at: string;
     }>(
+      /*
+        Locked, and this is the guard. Issue #90 item 3.
+
+        The league row above does not serialise these: `cancelClaim` is a bare
+        autocommit `UPDATE` on one claim and never touches `leagues`, so it does
+        not queue behind that lock. A manager cancelling a claim while this run
+        was loading priority and rosters committed straight through, and the
+        award below then stamped `AWARDED` over `CANCELLED` — the player moved,
+        and the team went to the back of the order, for a claim it had withdrawn.
+
+        **A `state = 'PENDING'` predicate on the write is not the guard here, and
+        adding one would make this worse rather than better.** That is the shape
+        `declineTrade` and `withdrawTrade` use, and it works there because the
+        state write *is* the whole transaction. Here the roster release and the
+        insert happen first — so a predicate that matched nothing would leave the
+        players moved and the claim still reading `CANCELLED`, which is the same
+        bad outcome with the record now disagreeing about it too. The decision
+        has to be made unchangeable before the roster moves, which means holding
+        these rows from the moment they are read.
+
+        Ordering: `leagues` then `waiver_claims`, and nothing takes them the
+        other way round — `cancelClaim` and `submitClaim` touch claims alone.
+      */
       `SELECT id, team_id, add_player_id, drop_player_id, created_at
-         FROM waiver_claims WHERE league_id = $1 AND state = 'PENDING'`,
+         FROM waiver_claims WHERE league_id = $1 AND state = 'PENDING'
+         FOR UPDATE`,
       [leagueId],
     );
 

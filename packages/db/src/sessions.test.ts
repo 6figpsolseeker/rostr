@@ -3,6 +3,7 @@ import { ed25519 } from "@noble/curves/ed25519";
 import bs58 from "bs58";
 import { buildWalletLinkMessage, sha256Hex } from "@rostr/core";
 import { createUser, getWallets } from "./identity.js";
+import { recordStatements } from "./testing.js";
 import {
   CHALLENGE_TTL_MS,
   createSession,
@@ -164,6 +165,91 @@ describe("wallet linking", () => {
     expect(await getWallets(client, user.id)).toHaveLength(1);
   });
 
+  it("refuses a second use of the same challenge", async () => {
+    /*
+      **Green with or without the predicate on the consuming write, and that is
+      worth saying rather than leaving for someone to discover.** The read above
+      the write already refuses a challenge whose `consumed_at` is set, so the
+      sequential case never reaches the guard. Kept because the behaviour is
+      worth pinning; it is not what proves the fix. The statement test below is.
+    */
+    const { client, user } = await signedIn();
+    const kp = keypair(21);
+
+    const challenge = await issueWalletChallenge(client, user.id, kp.address, NOW);
+    const signature = sign(kp.secret, challenge.message);
+
+    await linkWalletWithSignature(client, user.id, kp.address, signature, NOW);
+
+    await expect(
+      linkWalletWithSignature(client, user.id, kp.address, signature, NOW),
+    ).rejects.toMatchObject({ code: "CHALLENGE_NOT_FOUND" });
+  });
+
+  it("spends the challenge even when the signature is wrong", async () => {
+    // The property the docstring claims: guessing costs a round trip rather than
+    // being free. Asserted on the row, because the refusal happens either way.
+    const { client, user } = await signedIn();
+    const mine = keypair(22);
+    const theirs = keypair(23);
+
+    const challenge = await issueWalletChallenge(client, user.id, mine.address, NOW);
+
+    await expect(
+      linkWalletWithSignature(
+        client,
+        user.id,
+        mine.address,
+        sign(theirs.secret, challenge.message),
+        NOW,
+      ),
+    ).rejects.toMatchObject({ code: "BAD_SIGNATURE" });
+
+    const [row] = await client.query<{ consumed_at: string | null }>(
+      "SELECT consumed_at FROM wallet_challenges WHERE user_id = $1 AND address = $2",
+      [user.id, mine.address],
+    );
+    expect(row?.consumed_at).not.toBeNull();
+  });
+
+  it("consumes the challenge with a predicate, not with the read above it — #90", async () => {
+    /*
+      **The only honest test of this fix.**
+
+      The docstring promises a wrong signature costs a fresh round trip rather
+      than unlimited attempts against one nonce. The `consumed_at` read cannot
+      deliver that: it is a snapshot taken before the write, so N parallel
+      requests all pass it and all reach the signature check on the same nonce.
+      Only the predicate on the consuming `UPDATE` makes exactly one of them win.
+
+      PGlite is one connection, so that race cannot be produced — and the two
+      behavioural tests above are green without the predicate, which is measured
+      rather than assumed. So this asserts the statement: that the write carries
+      its own guard, and returns something, since `SqlClient.query` discards
+      `rowCount` and an unobserved guard would be unreadable.
+    */
+    const { client, user } = await signedIn();
+    const kp = keypair(24);
+    const challenge = await issueWalletChallenge(client, user.id, kp.address, NOW);
+    const rec = recordStatements(client);
+
+    await linkWalletWithSignature(
+      rec.client,
+      user.id,
+      kp.address,
+      sign(kp.secret, challenge.message),
+      NOW,
+    );
+
+    const consuming = rec.statements.filter(
+      (sql: string) =>
+        sql.includes("UPDATE wallet_challenges") && sql.includes("consumed_at = $3"),
+    );
+
+    expect(consuming).toHaveLength(1);
+    expect(consuming[0], "guards on its own read").toContain("consumed_at IS NULL");
+    expect(consuming[0], "and the guard is observable").toContain("RETURNING");
+  });
   it("names the account and the wallet in what gets signed", async () => {
     // Wallets show this text. It has to say what the signature does.
     const { client, user } = await signedIn();

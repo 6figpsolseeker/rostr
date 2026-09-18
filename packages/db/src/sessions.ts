@@ -213,6 +213,14 @@ export async function issueWalletChallenge(
  * The challenge is consumed whether or not the signature checks out, so a wrong
  * signature costs an attacker a fresh round trip rather than unlimited attempts
  * against one nonce.
+ *
+ * **The consuming write is what enforces that, not the read above it.** The
+ * `consumed_at` test is a snapshot taken before the `UPDATE`, so on its own it
+ * lets N parallel requests all pass and all reach the signature check against
+ * one nonce — which is the sentence above being false while appearing to be
+ * enforced. Issue #90 item 7. The predicate on the write is the guard, and
+ * `RETURNING` is what makes it observable: `SqlClient.query` hands back rows and
+ * discards `rowCount`, so an unchecked guard would be unreadable.
  */
 export async function linkWalletWithSignature(
   db: SqlClient,
@@ -237,10 +245,20 @@ export async function linkWalletWithSignature(
     throw new SessionError("No pending challenge for this wallet", "CHALLENGE_NOT_FOUND");
   }
 
-  await db.query(
-    "UPDATE wallet_challenges SET consumed_at = $3 WHERE user_id = $1 AND address = $2",
+  const consumed = await db.query<{ nonce: string }>(
+    `UPDATE wallet_challenges SET consumed_at = $3
+      WHERE user_id = $1 AND address = $2 AND consumed_at IS NULL
+    RETURNING nonce`,
     [userId, address, now.toISOString()],
   );
+
+  // Somebody else consumed it between the read and here. Reported as the same
+  // refusal the read gives, because it is the same fact — this request does not
+  // hold the challenge — and a second code would only invite a caller to treat
+  // losing a race as different from arriving late.
+  if (consumed.length === 0) {
+    throw new SessionError("No pending challenge for this wallet", "CHALLENGE_NOT_FOUND");
+  }
 
   if (new Date(row.expires_at).getTime() <= now.getTime()) {
     throw new SessionError("Challenge has expired", "CHALLENGE_EXPIRED");

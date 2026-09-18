@@ -630,6 +630,51 @@ describe("processing", () => {
     expect(row?.player_id).toBeNull();
   });
 
+  it("holds the claims it is deciding, so a cancel cannot land mid-run — #90", async () => {
+    /*
+      **Asserted as a statement, because the outcome test passes without the fix.**
+
+      Cancel a claim and then run the waivers and the claim is not awarded — on
+      the buggy code too, because that is a sequential history and the run's own
+      `state = 'PENDING'` filter excludes it. The bug was only ever about a
+      cancel committing *after* that read, and PGlite is one connection, so the
+      interleaving cannot be produced here at all.
+
+      What can be established is that the run takes the rows under `FOR UPDATE`
+      before it decides anything — which is the whole guard, since the roster
+      moves before the claim's own state is written and a predicate on that
+      write would therefore be too late to help.
+    */
+    const fx = await setup();
+    const wanted = fx.players.get("held")!;
+    await dropPlayer(fx.client, fx.leagueId, fx.teams[0]!, wanted, MONDAY);
+    await submitClaim(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: fx.teams[1]!,
+      addPlayerId: wanted,
+      now: MONDAY,
+    });
+
+    const rec = recordStatements(fx.client);
+    await processWaivers(rec.client, fx.leagueId, WEDNESDAY);
+
+    const begin = rec.statements.findIndex((sql) => sql.trim() === "BEGIN");
+    const claimRead = rec.statements.findIndex(
+      (sql, index) =>
+        index > begin && sql.includes("FROM waiver_claims") && sql.includes("FOR UPDATE"),
+    );
+    const award = rec.statements.findIndex(
+      (sql, index) => index > begin && sql.includes("SET state = 'AWARDED'"),
+    );
+
+    expect(claimRead, "the claims are read locked, inside the transaction").toBeGreaterThan(
+      begin,
+    );
+    expect(rec.connections[claimRead]).toBe(rec.connections[begin]);
+    expect(award, "a claim is awarded in this run").toBeGreaterThan(begin);
+    expect(claimRead, "locked before anything is decided").toBeLessThan(award);
+  });
+
   it("awards a claim for a player his club has cut — #276", async () => {
     /*
       **The open question in the test this replaces has been answered.**
@@ -2362,10 +2407,49 @@ describe("the market is shut unless the league is playing", () => {
     });
 
     await closed(fx, "DRAFTING");
-    await expect(
-      cancelClaim(fx.client, fx.leagueId, fx.teams[1]!, claimId),
-    ).resolves.toBeUndefined();
+    await expect(cancelClaim(fx.client, fx.leagueId, fx.teams[1]!, claimId)).resolves.toBe(
+      true,
+    );
     expect(await pendingClaims(fx.client, fx.leagueId, fx.teams[1]!)).toHaveLength(0);
+  });
+
+  it("says so when there was nothing left to cancel — #90", async () => {
+    /*
+      A cancel that arrives after the claim has been decided changes nothing,
+      and the manager has to be told that rather than shown a confirmation.
+
+      Reachable without any race: two tabs, or a click after the Wednesday run.
+      The race itself — a cancel landing *during* a run — is now serialised by
+      the `FOR UPDATE` the run holds on the claims it is deciding, so it ends
+      here too, having waited.
+    */
+    const fx = await setup();
+    const wanted = await waived(fx);
+    const { claimId } = await submitClaim(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: fx.teams[1]!,
+      addPlayerId: wanted,
+      now: MONDAY,
+    });
+
+    expect(await cancelClaim(fx.client, fx.leagueId, fx.teams[1]!, claimId)).toBe(true);
+    expect(await cancelClaim(fx.client, fx.leagueId, fx.teams[1]!, claimId)).toBe(false);
+  });
+
+  it("will not cancel another team's claim, and says it did not", async () => {
+    // The ownership guard was already there; what is new is that a caller can
+    // tell the difference between refusing and succeeding.
+    const fx = await setup();
+    const wanted = await waived(fx);
+    const { claimId } = await submitClaim(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: fx.teams[1]!,
+      addPlayerId: wanted,
+      now: MONDAY,
+    });
+
+    expect(await cancelClaim(fx.client, fx.leagueId, fx.teams[2]!, claimId)).toBe(false);
+    expect(await pendingClaims(fx.client, fx.leagueId, fx.teams[1]!)).toHaveLength(1);
   });
 
   it("gives the screen the same sentence the refusal carries", async () => {
