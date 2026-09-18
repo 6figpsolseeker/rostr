@@ -943,11 +943,22 @@ close from the locking side: these two functions were the only writers not
 excluded from the draft by a state gate, and a lock would not have helped, since
 the draft serialises on the `drafts` row, which injured reserve never takes.
 
-Bringing a player back **raises** it, which cannot manufacture room. And it is
-how a team gets back _under_ its limit — the whole injured-reserve design turns
-on never forcing anyone off a roster, so refusing activation is how a recoverable
-state becomes a permanent one. That is the argument `cancelClaim` is deliberately
-left ungated for, and it applies here unchanged.
+Bringing a player back **raises** it, which cannot manufacture room — so it is
+harmless to the draft in a way parking is not.
+
+It is allowed rather than merely harmless because the whole injured-reserve
+design turns on never forcing anyone off a roster: activation is the only way a
+player leaves that slot without being dropped, and it frees the slot for whoever
+is hurt next. Refusing it is how a recoverable state becomes a permanent one —
+the argument `cancelClaim` is deliberately left ungated for, and it applies here
+unchanged.
+
+**Unreachable today, and kept anyway.** State only moves forward, `startDraft`
+refuses anything but `FORMING`, and parking now needs `IN_SEASON` or `PLAYOFFS` —
+so no `DRAFTING` league can have anyone parked, and activation would answer
+`NOT_ON_IR` before the gate was consulted. The carve-out costs nothing and is the
+right answer to the question; a gate that is wrong only in a state nobody can
+reach is still wrong, and cheaper to get right now than to rediscover later.
 
 ### What was rejected
 

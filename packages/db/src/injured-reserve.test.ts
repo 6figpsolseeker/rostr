@@ -656,9 +656,11 @@ describe("injured reserve and the league's state — #311", () => {
       is invisible to it. Parking *lowers* a team's counted size, which is the
       direction that lets the engine believe a team has room it does not — and a
       pick can then land it over the limit its members signed.
-    - Bringing a player back is allowed. It is how a team gets back *under* its
-      limit, and nothing in this design ever forces a player off a roster.
-      Refusing it is how a recoverable state becomes a permanent one.
+    - Bringing a player back is allowed. Not because it lowers anything — it
+      raises counted size — but because activation is the only way a player
+      leaves that slot without being dropped, and nothing in this design ever
+      forces a player off a roster. Refusing it is how a recoverable state
+      becomes a permanent one.
   */
 
   const setState = (fx: Fixture, state: string) =>
@@ -693,9 +695,19 @@ describe("injured reserve and the league's state — #311", () => {
       The asymmetry, and the half that would be easy to lose to a tidy-up that
       gave both calls the same gate.
 
-      Reaching this state is ordinary rather than contrived: a league parks a
-      player, and a draft is how a league that has already played a season
-      starts its next one.
+      **Unreachable in production today, and the state is forced here to say so
+      rather than to simulate something that happens.** League state only moves
+      forward, `startDraft` refuses anything but `FORMING`, and `moveToIr` — the
+      only writer of `on_ir = true` — now needs `IN_SEASON` or `PLAYOFFS`. So no
+      league can be `DRAFTING` with anybody parked, and this call would answer
+      `NOT_ON_IR` long before the gate mattered.
+
+      The carve-out stays because it is the correct answer to the question, not
+      because anything asks it yet: the cost of allowing it is nothing, while
+      refusing it is what would trap a team if the state machine ever gained a
+      backwards edge or a league were ever redrafted. A gate that is wrong only
+      in a state nobody can reach is still wrong, and it is cheaper to be right
+      now than to rediscover why later.
     */
     const fx = await setup();
     await park(fx);
