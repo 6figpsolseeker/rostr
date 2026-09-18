@@ -30,6 +30,10 @@ const STATUS: Record<string, number> = {
   // would report a state conflict as a malformed request.
   ROSTER_WOULD_OVERFLOW: 409,
   SLOT_HELD_FOR_TRADE: 409,
+  // The league is not in a state where injured reserve may be used. Same 409 the
+  // waiver and trade routes give the same code, so a client that already knows
+  // what a shut market looks like needs nothing new.
+  LEAGUE_NOT_IN_SEASON: 409,
 };
 
 function fail(error: unknown): NextResponse {

@@ -915,3 +915,71 @@ The draft board grows by roughly 55% — about 570 rows on today's pool, ~80KB t
 grows the same way. Both are tolerable now and neither is bounded: `syncPlayers`
 upserts and never deletes, and `players` carries no season, so the inactive stock
 accretes every year. This is the trade the ruling was taken on.
+
+## Injured reserve is shut outside the season, and half-shut during a draft
+
+**Decided 2026-09-18 by the owner**, closing the rules half of issue #311.
+
+`moveToIr` and `activateFromIr` read no league state at all, unlike every other
+member-facing roster path. A player could be parked or brought back while a
+league was forming, drafting, settled or dissolved.
+
+The ruling: **open in `IN_SEASON` and `PLAYOFFS`, shut in `FORMING`, `SETTLED`
+and `DISSOLVED`** — and during `DRAFTING`, **parking is refused while bringing a
+player back is allowed.**
+
+### Why the two directions differ
+
+They are not the same move and the draft is why.
+
+The draft decides roster legality **in memory**, against `state.picks`, and never
+reads `roster_entries` — a divergence that predates this and is documented at
+`trades.ts`. So an IR flag set mid-draft is invisible to it.
+
+Parking **lowers** a team's counted size. That is precisely the direction that
+lets the engine believe a team has room it does not, and a pick can then land it
+over the limit its members signed. It is the one capacity hole PR #310 could not
+close from the locking side: these two functions were the only writers not
+excluded from the draft by a state gate, and a lock would not have helped, since
+the draft serialises on the `drafts` row, which injured reserve never takes.
+
+Bringing a player back **raises** it, which cannot manufacture room — so it is
+harmless to the draft in a way parking is not.
+
+It is allowed rather than merely harmless because the whole injured-reserve
+design turns on never forcing anyone off a roster: activation is the only way a
+player leaves that slot without being dropped, and it frees the slot for whoever
+is hurt next. Refusing it is how a recoverable state becomes a permanent one —
+the argument `cancelClaim` is deliberately left ungated for, and it applies here
+unchanged.
+
+**Unreachable today, and kept anyway.** State only moves forward, `startDraft`
+refuses anything but `FORMING`, and parking now needs `IN_SEASON` or `PLAYOFFS` —
+so no `DRAFTING` league can have anyone parked, and activation would answer
+`NOT_ON_IR` before the gate was consulted. The carve-out costs nothing and is the
+right answer to the question; a gate that is wrong only in a state nobody can
+reach is still wrong, and cheaper to get right now than to rediscover later.
+
+### What was rejected
+
+**One gate for both.** Symmetrical, tidier, and it would trap a team: a roster
+over its limit during a draft would have no legal way back under. The tidiness is
+the whole appeal and it buys a dead end.
+
+**Gating on `IN_SEASON` alone.** Injured reserve matters most in the weeks a
+season is decided. Shutting it through the playoffs would take the slot away
+exactly when a team most needs it.
+
+**A lock instead of a gate.** Considered while working #277 and wrong for the
+reason above — there is no row the draft and injured reserve both take, and
+introducing one would put a new edge into a lock graph two other comments already
+exist to keep acyclic.
+
+### Where the state is read
+
+Inside the transaction, under the league lock #310 added, never before it.
+`recordPick` sets `IN_SEASON` in the transaction that commits the final pick and
+the lock conflicts with that write, so the read either sees `DRAFTING` and
+refuses or sees `IN_SEASON` after the last pick has landed. There is no window
+between them. Read on the bare client and the answer is about a moment that has
+already passed — a mistake `waivers.ts` records having shipped here once.

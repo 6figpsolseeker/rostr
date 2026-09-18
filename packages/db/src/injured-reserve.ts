@@ -47,7 +47,14 @@ export class IrError extends Error {
        */
       | "ROSTER_WOULD_OVERFLOW"
       /** A slot is being held for a trade this team accepted. */
-      | "SLOT_HELD_FOR_TRADE",
+      | "SLOT_HELD_FOR_TRADE"
+      /**
+       * The league is not in a state where injured reserve may be used.
+       *
+       * Same code the waiver and trade paths raise for the same fact, so a
+       * caller that already handles a closed market handles this too.
+       */
+      | "LEAGUE_NOT_IN_SEASON",
   ) {
     super(message);
     this.name = "IrError";
@@ -61,6 +68,70 @@ const REFUSALS: Record<IrPlacementRefusal, string> = {
   IR_FULL: "Every injured reserve slot is taken.",
   NOT_ON_ROSTER: "That player is not on this roster.",
 };
+
+/**
+ * Whether the league is in a state where injured reserve may be used, and why
+ * not when it is not.
+ *
+ * **Placement and activation do not get the same answer, and the asymmetry is
+ * the decision.** Owner's ruling, 2026-09-18, issue #311.
+ *
+ * Both are open in `IN_SEASON` and `PLAYOFFS`, and shut in `FORMING`, `SETTLED`
+ * and `DISSOLVED` — before a roster exists, and after it is final. That half is
+ * the same rule every other member-facing roster path already applies.
+ *
+ * `DRAFTING` is where they part:
+ *
+ * - **Placement is refused.** The draft decides roster legality in memory
+ *   against `state.picks` and never reads `roster_entries`, so an IR flag set
+ *   mid-draft is invisible to it. Stashing lowers a team's counted size, which
+ *   is precisely the direction that lets the engine believe a team has room it
+ *   does not, and a pick can then land it over the limit its members signed.
+ * - **Activation is allowed.** Not because it lowers anything — it *raises*
+ *   counted size, and a recovered player is already counting before it runs.
+ *   It is allowed because the whole injured-reserve design turns on never
+ *   forcing anyone off a roster: activation is the only way a player leaves
+ *   that slot without being dropped, and it frees the slot for whoever is hurt
+ *   next. Refusing it is how a recoverable state becomes a permanent one — the
+ *   argument `cancelClaim` is deliberately left ungated for.
+ *
+ * So the narrow rule is "you may put the parked player back, you may not park a
+ * new one", which is the shape that cannot make a draft worse and cannot trap a
+ * team.
+ */
+export type IrMove = "PLACE" | "ACTIVATE";
+
+function irClosedReason(state: string, move: IrMove): string | null {
+  if (state === "IN_SEASON" || state === "PLAYOFFS") return null;
+
+  if (state === "DRAFTING") {
+    return move === "ACTIVATE"
+      ? null
+      : "Your draft is still running, and it counts every pick you have made rather " +
+          "than reading your roster — so a player parked now would not be counted. " +
+          "Injured reserve opens when the last pick is in.";
+  }
+
+  if (state === "FORMING") {
+    return "This league has not drafted yet, so there is no roster to move anyone on or off.";
+  }
+
+  return "This league's season is over, so its rosters are final.";
+}
+
+/**
+ * The same rule, as a refusal.
+ *
+ * Read inside the transaction and under the league lock, never before it — the
+ * reason `addFreeAgent` gives for the same read: `recordPick` sets `IN_SEASON`
+ * in the transaction that commits the final pick, and the lock conflicts with
+ * that write, so this either sees `DRAFTING` and refuses or sees `IN_SEASON`
+ * after the last pick has landed. There is no window between them.
+ */
+function refuseUnlessIrIsOpen(state: string, move: IrMove): void {
+  const reason = irClosedReason(state, move);
+  if (reason) throw new IrError(reason, "LEAGUE_NOT_IN_SEASON");
+}
 
 interface Held {
   player_id: string;
@@ -129,17 +200,26 @@ export async function moveToIr(
   return withTransaction(db, async (tx) => {
     /*
       The league, shared, and taken purely to be mutually exclusive with
-      `processWaivers`. The state is deliberately **not** read: whether an IR
-      move should be refused outside `IN_SEASON` is a product question nobody
-      has decided, and deciding it here by accident is what this repo keeps
-      paying for. Filed as #311.
+      `processWaivers`, and the row the state is read from.
+
+      Both jobs, one statement. The lock is why the read can be trusted:
+      `recordPick` sets `IN_SEASON` in the transaction that commits the final
+      pick, and `FOR SHARE` conflicts with that write, so this either sees
+      `DRAFTING` and refuses or sees `IN_SEASON` after the last pick has landed.
+      There is no window between them. Read on the bare client instead and the
+      answer is about a moment that has already passed — which `waivers.ts`
+      records having shipped here once.
+
+      This block used to say the state was **deliberately not read**, because
+      when the lock landed (#277) the rules question was still open. The owner
+      settled it on 2026-09-18 and #311 is closed; the sentence outlived what it
+      described by one commit.
 
       Every path that *decides capacity against `roster_entries`* now holds this
-      row. `recordPick` is the exception and does not: the draft decides
-      capacity in memory against its own picks, and is kept away from the other
-      writers by the league-state gate — which these two functions pointedly do
-      not read, so a pick can still race an activation. That is the second
-      consequence of #311 rather than something a lock here can fix.
+      row, and `recordPick` remains the exception: the draft decides capacity in
+      memory against its own picks and takes no league lock. What keeps it apart
+      from these two is the state gate below rather than any lock — which is why
+      #311's answer had to be a gate.
 
       `setLineup` and `submitClaim` are member-facing and take no league lock
       either, deliberately: neither changes a roster, so neither can move a
@@ -155,7 +235,12 @@ export async function moveToIr(
       No capacity key: a move that can only lower the count cannot carry a team
       over its limit, and the key exists for the writers that raise it.
     */
-    await tx.query("SELECT id FROM leagues WHERE id = $1 FOR SHARE", [input.leagueId]);
+    const [league] = await tx.query<{ state: string }>(
+      "SELECT state FROM leagues WHERE id = $1 FOR SHARE",
+      [input.leagueId],
+    );
+    if (!league) throw new IrError("League has no rules", "LEAGUE_NOT_FOUND");
+    refuseUnlessIrIsOpen(league.state, "PLACE");
 
     const held = await heldRoster(tx, input.teamId, stored.rules.seasonYear, input.week);
 
@@ -260,17 +345,26 @@ export async function activateFromIr(
 
     /*
       The league, shared, and taken purely to be mutually exclusive with
-      `processWaivers`. The state is deliberately **not** read: whether an IR
-      move should be refused outside `IN_SEASON` is a product question nobody
-      has decided, and deciding it here by accident is what this repo keeps
-      paying for. Filed as #311.
+      `processWaivers`, and the row the state is read from.
+
+      Both jobs, one statement. The lock is why the read can be trusted:
+      `recordPick` sets `IN_SEASON` in the transaction that commits the final
+      pick, and `FOR SHARE` conflicts with that write, so this either sees
+      `DRAFTING` and refuses or sees `IN_SEASON` after the last pick has landed.
+      There is no window between them. Read on the bare client instead and the
+      answer is about a moment that has already passed — which `waivers.ts`
+      records having shipped here once.
+
+      This block used to say the state was **deliberately not read**, because
+      when the lock landed (#277) the rules question was still open. The owner
+      settled it on 2026-09-18 and #311 is closed; the sentence outlived what it
+      described by one commit.
 
       Every path that *decides capacity against `roster_entries`* now holds this
-      row. `recordPick` is the exception and does not: the draft decides
-      capacity in memory against its own picks, and is kept away from the other
-      writers by the league-state gate — which these two functions pointedly do
-      not read, so a pick can still race an activation. That is the second
-      consequence of #311 rather than something a lock here can fix.
+      row, and `recordPick` remains the exception: the draft decides capacity in
+      memory against its own picks and takes no league lock. What keeps it apart
+      from these two is the state gate below rather than any lock — which is why
+      #311's answer had to be a gate.
 
       `setLineup` and `submitClaim` are member-facing and take no league lock
       either, deliberately: neither changes a roster, so neither can move a
@@ -286,7 +380,12 @@ export async function activateFromIr(
       must hold nothing, or the key can close a deadlock cycle. See
       `lockRosterCapacity`.
     */
-    await tx.query("SELECT id FROM leagues WHERE id = $1 FOR SHARE", [input.leagueId]);
+    const [league] = await tx.query<{ state: string }>(
+      "SELECT state FROM leagues WHERE id = $1 FOR SHARE",
+      [input.leagueId],
+    );
+    if (!league) throw new IrError("League has no rules", "LEAGUE_NOT_FOUND");
+    refuseUnlessIrIsOpen(league.state, "ACTIVATE");
 
     /*
       Locked, because this reads every row of the roster and then writes one of

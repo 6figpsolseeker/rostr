@@ -254,7 +254,8 @@ describe("activateFromIr", () => {
     // The league lock goes after the key, never before it: a transaction
     // waiting on the key must hold nothing, or the key can close a cycle.
     const league = rec.statements.findIndex(
-      (sql, index) => index > begin && sql === "SELECT id FROM leagues WHERE id = $1 FOR SHARE",
+      (sql, index) =>
+        index > begin && sql === "SELECT state FROM leagues WHERE id = $1 FOR SHARE",
     );
     expect(league, "the league is locked inside the transaction").toBeGreaterThan(begin);
     expect(league, "after the capacity key").toBeGreaterThan(lock);
@@ -285,7 +286,8 @@ describe("activateFromIr", () => {
 
     const begin = rec.statements.findIndex((sql) => sql.trim() === "BEGIN");
     const league = rec.statements.findIndex(
-      (sql, index) => index > begin && sql === "SELECT id FROM leagues WHERE id = $1 FOR SHARE",
+      (sql, index) =>
+        index > begin && sql === "SELECT state FROM leagues WHERE id = $1 FOR SHARE",
     );
     const roster = rec.statements.findIndex(
       (sql, index) => index > begin && sql.includes("FOR UPDATE OF r"),
@@ -637,5 +639,153 @@ describe("activation may not push a roster past the limit — #272", () => {
     await expect(activate(fx, "alsohurt")).rejects.toMatchObject({
       code: "ROSTER_WOULD_OVERFLOW",
     });
+  });
+});
+
+describe("injured reserve and the league's state — #311", () => {
+  /*
+    Every other member-facing roster path asks whether the league is playing
+    before it writes. These two never did, so a player could be parked or
+    brought back while a league was forming, drafting, settled or dissolved.
+
+    **Placement and activation get different answers during a draft, and that is
+    the ruling rather than an oversight** (owner, 2026-09-18):
+
+    - Parking is refused. The draft decides roster legality in memory against
+      its own picks and never reads `roster_entries`, so an IR flag set mid-draft
+      is invisible to it. Parking *lowers* a team's counted size, which is the
+      direction that lets the engine believe a team has room it does not — and a
+      pick can then land it over the limit its members signed.
+    - Bringing a player back is allowed. Not because it lowers anything — it
+      raises counted size — but because activation is the only way a player
+      leaves that slot without being dropped, and nothing in this design ever
+      forces a player off a roster. Refusing it is how a recoverable state
+      becomes a permanent one.
+  */
+
+  const setState = (fx: Fixture, state: string) =>
+    fx.client.query("UPDATE leagues SET state = $2 WHERE id = $1", [fx.leagueId, state]);
+
+  /** Park the hurt player while the league is still playing. */
+  const park = (fx: Fixture) =>
+    moveToIr(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: fx.teamId,
+      playerId: fx.players.get("hurt")!,
+      week: 2,
+      now: NOW,
+    });
+
+  const activate = (fx: Fixture) =>
+    activateFromIr(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: fx.teamId,
+      playerId: fx.players.get("hurt")!,
+    });
+
+  it("refuses to park a player while the draft is running", async () => {
+    const fx = await setup();
+    await setState(fx, "DRAFTING");
+
+    await expect(park(fx)).rejects.toMatchObject({ code: "LEAGUE_NOT_IN_SEASON" });
+  });
+
+  it("still lets a parked player be brought back while the draft is running", async () => {
+    /*
+      The asymmetry, and the half that would be easy to lose to a tidy-up that
+      gave both calls the same gate.
+
+      **Unreachable in production today, and the state is forced here to say so
+      rather than to simulate something that happens.** League state only moves
+      forward, `startDraft` refuses anything but `FORMING`, and `moveToIr` — the
+      only writer of `on_ir = true` — now needs `IN_SEASON` or `PLAYOFFS`. So no
+      league can be `DRAFTING` with anybody parked, and this call would answer
+      `NOT_ON_IR` long before the gate mattered.
+
+      The carve-out stays because it is the correct answer to the question, not
+      because anything asks it yet: the cost of allowing it is nothing, while
+      refusing it is what would trap a team if the state machine ever gained a
+      backwards edge or a league were ever redrafted. A gate that is wrong only
+      in a state nobody can reach is still wrong, and it is cheaper to be right
+      now than to rediscover why later.
+    */
+    const fx = await setup();
+    await park(fx);
+    await setState(fx, "DRAFTING");
+
+    await activate(fx);
+
+    const [row] = await fx.client.query<{ on_ir: boolean }>(
+      "SELECT on_ir FROM roster_entries WHERE team_id = $1 AND player_id = $2",
+      [fx.teamId, fx.players.get("hurt")],
+    );
+    expect(row?.on_ir).toBe(false);
+  });
+
+  it("refuses both before the league has drafted", async () => {
+    const fx = await setup();
+    await park(fx);
+    await setState(fx, "FORMING");
+
+    await expect(park(fx)).rejects.toMatchObject({ code: "LEAGUE_NOT_IN_SEASON" });
+    await expect(activate(fx)).rejects.toMatchObject({ code: "LEAGUE_NOT_IN_SEASON" });
+  });
+
+  it("refuses both once the season is over", async () => {
+    // Rosters are final. Both directions, because neither means anything now.
+    const fx = await setup();
+    await park(fx);
+
+    for (const state of ["SETTLED", "DISSOLVED"]) {
+      await setState(fx, state);
+      await expect(park(fx), state).rejects.toMatchObject({ code: "LEAGUE_NOT_IN_SEASON" });
+      await expect(activate(fx), state).rejects.toMatchObject({ code: "LEAGUE_NOT_IN_SEASON" });
+    }
+  });
+
+  it("allows both through the playoffs", async () => {
+    // The weeks an injury matters most. A gate that stopped at `IN_SEASON`
+    // would shut injured reserve exactly when a team most needs the slot.
+    const fx = await setup();
+    await setState(fx, "PLAYOFFS");
+
+    await park(fx);
+    await activate(fx);
+
+    const [row] = await fx.client.query<{ on_ir: boolean }>(
+      "SELECT on_ir FROM roster_entries WHERE team_id = $1 AND player_id = $2",
+      [fx.teamId, fx.players.get("hurt")],
+    );
+    expect(row?.on_ir).toBe(false);
+  });
+
+  it("reads the state under the lock, not before the transaction", async () => {
+    /*
+      `recordPick` sets `IN_SEASON` in the transaction that commits the final
+      pick, and this lock conflicts with that write — so the read either sees
+      `DRAFTING` and refuses, or sees `IN_SEASON` after the last pick has landed.
+      There is no window between them. Read on the bare client instead and the
+      answer is about a moment that has already passed, which `waivers.ts`
+      records having shipped once.
+    */
+    const fx = await setup();
+    const rec = recordStatements(fx.client);
+
+    await moveToIr(rec.client, {
+      leagueId: fx.leagueId,
+      teamId: fx.teamId,
+      playerId: fx.players.get("hurt")!,
+      week: 2,
+      now: NOW,
+    });
+
+    const begin = rec.statements.findIndex((sql) => sql.trim() === "BEGIN");
+    const stateRead = rec.statements.findIndex(
+      (sql, index) =>
+        index > begin && sql === "SELECT state FROM leagues WHERE id = $1 FOR SHARE",
+    );
+
+    expect(stateRead, "the state is read inside the transaction").toBeGreaterThan(begin);
+    expect(rec.connections[stateRead]).toBe(rec.connections[begin]);
   });
 });

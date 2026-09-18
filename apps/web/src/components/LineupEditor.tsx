@@ -704,9 +704,20 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
                 </span>
               )}
               {/*
-                Offered only to a player the server would actually accept. The
-                rule is enforced there; this just avoids a button whose only
-                outcome is a refusal.
+                Offered to a player the server would accept on the player rules
+                — a free IR slot and an out designation. The rule is enforced
+                there; this avoids a button whose only outcome is a refusal.
+
+                **It does not consult the league state, and since #311 that is a
+                gap rather than a simplification.** Injured reserve is now shut
+                outside `IN_SEASON`/`PLAYOFFS`, and this screen has no state gate
+                of its own, so in a settled or dissolved league both IR controls
+                still render and answer 409. `waivers.ts` and `trades.ts` solve
+                exactly this by exporting their closed-market reason and
+                returning it as `open`/`notice`; injured reserve keeps its reason
+                private. Filed rather than papered over here, because a second
+                copy of the rule in this file is the thing those two exports
+                exist to prevent.
               */}
               {data.irSlots > 0 &&
                 stashed.length < data.irSlots &&
