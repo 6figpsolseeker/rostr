@@ -86,11 +86,19 @@ leagues             season_started_at, season_start_signature, season_start_clus
 trigger             leagues_season_start_immutable
 ```
 
-**The lesson worth keeping: `pnpm db:status` compares by version _number_.** Through the
-whole collision it reported `0032` applied and `0033` pending — both technically true
-and both misleading, because the _names_ had swapped underneath. Only `db:migrate`
-compares names, and only `information_schema` answers what a database actually has.
-When a migration question matters, read the schema.
+**`pnpm db:status` compared by version _number_, and that is what made this so hard to
+see.** Through the whole collision it reported `0032` applied and `0033` pending — both
+technically true and both misleading, because the _names_ had swapped underneath.
+
+**Fixed 2026-09-18.** It now selects `name` and `checksum` as well and reports
+`MISMATCH` for a version that ran under a different file, so this exact collision is
+named rather than rendered as two true-and-useless lines. It also exits non-zero, and
+stopped swallowing read failures into an empty applied-set — an unreachable database
+used to print every migration as `PENDING` and exit 0.
+
+The rest of the lesson stands: only `information_schema` answers what a database
+actually _has_, as opposed to what it recorded having run. When a migration question
+matters, read the schema.
 
 ### ⬜ Privy app (`PRIVY_APP_ID`, `PRIVY_APP_SECRET`, `NEXT_PUBLIC_PRIVY_APP_ID`)
 

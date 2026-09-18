@@ -17,7 +17,8 @@ import { NFL } from "@rostr/core";
 import { Tank01Provider } from "@rostr/stats";
 import { cronHealth, expectedJobs, type CronConfig } from "./cron-health.js";
 import { listCronRuns } from "./cron-runs.js";
-import { loadMigrations, migrate } from "./migrate.js";
+import { loadMigrations, migrate, migrationStatus } from "./migrate.js";
+import { isUndefinedTable } from "./pg-errors.js";
 import { createPostgresClient } from "./postgres.js";
 import { seedSport } from "./sports.js";
 import { currentWeek } from "./week.js";
@@ -91,15 +92,56 @@ async function main(): Promise<void> {
 
       case "status": {
         const onDisk = loadMigrations();
-        const applied = await client
-          .query<{ version: number }>("SELECT version FROM schema_migrations")
-          .catch(() => []);
-        const appliedVersions = new Set(applied.map((r) => Number(r.version)));
 
-        for (const m of onDisk) {
-          console.log(
-            `${appliedVersions.has(m.version) ? "applied " : "PENDING "} ${m.filename}`,
+        /*
+          Name and checksum, not the version alone — and that is the fix rather
+          than decoration.
+
+          This compared `SELECT version` against the on-disk version and nothing
+          else, which has misreported twice, both times in the direction that
+          reads as healthy:
+
+          - A file written as `0030` against a database already at 31 printed
+            `applied` while never having run. Every query against its columns
+            then failed at runtime with this line green (`CLAUDE.md`, 2026-08-18).
+          - Through a numbering collision it reported `0032` applied and `0033`
+            pending, "both technically true and both misleading, because the
+            _names_ had swapped underneath" (`SETUP-REQUIRED.md`).
+
+          Both are identity failures at an equal version, so any check that
+          subtracts one number from another computes a gap of zero and says
+          nothing. The version says whether something ran; the name and the
+          checksum say whether it was *this*.
+        */
+        let applied: { version: number; name: string; checksum: string }[];
+        try {
+          applied = await client.query<{ version: number; name: string; checksum: string }>(
+            "SELECT version, name, checksum FROM schema_migrations",
           );
+        } catch (error) {
+          /*
+            An unreachable database used to print every migration as `PENDING`
+            and exit 0 — the loudest possible wrong answer, and indistinguishable
+            from a database that is merely empty. A missing table is the one
+            error that genuinely means "nothing has ever run here".
+          */
+          if (!isUndefinedTable(error)) {
+            console.error(
+              `Could not read schema_migrations: ${error instanceof Error ? error.message : String(error)}\n\n` +
+                `  This is a connection or permission problem, not a migration one.\n` +
+                `  Exiting 3 rather than 1 so a red result means what it says.`,
+            );
+            process.exitCode = 3;
+            break;
+          }
+          applied = [];
+        }
+
+        const status = migrationStatus(onDisk, applied);
+        const { pending, mismatched } = status;
+
+        for (const row of status.rows) {
+          console.log(`${row.state.padEnd(8)} ${row.filename}`);
         }
 
         // The anti-forgetting hook. `pnpm db:status` is the documented first
@@ -119,6 +161,62 @@ async function main(): Promise<void> {
                 ? "all running"
                 : `${unhealthy} not healthy — pnpm cron:status`),
         );
+
+        /*
+          A summary and a non-zero exit, because forty-six lines of `applied` with
+          seven `PENDING` scattered through them is information a reader has to
+          assemble. The gap was twice discovered by someone querying
+          `schema_migrations` by hand rather than by reading this output.
+
+          Nothing chains this command, so the exit code breaks no caller — it is
+          there so a human who half-reads the output still gets the answer, and
+          so this can be put in front of a deploy later without being rewritten.
+        */
+        const { highestApplied, highestOnDisk } = status;
+
+        if (mismatched.length > 0) {
+          console.error(
+            `\nMISMATCH — ${mismatched.length} migration(s) ran under a different file:\n  ` +
+              `${mismatched.join("\n  ")}\n\n` +
+              `  A numbering collision, or an applied migration was edited. Either way\n` +
+              `  this database did not run the file this checkout holds. "applied" beside\n` +
+              `  a file you just wrote means a collision, not success.\n` +
+              `  See packages/db/migrations/README.md.`,
+          );
+          process.exitCode = 1;
+          break;
+        }
+
+        /*
+          Named before the "behind" line, because the advice differs. A version
+          the database ran and this checkout has no file for is usually a branch
+          that predates a migration — but it is also what a renumbered or deleted
+          merged migration leaves behind, and in that case `db:migrate` does not
+          help: the runner only refuses versions *below* the applied maximum, so a
+          file renumbered upward re-runs its DDL and fails on "already exists".
+        */
+        if (status.orphaned.length > 0) {
+          console.error(
+            `\nUNKNOWN — this database has run ${status.orphaned.length} version(s) this ` +
+              `checkout has no file for: ${status.orphaned.join(", ")}.\n\n` +
+              `  Expected on a branch that predates them. If a merged migration was\n` +
+              `  renumbered or deleted instead, \`pnpm db:migrate\` will not fix it —\n` +
+              `  the file has to come back under the number it was applied as.`,
+          );
+        }
+
+        if (pending.length > 0) {
+          console.error(
+            `\nBEHIND — this database is ${pending.length} migration(s) behind this checkout ` +
+              `(applied through ${highestApplied}, repo carries ${highestOnDisk}):\n  ` +
+              `${pending.join("\n  ")}\n\n` +
+              `  Nothing applies these automatically. Run \`pnpm db:migrate\`.`,
+          );
+          process.exitCode = 1;
+          break;
+        }
+
+        console.log(`\nup to date — applied through ${highestApplied}.`);
         break;
       }
 

@@ -26,9 +26,32 @@ jobs:
       # build. Runs on every pull request rather than being filtered to
       # `packages/db/migrations/**` — a required check that never fires reads as
       # permanently pending and blocks the merge, so it exits early instead.
+      #
+      # And on pushes to `main`, which it used to skip. That gap was not
+      # theoretical: every renumber in this repo's history landed as a direct
+      # push rather than through a pull request, because a renumber is what you
+      # do when something is already wrong. The one shape of change this guard
+      # exists for is the one it was not watching.
+      #
+      # A push compares against what `main` held before it. `github.event.before`
+      # says that exactly; it is all-zeros for a branch's first push, so the
+      # first parent stands in, and a commit with no parent has nothing to
+      # compare and is not a finding.
       - name: Migration numbering
-        if: github.event_name == 'pull_request'
-        run: node scripts/check-migration-numbers.mjs "origin/${{ github.base_ref }}"
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            base="origin/${{ github.base_ref }}"
+          else
+            base="${{ github.event.before }}"
+            if ! git rev-parse --verify --quiet "${base}^{commit}" >/dev/null 2>&1; then
+              base="$(git rev-parse --verify --quiet HEAD^ || true)"
+            fi
+            if [ -z "$base" ]; then
+              echo "No previous commit to compare against; nothing to check."
+              exit 0
+            fi
+          fi
+          node scripts/check-migration-numbers.mjs "$base"
 
       # Deliberately before install, like the migration check above: it reads
       # JSON and needs no toolchain, so a missing project is reported in seconds.

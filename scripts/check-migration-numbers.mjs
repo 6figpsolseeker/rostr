@@ -102,14 +102,77 @@ function migrationsAt(ref) {
 const versionOf = (name) => Number(FILENAME.exec(name)[1]);
 
 const baseNames = migrationsAt(baseRef);
-const baseVersions = new Set(baseNames.map(versionOf));
 const baseHighest = baseNames.reduce((max, name) => Math.max(max, versionOf(name)), 0);
 
 // On a pull request, HEAD is the merge ref — base plus this branch — so
 // subtracting the base's own files leaves exactly what this branch adds. A
 // rename shows up as one addition, because the old name never existed at the
 // merge base.
-const ours = migrationsAt("HEAD").filter((name) => !baseNames.includes(name));
+//
+// On a push that model does not hold: HEAD *replaces* the base tree rather
+// than unioning with it, so a renamed file leaves nothing behind at its old
+// name. That is why the duplicate message below counts files at HEAD instead
+// of asking whether the base had one — on a push a renumber would otherwise be
+// reported as "both files would sit in one tree" when only one exists.
+const headNames = migrationsAt("HEAD");
+const ours = headNames.filter((name) => !baseNames.includes(name));
+
+/** How many files at HEAD claim each version. More than one is a real clash. */
+const headVersionCounts = new Map();
+for (const name of headNames) {
+  const version = versionOf(name);
+  headVersionCounts.set(version, (headVersionCounts.get(version) ?? 0) + 1);
+}
+
+/**
+ * Migrations that were on the base and are not here any more.
+ *
+ * A merged migration has already run on any database that is up to date, and
+ * `schema_migrations` keeps its row whatever happens to the file. Delete it and
+ * the row is orphaned — `applyPending` iterates the on-disk set, so nothing
+ * ever mentions it again. Rename it and the runner, which keys on version, runs
+ * the DDL a second time and dies on "already exists".
+ *
+ * A renumber is an addition *and* a removal, so it reports twice. Both messages
+ * are true and both point the same way, so they are left as they fall.
+ */
+const gone = baseNames.filter((name) => !headNames.includes(name));
+
+/**
+ * Merged migrations whose contents changed.
+ *
+ * **The case the test suite cannot see, and it is permanent.**
+ * `createTestDatabase()` applies the files to an empty database, where any
+ * contents are legal — so editing `0003` is green here for exactly the reason a
+ * bad ordering is green here. A deployed database recorded that file's SHA-256
+ * when it ran, and `migrate` compares it on every start: once the file no
+ * longer matches, the database refuses to start, and forward-only means there
+ * is no migration that can undo it.
+ */
+function editedSince(ref) {
+  try {
+    return execFileSync(
+      "git",
+      ["diff", "--name-only", "--diff-filter=M", ref, "HEAD", "--", MIGRATIONS_DIR],
+      { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+    )
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((path) => path.slice(MIGRATIONS_DIR.length + 1))
+      .filter((name) => FILENAME.test(name));
+  } catch (error) {
+    // Reported as "could not tell", never as a clean pass — the same direction
+    // `migrationsAt` takes, and for the same reason.
+    console.error(
+      `Could not diff ${MIGRATIONS_DIR} against "${ref}".\n` +
+        `  git said: ${String(error.stderr ?? error.message).trim()}`,
+    );
+    process.exit(COULD_NOT_TELL);
+  }
+}
+
+const edited = editedSince(baseRef);
 
 const problems = [];
 
@@ -118,9 +181,9 @@ for (const name of ours) {
   if (version > baseHighest) continue;
 
   problems.push(
-    baseVersions.has(version)
-      ? `${name} is version ${version}, and ${baseRef} already has a migration at ` +
-          `that version.\n` +
+    (headVersionCounts.get(version) ?? 0) > 1
+      ? `${name} is version ${version}, and another file at this revision has ` +
+          `the same one.\n` +
           `    Both files would sit in one tree, and \`loadMigrations\` throws\n` +
           `    \`Duplicate migration version ${version}\` — failing every\n` +
           `    database-backed test in the repo.`
@@ -130,6 +193,28 @@ for (const name of ours) {
           `    version ${baseHighest} will refuse this one permanently — while a fresh\n` +
           `    database applies it happily, which is why the test suite cannot see this.\n` +
           `    Renumber it above ${baseHighest}.`,
+  );
+}
+
+for (const name of gone) {
+  problems.push(
+    `${name} is on ${baseRef} and is not on this branch.\n` +
+      `    It has already run on any database that is up to date, and the runner\n` +
+      `    keys on the version rather than the name: renumbering it makes the DDL\n` +
+      `    run a second time and fail, and deleting it orphans its\n` +
+      `    \`schema_migrations\` row. Write a new migration above ${baseHighest}.`,
+  );
+}
+
+for (const name of edited) {
+  problems.push(
+    `${name} is on ${baseRef} and its contents changed.\n` +
+      `    An applied migration may never be edited. Every database that ran it\n` +
+      `    recorded the file's SHA-256, and \`migrate\` refuses to start once the\n` +
+      `    file stops matching — forward-only, so there is no way back.\n` +
+      `    The test suite cannot see this: it applies migrations to an empty\n` +
+      `    database, where any contents are legal. Add a new migration above\n` +
+      `    ${baseHighest} instead.`,
   );
 }
 

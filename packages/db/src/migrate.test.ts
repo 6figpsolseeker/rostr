@@ -1,6 +1,8 @@
 import { readdirSync } from "node:fs";
 import { afterEach, describe, expect, it } from "vitest";
-import { loadMigrations, migrate, MigrationError } from "./migrate.js";
+import { loadMigrations, migrate, MigrationError, migrationStatus } from "./migrate.js";
+import type { Migration } from "./migrate.js";
+import { isUndefinedTable } from "./pg-errors.js";
 import { createTestDatabase } from "./testing.js";
 import type { PGliteClient } from "./testing.js";
 
@@ -432,5 +434,168 @@ describe("constraints", () => {
        VALUES ($1, $2, 'LINEAR', 1000)`,
       [league!.id, statKey!.id],
     );
+  });
+});
+
+describe("migrationStatus", () => {
+  /*
+    The classification `pnpm db:status` prints, split out of the CLI so it can be
+    tested at all — the CLI needs a connection and an argv, and this is the part
+    that has been wrong twice.
+
+    Both prior misreports were **identity** failures at an equal version: a file
+    written as `0030` against a database already at 31 printed `applied` while
+    never having run, and a collision reported `0032` applied and `0033` pending
+    while the names had swapped underneath. Any check that subtracts one number
+    from another computes a gap of zero for both and says nothing. That is why
+    the interesting assertions here are the ones where the versions agree.
+  */
+
+  const migration = (version: number, name: string, checksum: string): Migration => ({
+    version,
+    name,
+    filename: `${String(version).padStart(4, "0")}_${name}.sql`,
+    sql: "SELECT 1",
+    checksum,
+  });
+
+  it("reports a migration the database has not run", () => {
+    const status = migrationStatus(
+      [migration(1, "first", "aaa"), migration(2, "second", "bbb")],
+      [{ version: 1, name: "first", checksum: "aaa" }],
+    );
+
+    expect(status.pending).toEqual(["0002_second.sql"]);
+    expect(status.rows.map((row) => row.state)).toEqual(["applied", "PENDING"]);
+  });
+
+  it("reports a version that ran under a different file", () => {
+    /*
+      **The state a version comparison cannot reach**, and the one that has
+      actually produced a wrong schema here. The database has a row at version 2
+      so nothing is "behind"; it simply ran a different file, and every query
+      against the columns this checkout expects will fail at runtime.
+    */
+    const status = migrationStatus(
+      [migration(2, "the_season_was_declared_started", "new")],
+      [{ version: 2, name: "player_profiles", checksum: "old" }],
+    );
+
+    expect(status.pending).toEqual([]);
+    expect(status.mismatched).toEqual([
+      '0002_the_season_was_declared_started.sql — recorded as "player_profiles"',
+    ]);
+    expect(status.rows[0]?.state).toBe("MISMATCH");
+    expect(status.rows[0]?.recordedName).toBe("player_profiles");
+  });
+
+  it("does not call a matching file a mismatch because the name is spelled out", () => {
+    // The checksum decides; the name is carried for the message. A file whose
+    // contents match is applied even if somebody renamed it in the tree, which
+    // is a different problem with a different guard (`check-migration-numbers`).
+    const status = migrationStatus(
+      [migration(3, "renamed_in_the_tree", "same")],
+      [{ version: 3, name: "original_name", checksum: "same" }],
+    );
+
+    expect(status.mismatched).toEqual([]);
+    expect(status.rows[0]?.state).toBe("applied");
+  });
+
+  it("answers zero for a database that has run nothing", () => {
+    // Not `-Infinity`, which is what `Math.max()` of an empty set gives and what
+    // the message would otherwise print at somebody.
+    const status = migrationStatus([migration(1, "first", "aaa")], []);
+
+    expect(status.highestApplied).toBe(0);
+    expect(status.pending).toEqual(["0001_first.sql"]);
+  });
+
+  it("takes the highest version from the last file, not from the count", () => {
+    /*
+      There is no `0021` in this repo — it was renumbered away on a rebase and
+      never refilled, so 46 files carry a highest version of 47. Anything that
+      inferred one from the other would be permanently wrong, which is also why
+      the gap is reported as a list of filenames rather than as a subtraction.
+    */
+    const status = migrationStatus(
+      [migration(20, "twenty", "a"), migration(22, "twenty_two", "b")],
+      [{ version: 20, name: "twenty", checksum: "a" }],
+    );
+
+    expect(status.highestOnDisk).toBe(22);
+    expect(status.highestApplied).toBe(20);
+    expect(status.pending).toEqual(["0022_twenty_two.sql"]);
+  });
+
+  it("names a version the database ran that this checkout has no file for", () => {
+    /*
+      A rolled-back deploy or a branch that predates a migration — and also what
+      a renumbered or deleted merged migration leaves behind. The two are
+      indistinguishable from here, which is why it is reported rather than
+      judged: what matters is that it is *said*, because the advice differs.
+      `pnpm db:migrate` fixes the benign case and cannot fix the other — the
+      runner only refuses versions below the applied maximum, so a file
+      renumbered upward re-runs its DDL and dies on "already exists".
+    */
+    const status = migrationStatus(
+      [migration(1, "first", "aaa")],
+      [
+        { version: 1, name: "first", checksum: "aaa" },
+        { version: 2, name: "from_the_future", checksum: "bbb" },
+      ],
+    );
+
+    expect(status.orphaned).toEqual([2]);
+    // Not behind, and not a mismatch. Saying either would send the reader at
+    // the wrong command.
+    expect(status.pending).toEqual([]);
+    expect(status.mismatched).toEqual([]);
+    expect(status.highestApplied).toBe(2);
+    expect(status.highestOnDisk).toBe(1);
+  });
+
+  it("says nothing about orphans when every applied version has a file", () => {
+    const status = migrationStatus(
+      [migration(1, "first", "aaa"), migration(2, "second", "bbb")],
+      [{ version: 1, name: "first", checksum: "aaa" }],
+    );
+
+    expect(status.orphaned).toEqual([]);
+    expect(status.pending).toEqual(["0002_second.sql"]);
+  });
+
+  it("does not invent a name mismatch for a file that was edited in place", () => {
+    /*
+      The other misreport this message could produce. An in-place edit leaves the
+      name alone, and `0003_x.sql — recorded as "x"` reads like a second,
+      invented problem rather than the one that happened.
+    */
+    const status = migrationStatus(
+      [migration(3, "players_and_stats", "edited")],
+      [{ version: 3, name: "players_and_stats", checksum: "original" }],
+    );
+
+    expect(status.mismatched).toEqual([
+      "0003_players_and_stats.sql — same name, different contents",
+    ]);
+  });
+});
+
+describe("isUndefinedTable", () => {
+  it("recognises a missing table, which is the one benign read failure", () => {
+    expect(isUndefinedTable({ code: "42P01" })).toBe(true);
+  });
+
+  it("does not swallow anything else", () => {
+    // The whole point: `db:status` used to treat every failure as an empty
+    // applied-set, so an unreachable database printed every migration as
+    // pending and exited 0.
+    for (const code of ["28P01", "3D000", "42501", "ECONNREFUSED"]) {
+      expect(isUndefinedTable({ code }), code).toBe(false);
+    }
+    expect(isUndefinedTable(new Error("connection terminated"))).toBe(false);
+    expect(isUndefinedTable(null)).toBe(false);
+    expect(isUndefinedTable(undefined)).toBe(false);
   });
 });
