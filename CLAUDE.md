@@ -251,7 +251,11 @@ believe, including this table, which is only true until something breaks:
 
 ```bash
 pnpm cron:status        # per job: never ran / stale / failing. Exits non-zero.
-pnpm db:status          # now carries a one-line scheduler summary
+pnpm db:status          # per migration: applied / PENDING / MISMATCH, plus a
+                        # scheduler line. Exits non-zero when behind, when a
+                        # version ran under a different file, or when the read
+                        # itself failed (3). Does not decide what is *allowed* —
+                        # that is db:migrate.
 ```
 
 `cron:status` reads the expected job list out of `vercel.json` itself rather than restating

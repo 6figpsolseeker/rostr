@@ -110,6 +110,19 @@ deploy touching it, check the port before anything else.
 will refuse still shows as pending. `db:status` tells you what is _missing_;
 `db:migrate` decides what is _allowed_.
 
+Since 2026-09-18 it says three more things, each of which used to read as
+either silence or a wrong answer:
+
+- **`MISMATCH`** — the database ran something at this version and it was not
+  this file. A renumbering collision, or an applied migration edited in place.
+  Comparing versions alone reported both as `applied`.
+- **`UNKNOWN`** — the database ran a version this checkout has no file for.
+  Ordinary on a branch that predates a migration; not ordinary after a merged
+  migration was renumbered or deleted, and `db:migrate` cannot fix that case.
+- **A non-zero exit and a closing summary**, because forty-odd lines with a few
+  `PENDING` scattered through them is something the reader has to assemble. A
+  read failure now exits 3 rather than printing everything as pending.
+
 ## Testing
 
 Migrations run against PGlite — real Postgres compiled to WASM, in-process, no
