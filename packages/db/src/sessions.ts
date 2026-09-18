@@ -252,11 +252,25 @@ export async function linkWalletWithSignature(
     [userId, address, now.toISOString()],
   );
 
-  // Somebody else consumed it between the read and here. Reported as the same
-  // refusal the read gives, because it is the same fact — this request does not
-  // hold the challenge — and a second code would only invite a caller to treat
-  // losing a race as different from arriving late.
-  if (consumed.length === 0) {
+  /*
+    Two ways to lose, one refusal.
+
+    Nothing matched: somebody else consumed the challenge between the read and
+    here. And a **different** nonce came back: `issueWalletChallenge` upserts on
+    `(user_id, address)` and clears `consumed_at`, so a second tab asking for a
+    challenge re-arms this row — the write then matches, burns that new nonce,
+    and this request would go on to verify the signature against the stale one
+    it read. Which would succeed, since the stale nonce was genuinely issued,
+    while silently spending a challenge the other tab is waiting on.
+
+    Reported as the same refusal the read gives, because it is the same fact —
+    this request does not hold the challenge — and a second code would invite a
+    caller to treat losing a race as different from arriving late.
+
+    This is what `RETURNING nonce` is for. Selecting it and not comparing it
+    would be the check looking present while doing nothing.
+  */
+  if (consumed.length === 0 || consumed[0]!.nonce !== row.nonce) {
     throw new SessionError("No pending challenge for this wallet", "CHALLENGE_NOT_FOUND");
   }
 

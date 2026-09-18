@@ -78,7 +78,16 @@ export class WaiverError extends Error {
       | "IN_A_TRADE"
       | "GAME_STARTED"
       /** The league is not playing, so nobody is moving players. */
-      | "LEAGUE_NOT_IN_SEASON",
+      | "LEAGUE_NOT_IN_SEASON"
+      /**
+       * There was no pending claim to cancel.
+       *
+       * Already awarded or failed by a run, already withdrawn in another tab, or
+       * another team's. One refusal for all of them: which it was is not a
+       * distinction the manager can act on, and naming it would leak whether a
+       * claim they do not own exists.
+       */
+      | "CLAIM_NOT_PENDING",
   ) {
     super(message);
     this.name = "WaiverError";
@@ -1036,18 +1045,23 @@ export async function cancelClaim(
   leagueId: string,
   teamId: string,
   claimId: string,
-): Promise<boolean> {
+): Promise<void> {
   /*
-    Answers whether it actually cancelled anything, and the caller is expected
-    to say so.
+    Refuses rather than returning quietly, which is how `declineTrade` handles
+    the same shape.
 
     Since #90 item 3 the waiver run holds `FOR UPDATE` on the claims it is
     deciding, so a cancel arriving mid-run waits and then finds the claim
-    `AWARDED` or `FAILED` — the right outcome, because by then the players have
-    moved. What is not right is telling the manager it worked: this returned
-    `void` and the route answered `{ cancelled: true }` unconditionally, so a
-    manager who lost that race was shown a confirmation for something that did
-    not happen, about a roster that had just changed under them.
+    `AWARDED` or `FAILED`. That is the right outcome — by then the players have
+    moved — but the manager has to be told, and told *something*: the screen has
+    never rendered anything for a cancel, so a silent no-op is indistinguishable
+    from success, and the claim row disappears either way because it is no
+    longer `PENDING`.
+
+    A thrown refusal reaches the red panel through the route's existing error
+    path. A boolean would not have: the market's response handler has branches
+    for `added`, `claimed` and `dropped` and none for this, so both answers
+    rendered nothing.
 
     `RETURNING id` because `SqlClient.query` hands back rows and discards
     `rowCount`, so an unobserved guard would be unreadable — the pattern the
@@ -1060,7 +1074,12 @@ export async function cancelClaim(
     [claimId, leagueId, teamId],
   );
 
-  return cancelled.length > 0;
+  if (cancelled.length === 0) {
+    throw new WaiverError(
+      "That claim is no longer pending — it may already have been processed.",
+      "CLAIM_NOT_PENDING",
+    );
+  }
 }
 
 /**
@@ -1199,7 +1218,11 @@ export async function processWaivers(
         these rows from the moment they are read.
 
         Ordering: `leagues` then `waiver_claims`, and nothing takes them the
-        other way round — `cancelClaim` and `submitClaim` touch claims alone.
+        other way round. `submitClaim` does read `leagues`, but neither it nor
+        `cancelClaim` holds a claim lock while waiting on anything — both run in
+        autocommit and take no row lock at all, so neither can be the other edge
+        of a cycle. This is the only transaction in the schema that locks a
+        claim row.
       */
       `SELECT id, team_id, add_player_id, drop_player_id, created_at
          FROM waiver_claims WHERE league_id = $1 AND state = 'PENDING'

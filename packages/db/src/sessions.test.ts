@@ -4,6 +4,7 @@ import bs58 from "bs58";
 import { buildWalletLinkMessage, sha256Hex } from "@rostr/core";
 import { createUser, getWallets } from "./identity.js";
 import { recordStatements } from "./testing.js";
+import type { SqlClient } from "./client.js";
 import {
   CHALLENGE_TTL_MS,
   createSession,
@@ -210,6 +211,78 @@ describe("wallet linking", () => {
       [user.id, mine.address],
     );
     expect(row?.consumed_at).not.toBeNull();
+  });
+
+  it("refuses when the consuming write loses to somebody else — #90", async () => {
+    /*
+      The one runtime branch the fix adds, and the only way to reach it here.
+
+      A real loss needs two connections, which PGlite does not have — so the
+      write is made to answer as it would have if another request had consumed
+      the row first. That is the same technique `migrate.pool.test.ts` uses when
+      the property under test is about dispatch rather than data.
+
+      Without this the throw is untested: the two behavioural tests above pass
+      with the whole branch deleted, because the read catches the sequential
+      case, and the statement test only asserts the SQL.
+    */
+    const { client, user } = await signedIn();
+    const kp = keypair(25);
+    const challenge = await issueWalletChallenge(client, user.id, kp.address, NOW);
+
+    const lost: SqlClient = {
+      exec: (sql) => client.exec(sql),
+      query: async (sql: string, params?: readonly unknown[]) =>
+        sql.includes("UPDATE wallet_challenges") ? [] : client.query(sql, params),
+    };
+
+    await expect(
+      linkWalletWithSignature(
+        lost,
+        user.id,
+        kp.address,
+        sign(kp.secret, challenge.message),
+        NOW,
+      ),
+    ).rejects.toMatchObject({ code: "CHALLENGE_NOT_FOUND" });
+  });
+
+  it("refuses when the consuming write burns a different nonce — #90", async () => {
+    /*
+      `issueWalletChallenge` upserts on `(user_id, address)` and clears
+      `consumed_at`, so a second tab asking for a challenge re-arms the same row.
+      If that lands between this request's read and its write, the write matches
+      and burns the **new** nonce while this request still holds the old one —
+      and would verify against it successfully, since it was genuinely issued,
+      silently spending the other tab's challenge.
+
+      **Not reproducible sequentially, and the first attempt at this test proved
+      it:** re-arming before the call simply makes the read return the new nonce,
+      so it fails on the signature instead and says nothing about this guard. The
+      divergence only exists between the read and the write, so the write is made
+      to answer with a nonce that is not the one that was read.
+    */
+    const { client, user } = await signedIn();
+    const kp = keypair(26);
+    const challenge = await issueWalletChallenge(client, user.id, kp.address, NOW);
+
+    const reArmed: SqlClient = {
+      exec: (sql) => client.exec(sql),
+      query: async (sql: string, params?: readonly unknown[]) =>
+        sql.includes("UPDATE wallet_challenges")
+          ? ([{ nonce: "a-nonce-this-request-never-read" }] as never)
+          : client.query(sql, params),
+    };
+
+    await expect(
+      linkWalletWithSignature(
+        reArmed,
+        user.id,
+        kp.address,
+        sign(kp.secret, challenge.message),
+        NOW,
+      ),
+    ).rejects.toMatchObject({ code: "CHALLENGE_NOT_FOUND" });
   });
 
   it("consumes the challenge with a predicate, not with the read above it — #90", async () => {

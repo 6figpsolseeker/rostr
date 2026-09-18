@@ -2407,9 +2407,9 @@ describe("the market is shut unless the league is playing", () => {
     });
 
     await closed(fx, "DRAFTING");
-    await expect(cancelClaim(fx.client, fx.leagueId, fx.teams[1]!, claimId)).resolves.toBe(
-      true,
-    );
+    await expect(
+      cancelClaim(fx.client, fx.leagueId, fx.teams[1]!, claimId),
+    ).resolves.toBeUndefined();
     expect(await pendingClaims(fx.client, fx.leagueId, fx.teams[1]!)).toHaveLength(0);
   });
 
@@ -2432,11 +2432,17 @@ describe("the market is shut unless the league is playing", () => {
       now: MONDAY,
     });
 
-    expect(await cancelClaim(fx.client, fx.leagueId, fx.teams[1]!, claimId)).toBe(true);
-    expect(await cancelClaim(fx.client, fx.leagueId, fx.teams[1]!, claimId)).toBe(false);
+    await cancelClaim(fx.client, fx.leagueId, fx.teams[1]!, claimId);
+
+    // Refused rather than answered quietly. The market renders nothing at all
+    // for a cancel, so a silent no-op is indistinguishable from success — and
+    // the claim row disappears either way, because it is no longer pending.
+    await expect(
+      cancelClaim(fx.client, fx.leagueId, fx.teams[1]!, claimId),
+    ).rejects.toMatchObject({ code: "CLAIM_NOT_PENDING" });
   });
 
-  it("will not cancel another team's claim, and says it did not", async () => {
+  it("will not cancel another team's claim, and refuses the same way", async () => {
     // The ownership guard was already there; what is new is that a caller can
     // tell the difference between refusing and succeeding.
     const fx = await setup();
@@ -2448,7 +2454,12 @@ describe("the market is shut unless the league is playing", () => {
       now: MONDAY,
     });
 
-    expect(await cancelClaim(fx.client, fx.leagueId, fx.teams[2]!, claimId)).toBe(false);
+    await expect(
+      cancelClaim(fx.client, fx.leagueId, fx.teams[2]!, claimId),
+    ).rejects.toMatchObject({ code: "CLAIM_NOT_PENDING" });
+
+    // One refusal for every reason, including this one: naming it would leak
+    // whether a claim the asker does not own exists.
     expect(await pendingClaims(fx.client, fx.leagueId, fx.teams[1]!)).toHaveLength(1);
   });
 
