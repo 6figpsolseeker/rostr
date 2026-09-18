@@ -338,6 +338,18 @@ export interface SchemaStatus {
   readonly pending: readonly string[];
   /** `filename — recorded as "other_name"`, ready to print. */
   readonly mismatched: readonly string[];
+  /**
+   * Versions the database has run that this checkout has no file for.
+   *
+   * Benign on a branch that predates a migration, and **not** benign after a
+   * merged migration was renumbered or deleted: the row stays, the file is
+   * gone, and `applyPending` iterates the on-disk set so nothing else ever
+   * mentions it. Reported rather than judged, because the two are
+   * indistinguishable from here — but reporting them is what stops the summary
+   * saying `BEHIND … run pnpm db:migrate` when that command is about to fail on
+   * a version the runner will re-run and the DDL will refuse.
+   */
+  readonly orphaned: readonly number[];
   readonly highestApplied: number;
   readonly highestOnDisk: number;
 }
@@ -382,17 +394,32 @@ export function migrationStatus(
 
     if (row.checksum !== migration.checksum) {
       rows.push({ filename: migration.filename, state: "MISMATCH", recordedName: row.name });
-      mismatched.push(`${migration.filename} — recorded as "${row.name}"`);
+      /*
+        The name only earns a mention when it differs. A collision swapped two
+        names underneath their numbers and naming the other file is the whole
+        explanation; an in-place edit leaves the name alone, and
+        `0003_x.sql — recorded as "x"` reads like a second, invented problem.
+      */
+      mismatched.push(
+        row.name === migration.name
+          ? `${migration.filename} — same name, different contents`
+          : `${migration.filename} — recorded as "${row.name}"`,
+      );
       continue;
     }
 
     rows.push({ filename: migration.filename, state: "applied", recordedName: null });
   }
 
+  const onDiskVersions = new Set(onDisk.map((migration) => migration.version));
+
   return {
     rows,
     pending,
     mismatched,
+    orphaned: [...byVersion.keys()]
+      .filter((version) => !onDiskVersions.has(version))
+      .sort((a, b) => a - b),
     // Zero rather than -Infinity on an empty database, so the message reads
     // "applied through 0" rather than something nobody can act on.
     highestApplied: byVersion.size === 0 ? 0 : Math.max(...byVersion.keys()),

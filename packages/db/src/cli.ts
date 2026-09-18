@@ -187,6 +187,24 @@ async function main(): Promise<void> {
           break;
         }
 
+        /*
+          Named before the "behind" line, because the advice differs. A version
+          the database ran and this checkout has no file for is usually a branch
+          that predates a migration — but it is also what a renumbered or deleted
+          merged migration leaves behind, and in that case `db:migrate` does not
+          help: the runner only refuses versions *below* the applied maximum, so a
+          file renumbered upward re-runs its DDL and fails on "already exists".
+        */
+        if (status.orphaned.length > 0) {
+          console.error(
+            `\nUNKNOWN — this database has run ${status.orphaned.length} version(s) this ` +
+              `checkout has no file for: ${status.orphaned.join(", ")}.\n\n` +
+              `  Expected on a branch that predates them. If a merged migration was\n` +
+              `  renumbered or deleted instead, \`pnpm db:migrate\` will not fix it —\n` +
+              `  the file has to come back under the number it was applied as.`,
+          );
+        }
+
         if (pending.length > 0) {
           console.error(
             `\nBEHIND — this database is ${pending.length} migration(s) behind this checkout ` +

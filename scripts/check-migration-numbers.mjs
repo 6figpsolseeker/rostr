@@ -102,15 +102,27 @@ function migrationsAt(ref) {
 const versionOf = (name) => Number(FILENAME.exec(name)[1]);
 
 const baseNames = migrationsAt(baseRef);
-const baseVersions = new Set(baseNames.map(versionOf));
 const baseHighest = baseNames.reduce((max, name) => Math.max(max, versionOf(name)), 0);
 
 // On a pull request, HEAD is the merge ref — base plus this branch — so
 // subtracting the base's own files leaves exactly what this branch adds. A
 // rename shows up as one addition, because the old name never existed at the
 // merge base.
+//
+// On a push that model does not hold: HEAD *replaces* the base tree rather
+// than unioning with it, so a renamed file leaves nothing behind at its old
+// name. That is why the duplicate message below counts files at HEAD instead
+// of asking whether the base had one — on a push a renumber would otherwise be
+// reported as "both files would sit in one tree" when only one exists.
 const headNames = migrationsAt("HEAD");
 const ours = headNames.filter((name) => !baseNames.includes(name));
+
+/** How many files at HEAD claim each version. More than one is a real clash. */
+const headVersionCounts = new Map();
+for (const name of headNames) {
+  const version = versionOf(name);
+  headVersionCounts.set(version, (headVersionCounts.get(version) ?? 0) + 1);
+}
 
 /**
  * Migrations that were on the base and are not here any more.
@@ -169,9 +181,9 @@ for (const name of ours) {
   if (version > baseHighest) continue;
 
   problems.push(
-    baseVersions.has(version)
-      ? `${name} is version ${version}, and ${baseRef} already has a migration at ` +
-          `that version.\n` +
+    (headVersionCounts.get(version) ?? 0) > 1
+      ? `${name} is version ${version}, and another file at this revision has ` +
+          `the same one.\n` +
           `    Both files would sit in one tree, and \`loadMigrations\` throws\n` +
           `    \`Duplicate migration version ${version}\` — failing every\n` +
           `    database-backed test in the repo.`

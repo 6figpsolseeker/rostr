@@ -528,9 +528,16 @@ describe("migrationStatus", () => {
     expect(status.pending).toEqual(["0022_twenty_two.sql"]);
   });
 
-  it("reports a database ahead of this checkout without calling it behind", () => {
-    // A rolled-back deploy, or a branch that predates a migration. Nothing is
-    // pending and nothing mismatches; the row simply has no file here.
+  it("names a version the database ran that this checkout has no file for", () => {
+    /*
+      A rolled-back deploy or a branch that predates a migration — and also what
+      a renumbered or deleted merged migration leaves behind. The two are
+      indistinguishable from here, which is why it is reported rather than
+      judged: what matters is that it is *said*, because the advice differs.
+      `pnpm db:migrate` fixes the benign case and cannot fix the other — the
+      runner only refuses versions below the applied maximum, so a file
+      renumbered upward re-runs its DDL and dies on "already exists".
+    */
     const status = migrationStatus(
       [migration(1, "first", "aaa")],
       [
@@ -539,10 +546,39 @@ describe("migrationStatus", () => {
       ],
     );
 
+    expect(status.orphaned).toEqual([2]);
+    // Not behind, and not a mismatch. Saying either would send the reader at
+    // the wrong command.
     expect(status.pending).toEqual([]);
     expect(status.mismatched).toEqual([]);
     expect(status.highestApplied).toBe(2);
     expect(status.highestOnDisk).toBe(1);
+  });
+
+  it("says nothing about orphans when every applied version has a file", () => {
+    const status = migrationStatus(
+      [migration(1, "first", "aaa"), migration(2, "second", "bbb")],
+      [{ version: 1, name: "first", checksum: "aaa" }],
+    );
+
+    expect(status.orphaned).toEqual([]);
+    expect(status.pending).toEqual(["0002_second.sql"]);
+  });
+
+  it("does not invent a name mismatch for a file that was edited in place", () => {
+    /*
+      The other misreport this message could produce. An in-place edit leaves the
+      name alone, and `0003_x.sql — recorded as "x"` reads like a second,
+      invented problem rather than the one that happened.
+    */
+    const status = migrationStatus(
+      [migration(3, "players_and_stats", "edited")],
+      [{ version: 3, name: "players_and_stats", checksum: "original" }],
+    );
+
+    expect(status.mismatched).toEqual([
+      "0003_players_and_stats.sql — same name, different contents",
+    ]);
   });
 });
 
