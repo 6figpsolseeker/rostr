@@ -311,3 +311,91 @@ async function applyPending(
 
   return { applied: didApply, skipped: didSkip };
 }
+
+/** What a database has recorded for one migration. */
+export interface AppliedMigration {
+  readonly version: number;
+  readonly name: string;
+  readonly checksum: string;
+}
+
+/**
+ * How one on-disk migration stands against what the database recorded.
+ *
+ * `MISMATCH` is the state that matters and the one a version comparison cannot
+ * produce: the database ran *something* at this version and it was not this
+ * file.
+ */
+export interface MigrationState {
+  readonly filename: string;
+  readonly state: "applied" | "PENDING" | "MISMATCH";
+  /** What the database recorded at this version, when it differs. */
+  readonly recordedName: string | null;
+}
+
+export interface SchemaStatus {
+  readonly rows: readonly MigrationState[];
+  readonly pending: readonly string[];
+  /** `filename — recorded as "other_name"`, ready to print. */
+  readonly mismatched: readonly string[];
+  readonly highestApplied: number;
+  readonly highestOnDisk: number;
+}
+
+/**
+ * Compare a checkout's migrations against a database's `schema_migrations`.
+ *
+ * Pure, and split out of the CLI because the CLI is the one place in this
+ * package a test cannot reach — it needs a real connection and an argv. The
+ * classification is the part that has been wrong twice, so it is the part that
+ * wants a test.
+ *
+ * **Keyed on version, compared on checksum.** The version answers "did anything
+ * run here"; the checksum answers "was it this". Both prior misreports were
+ * identity failures at an equal version — a file renumbered into a version
+ * another branch had already applied, and a collision that swapped two names
+ * underneath their numbers — so every comparison that subtracts one number from
+ * another reports a gap of zero and says nothing. See `CLAUDE.md` 2026-08-18
+ * and `docs/SETUP-REQUIRED.md`.
+ *
+ * The name is carried for the message rather than the decision: a checksum
+ * mismatch is already conclusive, and a name that also differs is what makes
+ * the sentence explicable to a human.
+ */
+export function migrationStatus(
+  onDisk: readonly Migration[],
+  applied: readonly AppliedMigration[],
+): SchemaStatus {
+  const byVersion = new Map(applied.map((row) => [Number(row.version), row]));
+  const rows: MigrationState[] = [];
+  const pending: string[] = [];
+  const mismatched: string[] = [];
+
+  for (const migration of onDisk) {
+    const row = byVersion.get(migration.version);
+
+    if (row === undefined) {
+      rows.push({ filename: migration.filename, state: "PENDING", recordedName: null });
+      pending.push(migration.filename);
+      continue;
+    }
+
+    if (row.checksum !== migration.checksum) {
+      rows.push({ filename: migration.filename, state: "MISMATCH", recordedName: row.name });
+      mismatched.push(`${migration.filename} — recorded as "${row.name}"`);
+      continue;
+    }
+
+    rows.push({ filename: migration.filename, state: "applied", recordedName: null });
+  }
+
+  return {
+    rows,
+    pending,
+    mismatched,
+    // Zero rather than -Infinity on an empty database, so the message reads
+    // "applied through 0" rather than something nobody can act on.
+    highestApplied: byVersion.size === 0 ? 0 : Math.max(...byVersion.keys()),
+    highestOnDisk: onDisk.at(-1)?.version ?? 0,
+  };
+}

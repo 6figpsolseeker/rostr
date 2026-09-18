@@ -39,3 +39,22 @@ export function isDeadlock(error: unknown): boolean {
     (error as { code?: unknown }).code === "40P01"
   );
 }
+
+/**
+ * Postgres `undefined_table` (42P01).
+ *
+ * The one error that genuinely means "nothing has ever run here". `db:status`
+ * used to swallow *every* failure into an empty applied-set, so an unreachable
+ * database, a permission problem and a wrong connection string all rendered as
+ * "every migration is pending" — the loudest possible wrong answer, and
+ * indistinguishable from a database that is merely new. This is what lets the
+ * one benign case stay benign while the rest are reported.
+ */
+export function isUndefinedTable(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === "42P01"
+  );
+}
