@@ -29,14 +29,19 @@ describe("irAvailability", () => {
 
   it("refuses placement during a draft and still allows activation", () => {
     /*
-      **The only case #316 could actually reach**, and the reason this file is
-      two booleans rather than one.
+      **The case #316 is worth shipping for**, and the reason this file is two
+      booleans rather than one.
 
-      Nothing in this repo writes `SETTLED` or `DISSOLVED` — `score-week`'s own
-      comment says so — so the finished-league scenario the issue was filed for
-      is unreachable today. What is reachable is a manager who drafted a player
-      already carrying an OUT designation: he satisfies every player-level
-      condition the "To IR" button checks, and `moveToIr` refuses him anyway.
+      A manager who drafted a player already carrying an OUT designation
+      satisfies every player-level condition the "To IR" button checks, and
+      `moveToIr` refuses him anyway — on draft day, the busiest hour this
+      product has.
+
+      The issue was filed for the *finished*-league case instead, and that one is
+      rarer rather than impossible. No code writes `SETTLED` or `DISSOLVED`; an
+      operator writes `DISSOLVED` by hand, because `CLAUDE.md` documents it as
+      the only way to retire a league. (An earlier version of this comment cited
+      `score-week`'s prose for both states. It names only `SETTLED`.)
 
       Activation staying open is the owner's ruling of 2026-09-18, and binding
       both controls to one boolean is how it would be silently deleted.
@@ -97,19 +102,40 @@ describe("irAvailability", () => {
     ]) {
       const ir = irAvailability(state);
 
-      expect(ir.notice === null).toBe(ir.place);
+      /*
+        The whole assertion is this one line: a shut activation implies a shut
+        placement, so the placement sentence is always present when either
+        control is missing.
+
+        It used to be paired with `expect(ir.notice === null).toBe(ir.place)`,
+        which was **vacuous** — `notice` and `place` are computed from the same
+        `placeReason` on adjacent lines of `ir-notice.ts`, so that could not fail
+        without editing the file under test. It read like a second guarantee and
+        was a restatement of the composition. Deleted rather than kept for
+        appearances; the fourth such test this month.
+      */
       if (!ir.activate) expect(ir.place).toBe(false);
+      if (!ir.place) expect(ir.notice).not.toBeNull();
     }
   });
 
   it("treats a state it has never heard of as shut", () => {
-    // Fails closed, like `loadKickoffs` and `slotIsLocked`. A new enum value
-    // reaching here means the rule has not been taught about it, and offering
-    // both controls on a guess is the expensive direction to be wrong in.
+    /*
+      Fails closed, like `loadKickoffs` and `slotIsLocked`. A new enum value
+      reaching here means the rule has not been taught about it, and offering
+      both controls on a guess is the expensive direction to be wrong in.
+
+      **And it must not borrow the settled league's sentence**, which is what it
+      did until this screen started rendering the answer. "This league's season
+      is over" was a harmless thing to put in a 409 body nobody reads and a false
+      thing to put on the lineup page of a running league. The second assertion
+      is the one that catches a future state falling into the wrong branch.
+    */
     const ir = irAvailability("PROBATION");
 
     expect(ir.place).toBe(false);
     expect(ir.activate).toBe(false);
     expect(ir.notice).not.toBeNull();
+    expect(ir.notice).not.toBe(irAvailability("SETTLED").notice);
   });
 });

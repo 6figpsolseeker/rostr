@@ -474,6 +474,37 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
         </p>
       )}
 
+      {data.ir.notice !== null && (
+        /*
+          Why the injured-reserve controls are missing, when they are.
+
+          **Here rather than at the head of the injured-reserve section**, which
+          is where this started and where it was wrong. The two controls this
+          sentence explains live in two different sections: "Activate" is in the
+          injured-reserve list, but "To IR" is on each *bench row*, a whole
+          `<section>` earlier — and in `DRAFTING`, the one state this actually
+          reaches, "To IR" is the only one that moves. A manager scanning his
+          bench for the button he used last season would have found nothing
+          beside it and an explanation a hundred lines further down.
+
+          So it follows `editing.notice` above, for the reason that comment
+          gives: said once, above everything it governs. Quieter than that one,
+          because it withdraws two controls rather than freezing the whole
+          screen.
+
+          This is **not** a state gate on the page. Nothing is hidden that a
+          manager can still legitimately read; every control here stays governed
+          by its own rule.
+
+          One sentence for two controls. It is the *placement* sentence, which is
+          not a coin toss — `irAvailability` composes it and `ir-notice.test.ts`
+          asserts that placement is shut in every state where activation is.
+        */
+        <p className="rounded border border-nocturne-neutral-800 bg-nocturne-neutral-900/40 px-4 py-3 text-xs text-nocturne-neutral-400">
+          {data.ir.notice}
+        </p>
+      )}
+
       {(saveError || problems.length > 0) && (
         <div className="space-y-1 rounded border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
           {saveError && <p>{saveError}</p>}
@@ -714,10 +745,18 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
                 </span>
               )}
               {/*
-                Offered to a player the server would accept — a free IR slot, an
-                out designation, and a league state that permits placement. Every
-                one of those rules is enforced in `moveToIr`; this avoids a button
-                whose only outcome is a refusal.
+                Offered to a player the server would accept **on the rules this
+                screen can check** — a free IR slot, an out designation, and a
+                league state that permits placement. `moveToIr` enforces those
+                three and one more, so this narrows the refusals rather than
+                eliminating them.
+
+                The scoping phrase is load-bearing and was briefly deleted here.
+                `moveToIr` also refuses `GAME_STARTED`, and nothing in this
+                condition consults a kickoff — so "To IR" still renders for a
+                player already playing and still answers 409. That is a smaller,
+                separate gap; what is not acceptable is a comment claiming the
+                list is complete when it is not.
 
                 `data.ir.place` is the league-state half, and it is the reachable
                 one during a **draft**: a manager who drafted a player already
@@ -830,27 +869,6 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
               {stashed.length} of {data.irSlots}
             </span>
           </h3>
-
-          {/*
-            Why the controls below are missing, when they are.
-
-            At the head of this section rather than the top of the page, for the
-            reason the section renders at all when empty: `roster.irSlots` is a
-            rule members signed, and the answer to "where did the button go"
-            belongs beside where the button was. The page has no state gate of
-            its own and gains none here — every other control on it is governed
-            by its own rule, and a page-level gate would hide the lineup a
-            manager can still legitimately read.
-
-            One sentence for two controls. It is the *placement* sentence, which
-            is not a coin toss — see `irAvailability`, which asserts that
-            placement is shut in every state where activation is.
-          */}
-          {data.ir.notice !== null && (
-            <p className="rounded border border-nocturne-neutral-800 bg-nocturne-neutral-900/40 px-3 py-2 text-[11px] text-nocturne-neutral-400">
-              {data.ir.notice}
-            </p>
-          )}
 
           {stashed.length === 0 ? (
             <p className="text-[11px] text-nocturne-neutral-600">
