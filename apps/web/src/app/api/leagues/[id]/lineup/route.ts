@@ -27,6 +27,7 @@ import {
   setLineup,
 } from "@rostr/db";
 import { db } from "@/lib/db";
+import { irAvailability } from "@/lib/ir-notice";
 import { draftContext, DraftContextError } from "@/lib/draft-context";
 
 const STATUS: Record<string, number> = {
@@ -237,6 +238,23 @@ export async function GET(
         open: editingNotice === null,
         notice: editingNotice,
       },
+      /*
+        What injured reserve will accept, composed from the same function the IR
+        route refuses with, so the screen cannot offer a control whose only
+        outcome is a 409.
+
+        **Deliberately not the `{ open, notice }` shape `players` and `trades`
+        return** — see `irAvailability`, which carries the argument. Those two
+        govern one decision each; this governs two that disagree during a draft.
+
+        **It is served from the lineup route rather than the IR route**, which is
+        POST-only: the screen has to know before a manager clicks, and this is
+        the payload it already loads.
+
+        Two booleans rather than one, because during a draft placement is refused
+        and activation is allowed. `irAvailability` carries the argument.
+      */
+      ir: irAvailability(context.state),
       autofill: {
         enabled: autofillEnabled ?? true,
         /**

@@ -80,6 +80,23 @@ const REFUSALS: Record<IrPlacementRefusal, string> = {
  * and `DISSOLVED` — before a roster exists, and after it is final. That half is
  * the same rule every other member-facing roster path already applies.
  *
+ * **`SETTLED` and `DISSOLVED` are reachable, and "no code writes them" is not
+ * the same claim.** No product code does — the three state writers all move
+ * forward, to `DRAFTING`, `IN_SEASON` and `PLAYOFFS` — and it is tempting to
+ * read that as "a settled league cannot exist". It does not follow, and
+ * `rules.test.ts` already records somebody reaching for the same inference and
+ * putting it down:
+ *
+ * - an *operator* writes `DISSOLVED` by hand, because `CLAUDE.md` documents that
+ *   as the way to retire a league — every foreign key into `leagues` is
+ *   ON DELETE RESTRICT, so the row cannot be deleted and the state is the only
+ *   retirement there is. Four such leagues are recorded in the deployed database;
+ * - `score-week/route.test.ts` creates and dissolves more of them **against that
+ *   database**, not PGlite, whenever `DATABASE_URL` is set.
+ *
+ * So this branch is not written against a hypothetical, and `leagueNavOpen` has
+ * no state gate — a dissolved league's lineup tab is reachable from the hub.
+ *
  * `DRAFTING` is where they part:
  *
  * - **Placement is refused.** The draft decides roster legality in memory
@@ -101,7 +118,7 @@ const REFUSALS: Record<IrPlacementRefusal, string> = {
  */
 export type IrMove = "PLACE" | "ACTIVATE";
 
-function irClosedReason(state: string, move: IrMove): string | null {
+export function irClosedReason(state: string, move: IrMove): string | null {
   if (state === "IN_SEASON" || state === "PLAYOFFS") return null;
 
   if (state === "DRAFTING") {
@@ -116,7 +133,22 @@ function irClosedReason(state: string, move: IrMove): string | null {
     return "This league has not drafted yet, so there is no roster to move anyone on or off.";
   }
 
-  return "This league's season is over, so its rosters are final.";
+  if (state === "SETTLED" || state === "DISSOLVED") {
+    return "This league's season is over, so its rosters are final.";
+  }
+
+  /*
+    A state this rule has not been taught about. Shut, like every other
+    fail-closed decision on this path — but it must not borrow the sentence
+    above, and until #316 it did.
+
+    That was survivable while the only reader was a 409 body nobody sees. This
+    sentence is now rendered on the lineup screen the moment the page loads, so
+    an unrecognised state would have told a manager his season was over on a
+    league that is running. Saying less is the only honest answer: we do not
+    know what this state is, which is exactly why we are refusing.
+  */
+  return "Injured reserve is not available for this league right now.";
 }
 
 /**

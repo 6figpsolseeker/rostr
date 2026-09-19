@@ -99,6 +99,16 @@ interface LineupResponse {
   roster: RosterPlayer[];
   /** From the frozen rules. Zero means the league has no injured reserve. */
   irSlots: number;
+  /**
+   * What injured reserve will accept right now, and the sentence when it will
+   * not. Composed server-side by `lib/ir-notice.ts`, from the same function the
+   * IR route refuses with.
+   *
+   * **Two booleans, not one.** During a draft a stashed player may be brought
+   * back and a new one may not, so the controls are gated separately — see
+   * `irAvailability` for why a single `open` cannot carry that.
+   */
+  ir: { place: boolean; activate: boolean; notice: string | null };
 }
 
 /**
@@ -464,6 +474,37 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
         </p>
       )}
 
+      {data.ir.notice !== null && (
+        /*
+          Why the injured-reserve controls are missing, when they are.
+
+          **Here rather than at the head of the injured-reserve section**, which
+          is where this started and where it was wrong. The two controls this
+          sentence explains live in two different sections: "Activate" is in the
+          injured-reserve list, but "To IR" is on each *bench row*, a whole
+          `<section>` earlier — and in `DRAFTING`, the one state this actually
+          reaches, "To IR" is the only one that moves. A manager scanning his
+          bench for the button he used last season would have found nothing
+          beside it and an explanation a hundred lines further down.
+
+          So it follows `editing.notice` above, for the reason that comment
+          gives: said once, above everything it governs. Quieter than that one,
+          because it withdraws two controls rather than freezing the whole
+          screen.
+
+          This is **not** a state gate on the page. Nothing is hidden that a
+          manager can still legitimately read; every control here stays governed
+          by its own rule.
+
+          One sentence for two controls. It is the *placement* sentence, which is
+          not a coin toss — `irAvailability` composes it and `ir-notice.test.ts`
+          asserts that placement is shut in every state where activation is.
+        */
+        <p className="rounded border border-nocturne-neutral-800 bg-nocturne-neutral-900/40 px-4 py-3 text-xs text-nocturne-neutral-400">
+          {data.ir.notice}
+        </p>
+      )}
+
       {(saveError || problems.length > 0) && (
         <div className="space-y-1 rounded border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
           {saveError && <p>{saveError}</p>}
@@ -704,22 +745,36 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
                 </span>
               )}
               {/*
-                Offered to a player the server would accept on the player rules
-                — a free IR slot and an out designation. The rule is enforced
-                there; this avoids a button whose only outcome is a refusal.
+                Offered to a player the server would accept **on the rules this
+                screen can check** — a free IR slot, an out designation, and a
+                league state that permits placement. `moveToIr` enforces those
+                three and one more, so this narrows the refusals rather than
+                eliminating them.
 
-                **It does not consult the league state, and since #311 that is a
-                gap rather than a simplification.** Injured reserve is now shut
-                outside `IN_SEASON`/`PLAYOFFS`, and this screen has no state gate
-                of its own, so in a settled or dissolved league both IR controls
-                still render and answer 409. `waivers.ts` and `trades.ts` solve
-                exactly this by exporting their closed-market reason and
-                returning it as `open`/`notice`; injured reserve keeps its reason
-                private. Filed rather than papered over here, because a second
-                copy of the rule in this file is the thing those two exports
-                exist to prevent.
+                The scoping phrase is load-bearing and was briefly deleted here.
+                `moveToIr` also refuses `GAME_STARTED`, and nothing in this
+                condition consults a kickoff — so "To IR" still renders for a
+                player already playing and still answers 409. That is a smaller,
+                separate gap — issue #321, which also records why the tempting
+                one-line conjunct here would introduce a quieter bug than the
+                one it removes. What is not acceptable is a comment claiming the
+                list is complete when it is not.
+
+                `data.ir.place` is the league-state half, and it is the reachable
+                one during a **draft**: a manager who drafted a player already
+                carrying an OUT designation meets both player-level conditions,
+                and placement is refused for the whole of `DRAFTING` because the
+                draft engine counts picks rather than reading the roster. Before
+                #316 that manager got a 409 from a button the screen had offered
+                him, on the busiest hour this product has.
+
+                The rule is **not** restated here. `irAvailability` composes it
+                from `irClosedReason`, which is what `moveToIr` itself throws
+                with — the shape `waivers.ts` and `trades.ts` already use, and the
+                reason a second copy of the rule does not live in this file.
               */}
-              {data.irSlots > 0 &&
+              {data.ir.place &&
+                data.irSlots > 0 &&
                 stashed.length < data.irSlots &&
                 irEligible(player.injuryDesignation) && (
                   <button
@@ -859,13 +914,30 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
                       </span>
                     )}
 
-                    <button
-                      onClick={() => void ir(player.playerId, "ACTIVATE")}
-                      disabled={saving}
-                      className="text-[10px] text-nocturne-neutral-600 hover:text-nocturne-accent-300 disabled:opacity-40"
-                    >
-                      Activate
-                    </button>
+                    {/*
+                      Gated on its own boolean, never on `place`. The two part
+                      during a draft, and binding this to placement is the trap
+                      the owner's ruling exists to prevent: it would strand a
+                      team over its roster limit with no legal way back under,
+                      since activation is the only way a player leaves this slot
+                      without being dropped.
+
+                      Unobservable in `DRAFTING` today — nothing can be on IR
+                      there, because placement is refused in every state that
+                      precedes it, so this list is empty and the button does not
+                      render. Written to the rule rather than to that accident:
+                      the accident is one migration or one backfill away from
+                      being false, and the failure would be silent.
+                    */}
+                    {data.ir.activate && (
+                      <button
+                        onClick={() => void ir(player.playerId, "ACTIVATE")}
+                        disabled={saving}
+                        className="text-[10px] text-nocturne-neutral-600 hover:text-nocturne-accent-300 disabled:opacity-40"
+                      >
+                        Activate
+                      </button>
+                    )}
                   </li>
                 );
               })}
