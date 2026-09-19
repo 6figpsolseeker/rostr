@@ -101,7 +101,7 @@ const REFUSALS: Record<IrPlacementRefusal, string> = {
  */
 export type IrMove = "PLACE" | "ACTIVATE";
 
-function irClosedReason(state: string, move: IrMove): string | null {
+export function irClosedReason(state: string, move: IrMove): string | null {
   if (state === "IN_SEASON" || state === "PLAYOFFS") return null;
 
   if (state === "DRAFTING") {

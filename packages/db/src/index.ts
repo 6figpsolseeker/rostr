@@ -350,7 +350,8 @@ export {
   type OnChainStake,
 } from "./membership.js";
 
-export { activateFromIr, IrError, moveToIr } from "./injured-reserve.js";
+export { activateFromIr, irClosedReason, IrError, moveToIr } from "./injured-reserve.js";
+export type { IrMove } from "./injured-reserve.js";
 
 export { lastWaiverRun, type WaiverRun, type WaiverRunClaim } from "./waiver-run.js";
 
