@@ -346,6 +346,80 @@ describe("what is still to come", () => {
   });
 });
 
+describe("a player no NFL club lists — #308", () => {
+  /*
+    PR #304 made a released player acquirable on purpose and labelled him on the
+    two screens where he is *chosen*. This is the screen where he is lived with,
+    and it read the literal word **"bye"** for him, every week, to both managers
+    in the matchup, all season.
+
+    "Bye" says he is resting and will be back next week. It is the exactly wrong
+    sentence about the one player it is wrong about, and it is the sentence
+    `docs/DECISIONS.md` says the ruling deliberately keeps acquirable.
+  */
+
+  /** Cut: no NFL club lists him, and no fixture exists for him anywhere. */
+  const release = (fx: Fixture) =>
+    fx.client.query(
+      "UPDATE players SET active = false, team_ref = NULL WHERE external_ref = 'qb-0'",
+    );
+
+  it("says so rather than calling it a bye", async () => {
+    /*
+      **The live defect.** Released before the byes were synced, so he has no
+      `player_seasons` row at all — `syncByeWeeks` inserts `WHERE team_ref = $3`
+      and he matches no club, so one is never created. `byeWeek` is therefore
+      null and the fallback claimed a bye.
+    */
+    const fx = await setup();
+    await release(fx);
+
+    const views = await loadWeekMatchups(fx.client, fx.leagueId, WEEK, BEFORE);
+    const side = sideOf(views, fx.teamIds[0]!);
+
+    expect(side?.starters[0]?.gameState).toBe("NO_CLUB");
+  });
+
+  it("outranks a stale bye row from the club that cut him", async () => {
+    /*
+      The other population, and the one a narrower fix would miss.
+
+      A player cut *mid-season* keeps the `player_seasons` row his old club gave
+      him, because `syncByeWeeks` matches on `team_ref` and so never revisits
+      him to clear it. A fix that consulted `active` only when `byeWeek` was
+      null would leave him reading "bye" in his old club's bye week — a
+      specific, plausible, false number, once a season.
+    */
+    const fx = await setup();
+    await recordBye(fx, "qb-0", WEEK);
+    await release(fx);
+
+    const views = await loadWeekMatchups(fx.client, fx.leagueId, WEEK, BEFORE);
+    const side = sideOf(views, fx.teamIds[0]!);
+
+    expect(side?.starters[0]?.gameState).toBe("NO_CLUB");
+  });
+
+  it("still calls a listed player's bye a bye", async () => {
+    /*
+      **The control, and the one that stops this fix becoming #182.**
+
+      `syncByeWeeks` is the only writer of `player_seasons`, so before it has
+      run for a season `loadByeWeeks` is empty for *everybody*. Claiming the new
+      state from `byeWeek === null` rather than from the club flag would put
+      every starter in every league on "no club" — the whole league mislabelled
+      to fix one player.
+    */
+    const fx = await setup();
+    await fx.client.query("UPDATE players SET team_ref = 'DEN' WHERE external_ref = 'qb-0'");
+
+    const views = await loadWeekMatchups(fx.client, fx.leagueId, WEEK, BEFORE);
+    const side = sideOf(views, fx.teamIds[0]!);
+
+    expect(side?.starters[0]?.gameState).toBe("BYE");
+  });
+});
+
 /** Give a player's team a bye week, which is what separates a bye from an
  * undated fixture. */
 async function recordBye(fx: Fixture, handle: string, week: number): Promise<void> {

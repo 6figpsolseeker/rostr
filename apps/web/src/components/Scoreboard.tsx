@@ -27,7 +27,17 @@ interface PlayerLine {
   position: string;
   slot: string;
   milliPoints: number;
-  gameState: "BYE" | "UNSCHEDULED" | "TIME_TBD" | "YET_TO_PLAY" | "IN_PROGRESS" | "FINAL";
+  /**
+   * Restated by hand rather than imported, like every other field here — the
+   * route→component link is untyped JSON.
+   *
+   * **So adding a member in `@rostr/db` does not fail a build here.** It falls
+   * through `Score`'s chain to `null` and renders no label at all, which is how
+   * a new state arrives silently. If `PlayerGameState` grows, this list and the
+   * chain below both need visiting; `pnpm typecheck` will not say so.
+   */
+  gameState:
+    "BYE" | "UNSCHEDULED" | "TIME_TBD" | "YET_TO_PLAY" | "IN_PROGRESS" | "FINAL" | "NO_CLUB";
   kickoffAt: string | null;
 }
 
@@ -325,20 +335,25 @@ function Player({
  */
 function Score({ line }: { line: PlayerLine }) {
   const label =
-    line.gameState === "BYE"
-      ? "bye"
-      : // A fixture whose hour is not fixed. Distinct from a bye, because this
-        // player will play and a bye player cannot — the difference decides
-        // whether a manager holds the roster spot. The stored kickoff is the
-        // earliest the game could start, so it is deliberately not shown as a
-        // time: the date is real and the clock beside it would not be.
-        line.gameState === "TIME_TBD" || line.gameState === "UNSCHEDULED"
-        ? "TBD"
-        : line.gameState === "YET_TO_PLAY"
-          ? kickoffLabel(line.kickoffAt)
-          : line.gameState === "IN_PROGRESS"
-            ? "live"
-            : null;
+    // No NFL club lists him, so nothing is coming — a different instruction from
+    // "bye", which says he is resting and will be back. This screen said "bye"
+    // for such a player every week of the season until #308.
+    line.gameState === "NO_CLUB"
+      ? "no club"
+      : line.gameState === "BYE"
+        ? "bye"
+        : // A fixture whose hour is not fixed. Distinct from a bye, because this
+          // player will play and a bye player cannot — the difference decides
+          // whether a manager holds the roster spot. The stored kickoff is the
+          // earliest the game could start, so it is deliberately not shown as a
+          // time: the date is real and the clock beside it would not be.
+          line.gameState === "TIME_TBD" || line.gameState === "UNSCHEDULED"
+          ? "TBD"
+          : line.gameState === "YET_TO_PLAY"
+            ? kickoffLabel(line.kickoffAt)
+            : line.gameState === "IN_PROGRESS"
+              ? "live"
+              : null;
 
   return (
     <span className="flex shrink-0 items-baseline gap-1.5">
