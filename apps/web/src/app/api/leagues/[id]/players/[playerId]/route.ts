@@ -71,6 +71,10 @@ export async function GET(
         name: profile.fullName,
         positions: profile.positions,
         teamRef: profile.teamRef,
+        // Sent beside `teamRef` rather than folded into it: the card needs both
+        // to say the right thing, and collapsing them here would decide in the
+        // route what `lib/player.ts` can test.
+        onNflRoster: profile.onNflRoster,
         imageUrl: profile.imageUrl,
         byeWeek: profile.byeWeek,
         bio: profile.bio,

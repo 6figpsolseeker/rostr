@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   ageOn,
+  byeChip,
+  clubLabel,
   heightText,
   initialsOf,
   injuryBadge,
@@ -178,5 +180,59 @@ describe("shortName", () => {
 
   it("leaves a one-word name alone", () => {
     expect(shortName("Cowboys")).toBe("Cowboys");
+  });
+});
+
+describe("what a released player's card says — #308", () => {
+  /*
+    PR #304 made a player his NFL club released acquirable on purpose, and
+    labelled him where he is *chosen*. The card is where the choosing actually
+    happens — it opens from the draft board and from the market, one click after
+    a correct "No NFL club" label — and it contradicted that label in three
+    places at once: a blank where the club goes, a stale bye week, and the words
+    "Free agent" in the fantasy sense.
+  */
+
+  it("names the fact instead of rendering a blank", () => {
+    // Was `{player?.teamRef && <span>…</span>}` with no else, so a released
+    // player got nothing at all and nothing took its place.
+    expect(clubLabel({ teamRef: null, onNflRoster: false })).toBe("Not on an NFL roster");
+  });
+
+  it("still says FA for a listed player whose club we do not hold", () => {
+    /*
+      **The half a `teamRef` check gets wrong.** The adapter reads `team` and
+      `isFreeAgent` separately, so a listed player can arrive with a blank club.
+      "FA" means *fantasy* free agent and is right for him; the longer sentence
+      would be a claim about his employment that we have no basis for.
+    */
+    expect(clubLabel({ teamRef: null, onNflRoster: true })).toBe("FA");
+  });
+
+  it("names the fact even when the provider still prints a club", () => {
+    /*
+      **The other half, and the one nothing in this repo caught before.** A
+      released player can keep a club abbreviation — `active` and `team_ref` come
+      from different provider fields. Keyed on `teamRef` this row reads "PHI" and
+      says nothing is wrong.
+    */
+    expect(clubLabel({ teamRef: "PHI", onNflRoster: false })).toBe("Not on an NFL roster");
+  });
+
+  it("drops a bye that belongs to the club that cut him", () => {
+    /*
+      `syncByeWeeks` inserts `WHERE team_ref = $3`, so it never revisits a
+      released player to clear the row his old club gave him. The card printed
+      `bye 9` from it — specific, plausible, false, every time it was opened.
+    */
+    expect(byeChip({ byeWeek: 9, onNflRoster: false })).toBeNull();
+  });
+
+  it("keeps the bye for everyone else", () => {
+    // The control. A bye is a real and useful fact about a listed player, and a
+    // blanket suppression would take it from the screen that exists to inform a
+    // draft pick.
+    expect(byeChip({ byeWeek: 9, onNflRoster: true })).toBe(9);
+    expect(byeChip({ byeWeek: null, onNflRoster: true })).toBeNull();
   });
 });

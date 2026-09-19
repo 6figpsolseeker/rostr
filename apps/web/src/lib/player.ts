@@ -198,3 +198,68 @@ export function shortName(name: string): string {
   const initial = [...first][0] ?? "";
   return `${initial}. ${rest}`;
 }
+
+/**
+ * What to show where a player's NFL club goes, and whether a bye means anything.
+ *
+ * ## Why these are functions rather than two `&&`s in a component
+ *
+ * `apps/web` cannot render a component in a test — both vitest projects are
+ * node-environment with no jsdom — so a rule written in `.tsx` is verified only
+ * by being run in production. Every mistake #308 is about was of that shape: a
+ * `{player?.teamRef && …}` with no `else`, and a bye chip that consulted only
+ * whether a number was present.
+ *
+ * ## The fact they read, and the one they must not
+ *
+ * `onNflRoster` comes from `players.active`, which is what the draft board and
+ * the player market already key on. **Never `teamRef`.** The adapter maps the
+ * two from different provider fields, so they disagree in both directions — a
+ * listed player with a blank club reads `teamRef` null, and a released player
+ * can keep a club abbreviation. Keying the label on `teamRef` would put "not on
+ * an NFL roster" on a rostered player and say nothing about some released ones.
+ *
+ * The card opens from the board and the market, so it is the screen most likely
+ * to contradict a label the manager read one click earlier. Its own docstring
+ * says why that matters: "a player who reads differently depending on which
+ * screen you came from is a player somebody will mis-draft."
+ */
+export interface ClubFacts {
+  readonly teamRef: string | null;
+  readonly onNflRoster: boolean;
+}
+
+/**
+ * The club chip.
+ *
+ * Three answers, and the third used to render as nothing at all — a blank where
+ * a fact belongs, which reads as "we forgot" rather than as information.
+ *
+ * "FA" here means *fantasy* free agent and is the right word for a listed
+ * player whose club we do not hold; it is the wrong word for a released one,
+ * which is what the longer sentence is for. `PlayerMarket` already draws that
+ * distinction in the same words.
+ */
+export function clubLabel({ teamRef, onNflRoster }: ClubFacts): string {
+  if (!onNflRoster) return "Not on an NFL roster";
+  return teamRef ?? "FA";
+}
+
+/**
+ * The bye week to show, or `null` when a bye is not a fact about this player.
+ *
+ * A released player keeps the `player_seasons` row his old club gave him —
+ * `syncByeWeeks` matches on `team_ref`, so it never revisits him to clear it.
+ * The card therefore printed `bye 9` for him: specific, plausible and false,
+ * every time it was opened, beside a blank club.
+ */
+export function byeChip({
+  byeWeek,
+  onNflRoster,
+}: {
+  readonly byeWeek: number | null;
+  readonly onNflRoster: boolean;
+}): number | null {
+  if (!onNflRoster) return null;
+  return byeWeek;
+}
