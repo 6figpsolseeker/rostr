@@ -224,6 +224,16 @@ export interface ResolveWeekOutcome {
   /** Why it was not finalised, when it was not. */
   readonly holdReason?: string;
   /**
+   * Present only when `holdReason` will never clear by itself.
+   *
+   * The distinction the cron reporter needs and could not previously make: a
+   * week waiting out its correction window and a week that can never finalise
+   * both look like `finalized: false` with a sentence. Only the second is
+   * worth anybody's attention, and it is invisible until somebody opens the
+   * bracket page in December.
+   */
+  readonly holdCode?: WeekHoldCode;
+  /**
    * Set when the week finalised on the clock rather than on complete data.
    *
    * **Two causes, not one, and the name only describes the first.** It began as
@@ -384,6 +394,7 @@ export async function resolveLeagueWeek(
     matchups: written,
     finalized,
     ...(decision.hold === null ? {} : { holdReason: decision.hold }),
+    ...(decision.holdCode ? { holdCode: decision.holdCode } : {}),
     ...(decision.fallback ? { finalizedWithUnfinishedGames: decision.fallback } : {}),
     ...(filled.teamsOverLimit.length > 0 ? { teamsOverLimit: filled.teamsOverLimit } : {}),
     ...(alreadyFinal > 0 ? { matchupsAlreadyFinal: alreadyFinal } : {}),
@@ -501,7 +512,29 @@ interface FinalizationDecision {
   readonly hold: string | null;
   /** Set only when it may *despite* games that never reached `FINAL`. */
   readonly fallback?: string;
+  /** Set only when the hold can never clear on its own. See `WeekHoldCode`. */
+  readonly holdCode?: WeekHoldCode;
 }
+
+/**
+ * A hold that the clock will never lift.
+ *
+ * **Every other hold is temporary, and that is a property of this function
+ * rather than an observation about it.** Past `clearsAt` every branch returns
+ * `hold: null` — `RULES.md` §10's fallback exists precisely so that one
+ * unplayed game cannot keep a paying week open forever. So "still held" is
+ * normal and self-clearing in every case but one.
+ *
+ * The exception is a week with **no games ingested at all**. There is no
+ * kickoff, so there is no window, so the clock never starts and the fallback
+ * that ends every other wait is unreachable. That week holds until somebody
+ * ingests a schedule.
+ *
+ * It is a code rather than a sentence because the caller that needs to act on
+ * it is a cron reporter, and matching on prose is how a reworded message
+ * silently disables an alarm.
+ */
+export type WeekHoldCode = "NO_SCHEDULE";
 
 /**
  * Whether a week may be finalised.
@@ -629,7 +662,9 @@ async function finalizationHold(
   // No games at all is not the postponement case and gets no fallback. There is
   // no kickoff to run a window from, and a week nobody has ingested would settle
   // every matchup 0–0 rather than zeroing the players of one abandoned game.
-  if (total === 0) return { hold: "no games are scheduled for this week yet" };
+  if (total === 0) {
+    return { hold: "no games are scheduled for this week yet", holdCode: "NO_SCHEDULE" };
+  }
 
   // `games.kickoff_at` is NOT NULL, so this cannot fire while `total > 0`. It
   // stays because the clock below is now the only thing that ends the wait, and

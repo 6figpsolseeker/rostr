@@ -17,6 +17,7 @@ import {
 import type { SqlClient } from "@rostr/db";
 import { db } from "@/lib/db";
 import { cronForbidden } from "@/lib/cron";
+import { scoreWeekNotes } from "@/lib/score-week";
 
 /**
  * Score every active league's current week.
@@ -97,9 +98,14 @@ async function run(client: SqlClient, now: Date, request: Request): Promise<Next
     league's own season, and the cron and the scoreboard cannot disagree because
     they are the same function on the same argument.
   */
-  const leagues = await client.query<{ id: string; name: string; season: number }>(
-    "SELECT id, name, season FROM leagues WHERE state IN ('IN_SEASON', 'PLAYOFFS')",
-  );
+  // `state` is selected for the bracket gate below, which has to tell a league
+  // still playing its regular season from one already in the playoffs.
+  const leagues = await client.query<{
+    id: string;
+    name: string;
+    season: number;
+    state: string;
+  }>("SELECT id, name, season, state FROM leagues WHERE state IN ('IN_SEASON', 'PLAYOFFS')");
 
   const scored: {
     leagueId: string;
@@ -109,6 +115,7 @@ async function run(client: SqlClient, now: Date, request: Request): Promise<Next
       matchups: number;
       finalized: boolean;
       holdReason?: string;
+      holdCode?: string;
       finalizedWithUnfinishedGames?: string;
     }[];
     failedWeeks?: readonly { readonly week: number; readonly reason: string }[];
@@ -122,7 +129,6 @@ async function run(client: SqlClient, now: Date, request: Request): Promise<Next
   }[] = [];
 
   let anyWeek = false;
-  let prefillProblems = 0;
 
   /** What the early fill did for one league, spread straight into its row. */
   type PrefillOutcome = {
@@ -195,7 +201,9 @@ async function run(client: SqlClient, now: Date, request: Request): Promise<Next
       );
       return { prefilled: { week, teams: outcome.teamsFilled } };
     } catch (error) {
-      prefillProblems++;
+      // Counted by `scoreWeekNotes` off the rows themselves. A tally kept here
+      // as well would be a second source for one number, free to disagree with
+      // the array it is supposed to describe.
       return { prefillProblem: error instanceof Error ? error.message : String(error) };
     }
   };
@@ -251,8 +259,45 @@ async function run(client: SqlClient, now: Date, request: Request): Promise<Next
     // A league still mid-season refuses, which is not a failure and is why this
     // does not take the scoring below it down with it.
     try {
-      await enterPlayoffs(client, league.id);
-      bracketGames = (await advancePlayoffs(client, league.id)).written;
+      /*
+        **Advance only when the bracket is actually buildable.**
+
+        `advancePlayoffs` throws `REGULAR_SEASON_UNFINISHED` whenever any
+        `phase='REGULAR'` row is unfinalised — which is the state of every
+        healthy league from week 1 until a week after week 14. Calling it
+        unconditionally therefore raised that refusal ~14,800 times a season and
+        `failed` counted every one, so `cron:status` read FAILING for about a
+        hundred days a year on a job that was working perfectly.
+
+        That was not merely noise. `cronJobState` checks `lastOutcome` *before*
+        staleness, so while the note was being written this job could not report
+        `STALE` — a scheduler that stopped firing mid-season would have looked
+        identical to one that was fine, on the job that decides money.
+
+        **The gate is `enterPlayoffs`'s own answer, not a second copy of the
+        rule.** Its `NOT EXISTS (… phase='REGULAR' AND finalized_at IS NULL)` is
+        the same predicate `advancePlayoffs` throws on, against the same table —
+        so there is no state in which the gate passes and the refusal still
+        fires for the ordinary reason.
+
+        **`|| state === 'PLAYOFFS'` is load-bearing in both directions.**
+        `enterPlayoffs` returns `false` for "not finished yet" *and* for "already
+        `PLAYOFFS`", because its UPDATE matches only `state = 'IN_SEASON'` — so
+        gating on the boolean alone would stop laying week 16 and 17 fixtures for
+        every league that had already entered. And keeping the call live for a
+        league already in the playoffs is what preserves the alarm: such a league
+        acquiring an unfinalised regular row still throws, still counts, and that
+        is exactly the duplicate-matchup shape #319 describes.
+
+        An allowlist on the error code was the obvious alternative and is worse:
+        it would suppress the refusal unconditionally, including for the league
+        above. `route.ts`'s own catch already warns that an allowlist inside a
+        per-league loop is usually the bug.
+      */
+      const entered = await enterPlayoffs(client, league.id);
+      if (entered || league.state === "PLAYOFFS") {
+        bracketGames = (await advancePlayoffs(client, league.id)).written;
+      }
     } catch (error) {
       // **One league's failure may never stop the others scoring.**
       //
@@ -308,6 +353,7 @@ async function run(client: SqlClient, now: Date, request: Request): Promise<Next
           matchups: o.matchups,
           finalized: o.finalized,
           ...(o.holdReason ? { holdReason: o.holdReason } : {}),
+          ...(o.holdCode ? { holdCode: o.holdCode } : {}),
           ...(o.finalizedWithUnfinishedGames
             ? { finalizedWithUnfinishedGames: o.finalizedWithUnfinishedGames }
             : {}),
@@ -341,51 +387,23 @@ async function run(client: SqlClient, now: Date, request: Request): Promise<Next
     if (last) Object.assign(last, await prefill(client, league, now));
   }
 
-  // The outcome, not merely the fact of running. A league is counted as failed
-  // if it was skipped entirely, if any week in its sweep failed, or if its
-  // bracket could not be built — all three are already in the JSON, and a row
-  // saying "ran, all fine" over them would be the healthy face this record
-  // exists to remove.
-  const failed = scored.filter(
-    (entry) => entry.skipped || entry.failedWeeks?.length || entry.bracketProblem,
-  ).length;
-
   /*
-    A week that settled on the fallback is recorded here too, and it was not.
+    The outcome, not merely the fact of running — composed in `lib/score-week.ts`.
 
-    `finalizedWithUnfinishedGames` reached the JSON response body and stopped
-    there. Vercel does not keep cron response bodies, so the one durable record
-    of a run — the row `pnpm cron:status` reads — said nothing, and a run in
-    which a paying week permanently scored twelve teams zero on box scores we
-    never fetched was indistinguishable from a quiet Tuesday. Green.
+    **Moved out of this file because nothing here could be tested.**
+    `route.test.ts` is `describe.skipIf(!DATABASE_URL)`, so it runs on nobody's
+    machine and never in CI; every rule written in this body was verified only by
+    being run in production. That is the reason `lib/lobby.ts`, `lib/setup.ts`
+    and `lib/ops.ts` exist, and this rule had earned the same treatment twice
+    over — it decides whether the only monitoring on the money job is readable.
 
-    It is deliberately **not** folded into `failed`. That count means "this
-    league did not get scored", which is a different and recoverable thing; a
-    fallback settlement is the opposite — the league was scored, once, for good.
-    Counting them together would let a retry-shaped response be applied to
-    something no retry can reach.
+    `scoreWeekNotes` also carries two changes of substance, both argued there: a
+    sweep that hit `SWEEP_LIMIT` now counts (it has weeks it never examined, and
+    said so only in a response body nobody retains), and a week that can never
+    finalise is named directly rather than being reported by proxy through the
+    bracket refusal it caused.
   */
-  const onFallback = scored.filter((entry) =>
-    entry.weeks?.some((week) => week.finalizedWithUnfinishedGames),
-  ).length;
-
-  const notes = [
-    ...(failed > 0 ? [`${failed} of ${scored.length} leagues had a problem`] : []),
-    // Recorded rather than left in the response body: Vercel keeps no cron
-    // response bodies, so a prefill that has been failing for a week would
-    // otherwise read as a quiet Tuesday — the failure this file already names.
-    ...(prefillProblems > 0
-      ? [`${prefillProblems} of ${scored.length} leagues could not prefill next week's lineups`]
-      : []),
-    ...(onFallback > 0
-      ? [
-          `${onFallback} of ${scored.length} leagues permanently settled a week on the ` +
-            `clock rather than on complete data — see finalizedWithUnfinishedGames`,
-        ]
-      : []),
-  ];
-
-  await recordCronRun(client, "score-week", notes.length > 0 ? notes.join("; ") : null);
+  await recordCronRun(client, "score-week", scoreWeekNotes(scored));
 
   /*
     No top-level `week` any more: there is one per league, and publishing a
