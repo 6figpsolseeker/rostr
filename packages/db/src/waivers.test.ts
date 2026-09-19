@@ -236,6 +236,49 @@ describe("dropping", () => {
 });
 
 describe("free agency", () => {
+  it("puts the dropped player on the wire inside the transaction — #90", async () => {
+    /*
+      The release and the wire row used to commit separately: `placeDroppedPlayer`
+      ran on the bare client *after* the transaction closed. Between the two,
+      the dropped player was released and carried no wire row — and
+      `availabilityOf` reads exactly those two things, so another manager asking
+      in that gap was told `FREE_AGENT` and could sign a player on his way to
+      waivers. The wire row then landed on top of a rostered player, and the
+      league held someone its own wire declared unclaimable until Wednesday.
+
+      **Asserted as a statement, because the outcome cannot be produced here.**
+      The window needs a second connection to read in, and PGlite has one. What
+      is checkable is that the two writes are in the same transaction, which is
+      the whole of the fix — there is then no instant at which a reader sees
+      neither.
+
+      `dropPlayer` has always done this correctly; this was the one release path
+      that did not, which is why the assertion names the transaction rather than
+      the behaviour.
+    */
+    const fx = await setup();
+    const rec = recordStatements(fx.client);
+
+    await addFreeAgent(rec.client, {
+      leagueId: fx.leagueId,
+      teamId: fx.teams[0]!,
+      addPlayerId: fx.players.get("target")!,
+      dropPlayerId: fx.players.get("held")!,
+      now: MONDAY,
+    });
+
+    const begin = rec.statements.findIndex((sql) => sql.trim() === "BEGIN");
+    const commit = rec.statements.findIndex((sql) => sql.trim() === "COMMIT");
+    const wire = rec.statements.findIndex((sql) => sql.includes("INSERT INTO waiver_wire"));
+
+    expect(wire, "the dropped player is put on the wire at all").toBeGreaterThanOrEqual(0);
+    expect(wire, "inside the transaction").toBeGreaterThan(begin);
+    expect(wire, "and before it commits").toBeLessThan(commit);
+    // Same handle as the transaction, not the pool client it used to run on.
+    expect(rec.connections[wire]).toBe(rec.connections[begin]);
+    expect(rec.connections[wire]).not.toBe("outer");
+  });
+
   it("takes the capacity key before counting the roster — #277", async () => {
     /*
       The count and the insert are two statements, and nothing between them

@@ -913,13 +913,32 @@ export async function addFreeAgent(db: SqlClient, input: AddInput): Promise<void
       input.leagueId,
       input.addPlayerId,
     ]);
-  });
 
-  // A dropped player has to land somewhere, and the destination depends on how
-  // long *this* team held him — so it runs after the swap, not before.
-  if (input.dropPlayerId) {
-    await placeDroppedPlayer(db, input.leagueId, input.dropPlayerId, input.now, stored.rules);
-  }
+    /*
+      A dropped player has to land somewhere, and the destination depends on how
+      long *this* team held him — so it runs after the release, not before.
+
+      **Inside the transaction, which it was not.** It ran on the bare client
+      after the commit, which left a window in which the player was released and
+      carried no wire row: `availabilityOf` reads exactly those two things, so
+      another manager asking in that gap was told `FREE_AGENT` and could sign a
+      player who was on his way to waivers. The wire row then landed on top,
+      and the league held a rostered player its own wire declared unclaimable
+      until Wednesday — the 24-hour rule this module exists to enforce, bypassed
+      by two people clicking at once. Issue #90 item 4.
+
+      `dropPlayer` has always written its wire row inside its own transaction,
+      for the same reason and with the same comment. This is the one release
+      path that did not.
+
+      There is no window to close on the other side: the release and the wire
+      row now commit together, so a reader sees the player rostered or sees him
+      on the wire, never neither.
+    */
+    if (input.dropPlayerId) {
+      await placeDroppedPlayer(tx, input.leagueId, input.dropPlayerId, input.now, stored.rules);
+    }
+  });
 }
 
 /** Put a released player on waivers or into free agency. */
