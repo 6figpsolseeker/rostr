@@ -213,6 +213,14 @@ export async function issueWalletChallenge(
  * The challenge is consumed whether or not the signature checks out, so a wrong
  * signature costs an attacker a fresh round trip rather than unlimited attempts
  * against one nonce.
+ *
+ * **The consuming write is what enforces that, not the read above it.** The
+ * `consumed_at` test is a snapshot taken before the `UPDATE`, so on its own it
+ * lets N parallel requests all pass and all reach the signature check against
+ * one nonce — which is the sentence above being false while appearing to be
+ * enforced. Issue #90 item 7. The predicate on the write is the guard, and
+ * `RETURNING` is what makes it observable: `SqlClient.query` hands back rows and
+ * discards `rowCount`, so an unchecked guard would be unreadable.
  */
 export async function linkWalletWithSignature(
   db: SqlClient,
@@ -237,10 +245,34 @@ export async function linkWalletWithSignature(
     throw new SessionError("No pending challenge for this wallet", "CHALLENGE_NOT_FOUND");
   }
 
-  await db.query(
-    "UPDATE wallet_challenges SET consumed_at = $3 WHERE user_id = $1 AND address = $2",
+  const consumed = await db.query<{ nonce: string }>(
+    `UPDATE wallet_challenges SET consumed_at = $3
+      WHERE user_id = $1 AND address = $2 AND consumed_at IS NULL
+    RETURNING nonce`,
     [userId, address, now.toISOString()],
   );
+
+  /*
+    Two ways to lose, one refusal.
+
+    Nothing matched: somebody else consumed the challenge between the read and
+    here. And a **different** nonce came back: `issueWalletChallenge` upserts on
+    `(user_id, address)` and clears `consumed_at`, so a second tab asking for a
+    challenge re-arms this row — the write then matches, burns that new nonce,
+    and this request would go on to verify the signature against the stale one
+    it read. Which would succeed, since the stale nonce was genuinely issued,
+    while silently spending a challenge the other tab is waiting on.
+
+    Reported as the same refusal the read gives, because it is the same fact —
+    this request does not hold the challenge — and a second code would invite a
+    caller to treat losing a race as different from arriving late.
+
+    This is what `RETURNING nonce` is for. Selecting it and not comparing it
+    would be the check looking present while doing nothing.
+  */
+  if (consumed.length === 0 || consumed[0]!.nonce !== row.nonce) {
+    throw new SessionError("No pending challenge for this wallet", "CHALLENGE_NOT_FOUND");
+  }
 
   if (new Date(row.expires_at).getTime() <= now.getTime()) {
     throw new SessionError("Challenge has expired", "CHALLENGE_EXPIRED");

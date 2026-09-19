@@ -78,7 +78,16 @@ export class WaiverError extends Error {
       | "IN_A_TRADE"
       | "GAME_STARTED"
       /** The league is not playing, so nobody is moving players. */
-      | "LEAGUE_NOT_IN_SEASON",
+      | "LEAGUE_NOT_IN_SEASON"
+      /**
+       * There was no pending claim to cancel.
+       *
+       * Already awarded or failed by a run, already withdrawn in another tab, or
+       * another team's. One refusal for all of them: which it was is not a
+       * distinction the manager can act on, and naming it would leak whether a
+       * claim they do not own exists.
+       */
+      | "CLAIM_NOT_PENDING",
   ) {
     super(message);
     this.name = "WaiverError";
@@ -1037,11 +1046,40 @@ export async function cancelClaim(
   teamId: string,
   claimId: string,
 ): Promise<void> {
-  await db.query(
+  /*
+    Refuses rather than returning quietly, which is how `declineTrade` handles
+    the same shape.
+
+    Since #90 item 3 the waiver run holds `FOR UPDATE` on the claims it is
+    deciding, so a cancel arriving mid-run waits and then finds the claim
+    `AWARDED` or `FAILED`. That is the right outcome — by then the players have
+    moved — but the manager has to be told, and told *something*: the screen has
+    never rendered anything for a cancel, so a silent no-op is indistinguishable
+    from success, and the claim row disappears either way because it is no
+    longer `PENDING`.
+
+    A thrown refusal reaches the red panel through the route's existing error
+    path. A boolean would not have: the market's response handler has branches
+    for `added`, `claimed` and `dropped` and none for this, so both answers
+    rendered nothing.
+
+    `RETURNING id` because `SqlClient.query` hands back rows and discards
+    `rowCount`, so an unobserved guard would be unreadable — the pattern the
+    trade state writes established.
+  */
+  const cancelled = await db.query<{ id: string }>(
     `UPDATE waiver_claims SET state = 'CANCELLED'
-      WHERE id = $1 AND league_id = $2 AND team_id = $3 AND state = 'PENDING'`,
+      WHERE id = $1 AND league_id = $2 AND team_id = $3 AND state = 'PENDING'
+    RETURNING id`,
     [claimId, leagueId, teamId],
   );
+
+  if (cancelled.length === 0) {
+    throw new WaiverError(
+      "That claim is no longer pending — it may already have been processed.",
+      "CLAIM_NOT_PENDING",
+    );
+  }
 }
 
 /**
@@ -1159,8 +1197,36 @@ export async function processWaivers(
       drop_player_id: string | null;
       created_at: string;
     }>(
+      /*
+        Locked, and this is the guard. Issue #90 item 3.
+
+        The league row above does not serialise these: `cancelClaim` is a bare
+        autocommit `UPDATE` on one claim and never touches `leagues`, so it does
+        not queue behind that lock. A manager cancelling a claim while this run
+        was loading priority and rosters committed straight through, and the
+        award below then stamped `AWARDED` over `CANCELLED` — the player moved,
+        and the team went to the back of the order, for a claim it had withdrawn.
+
+        **A `state = 'PENDING'` predicate on the write is not the guard here, and
+        adding one would make this worse rather than better.** That is the shape
+        `declineTrade` and `withdrawTrade` use, and it works there because the
+        state write *is* the whole transaction. Here the roster release and the
+        insert happen first — so a predicate that matched nothing would leave the
+        players moved and the claim still reading `CANCELLED`, which is the same
+        bad outcome with the record now disagreeing about it too. The decision
+        has to be made unchangeable before the roster moves, which means holding
+        these rows from the moment they are read.
+
+        Ordering: `leagues` then `waiver_claims`, and nothing takes them the
+        other way round. `submitClaim` does read `leagues`, but neither it nor
+        `cancelClaim` holds a claim lock while waiting on anything — both run in
+        autocommit and take no row lock at all, so neither can be the other edge
+        of a cycle. This is the only transaction in the schema that locks a
+        claim row.
+      */
       `SELECT id, team_id, add_player_id, drop_player_id, created_at
-         FROM waiver_claims WHERE league_id = $1 AND state = 'PENDING'`,
+         FROM waiver_claims WHERE league_id = $1 AND state = 'PENDING'
+         FOR UPDATE`,
       [leagueId],
     );
 

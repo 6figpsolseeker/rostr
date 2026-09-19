@@ -25,6 +25,9 @@ const STATUS: Record<string, number> = {
   // would call it 400.
   SLOT_HELD_FOR_TRADE: 409,
   DUPLICATE_CLAIM: 409,
+  // Nothing pending to cancel — already awarded, already failed, already
+  // withdrawn, or another team's. A state conflict like the rest of these.
+  CLAIM_NOT_PENDING: 409,
   IN_A_TRADE: 409,
   // The league is not playing. A conflict with its state, like every other 409
   // here, and the fallback below would call it a malformed request.
@@ -169,6 +172,11 @@ export async function POST(
       if (!body.claimId) {
         return NextResponse.json({ error: "claimId is required" }, { status: 400 });
       }
+      // `cancelClaim` refuses when there was nothing pending to cancel, so this
+      // is only reached when it genuinely happened. It used to answer `true`
+      // whatever the outcome, and the market renders nothing for a cancel — so
+      // a manager who lost the race to the waiver run saw the row disappear and
+      // nothing else, which is what success looks like too.
       await cancelClaim(client, id, context.myTeamId, body.claimId);
       return NextResponse.json({ cancelled: true });
     }
