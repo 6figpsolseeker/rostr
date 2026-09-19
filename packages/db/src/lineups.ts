@@ -325,6 +325,45 @@ export async function loadByeWeeks(
 }
 
 /**
+ * Which of these players no NFL club currently lists.
+ *
+ * A sibling loader, for the reason `loadByeWeeks` above gives: `loadKickoffs`
+ * is `validateLineup`'s lock oracle and `loadRosterForWeek` is its ownership
+ * oracle, and neither may gain a column to serve a label. `LineupEditor` names
+ * that prohibition directly. Loading it alongside means a bug here can mislabel
+ * a row and cannot unlock one or widen who may be started.
+ *
+ * ## Why this cannot be derived from what the lineup already holds
+ *
+ * The obvious shortcut is `teamRef === null`, and it is wrong in both
+ * directions. The adapter maps `team_ref` from the provider's `team` and
+ * `active` from its `isFreeAgent`, independently — so a listed player with a
+ * blank club reads null, and a released player can keep a club abbreviation.
+ *
+ * The other shortcut is `kickoffAt === null`, and that is worse: it is never
+ * null for this player. `loadRosterForWeek` hands anyone whose club has no
+ * fixture the week's first kickoff, deliberately, so his slot still locks — see
+ * the test that exists for exactly that trap. It is also why the lineup screen
+ * showed no "bye" for him and #308's diagnosis missed this screen entirely.
+ *
+ * `active` is the column the draft board and the market already key on, so all
+ * four surfaces now answer from one fact rather than four approximations.
+ */
+export async function loadOffNflRoster(
+  db: SqlClient,
+  playerIds: readonly string[],
+): Promise<ReadonlySet<string>> {
+  if (playerIds.length === 0) return new Set();
+
+  const rows = await db.query<{ id: string }>(
+    "SELECT id FROM players WHERE id = ANY($1) AND NOT active",
+    [[...playerIds]],
+  );
+
+  return new Set(rows.map((row) => row.id));
+}
+
+/**
  * Which of these players' games this week carry a provisional kickoff.
  *
  * `games.kickoff_tbd`: the fixture and its date are known, the hour is not, and

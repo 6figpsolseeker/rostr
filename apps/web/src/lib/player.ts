@@ -263,3 +263,75 @@ export function byeChip({
   if (!onNflRoster) return null;
   return byeWeek;
 }
+
+/** What a lineup row should say about a player's week, beside his points. */
+export interface WeekNote {
+  /** The chip, two or three characters. */
+  readonly short: string;
+  /** The tooltip. States the observable and gives no advice. */
+  readonly detail: string;
+}
+
+/**
+ * Why this player may not score this week, or `null` when nothing is unusual.
+ *
+ * ## `onNflRoster` wins over everything, including a fixture
+ *
+ * That ordering is the whole function, and it is not obvious, so: a released
+ * player's `availability` is **`SCHEDULED`**. `loadRosterForWeek` hands anyone
+ * whose club has no fixture the week's first kickoff rather than null — on
+ * purpose, so his slot still locks — and `gameAvailability` sees a non-null
+ * kickoff and answers accordingly.
+ *
+ * So a screen reading `availability` alone shows him as playing a game that
+ * does not exist, with a lock countdown, and marks him "played" from the week's
+ * first kickoff. Checking the club flag only when the schedule has nothing to
+ * say would therefore never fire for the player this exists for.
+ *
+ * ## And it is claimed from the flag alone
+ *
+ * Never from a missing bye. `syncByeWeeks` is the only writer of
+ * `player_seasons`, so before it runs for a season every player looks
+ * bye-less — reading that as "no club" would relabel the entire league. That is
+ * the failure #182 fixed, inverted.
+ */
+export function weekNote({
+  availability,
+  onNflRoster,
+}: {
+  readonly availability: "SCHEDULED" | "TIME_TBD" | "BYE" | "UNSCHEDULED";
+  readonly onNflRoster: boolean;
+}): WeekNote | null {
+  if (!onNflRoster) {
+    return {
+      short: "no club",
+      detail:
+        "He is not listed with an NFL club, so no fixture is stored for him and " +
+        "he cannot score this week.",
+    };
+  }
+
+  if (availability === "BYE") {
+    return { short: "bye", detail: "His club is on its bye this week." };
+  }
+
+  if (availability === "TIME_TBD") {
+    return {
+      short: "TBD",
+      detail:
+        "He plays this week. The NFL has not fixed the kickoff time, so this " +
+        "slot locks at the earliest hour the game could start.",
+    };
+  }
+
+  if (availability === "UNSCHEDULED") {
+    return {
+      short: "TBD",
+      detail:
+        "No fixture stored for his team this week, and it is not their bye. " +
+        "Check back once the schedule syncs.",
+    };
+  }
+
+  return null;
+}
