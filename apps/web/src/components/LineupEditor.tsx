@@ -755,7 +755,9 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
                 `moveToIr` also refuses `GAME_STARTED`, and nothing in this
                 condition consults a kickoff — so "To IR" still renders for a
                 player already playing and still answers 409. That is a smaller,
-                separate gap; what is not acceptable is a comment claiming the
+                separate gap — issue #321, which also records why the tempting
+                one-line conjunct here would introduce a quieter bug than the
+                one it removes. What is not acceptable is a comment claiming the
                 list is complete when it is not.
 
                 `data.ir.place` is the league-state half, and it is the reachable
