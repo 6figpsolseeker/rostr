@@ -32,14 +32,26 @@ import { withTransaction } from "./transaction.js";
 import { loadWeekResults } from "./week.js";
 import type { MatchupPhase } from "./week.js";
 
+/**
+ * A refusal from the playoff writers.
+ *
+ * **`NOT_ENOUGH_TEAMS` was removed 2026-09-19**: it was declared here and thrown
+ * at no site in the tree. A field too small for a bracket is refused by
+ * `bracketFor`, which returns `null` below two teams, or by `BracketError`'s
+ * own `FIELD_TOO_SMALL` — so this member described a refusal that could not
+ * happen.
+ *
+ * **Nothing switches on these codes**, so the cost was never a wrong branch.
+ * `score-week` matches the *class* and stringifies `.code` into a message; the
+ * alarm is raised by a `bracketProblem` being present at all. The cost is that
+ * this union is the taxonomy a reader has to work through when deciding whether
+ * a refusal is real, and a code nothing throws is a case every one of them must
+ * rule out by hand. Three reviews did exactly that in one afternoon.
+ */
 export class PlayoffError extends Error {
   constructor(
     message: string,
-    readonly code:
-      | "LEAGUE_NOT_FOUND"
-      | "REGULAR_SEASON_UNFINISHED"
-      | "NOT_ENOUGH_TEAMS"
-      | "NO_PLAYOFF_WEEKS",
+    readonly code: "LEAGUE_NOT_FOUND" | "REGULAR_SEASON_UNFINISHED" | "NO_PLAYOFF_WEEKS",
   ) {
     super(message);
     this.name = "PlayoffError";

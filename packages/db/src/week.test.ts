@@ -827,6 +827,45 @@ describe("a game that never finishes — docs/RULES.md §10", () => {
 
     expect(outcome.finalized).toBe(false);
     expect(outcome.holdReason).toMatch(/no games are scheduled/);
+
+    /*
+      **And it says so in a way a machine can read.**
+
+      This is the one hold that never clears: no kickoff means no window, so
+      §10's fallback — which ends every other wait — is unreachable, and the
+      week stays open until somebody ingests a schedule. Nothing throws, so it
+      never reaches `failedWeeks`; later weeks finalise normally, so the sweep
+      never defers it. The only thing that used to report such a league was the
+      bracket refusal it caused downstream, and that refusal fired for healthy
+      leagues too — so it named a real problem with a sentence true of everyone.
+
+      `score-week` now raises it directly off this code. It is a code rather
+      than the sentence above because the sentence is operator-facing prose that
+      will be reworded, and matching on prose is how a rewording silently
+      disables the alarm behind it.
+    */
+    expect(outcome.holdCode).toBe("NO_GAMES_INGESTED");
+  });
+
+  it("marks no other hold as permanent", async () => {
+    /*
+      The other half, and the one that keeps the alarm quiet.
+
+      Every hold but the one above is temporary *by construction*: past
+      `clearsAt` every branch of `finalizationHold` returns `hold: null`, because
+      a paying week has to settle even with a game that was never played. So a
+      week merely waiting must carry no code, or `score-week` would report the
+      ordinary state of every league in progress as something to act on — which
+      is the false alarm this whole change exists to remove.
+    */
+    const fx = await setup();
+    await schedule(fx);
+
+    const outcome = await resolveLeagueWeek(fx.client, fx.leagueId, WEEK, DURING);
+
+    expect(outcome.finalized).toBe(false);
+    expect(outcome.holdReason).toBeDefined();
+    expect(outcome.holdCode).toBeUndefined();
   });
 });
 

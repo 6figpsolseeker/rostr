@@ -163,7 +163,9 @@ function stepOf(field: string): number | null {
  * `recordCronRun` — `/api/cron/season-sync` records as `season-sync`. If that
  * convention is ever broken the job reports `NEVER_RAN` while running perfectly,
  * which is loud and wrong rather than quiet and wrong; there is a test pinning
- * the six real names against the real file for exactly that reason.
+ * the seven real names against the real file for exactly that reason — seven,
+ * not six, since `injuries` joined the schedule and this sentence was not
+ * revisited. Do not hand-maintain the number: the test reads `vercel.json`.
  */
 export function expectedJobs(config: CronConfig): readonly ExpectedJob[] {
   return (config.crons ?? [])
