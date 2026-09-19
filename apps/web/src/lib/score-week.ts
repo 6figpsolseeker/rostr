@@ -6,8 +6,9 @@ import "server-only";
  * ## Why this is not in the route
  *
  * `apps/web/src/app/api/cron/score-week/route.test.ts` is
- * `describe.skipIf(!DATABASE_URL)`, so it runs on nobody's machine and never in
- * CI. Every rule that lived in the route body was therefore verified only by
+ * `describe.skipIf(!DATABASE_URL)` — so it runs for whoever has that variable
+ * set locally, and **never in CI**, which has no Postgres service and never
+ * will. Every rule that lived in the route body was therefore verified only by
  * being run in production — the reason `lib/lobby.ts`, `lib/setup.ts` and
  * `lib/ops.ts` exist. `apps/web/src/lib/*.test.ts` **is** collected by the root
  * `vitest.config.ts` and needs no database, so a test here actually executes.
@@ -36,7 +37,8 @@ export interface WeekRow {
   readonly finalized: boolean;
   readonly holdReason?: string;
   /**
-   * Set when the hold can never clear on its own — today only `NO_SCHEDULE`.
+   * Set when the hold can never clear on its own — today only
+   * `NO_GAMES_INGESTED`.
    *
    * Matched as a code rather than by reading `holdReason`, so that rewording an
    * operator-facing sentence cannot silently disable the alarm behind it.
@@ -58,13 +60,38 @@ export interface LeagueRow {
 /**
  * Did this league fail to get scored?
  *
- * Three conditions, and they mean the same thing — the league did not get the
- * work done that this run exists to do. `bracketProblem` **stays in this set**,
- * and that is the decision: after the call gate in `route.ts`, a bracket
- * refusal is no longer the normal state of a healthy league, so any refusal
- * that still arrives is a league already in `PLAYOFFS` whose regular season
- * came apart underneath it, our own `INVARIANT`, or an unrecognised class. All
- * three deserve an alarm.
+ * Four conditions, and they mean the same thing — the league did not get the
+ * work done that this run exists to do.
+ *
+ * `bracketProblem` **stays in this set**, and that is the decision: after the
+ * call gate in `route.ts`, a bracket refusal is no longer the normal state of a
+ * healthy league. Six codes can still arrive, and the honest split is the one
+ * `CLAUDE.md` already draws rather than the three-way one an earlier draft of
+ * this comment invented:
+ *
+ * - **ours** — `INVARIANT` from the ladder that decides the pot, or anything
+ *   arriving as `UNEXPECTED` (chiefly `StandingsError`, which shares no base
+ *   class with the other two and so lands in the fallback);
+ * - **that league's own frozen rules** — `FIELD_TOO_SMALL` and
+ *   `NOT_ENOUGH_WEEKS`;
+ * - **should be unconstructible** — `LEAGUE_NOT_FOUND`, and
+ *   `REGULAR_SEASON_UNFINISHED` now that the gate stands in front of it.
+ *
+ * ## The residual this fix does not close, stated rather than left to be found
+ *
+ * The middle group is **permanently true once it fires**, because frozen rules
+ * cannot be amended — so such a league pins this job red for the rest of its
+ * season, which is the same permanent-red failure the gate above exists to
+ * remove. And `NOT_ENOUGH_WEEKS` is reachable with rules that pass validation:
+ * `validate.ts` sizes `playoffWeeks` against the **main** bracket only, and
+ * nothing checks the consolation field, so a legal 12-team league with
+ * `playoffTeams: 2` needs one playoff week and four consolation rounds.
+ *
+ * It is still counted, deliberately. A league that can never build a bracket is
+ * a real problem somebody should hear about once, and suppressing it here would
+ * be the allowlist this design rejected. What it actually wants is a durable
+ * channel that reports without reddening — filed separately — and inventing
+ * half of that here would be worse than naming the gap.
  *
  * `deferredWeeks` joins them, and did not before. A league whose sweep hit
  * `SWEEP_LIMIT` has weeks it never examined, which is the same "did not get
@@ -75,6 +102,18 @@ function leagueFailed(row: LeagueRow): boolean {
   return Boolean(
     row.skipped || row.failedWeeks?.length || row.deferredWeeks?.length || row.bracketProblem,
   );
+}
+
+/**
+ * Whether a league reported a problem string at all, empty one included.
+ *
+ * `route.ts` builds these from `error.message`, and an `Error` with an empty
+ * message is not impossible — so a bare truthiness test silently drops the one
+ * failure that could say least about itself. The old inline counter incremented
+ * in the `catch` and therefore counted it.
+ */
+function reported(value: string | undefined): boolean {
+  return value !== undefined;
 }
 
 /** Weeks that will never finalise without somebody intervening. */
@@ -91,7 +130,7 @@ function overdueWeeks(row: LeagueRow): readonly number[] {
  */
 export function scoreWeekNotes(rows: readonly LeagueRow[]): string | null {
   const failed = rows.filter(leagueFailed).length;
-  const prefillProblems = rows.filter((r) => r.prefillProblem).length;
+  const prefillProblems = rows.filter((r) => reported(r.prefillProblem)).length;
 
   /*
     A week that settled on the clock rather than on complete data.
@@ -118,14 +157,18 @@ export function scoreWeekNotes(rows: readonly LeagueRow[]): string | null {
     Now the bracket refusal is gone for healthy leagues, so this has to be said
     directly or it would be said nowhere at all.
   */
-  const overdue = rows.flatMap((r) => overdueWeeks(r));
+  const overdue = [...new Set(rows.flatMap((r) => overdueWeeks(r)))].sort((a, b) => a - b);
 
   const notes = [
     ...(failed > 0 ? [`${failed} of ${rows.length} leagues had a problem`] : []),
     ...(overdue.length > 0
       ? [
-          `${overdue.length} week(s) can never finalise and are holding the bracket: ` +
-            `week ${[...new Set(overdue)].sort((a, b) => a - b).join(", ")}`,
+          // Deduplicated *before* counting, so the number and the list cannot
+          // disagree — two leagues wedged on the same week is one week to go and
+          // look at, not two.
+          `${overdue.length} ${overdue.length === 1 ? "week" : "weeks"} can never finalise ` +
+            `and are holding the bracket: ` +
+            `week ${overdue.join(", ")}`,
         ]
       : []),
     ...(prefillProblems > 0
@@ -133,8 +176,11 @@ export function scoreWeekNotes(rows: readonly LeagueRow[]): string | null {
       : []),
     ...(onFallback > 0
       ? [
-          `${onFallback} league(s) finalised a week on the correction-window fallback — ` +
-            `those scores are permanent`,
+          // Names the field, because the note is where somebody starts and the
+          // JSON is where the detail is. An earlier draft dropped it and left an
+          // operator with a sentence and nothing to grep for.
+          `${onFallback} of ${rows.length} leagues permanently settled a week on the ` +
+            `clock rather than on complete data — see finalizedWithUnfinishedGames`,
         ]
       : []),
   ];

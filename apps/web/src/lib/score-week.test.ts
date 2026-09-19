@@ -5,9 +5,10 @@ import { scoreWeekNotes, type LeagueRow } from "./score-week";
   What `score-week` writes into `cron_runs.last_outcome`.
 
   These are the first tests this rule has ever had. It lived in the route body,
-  and `route.test.ts` is `describe.skipIf(!DATABASE_URL)` — so it ran on nobody's
-  machine and never in CI, and the rule was verified only by being run in
-  production. It was wrong in production for about a hundred days a year.
+  and `route.test.ts` is `describe.skipIf(!DATABASE_URL)` — so it runs for
+  whoever has that variable set locally and **never in CI**, which has no
+  Postgres service. The rule was therefore verified only by being run in
+  production, and it was wrong in production for about a hundred days a year.
 */
 
 /** A league mid-season: scored, week held inside its correction window. */
@@ -31,29 +32,40 @@ describe("scoreWeekNotes", () => {
   });
 
   it("still reports a league that could not be scored", () => {
-    expect(scoreWeekNotes([{ skipped: "SCHEDULE_MISSING" }])).toMatch(
+    // `NO_SCHEDULE` is a real `WeekError` code. An earlier draft invented
+    // `SCHEDULE_MISSING`, which belongs to nothing — a fixture that cannot
+    // occur proves the rule handles a case that will never arrive.
+    expect(scoreWeekNotes([{ skipped: "NO_SCHEDULE" }])).toMatch(
       /1 of 1 leagues had a problem/,
     );
   });
 
-  it("still reports a bracket refusal, because after the gate they are all real", () => {
+  it("still reports every bracket refusal, whatever the code", () => {
     /*
       The gate in `route.ts` stops `advancePlayoffs` being called at all while a
       league's regular season is unfinished, so a refusal that still arrives is
-      one of: a league already in `PLAYOFFS` whose regular season came apart
-      underneath it (the #319 duplicate-row shape), our own `INVARIANT` from the
-      ladder that decides the pot, or an unrecognised class.
+      real. Six codes can reach the field and every one of them counts —
+      asserted so that nobody "finishes" this fix by suppressing a code, which
+      was the first design considered and the one that throws the alarm away.
 
-      Asserted here so that nobody "finishes" this fix by also suppressing the
-      code — which was the first design considered and is the one that would
-      throw the alarm away.
+      Two of these are **permanently true** once they fire, because frozen rules
+      cannot be amended, so such a league pins the job red for its whole season.
+      That residual is named in `score-week.ts` and deliberately not papered
+      over here — a league that can never build a bracket is a real problem, and
+      the fix for "real but permanent" is a channel that reports without
+      reddening, not a filter.
     */
-    expect(scoreWeekNotes([{ bracketProblem: "INVARIANT: bad pairing" }])).toMatch(
-      /had a problem/,
-    );
-    expect(scoreWeekNotes([{ bracketProblem: "REGULAR_SEASON_UNFINISHED" }])).toMatch(
-      /had a problem/,
-    );
+    for (const code of [
+      "INVARIANT: bad pairing",
+      "FIELD_TOO_SMALL: 1 team",
+      "NOT_ENOUGH_WEEKS: needs 4 rounds in 1 week",
+      "LEAGUE_NOT_FOUND",
+      "NO_PLAYOFF_WEEKS",
+      "REGULAR_SEASON_UNFINISHED",
+      "UNEXPECTED: tiebreakers exhausted",
+    ]) {
+      expect(scoreWeekNotes([{ bracketProblem: code }]), code).toMatch(/had a problem/);
+    }
   });
 
   it("counts a sweep that ran out of room, which it did not before", () => {
@@ -81,7 +93,7 @@ describe("scoreWeekNotes", () => {
           week: 3,
           finalized: false,
           holdReason: "no games are scheduled",
-          holdCode: "NO_SCHEDULE",
+          holdCode: "NO_GAMES_INGESTED",
         },
       ],
     };
@@ -99,7 +111,7 @@ describe("scoreWeekNotes", () => {
           week: 3,
           finalized: false,
           holdReason: "totally different wording",
-          holdCode: "NO_SCHEDULE",
+          holdCode: "NO_GAMES_INGESTED",
         },
       ],
     };
@@ -131,10 +143,36 @@ describe("scoreWeekNotes", () => {
   });
 
   it("does not let one healthy league mask another's failure, or vice versa", () => {
-    const note = scoreWeekNotes([healthy, { skipped: "SCHEDULE_MISSING" }]);
+    const note = scoreWeekNotes([healthy, { skipped: "NO_SCHEDULE" }]);
 
     // 1 of 2, not 2 of 2 — the healthy league must not be swept in.
     expect(note).toMatch(/1 of 2 leagues had a problem/);
+  });
+
+  it("counts one wedged week once, however many leagues are stuck on it", () => {
+    /*
+      The number and the list are built from the same deduplicated set. They were
+      not: the count flat-mapped occurrences while the list deduped, so two
+      leagues wedged on week 3 read "2 week(s) … week 3" — a sentence that
+      contradicts itself in the space of eight words, in the one note whose job
+      is to send somebody to look at something.
+    */
+    const wedged = (week: number): LeagueRow => ({
+      weeks: [{ week, finalized: false, holdCode: "NO_GAMES_INGESTED" }],
+    });
+
+    expect(scoreWeekNotes([wedged(3), wedged(3)])).toMatch(/^1 week can never/);
+    expect(scoreWeekNotes([wedged(3), wedged(3)])).toMatch(/week 3$/);
+    expect(scoreWeekNotes([wedged(3), wedged(5)])).toMatch(/^2 weeks can never/);
+    expect(scoreWeekNotes([wedged(3), wedged(5)])).toMatch(/week 3, 5$/);
+  });
+
+  it("counts a failure that could not say what it was", () => {
+    // `route.ts` builds these from `error.message`, and an `Error` with an
+    // empty message is legal. The old inline counter incremented in the
+    // `catch` and so counted it; a bare truthiness test drops precisely the
+    // failure with least to say for itself.
+    expect(scoreWeekNotes([{ prefillProblem: "" }])).toMatch(/could not prefill/);
   });
 
   it("says nothing for a run over no leagues at all", () => {

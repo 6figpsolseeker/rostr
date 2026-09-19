@@ -39,9 +39,14 @@ import type { MatchupPhase } from "./week.js";
  * at no site in the tree. A field too small for a bracket is refused by
  * `bracketFor`, which returns `null` below two teams, or by `BracketError`'s
  * own `FIELD_TOO_SMALL` — so this member described a refusal that could not
- * happen, in a union the score-week cron now reads to decide whether to raise an
- * alarm. A code nothing throws is a branch nobody can test and a case every
- * future reader has to rule out by hand.
+ * happen.
+ *
+ * **Nothing switches on these codes**, so the cost was never a wrong branch.
+ * `score-week` matches the *class* and stringifies `.code` into a message; the
+ * alarm is raised by a `bracketProblem` being present at all. The cost is that
+ * this union is the taxonomy a reader has to work through when deciding whether
+ * a refusal is real, and a code nothing throws is a case every one of them must
+ * rule out by hand. Three reviews did exactly that in one afternoon.
  */
 export class PlayoffError extends Error {
   constructor(

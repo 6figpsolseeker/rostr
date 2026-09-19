@@ -844,7 +844,7 @@ describe("a game that never finishes — docs/RULES.md §10", () => {
       will be reworded, and matching on prose is how a rewording silently
       disables the alarm behind it.
     */
-    expect(outcome.holdCode).toBe("NO_SCHEDULE");
+    expect(outcome.holdCode).toBe("NO_GAMES_INGESTED");
   });
 
   it("marks no other hold as permanent", async () => {

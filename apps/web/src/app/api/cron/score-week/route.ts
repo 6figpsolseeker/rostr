@@ -287,7 +287,14 @@ async function run(client: SqlClient, now: Date, request: Request): Promise<Next
         every league that had already entered. And keeping the call live for a
         league already in the playoffs is what preserves the alarm: such a league
         acquiring an unfinalised regular row still throws, still counts, and that
-        is exactly the duplicate-matchup shape #319 describes.
+        is the class #319 sits in — an unexpected regular-season row under a
+        league that has finished its regular season.
+
+        Not #319's own mechanism, and an earlier version of this said "exactly",
+        which was wrong: #319's duplicates are written by `writeSchedule` in the
+        transaction that commits the final draft pick, so they appear while the
+        league is `IN_SEASON` and finalise alongside their twins long before
+        `enterPlayoffs` succeeds. This arm guards the shape, from any cause.
 
         An allowlist on the error code was the obvious alternative and is worse:
         it would suppress the refusal unconditionally, including for the league

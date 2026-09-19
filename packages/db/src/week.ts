@@ -519,11 +519,10 @@ interface FinalizationDecision {
 /**
  * A hold that the clock will never lift.
  *
- * **Every other hold is temporary, and that is a property of this function
- * rather than an observation about it.** Past `clearsAt` every branch returns
- * `hold: null` — `RULES.md` §10's fallback exists precisely so that one
- * unplayed game cannot keep a paying week open forever. So "still held" is
- * normal and self-clearing in every case but one.
+ * Past `clearsAt` every branch of `finalizationHold` returns `hold: null` —
+ * `RULES.md` §10's fallback exists precisely so one unplayed game cannot keep a
+ * paying week open forever. So "still held" is normal and self-clearing almost
+ * everywhere.
  *
  * The exception is a week with **no games ingested at all**. There is no
  * kickoff, so there is no window, so the clock never starts and the fallback
@@ -533,8 +532,24 @@ interface FinalizationDecision {
  * It is a code rather than a sentence because the caller that needs to act on
  * it is a cron reporter, and matching on prose is how a reworded message
  * silently disables an alarm.
+ *
+ * ## Two things this does not claim
+ *
+ * **"Self-clearing" is not "bounded by a fixed deadline".** `clearsAt` is
+ * derived from `max(kickoff_at)` for the week, so a provider that moves a
+ * postponed game *later within the same week* moves the deadline with it, and
+ * the in-progress hold can outlast its nominal window. It still clears when the
+ * provider settles the time — it is a wait, not a wedge — so it carries no code,
+ * but nothing here caps how long it runs. The function's own header names the
+ * same residual.
+ *
+ * **And one other permanent hold carries no code**: "no kickoff times are
+ * known", below. It is unreachable because `games.kickoff_at` is NOT NULL, which
+ * is a schema invariant asserted in migration `0003` rather than anything this
+ * function establishes — so if that column ever becomes nullable, this type has
+ * a second member and the alarm has a blind spot until somebody adds it.
  */
-export type WeekHoldCode = "NO_SCHEDULE";
+export type WeekHoldCode = "NO_GAMES_INGESTED";
 
 /**
  * Whether a week may be finalised.
@@ -663,7 +678,7 @@ async function finalizationHold(
   // no kickoff to run a window from, and a week nobody has ingested would settle
   // every matchup 0–0 rather than zeroing the players of one abandoned game.
   if (total === 0) {
-    return { hold: "no games are scheduled for this week yet", holdCode: "NO_SCHEDULE" };
+    return { hold: "no games are scheduled for this week yet", holdCode: "NO_GAMES_INGESTED" };
   }
 
   // `games.kickoff_at` is NOT NULL, so this cannot fire while `total > 0`. It
