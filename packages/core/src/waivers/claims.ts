@@ -157,11 +157,26 @@ export function resolveWaiverClaims(input: ResolveInput): WaiverResolution {
   // comparator makes the sort depend on input order, which is exactly the
   // replayability this function exists to provide.
   //
-  // The one residue: claims from a team *absent* from `priority` share the
-  // `MAX_SAFE_INTEGER` fallback, so two of those from different teams would
-  // compare on time. Nothing produces that state — and such a claim would be
-  // awarded a player in a league it does not belong to long before its ordering
-  // mattered, which is a schema gap filed separately, not an ordering one.
+  // That residue is closed. Claims from a team *absent* from `priority` shared
+  // the `MAX_SAFE_INTEGER` fallback, so two of those from different teams would
+  // have compared on time — the one way submission time could cross teams. The
+  // schema gap that produced them is gone: `waiver_claims_team_in_league`
+  // (migration 0048) makes a claim naming a team in another league
+  // unrepresentable, and `loadWaiverPriority` lists every team in the league
+  // exactly once, so `rank` covers every claim a run can now be handed.
+  //
+  // **The fallback stays, and it is not a guess.** It is what keeps this
+  // comparator total: without it a missing rank subtracts to `NaN`, and a
+  // comparator that returns `NaN` makes the sort implementation-defined —
+  // destroying the replayability the paragraph above exists to protect.
+  //
+  // Refusing here instead — which is what the issue asked for once the row
+  // became unrepresentable — would be worse than either. This function is pure
+  // and called inside `processWaivers`' single per-league transaction, so a
+  // throw rolls back every award and leaves every claim `PENDING` for the next
+  // run to fail on identically. `waivers.ts` records that wedge happening, from
+  // `0038`. If a reason to reject a claim is ever needed, it belongs beside the
+  // pre-resolution filters that mark one `FAILED`, not in a throw down here.
   const ordered = [...claims].sort((a, b) => {
     const byPriority =
       (rank.get(a.teamId) ?? Number.MAX_SAFE_INTEGER) -
