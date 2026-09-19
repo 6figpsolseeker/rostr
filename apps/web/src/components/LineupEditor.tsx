@@ -55,10 +55,11 @@ interface RosterPlayer {
    * Whether any NFL club lists him — orthogonal to `availability`, and read
    * together with it by `weekNote`.
    *
-   * **A released player's `availability` is `SCHEDULED`**, which is the whole
-   * reason this field exists. `loadRosterForWeek` gives a player whose club has
-   * no fixture the week's first kickoff rather than null, deliberately, so his
-   * slot still locks — and `gameAvailability` reads that as an ordinary game.
+   * **A released player's `availability` is usually `SCHEDULED`**, which is the
+   * whole reason this field exists. `loadRosterForWeek` gives a player whose
+   * club has no games *in the season* the week's first kickoff rather than null,
+   * deliberately, so his slot still locks — and `gameAvailability` reads that as
+   * an ordinary game. `weekNote` carries the exceptions.
    */
   onNflRoster: boolean;
   /** Stashed on injured reserve: on the roster, out of the rotation. */
@@ -587,7 +588,7 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
                       >
                         {positionGroup(player.positions)}
                       </span>
-                      {clubLabel(player)}
+                      {clubLabel(player) ?? ""}
                       {/*
                         Who he plays, next to who he plays for. A manager
                         deciding a lineup is comparing matchups, and sending
@@ -668,7 +669,18 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
                           between them is the point of this list.
                         */}
                         {weekNote(candidate) ? ` — ${weekNote(candidate)!.short}` : ""}
-                        {played && !weekNote(candidate) ? " — played" : ""}
+                        {/*
+                          Suppressed **only** for a player with no club, whose
+                          "played" is a claim about a game he was never in — he
+                          is handed the week's first kickoff so his slot locks,
+                          which is what made `played` true for him.
+
+                          A `TIME_TBD` player has a real fixture and may
+                          genuinely have played, so he keeps both labels. An
+                          earlier draft suppressed "played" for every note and
+                          lost that.
+                        */}
+                        {played && candidate.onNflRoster ? " — played" : ""}
                         {candidate.injuryDesignation ? ` — ${candidate.injuryDesignation}` : ""}
                       </option>
                     );
@@ -728,7 +740,7 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
                   <span className="block truncate text-xs">{player.name}</span>
                   <span className="block text-[10px] text-nocturne-neutral-600">
                     {positionGroup(player.positions)}
-                    {player.teamRef ? ` · ${player.teamRef}` : ""}
+                    {clubLabel(player) ? ` · ${clubLabel(player)}` : ""}
                     {/*
                       The bench is where a substitution gets decided, so the
                       matchup matters here at least as much as it does on a
@@ -811,13 +823,22 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
                 Why this player may not score, composed in `lib/player.ts`.
 
                 **The `teamRef === null` branch that used to live here was
-                deleted rather than repaired, because it could never run.** It
-                required `availability === "UNSCHEDULED"`, which requires a null
+                deleted rather than repaired.** It required
+                `availability === "UNSCHEDULED"`, which requires a null
                 `kickoffAt`, which for a player with no club requires that *no
                 games at all* are stored for the week — `loadRosterForWeek` hands
                 him the week's first kickoff otherwise, so his slot still locks.
-                So the sentence written for a cut player was unreachable for
-                every cut player, and #308 recorded it as working.
+
+                So it was unreachable in any week that has fixtures stored, which
+                is every operational week. It could fire in a week whose schedule
+                was never ingested, where nothing locks and `setLineup` refuses
+                anyway — an earlier version of this said "could never run", which
+                was too strong. Its sentence now lives in `weekNote`, which
+                covers him in every week rather than only that one.
+
+                #308 records the branch as working for the mid-season-cut
+                sub-case and as unreachable for the other. Both are wrong, for
+                different reasons.
 
                 What he actually got was nothing here and an `FA` chip above.
               */}
@@ -898,7 +919,7 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
                         <span className="block truncate text-xs">{player.name}</span>
                         <span className="block text-[10px] text-nocturne-neutral-600">
                           {positionGroup(player.positions)}
-                          {player.teamRef ? ` · ${player.teamRef}` : ""}
+                          {clubLabel(player) ? ` · ${clubLabel(player)}` : ""}
                           {player.injuryDesignation ? ` · ${player.injuryDesignation}` : ""}
                         </span>
                       </span>

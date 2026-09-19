@@ -329,9 +329,9 @@ export async function loadByeWeeks(
  *
  * A sibling loader, for the reason `loadByeWeeks` above gives: `loadKickoffs`
  * is `validateLineup`'s lock oracle and `loadRosterForWeek` is its ownership
- * oracle, and neither may gain a column to serve a label. `LineupEditor` names
- * that prohibition directly. Loading it alongside means a bug here can mislabel
- * a row and cannot unlock one or widen who may be started.
+ * oracle, and neither may gain a column to serve a label — `CLAUDE.md` states
+ * that prohibition and `draft.ts` restates it. Loading alongside means a bug
+ * here can mislabel a row and cannot unlock one or widen who may be started.
  *
  * ## Why this cannot be derived from what the lineup already holds
  *
@@ -340,14 +340,22 @@ export async function loadByeWeeks(
  * `active` from its `isFreeAgent`, independently — so a listed player with a
  * blank club reads null, and a released player can keep a club abbreviation.
  *
- * The other shortcut is `kickoffAt === null`, and that is worse: it is never
- * null for this player. `loadRosterForWeek` hands anyone whose club has no
- * fixture the week's first kickoff, deliberately, so his slot still locks — see
- * the test that exists for exactly that trap. It is also why the lineup screen
- * showed no "bye" for him and #308's diagnosis missed this screen entirely.
+ * The other shortcut is `kickoffAt === null`, and that is worse, because it is
+ * usually **not** null for him. `loadRosterForWeek` gates its fallback on
+ * `team_scheduled` — whether the club appears anywhere in the *season's*
+ * schedule, not this week's — and hands anyone who fails it the week's first
+ * kickoff, deliberately, so his slot still locks. See the test that exists for
+ * exactly that trap. It is also why the lineup screen showed no "bye" for him,
+ * and why #308's diagnosis missed this screen entirely.
+ *
+ * "Usually" rather than "never", precisely: it **is** null in a week with no
+ * stored games (there is no first kickoff to fall back to), and it follows the
+ * old club's fixture — including that club's bye — for a released player who
+ * kept his abbreviation. Neither is a state to key a label on.
  *
  * `active` is the column the draft board and the market already key on, so all
- * four surfaces now answer from one fact rather than four approximations.
+ * five surfaces — board, market, scoreboard, player card and this screen — now
+ * answer from one fact rather than five approximations.
  */
 export async function loadOffNflRoster(
   db: SqlClient,

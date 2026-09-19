@@ -197,17 +197,22 @@ describe("what a released player's card says — #308", () => {
   it("names the fact instead of rendering a blank", () => {
     // Was `{player?.teamRef && <span>…</span>}` with no else, so a released
     // player got nothing at all and nothing took its place.
-    expect(clubLabel({ teamRef: null, onNflRoster: false })).toBe("Not on an NFL roster");
+    expect(clubLabel({ teamRef: null, onNflRoster: false })).toBe("No NFL club");
   });
 
-  it("still says FA for a listed player whose club we do not hold", () => {
+  it("says nothing for a listed player whose club we do not hold", () => {
     /*
-      **The half a `teamRef` check gets wrong.** The adapter reads `team` and
-      `isFreeAgent` separately, so a listed player can arrive with a blank club.
-      "FA" means *fantasy* free agent and is right for him; the longer sentence
-      would be a claim about his employment that we have no basis for.
+      **The half a `teamRef` check gets wrong**, and the half #308 item 3 is
+      about. The adapter reads `team` and `isFreeAgent` separately, so a listed
+      player can arrive with a blank club.
+
+      Not "FA": every caller renders a player somebody rosters, and there that
+      string is false twice over — he is rostered, and that is not why his club
+      column is empty. Not the released sentence either, which would be a claim
+      about his employment we have no basis for. We know he is listed and not
+      where; `null` says exactly that.
     */
-    expect(clubLabel({ teamRef: null, onNflRoster: true })).toBe("FA");
+    expect(clubLabel({ teamRef: null, onNflRoster: true })).toBeNull();
   });
 
   it("names the fact even when the provider still prints a club", () => {
@@ -217,7 +222,8 @@ describe("what a released player's card says — #308", () => {
       from different provider fields. Keyed on `teamRef` this row reads "PHI" and
       says nothing is wrong.
     */
-    expect(clubLabel({ teamRef: "PHI", onNflRoster: false })).toBe("Not on an NFL roster");
+    expect(clubLabel({ teamRef: "PHI", onNflRoster: false })).toBe("No NFL club");
+    expect(clubLabel({ teamRef: "PHI", onNflRoster: true })).toBe("PHI");
   });
 
   it("drops a bye that belongs to the club that cut him", () => {

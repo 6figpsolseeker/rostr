@@ -370,9 +370,13 @@ export async function GET(
          * locking and says nothing about whether he can play.
          *
          * So the screen needs both, and `lib/player.ts` composes them. Reading
-         * `availability` alone is how this screen came to show an `FA` chip, a
-         * lock countdown promising a game, and " — played" in the swap
-         * dropdown, for a man with no club.
+         * `availability` alone is how this screen came to show an `FA` chip and
+         * " — played" in the swap dropdown for a man with no club.
+         *
+         * The lock countdown beside them is **not** from `availability` — it
+         * comes from `slotLocksAt` over `loadKickoffs` — and it still renders.
+         * Arguably right, since his slot genuinely does lock; it is not fixed
+         * here, and an earlier version of this comment implied it was.
          */
         onNflRoster: !offNflRoster.has(player.playerId),
         milliPoints: scorePlayer(stats.get(player.playerId) ?? [], scoring),

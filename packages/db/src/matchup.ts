@@ -53,18 +53,24 @@ export class MatchupError extends Error {
  * all on a week that is not the team's bye. Both used to be indistinguishable
  * from `BYE`, and a bye means the opposite thing to anyone deciding a lineup.
  * See `gameAvailability` in `@rostr/core`.
- */
-/**
- * What the scoreboard says about a player's week.
  *
- * A superset of `@rostr/core`'s `GameAvailability`: that enum answers a
- * question about the *schedule*, and this one answers what a screen should show,
- * which is a wider question.
+ * ## Related to `GameAvailability`, and not a superset of it
  *
- * `NO_CLUB` is the clearest case of the difference. "His club released him" is
- * employment rather than fixtures, so it is not something `gameAvailability`
- * could answer from its inputs — every one of them is a fact about games. It
- * belongs here, where the display union already widens the pure rule.
+ * An earlier draft of this said "superset", which is wrong at the type level:
+ * there is no `SCHEDULED` member here. `gameStateOf` **resolves** that one into
+ * `YET_TO_PLAY`, `IN_PROGRESS` or `FINAL` using the clock and the game status,
+ * and adds `NO_CLUB` — so `GameAvailability` is not assignable to this.
+ *
+ * `NO_CLUB` is the clearest case of why this union exists separately. "His club
+ * released him" is employment rather than fixtures, so it is not something
+ * `gameAvailability` could answer from its inputs — every one of them is a fact
+ * about games.
+ *
+ * **These values are not only labels.** `MatchupSide`'s `yetToPlay`,
+ * `inProgress` and `unscheduled` counters are derived from them, and those feed
+ * the scoreboard's progress line and its poll interval. A `NO_CLUB` starter
+ * counts in none of the three — correct for a player with no fixture, and worth
+ * knowing before adding a member.
  */
 export type PlayerGameState =
   | "BYE"
@@ -388,10 +394,14 @@ function gameStateOf(facts: PlayerFacts | undefined, week: number, now: Date): P
 
     **This is the one place `gameAvailability` was answering falsely.** With no
     club there is no `games` row and, for a player released before the byes were
-    synced, no `player_seasons` row either — so `byeWeek` is null and the branch
+    synced, no `player_seasons` row either — so `byeWeek` was null and the branch
     below returned `BYE`. The screen said the literal word "bye", every week, to
     both managers, all season: "he is resting, he will be back next week" about a
     man no club employs.
+
+    A player cut *mid*-season keeps a stale row, so he read `UNSCHEDULED` → "TBD"
+    in most weeks and "bye" only in his old club's bye week. Also wrong, and less
+    loudly.
 
     Claimed from `onNflRoster` alone, **never** from `byeWeek === null`.
     `syncByeWeeks` is the only writer of `player_seasons`, so before it has run

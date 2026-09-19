@@ -150,11 +150,13 @@ export function PlayerCard({
               {/*
                 The club, or the reason there is not one. This used to be
                 `{player?.teamRef && …}` with no else, so a released player got a
-                blank — and the card opens one click after the draft board and
-                the market have both correctly said "No NFL club". Composed in
+                blank — and the card opens one click after the draft board has
+                said "No NFL club" and the market "Not on an NFL roster". Two
+                strings for one fact, which is why `clubLabel` adopts the
+                board's rather than inventing a third. Composed in
                 `lib/player.ts` because this file cannot be tested.
               */}
-              {player && <span>{clubLabel(player)}</span>}
+              {player && clubLabel(player) && <span>{clubLabel(player)}</span>}
               {player?.bio.jerseyNumber && <span>#{player.bio.jerseyNumber}</span>}
               {player && byeChip(player) !== null && <span>bye {byeChip(player)}</span>}
               {player?.injury && (

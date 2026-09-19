@@ -25,6 +25,7 @@ import {
   loadKickoffs,
   loadLineup,
   loadProjectedPoints,
+  loadOffNflRoster,
   loadRosterForWeek,
   loadWeekLineups,
   loadWeekStats,
@@ -2182,6 +2183,45 @@ describe("the autofill ranks an injured player behind a healthy one — #269", (
     // A sort key, not an exclusion — a team with nobody else still fields him.
     expect(candidate.unavailable).toBe(true);
     expect(candidate.playerId).toBe(fx.player("sun-qb"));
+  });
+
+  it("loads who is off NFL rosters, keyed on active rather than a club ref — #308", async () => {
+    /*
+      The sibling loader, and the two cases a `team_ref` check gets wrong.
+
+      `loadOffNflRoster` exists so the lineup screen can say why a released
+      player will not score **without** widening `loadRosterForWeek`, which is
+      `validateLineup`'s ownership oracle. That is the same argument
+      `loadByeWeeks` and `loadTbdKickoffs` make — though neither of those has a
+      direct test either, which is its own small gap.
+    */
+    const fx = await setup();
+
+    // Released but the provider still prints a club — `active` and `team_ref`
+    // come from different fields (`isFreeAgent` and `team`), so this row is
+    // representable and a `teamRef` check says nothing is wrong with it.
+    await fx.client.query("UPDATE players SET active = false WHERE id = $1", [
+      fx.player("sun-qb"),
+    ]);
+    // Listed, but with no club stored — the mirror image. A `teamRef` check
+    // would wrongly accuse him.
+    await fx.client.query("UPDATE players SET team_ref = NULL WHERE id = $1", [
+      fx.player("rb-a"),
+    ]);
+
+    const off = await loadOffNflRoster(fx.client, [fx.player("sun-qb"), fx.player("rb-a")]);
+
+    expect(off.has(fx.player("sun-qb"))).toBe(true);
+    expect(off.has(fx.player("rb-a"))).toBe(false);
+  });
+
+  it("asks the database nothing when there is nobody to ask about", async () => {
+    // The guard both siblings carry: `= ANY('{}')` is legal but a round trip
+    // for an answer we already know, and an empty roster is the ordinary state
+    // of a league that has not drafted.
+    const fx = await setup();
+
+    expect((await loadOffNflRoster(fx.client, [])).size).toBe(0);
   });
 
   it("marks one who is ruled out unavailable, without excluding him", async () => {

@@ -2554,9 +2554,31 @@ reversed, in the weeks that decide a season.
 unknown bye keeps the old answer, because a wrong `BYE` costs one player's week while a
 wrong `UNSCHEDULED` is the screen promising a game out of a gap in our own ingest.
 
-And it **decides nothing**: `loadKickoffs` is still the only definition of when a slot
-freezes. Bye weeks and the TBD flag load through `loadByeWeeks` and `loadTbdKickoffs`,
-separately, so a bug in this labelling can mislabel a row and cannot unlock one.
+And it **decides nothing about locking**: `loadKickoffs` is still the only definition of
+when a slot freezes. Bye weeks, the TBD flag and — since #308 — who is off NFL rosters
+load through `loadByeWeeks`, `loadTbdKickoffs` and `loadOffNflRoster`, separately, so a
+bug in this labelling can mislabel a row and cannot unlock one or widen who may be
+started. **Add a fourth sibling rather than widening either oracle.**
+
+"Decides nothing" is narrower than it sounds, though, and the scoreboard is where it
+stops being true: `MatchupSide`'s `yetToPlay`, `inProgress` and `unscheduled` counters are
+derived from `PlayerGameState`, and they drive the progress line and the poll interval.
+Adding a member to that union changes those counts.
+
+**A released player is `NO_CLUB`, checked before the schedule and keyed on
+`players.active`.** Three rules, each of which a review named as a way to get it wrong:
+
+- **Never `team_ref`.** The adapter maps `active` from `isFreeAgent` and `team_ref` from
+  `team`, independently, so they disagree in both directions — a listed player can arrive
+  with a blank club, and a released one can keep an abbreviation.
+- **Never from a missing bye.** `syncByeWeeks` is the only writer of `player_seasons`, so
+  before it has run for a season that table is empty for _everybody_. Reading a null bye
+  as "no club" would relabel the whole league — #182 inverted.
+- **Checked first, above the kickoff test**, because his `availability` is usually
+  `SCHEDULED`: `loadRosterForWeek` hands a player whose club has no games _in the season_
+  the week's first kickoff so his slot still locks. A check that fired only when the
+  schedule had nothing to say would never fire for him. #308's own diagnosis missed this
+  and named three screens that were never showing "bye".
 
 `loadWeekMatchups` takes `now` rather than calling `Date.now()`, so game state is
 deterministic and the finalisation cases are testable.

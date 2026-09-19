@@ -219,10 +219,11 @@ export function shortName(name: string): string {
  * can keep a club abbreviation. Keying the label on `teamRef` would put "not on
  * an NFL roster" on a rostered player and say nothing about some released ones.
  *
- * The card opens from the board and the market, so it is the screen most likely
- * to contradict a label the manager read one click earlier. Its own docstring
- * says why that matters: "a player who reads differently depending on which
- * screen you came from is a player somebody will mis-draft."
+ * The card opens from the board, the market, a market roster row and the lineup
+ * screen, so it is the screen most likely to contradict a label the manager read
+ * one click earlier. Its own docstring says why that matters: "a player who
+ * reads differently depending on which screen you came from is a player somebody
+ * will mis-draft."
  */
 export interface ClubFacts {
   readonly teamRef: string | null;
@@ -232,17 +233,27 @@ export interface ClubFacts {
 /**
  * The club chip.
  *
- * Three answers, and the third used to render as nothing at all — a blank where
- * a fact belongs, which reads as "we forgot" rather than as information.
+ * Three answers, and `null` is one of them.
  *
- * "FA" here means *fantasy* free agent and is the right word for a listed
- * player whose club we do not hold; it is the wrong word for a released one,
- * which is what the longer sentence is for. `PlayerMarket` already draws that
- * distinction in the same words.
+ * **It never says "FA", and that is #308's third item.** "FA" means *fantasy*
+ * free agent, and every screen that calls this renders a player somebody
+ * rosters — so there it is false twice over: he is rostered, and that is not
+ * why his club column is empty. `players/route.ts` already made that ruling for
+ * the market's roster list, in nearly these words.
+ *
+ * So a listed player whose club we do not hold gets `null` and the caller
+ * renders nothing. Silence is honest here: we know he is listed and we do not
+ * know where, and any string would claim more than that.
+ *
+ * **"No NFL club" rather than the market's "Not on an NFL roster"**, because
+ * this lands in chip rows two or three characters wide as well as on the card.
+ * It is the draft board's existing string, so this adds no third phrasing — the
+ * two that exist differ in register rather than meaning, which is worth tidying
+ * in one pass rather than inventing a fourth here.
  */
-export function clubLabel({ teamRef, onNflRoster }: ClubFacts): string {
-  if (!onNflRoster) return "Not on an NFL roster";
-  return teamRef ?? "FA";
+export function clubLabel({ teamRef, onNflRoster }: ClubFacts): string | null {
+  if (!onNflRoster) return "No NFL club";
+  return teamRef;
 }
 
 /**
@@ -266,7 +277,7 @@ export function byeChip({
 
 /** What a lineup row should say about a player's week, beside his points. */
 export interface WeekNote {
-  /** The chip, two or three characters. */
+  /** The chip. Short — two or three characters, except "no club". */
   readonly short: string;
   /** The tooltip. States the observable and gives no advice. */
   readonly detail: string;
@@ -278,10 +289,15 @@ export interface WeekNote {
  * ## `onNflRoster` wins over everything, including a fixture
  *
  * That ordering is the whole function, and it is not obvious, so: a released
- * player's `availability` is **`SCHEDULED`**. `loadRosterForWeek` hands anyone
- * whose club has no fixture the week's first kickoff rather than null — on
- * purpose, so his slot still locks — and `gameAvailability` sees a non-null
- * kickoff and answers accordingly.
+ * player's `availability` is usually **`SCHEDULED`**. `loadRosterForWeek` gates
+ * its fallback on whether the club appears anywhere in the *season's* schedule,
+ * and hands anyone who fails that the week's first kickoff rather than null — on
+ * purpose, so his slot still locks. `gameAvailability` then sees a real kickoff.
+ *
+ * "Usually" because two states escape it: a week with no stored games has no
+ * first kickoff to fall back on, and a released player who kept his club
+ * abbreviation follows that club's fixtures, bye included. The flag is checked
+ * first precisely so none of that matters here.
  *
  * So a screen reading `availability` alone shows him as playing a game that
  * does not exist, with a lock countdown, and marks him "played" from the week's

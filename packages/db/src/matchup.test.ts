@@ -350,12 +350,17 @@ describe("a player no NFL club lists — #308", () => {
   /*
     PR #304 made a released player acquirable on purpose and labelled him on the
     two screens where he is *chosen*. This is the screen where he is lived with,
-    and it read the literal word **"bye"** for him, every week, to both managers
-    in the matchup, all season.
+    and it read the literal word **"bye"** for a player released before the byes
+    were synced — every week, to both managers in the matchup, all season.
 
-    "Bye" says he is resting and will be back next week. It is the exactly wrong
-    sentence about the one player it is wrong about, and it is the sentence
-    `docs/DECISIONS.md` says the ruling deliberately keeps acquirable.
+    Scoped deliberately: a player cut *mid*-season keeps a stale
+    `player_seasons` row, so he read "TBD" in most weeks and "bye" only in his
+    old club's bye week. Both are wrong and the first is worse, but "every cut
+    player read bye" is not the claim.
+
+    "Bye" says he is resting and will be back next week — the exactly wrong
+    sentence about the one player it is wrong about, and `docs/DECISIONS.md`
+    records that such a player is deliberately kept acquirable.
   */
 
   /** Cut: no NFL club lists him, and no fixture exists for him anywhere. */
@@ -398,6 +403,37 @@ describe("a player no NFL club lists — #308", () => {
     const side = sideOf(views, fx.teamIds[0]!);
 
     expect(side?.starters[0]?.gameState).toBe("NO_CLUB");
+  });
+
+  it("keeps a real fixture's progress out of the counters when he has no club", async () => {
+    /*
+      **The case the other tests in this block do not reach**, because `release`
+      clears `team_ref` and `active` together — which is what an ordinary
+      release does, since the adapter writes both from one provider record.
+
+      The divergent row is the one every comment in this change insists exists:
+      `active = false` with a club abbreviation still printed. He then joins his
+      old club's fixture, so `gameState` had a real game to report and now says
+      `NO_CLUB` instead.
+
+      That is not only a label. `yetToPlay`, `inProgress` and `unscheduled` are
+      derived from `gameState`, and they drive the scoreboard's progress line and
+      its poll interval — so he now counts in none of them. Pinned rather than
+      argued, because "all done" over a fixture that has not kicked off is the
+      claim `progressLabel` is most careful about.
+    */
+    const fx = await setup();
+    await fx.client.query(
+      "UPDATE players SET active = false, team_ref = 'DEN' WHERE external_ref = 'qb-0'",
+    );
+
+    const views = await loadWeekMatchups(fx.client, fx.leagueId, WEEK, BEFORE);
+    const side = sideOf(views, fx.teamIds[0]!);
+
+    expect(side?.starters[0]?.gameState).toBe("NO_CLUB");
+    expect(side?.yetToPlay).toBe(0);
+    expect(side?.inProgress).toBe(0);
+    expect(side?.unscheduled).toBe(0);
   });
 
   it("still calls a listed player's bye a bye", async () => {
