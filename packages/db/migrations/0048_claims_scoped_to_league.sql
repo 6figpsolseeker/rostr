@@ -1,0 +1,90 @@
+-- A waiver claim belongs to the league it was filed in.
+--
+-- `waiver_claims` carries `league_id` and `team_id` as two independent
+-- references, so a row naming a team in a *different* league is representable.
+-- This is the third table with that shape: `0020` closed it for vetoes and
+-- `0026` for trades, using the uniqueness `0020` added and did not spend.
+-- Issue #126.
+--
+-- ## Not reachable today, and that is the honest reason to add it
+--
+-- Unlike trades, waivers never took a team from a request. `submitClaim`'s only
+-- caller passes the team `draft-context` derived from the session and the
+-- league's own rows — "never from the request", as that file puts it — and
+-- `submitClaim` re-checks it against the league anyway and throws
+-- `TEAM_NOT_IN_LEAGUE`. `0026` was closing a hole somebody could walk through;
+-- this is closing one a future writer could open.
+--
+-- That is worth a constraint rather than a comment because of what the row
+-- would do if it ever existed, which is not "sort oddly".
+--
+-- ## What `processWaivers` would do with one
+--
+-- Award it. `loadWaiverPriority` lists the claiming league's teams only, so the
+-- foreign team is absent from `priority` and `resolveWaiverClaims` sorts it last
+-- on its `MAX_SAFE_INTEGER` fallback — last, but still tried. Its working roster
+-- resolves empty, because the roster read is scoped to the claiming league, so
+-- every capacity check passes against a roster of nobody. The award then inserts
+-- into `roster_entries`, where `0022`'s trigger derives `league_id` from the
+-- *destination* team: the row lands correctly stamped for the other league and
+-- satisfies `roster_entries_one_owner_per_league`. Indistinguishable from a
+-- legitimate signing.
+--
+-- Both pools are breached, in different ways. In the claiming league the award
+-- deletes the player's wire row and writes no roster row, so he reads as a free
+-- agent there from that instant — pulled out of blind allocation mid-period and
+-- dropped into first-come. In the other league he simply appears, without
+-- passing its wire at all.
+--
+-- And a third league's-worth of damage, silently: the run writes the whole new
+-- order back with `UPDATE teams SET waiver_priority = $1 WHERE id = $2`, and a
+-- foreign winner is in that list. So a team in the *other* league has its
+-- priority overwritten with an index from this league's ordering, leaving two of
+-- that league's teams sharing a number, in a run that league had nothing to do
+-- with.
+--
+-- ## What this does not change
+--
+-- **Not the resolver's fallback.** `resolveWaiverClaims` keeps
+-- `?? Number.MAX_SAFE_INTEGER`. The issue proposes replacing it with a refusal
+-- now that the state is unrepresentable; that would be wrong twice over. It is
+-- what keeps the comparator *total* — without it a missing rank subtracts to
+-- `NaN` and the sort order becomes whatever the engine does with that, which is
+-- the replayability the function exists to provide. And a throw there is inside
+-- `processWaivers`' single transaction, which rolls back every award and leaves
+-- every claim `PENDING` for the next run to fail on identically. This module has
+-- that wedge on record from `0038`.
+--
+-- **Not delete semantics.** `waiver_claims.team_id` already references
+-- `teams (id)` with no `ON DELETE` clause, so this is a second reference to the
+-- same rows rather than a new rule. Deliberately no `ON DELETE` clause here
+-- either, as `0020` and `0026` wrote none: a `CASCADE` alongside a `NO ACTION`
+-- constraint on the same columns cascades *first*, so the delete would succeed
+-- instead of being refused — turning a loud refusal into silent destruction of
+-- a manager's claims.
+--
+-- ## Prerequisites, and no repair step
+--
+-- `teams_id_league_unique (id, league_id)` exists since `0020` and is never
+-- dropped. Both columns have been `NOT NULL` since `0005`, so MATCH SIMPLE
+-- cannot exempt a row for want of a null and `MATCH FULL` would be noise — the
+-- same reason `0020`, `0022` and `0026` all omit it.
+--
+-- No cleanup statement, following `0026`. A dirty row makes this `ALTER` fail
+-- with the offending pair named, the runner rolls back before recording
+-- anything, and the file re-runs unchanged once a human has looked at it.
+-- Deleting the claim would destroy the only record of a move it cannot undo —
+-- nothing cascades from `waiver_claims`, so an `AWARDED` claim's roster row
+-- outlives it — and `UPDATE`ing the state would not help in any case: a foreign
+-- key does not care about `state`, so the `ALTER` still fails, now after
+-- mutating rows in the same transaction.
+--
+-- Forward-only, like every migration here.
+
+ALTER TABLE waiver_claims
+  ADD CONSTRAINT waiver_claims_team_in_league
+  FOREIGN KEY (team_id, league_id) REFERENCES teams (id, league_id);
+
+-- Nothing is left open behind it, unlike `0026` and `trade_assets`.
+-- `waiver_claims` has no second team column, and `waiver_wire` is keyed
+-- `(league_id, player_id)` and names no team at all.

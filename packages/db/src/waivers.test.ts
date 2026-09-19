@@ -2528,3 +2528,116 @@ describe("the market is shut unless the league is playing", () => {
     expect(marketClosedReason("PLAYOFFS", "RELEASE")).toBeNull();
   });
 });
+
+describe("a claim belongs to the league it was filed in — #126", () => {
+  /*
+    `waiver_claims` carried `league_id` and `team_id` as two independent
+    references, so a row naming a team in another league was representable.
+    Migration 0048 makes it not, the way 0020 did for vetoes and 0026 for
+    trades.
+
+    **Nothing could produce that row through the product**, which is the honest
+    framing and differs from the trades case 0026 closed: `submitClaim`'s only
+    caller passes a team derived from the session and the league's own rows, and
+    `submitClaim` re-checks it anyway. This is defence against a future writer,
+    not a hole somebody could walk through.
+
+    What makes it worth a constraint rather than a comment is what the row would
+    do if it existed: `processWaivers` would *award* it — the foreign team sorts
+    last but is still tried, its working roster resolves empty so every capacity
+    check passes, and 0022's trigger stamps the resulting roster row for the
+    destination league, so the result is indistinguishable from a legitimate
+    signing.
+  */
+
+  /** A second league with a team of its own, built through the real writers. */
+  async function elsewhere(fx: Fixture): Promise<string> {
+    const other = await createLeague(fx.client, NFL, {
+      name: "Other League",
+      commissionerId: (await createUser(fx.client, "far@example.com", "Far")).id,
+      rules: fx.rules,
+    });
+    return (await addTestTeam(fx.client, other.id, "Elsewhere")).teamId;
+  }
+
+  it("cannot be written with a team from another league", async () => {
+    /*
+      A real team in a real second league, not a random UUID — a made-up id is
+      refused by the single-column reference `0005` already had, with an error
+      that looks the same and proves nothing about this constraint.
+    */
+    const fx = await setup();
+    const outsider = await elsewhere(fx);
+
+    await expect(
+      fx.client.query(
+        "INSERT INTO waiver_claims (league_id, team_id, add_player_id) VALUES ($1, $2, $3)",
+        [fx.leagueId, outsider, fx.players.get("target")!],
+      ),
+    ).rejects.toThrow(/waiver_claims_team_in_league/);
+  });
+
+  it("refuses the mirror image too", async () => {
+    // The same constraint from the other side: this league's team, filed under
+    // the other league. One key, so one refusal — asserted so nobody reads it
+    // as a one-way check on `team_id`.
+    const fx = await setup();
+    const outsider = await elsewhere(fx);
+    const [other] = await fx.client.query<{ league_id: string }>(
+      "SELECT league_id FROM teams WHERE id = $1",
+      [outsider],
+    );
+
+    await expect(
+      fx.client.query(
+        "INSERT INTO waiver_claims (league_id, team_id, add_player_id) VALUES ($1, $2, $3)",
+        [other!.league_id, fx.teams[0], fx.players.get("target")!],
+      ),
+    ).rejects.toThrow(/waiver_claims_team_in_league/);
+  });
+
+  it("still lets two leagues claim the same player", async () => {
+    // The control. Two leagues chasing one real footballer is the ordinary
+    // case, and a constraint that stopped it would be a worse bug than the one
+    // it closes.
+    const fx = await setup();
+    const outsider = await elsewhere(fx);
+    const [other] = await fx.client.query<{ league_id: string }>(
+      "SELECT league_id FROM teams WHERE id = $1",
+      [outsider],
+    );
+
+    await expect(
+      fx.client.query(
+        "INSERT INTO waiver_claims (league_id, team_id, add_player_id) VALUES ($1, $2, $3)",
+        [other!.league_id, outsider, fx.players.get("target")!],
+      ),
+    ).resolves.toBeDefined();
+  });
+
+  it("refuses at the door too, with a typed error rather than a 500", async () => {
+    /*
+      **The guard that has been holding this line, and had no test at all.**
+
+      The constraint decides correctness; this decides the quality of the answer.
+      Without it the same request reaches the database and comes back as a raw
+      foreign-key violation, which the route has no mapping for — a 500 where a
+      403 belongs.
+
+      Note this test passes with or without migration 0048. It is testing the
+      check, not the constraint, and it is here because the check is what a
+      manager meets.
+    */
+    const fx = await setup();
+    const outsider = await elsewhere(fx);
+
+    await expect(
+      submitClaim(fx.client, {
+        leagueId: fx.leagueId,
+        teamId: outsider,
+        addPlayerId: fx.players.get("target")!,
+        now: MONDAY,
+      }),
+    ).rejects.toMatchObject({ code: "TEAM_NOT_IN_LEAGUE" });
+  });
+});
