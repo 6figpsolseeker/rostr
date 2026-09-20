@@ -9,6 +9,7 @@ import type { BoardCell, BoardRow } from "@/lib/draft-board";
 import {
   POSITION_ORDER,
   byeChip,
+  clubLabel,
   injuryBadge,
   injuryTone,
   points,
@@ -872,7 +873,8 @@ function PlayerTable({
                     >
                       {group}
                     </span>
-                    {player.active ? (player.teamRef ?? "FA") : "No NFL club"}
+                    {/* "FA" is no NFL club — see `clubLabel`. */}
+                    {clubLabel({ teamRef: player.teamRef, onNflRoster: player.active }) ?? ""}
                   </span>
                 </span>
               </button>

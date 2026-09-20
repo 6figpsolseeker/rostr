@@ -60,7 +60,6 @@ interface CardResponse {
   };
   weeks: CardWeek[];
   ownedBy: { teamId: string; teamName: string } | null;
-  myTeamId: string | null;
 }
 
 const fetcher = async (url: string): Promise<CardResponse> => {
@@ -167,17 +166,26 @@ export function PlayerCard({
             </p>
 
             <p className="mt-1 text-xs text-nocturne-neutral-600">
+              {/*
+                Who holds him **in this league** — a different fact from the club
+                chip above, and deliberately never worded as "free agent".
+
+                Owner's rule, 2026-09-20: those words mean *no NFL team* and
+                nothing else. This line used to read "Free agent" for a player
+                nobody had rostered, which is the same words for an entirely
+                different fact — so Rashod Bateman, a starting Raven, read as a
+                free agent to anyone who opened his card.
+
+                Every rostered player reads the same way now, including your own
+                team. "On your roster" was a third phrasing of one fact, and the
+                team name answers it without the reader having to work out which
+                team is theirs.
+              */}
               {data
                 ? data.ownedBy
-                  ? data.ownedBy.teamId === data.myTeamId
-                    ? "On your roster"
-                    : `Rostered by ${data.ownedBy.teamName}`
-                  : // Fantasy free agency — nobody in this league holds him. A
-                    // released player is separately labelled above, because the
-                    // two "free agent"s mean different things and this line
-                    // reinforced the wrong reading of the other.
-                    "Free agent in this league"
-                : " "}
+                  ? `Rostered by ${data.ownedBy.teamName}`
+                  : "Not rostered in this league"
+                : " "}
             </p>
           </div>
 

@@ -97,7 +97,11 @@ export async function GET(
       })),
       ownedBy: owner ? { teamId: owner.team_id, teamName: owner.team_name } : null,
       /** So the card can say "your team" rather than naming you to yourself. */
-      myTeamId: context.myTeamId,
+      // `myTeamId` was sent so the card could say "On your roster" instead of
+      // naming your team. That distinction is gone — every rostered player now
+      // reads "Rostered by <team>", your own included — so the field had no
+      // reader left. This route is gated by `leagueReadForbidden`, not by
+      // comparing team ids, so removing it changes no access decision.
     });
   } catch (error) {
     if (error instanceof DraftContextError) {

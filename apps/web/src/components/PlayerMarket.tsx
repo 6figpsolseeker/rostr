@@ -4,7 +4,13 @@ import { useMemo, useState } from "react";
 import useSWR from "swr";
 import { PlayerAvatar } from "./PlayerAvatar";
 import { PlayerCard } from "./PlayerCard";
-import { injuryBadge, injuryTone, positionColour, positionGroup } from "@/lib/player";
+import {
+  clubLabel,
+  injuryBadge,
+  injuryTone,
+  positionColour,
+  positionGroup,
+} from "@/lib/player";
 
 /**
  * Adds, drops and waiver claims.
@@ -288,14 +294,17 @@ export function PlayerMarket({ leagueId }: { leagueId: string }) {
                     >
                       {positionGroup(player.positions)}
                     </span>
-                    {player.onNflRoster ? (
-                      (player.teamRef ?? "FA")
-                    ) : (
-                      /* States the observable and gives no advice — he may be
-                         signed on Wednesday. Same convention as the off-roster
-                         notification and `whyClaimFailed`. */
-                      <span className="text-nocturne-neutral-500">Not on an NFL roster</span>
-                    )}
+                    {/*
+                      "FA" means he has no NFL club — owner's rule, 2026-09-20,
+                      and the convention every other fantasy app uses here.
+                      Deliberately *not* a statement about this league: every row
+                      on this page is unrostered, so saying so here would be
+                      noise, and a player rostered elsewhere is still FA if no
+                      NFL team has him.
+                    */}
+                    <span className={player.onNflRoster ? "" : "text-nocturne-neutral-500"}>
+                      {clubLabel(player) ?? ""}
+                    </span>
                   </span>
                 </span>
               </button>
@@ -360,11 +369,9 @@ export function PlayerMarket({ leagueId }: { leagueId: string }) {
                     >
                       {player.position}
                     </span>
-                    {player.onNflRoster ? (
-                      (player.teamRef ?? "FA")
-                    ) : (
-                      <span className="text-nocturne-neutral-500">Not on an NFL roster</span>
-                    )}
+                    <span className={player.onNflRoster ? "" : "text-nocturne-neutral-500"}>
+                      {clubLabel(player) ?? ""}
+                    </span>
                   </span>
                 </span>
               </button>

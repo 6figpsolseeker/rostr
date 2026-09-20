@@ -2137,32 +2137,39 @@ describe("the autofill ranks an injured player behind a healthy one — #269", (
 
     for (const handle of ["sun-qb", "thu-qb"]) {
       const player = roster.get(fx.player(handle))!;
-      const candidate = autolineupCandidate(player, {
-        averageMilliPoints: null,
-        projectedMilliPoints: null,
-      });
+      const candidate = autolineupCandidate(
+        player,
+        { averageMilliPoints: null, projectedMilliPoints: null },
+        new Set(),
+      );
       expect(candidate.unavailable).toBe(false);
     }
   });
 
-  it("marks a player with no NFL club unavailable, and a null kickoff does not", async () => {
+  it("marks a player with no club ref unavailable, and a null kickoff does not", async () => {
     /*
       **The trap this test exists for: `kickoffAt` is not null for a cut player,
       and reading the code quickly says it is.**
 
       `loadKickoffs` is the lock oracle and fails closed. A player whose club has
-      no games in the season — which is every player with `team_ref IS NULL` — hits
-      its third branch and is handed the *week's first kickoff*, so his slot
-      freezes rather than staying open all Sunday. Correct for a lock, and exactly
-      wrong as a proxy for "will he play": it made him read as available and then
-      ranked him on a projection nothing expires.
+      no games *in the season* hits its third branch and is handed the **week's
+      first kickoff**, so his slot freezes rather than staying open all Sunday.
+      Correct for a lock, and exactly wrong as a proxy for "will he play": it
+      made him read as available and then ranked him on a projection nothing
+      expires.
+
+      An earlier version of this comment glossed that condition as "which is
+      every player with `team_ref IS NULL`". That equation is the bug in
+      miniature and is why this looked settled — the gate is whether the *club*
+      appears in the season's schedule, and a released player who keeps his
+      abbreviation sails through it. See the test below.
 
       So this asserts the state as well as the conclusion. Without the
-      `kickoffAt` line the test would pass against a `teamRef`-only check by
-      accident, and a reader would go on believing the null-kickoff story.
+      `kickoffAt` line it would pass against a `teamRef`-only check by accident,
+      and a reader would go on believing the null-kickoff story.
     */
     const fx = await setup();
-    await fx.client.query("UPDATE players SET team_ref = NULL, active = false WHERE id = $1", [
+    await fx.client.query("UPDATE players SET team_ref = NULL WHERE id = $1", [
       fx.player("sun-qb"),
     ]);
 
@@ -2173,16 +2180,82 @@ describe("the autofill ranks an injured player behind a healthy one — #269", (
     expect(player.kickoffAt).not.toBeNull();
     expect(player.teamRef).toBeNull();
 
-    const candidate = autolineupCandidate(player, {
+    const candidate = autolineupCandidate(
+      player,
       // A stale projection from before he was released is exactly the input
       // that makes this dangerous: it would outrank a fit bench player.
-      averageMilliPoints: 18_000,
-      projectedMilliPoints: 18_000,
-    });
+      { averageMilliPoints: 18_000, projectedMilliPoints: 18_000 },
+      // Empty on purpose: `active` is still true for him, so the club-ref term
+      // is the only thing that can fire. This is the half a move to `active`
+      // alone would have dropped.
+      new Set(),
+    );
 
     // A sort key, not an exclusion — a team with nobody else still fields him.
     expect(candidate.unavailable).toBe(true);
     expect(candidate.playerId).toBe(fx.player("sun-qb"));
+  });
+
+  it("marks a released player unavailable even when he keeps his club — #327", async () => {
+    /*
+      **The live bug, and the half `teamRef` could never catch.**
+
+      `active` and `team_ref` come from different provider fields — `isFreeAgent`
+      and `team` — so a released player can keep his abbreviation. He then joins
+      his *old* club's real fixture, so his kickoff is genuine, his designation
+      is usually cleared, and `teamRef` never fires. He read as fully
+      **available** and was ranked on a season average nothing expires.
+
+      That is the receiver cut in week 6 after two good games, started in week 7
+      over a fit bench player for a guaranteed zero.
+    */
+    const fx = await setup();
+    await fx.client.query("UPDATE players SET active = false WHERE id = $1", [
+      fx.player("sun-qb"),
+    ]);
+
+    const roster = await loadRosterForWeek(fx.client, fx.teamId, SEASON, WEEK);
+    const player = roster.get(fx.player("sun-qb"))!;
+
+    // Both premises, because the point of the case is that neither fires.
+    expect(player.teamRef).not.toBeNull();
+    expect(player.kickoffAt).not.toBeNull();
+
+    const offNflRoster = await loadOffNflRoster(fx.client, [...roster.keys()]);
+    const candidate = autolineupCandidate(
+      player,
+      { averageMilliPoints: 18_000, projectedMilliPoints: 18_000 },
+      offNflRoster,
+    );
+
+    expect(candidate.unavailable).toBe(true);
+  });
+
+  it("still ranks a bye player unavailable", async () => {
+    /*
+      The clause a reader of #308 is most likely to delete.
+
+      "`loadRosterForWeek` synthesises a kickoff, so `kickoffAt === null` is
+      dead" is an attractive simplification and it is wrong: the synthesis only
+      applies to a club with no games *in the season*. A club that is in the
+      schedule and simply has no game this week — an ordinary bye — still gets
+      `null`, and `RULES.md` §8 promises those players are demoted.
+    */
+    const fx = await setup();
+
+    const roster = await loadRosterForWeek(fx.client, fx.teamId, SEASON, WEEK);
+    const player = roster.get(fx.player("bye-te"))!;
+
+    expect(player.kickoffAt).toBeNull();
+    expect(player.teamRef).not.toBeNull();
+
+    const candidate = autolineupCandidate(
+      player,
+      { averageMilliPoints: 9_000, projectedMilliPoints: 9_000 },
+      new Set(),
+    );
+
+    expect(candidate.unavailable).toBe(true);
   });
 
   it("loads who is off NFL rosters, keyed on active rather than a club ref — #308", async () => {
@@ -2229,10 +2302,11 @@ describe("the autofill ranks an injured player behind a healthy one — #269", (
     await designate(fx, "sun-qb", "Doubtful");
 
     const roster = await loadRosterForWeek(fx.client, fx.teamId, SEASON, WEEK);
-    const candidate = autolineupCandidate(roster.get(fx.player("sun-qb"))!, {
-      averageMilliPoints: null,
-      projectedMilliPoints: null,
-    });
+    const candidate = autolineupCandidate(
+      roster.get(fx.player("sun-qb"))!,
+      { averageMilliPoints: null, projectedMilliPoints: null },
+      new Set(),
+    );
 
     // A sort key, not an exclusion: he is still a candidate.
     expect(candidate.unavailable).toBe(true);

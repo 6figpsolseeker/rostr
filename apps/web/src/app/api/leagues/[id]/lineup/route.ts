@@ -170,10 +170,18 @@ export async function GET(
       roster: [...roster.values()]
         .filter((player) => !player.onIr)
         .map((player) =>
-          autolineupCandidate(player, {
-            averageMilliPoints: averages.get(player.playerId) ?? null,
-            projectedMilliPoints: projected.get(player.playerId) ?? null,
-          }),
+          // `offNflRoster` is already loaded above for the screen's own labels,
+          // over this same id list. The preview and the write pass the same
+          // fact because the parameter is required — omitting it here would be
+          // a compile error rather than a silent disagreement.
+          autolineupCandidate(
+            player,
+            {
+              averageMilliPoints: averages.get(player.playerId) ?? null,
+              projectedMilliPoints: projected.get(player.playerId) ?? null,
+            },
+            offNflRoster,
+          ),
         ),
       mode: context.rules.roster.autofill,
       locked: currentAssignments.filter((entry) => slotIsLocked(entry, kickoffs, now)),
