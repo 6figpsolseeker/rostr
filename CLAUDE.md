@@ -1520,8 +1520,10 @@ and leaves TE empty. There is a test.
 has kicked off does not.** Those read as the same rule and are not, which is why this is a
 paragraph rather than a line.
 
-Unavailable is about whether he can _score_: a bye or an OUT designation and an empty slot
-both produce nothing, so starting him costs the manager nothing he had. Kicked off is about
+Unavailable is about whether he can _score_: a bye, an OUT designation, **no NFL club**,
+**no locatable fixture**, and an empty slot all produce nothing, so starting him costs the
+manager nothing he had. Four terms, not the two this paragraph named until #327 — and each
+is a separate question, so none may be folded into another. Kicked off is about
 whether the manager still held the _choice_, and there the two come apart. Filling an empty
 slot from a player already playing locks it from that instant, so a slot the manager had
 three more hours to decide is decided for him, from a performance already half or wholly

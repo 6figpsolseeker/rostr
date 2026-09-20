@@ -884,7 +884,7 @@ function PlayerTable({
                   A released player's bye belongs to the club that cut him.
                   `syncByeWeeks` matches on `team_ref`, so it never revisits him
                   to clear the row — this column printed that number beside a
-                  correct "No NFL club" label one column to its left.
+                  correct "FA" one column to its left.
                 */}
                 {byeChip({ byeWeek: player.byeWeek, onNflRoster: player.active }) ?? "—"}
               </span>

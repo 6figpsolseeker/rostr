@@ -216,8 +216,8 @@ export function shortName(name: string): string {
  * the player market already key on. **Never `teamRef`.** The adapter maps the
  * two from different provider fields, so they disagree in both directions — a
  * listed player with a blank club reads `teamRef` null, and a released player
- * can keep a club abbreviation. Keying the label on `teamRef` would put "not on
- * an NFL roster" on a rostered player and say nothing about some released ones.
+ * can keep a club abbreviation. Keying the label on `teamRef` would put "FA"
+ * on a rostered player and say nothing about some released ones.
  *
  * The card opens from the board, the market, a market roster row and the lineup
  * screen, so it is the screen most likely to contradict a label the manager read

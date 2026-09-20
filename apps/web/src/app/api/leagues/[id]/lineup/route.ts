@@ -378,8 +378,14 @@ export async function GET(
          * locking and says nothing about whether he can play.
          *
          * So the screen needs both, and `lib/player.ts` composes them. Reading
-         * `availability` alone is how this screen came to show an `FA` chip and
-         * " — played" in the swap dropdown for a man with no club.
+         * `availability` alone is how this screen came to show " — played" in
+         * the swap dropdown for a man with no club.
+         *
+         * It also showed him an `FA` chip, which was a symptom then and is the
+         * **correct** output now: since the owner's rule of 2026-09-20 those
+         * letters mean *no NFL club*, which is exactly what he is. What was
+         * wrong was the same chip appearing for a player who **is** NFL
+         * rostered with a missing club value.
          *
          * The lock countdown beside them is **not** from `availability` — it
          * comes from `slotLocksAt` over `loadKickoffs` — and it still renders.

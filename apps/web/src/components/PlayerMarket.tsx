@@ -36,9 +36,13 @@ interface Available {
    *
    * He is acquirable either way — that was decided on 2026-09-16 — and the list
    * already puts these last. This is here so the row can say which kind of
-   * player it is, because nothing else on it can: every player in this list is
-   * a fantasy free agent, so the "FA" the club column falls back to means the
-   * wrong thing precisely where it matters.
+   * player it is, because nothing else on it can.
+   *
+   * It used to be needed to *avoid* a wrong word: the club column fell back to
+   * "FA", which in this list meant the fantasy sense and so said nothing about
+   * his NFL club. Since the owner's rule of 2026-09-20 there is no fallback —
+   * "FA" means *no NFL club* and a missing club value renders nothing — so this
+   * flag is now what produces the word rather than what qualifies it.
    */
   onNflRoster: boolean;
   /** Display only. Null on a pool synced before migration `0032`. */
@@ -298,13 +302,22 @@ export function PlayerMarket({ leagueId }: { leagueId: string }) {
                       "FA" means he has no NFL club — owner's rule, 2026-09-20,
                       and the convention every other fantasy app uses here.
                       Deliberately *not* a statement about this league: every row
-                      on this page is unrostered, so saying so here would be
-                      noise, and a player rostered elsewhere is still FA if no
-                      NFL team has him.
+                      in **this list** is unrostered, so saying so here would be
+                      noise — and a player rostered elsewhere is still FA if no
+                      NFL team has him. ("This list", not "this page": the same
+                      component renders a "Your roster" section below, through
+                      this same function, where the rows are by definition
+                      rostered and FA still means exactly what it says.)
                     */}
-                    <span className={player.onNflRoster ? "" : "text-nocturne-neutral-500"}>
-                      {clubLabel(player) ?? ""}
-                    </span>
+                    {clubLabel(player) && (
+                      // Conditional so a null label leaves no element at all.
+                      // Rendered unconditionally it is an empty flex item, and
+                      // this row has `gap-1.5` — so the rare NFL-rostered
+                      // player with no club value trailed dead space.
+                      <span className={player.onNflRoster ? "" : "text-nocturne-neutral-500"}>
+                        {clubLabel(player)}
+                      </span>
+                    )}
                   </span>
                 </span>
               </button>
@@ -369,9 +382,15 @@ export function PlayerMarket({ leagueId }: { leagueId: string }) {
                     >
                       {player.position}
                     </span>
-                    <span className={player.onNflRoster ? "" : "text-nocturne-neutral-500"}>
-                      {clubLabel(player) ?? ""}
-                    </span>
+                    {clubLabel(player) && (
+                      // Conditional so a null label leaves no element at all.
+                      // Rendered unconditionally it is an empty flex item, and
+                      // this row has `gap-1.5` — so the rare NFL-rostered
+                      // player with no club value trailed dead space.
+                      <span className={player.onNflRoster ? "" : "text-nocturne-neutral-500"}>
+                        {clubLabel(player)}
+                      </span>
+                    )}
                   </span>
                 </span>
               </button>

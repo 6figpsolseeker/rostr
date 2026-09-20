@@ -688,9 +688,15 @@ already kicked off**, because § 2's lock forbids moving him into a slot he was 
 in. The autofill is held to that lock exactly as you are: it may leave a player whose game
 has started where he already stands, and it may not start him anywhere new.
 
-**Who gets the slot.** Among those eligible, a player with a game this week who is not
-ruled out comes first, because a player on a bye or officially out cannot score at all.
-Then the highest-ranked of those, ties broken by ascending player ID. Scarce slots are
+**Who gets the slot.** Among those eligible, a player who can actually score this week
+comes first. Four things mean he cannot: his club is on its bye, he is officially out, **no
+NFL club currently lists him**, or no fixture is stored for his club at all. Then the
+highest-ranked of those, ties broken by ascending player ID.
+
+This used to name only the first two. The reason has always been "cannot score at all", and
+that reason covers a player no club employs just as plainly — but the enumeration did not,
+so the text promised to rank first a player the autofill demotes. The wording is corrected
+rather than the rule: nothing about which players score has changed. Scarce slots are
 filled first, so a tight end who also qualifies for the FLEX is considered for TE first
 rather than being taken by the FLEX and leaving TE empty.
 

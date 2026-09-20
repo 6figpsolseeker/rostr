@@ -98,10 +98,11 @@ export async function GET(
       roster: roster.map((row) => ({
         playerId: row.player_id,
         onIr: row.on_ir,
-        // The same fact the available list carries. Without it the roster row
-        // for a player somebody has just stashed falls back to "FA", which on a
-        // roster is false twice over — he is rostered, and that is not why his
-        // club column is empty.
+        // The same fact the available list carries, and the one that decides
+        // whether his club column reads "FA". Since 2026-09-20 those letters
+        // mean *no NFL club* — a fact about the real world — so a rostered
+        // player gets them exactly when they are true of him, and a missing
+        // club value renders nothing rather than borrowing the word.
         onNflRoster: row.on_nfl_roster,
         name: row.full_name,
         position: row.key,

@@ -2091,6 +2091,64 @@ describe("the autofill ranks an injured player behind a healthy one — #269", (
     expect(await startedAt(fx, "QB")).toBe(fx.player("thu-qb"));
   });
 
+  it("passes over a released player, end to end — #327", async () => {
+    /*
+      **The wiring, which no unit test can see.**
+
+      The `autolineupCandidate` tests above build the set themselves, so
+      narrowing the id list `autoFillLineup` loads it over — or deleting that
+      load and passing an empty set — fails none of them. The set means "off an
+      NFL roster" by *membership*, so an under-populated one silently marks
+      everybody available: it fails **open**, which is the one direction this
+      whole change is about.
+
+      `team_ref` is deliberately left set. That is the row `teamRef` cannot
+      catch, so this asserts the new term is genuinely reaching the write path
+      rather than the old one covering for it.
+    */
+    const fx = await setup();
+
+    /*
+      **`sun-qb` is made the better player first, and that is what makes this
+      test mean anything.**
+
+      This fixture gives its players random ids and `compare` breaks ties on
+      ascending id, so two equally-ranked quarterbacks are a coin toss — the
+      block comment above says so. A test asserting `thu-qb` against an
+      unranked pair therefore passes about half the time on *unfixed* code,
+      which is worse than no test. Projecting `sun-qb` well means only a
+      demotion can explain him losing the slot.
+    */
+    const [statKey] = await fx.client.query<{ id: string }>(
+      `SELECT k.id FROM stat_keys k JOIN sports s ON s.id = k.sport_id
+        WHERE s.key = $1 AND k.key = 'pass_yd'`,
+      [NFL.key],
+    );
+    await fx.client.query(
+      `INSERT INTO player_projections (player_id, season, week, source, stat_key_id, value)
+       VALUES ($1, $2, $3, $4, $5, 400)`,
+      [fx.player("sun-qb"), SEASON, WEEK, PRIMARY_PROJECTION_SOURCE, statKey!.id],
+    );
+
+    // The control: well projected and still listed, he takes the slot.
+    await autoFillLineup(fx.client, fx.leagueId, fx.teamId, WEEK, BEFORE_ANYTHING);
+    expect(await startedAt(fx, "QB")).toBe(fx.player("sun-qb"));
+
+    // Released. `team_ref` is left set on purpose — this is the row a
+    // `teamRef` check cannot catch, so only the new term can demote him.
+    await fx.client.query("UPDATE players SET active = false WHERE id = $1", [
+      fx.player("sun-qb"),
+    ]);
+    await fx.client.query("DELETE FROM lineups WHERE team_id = $1 AND week = $2", [
+      fx.teamId,
+      WEEK,
+    ]);
+
+    await autoFillLineup(fx.client, fx.leagueId, fx.teamId, WEEK, BEFORE_ANYTHING);
+
+    expect(await startedAt(fx, "QB")).toBe(fx.player("thu-qb"));
+  });
+
   it("passes over one on injured reserve, which is issue #270's player", async () => {
     const fx = await setup();
     await designate(fx, "sun-qb", "Injured Reserve");

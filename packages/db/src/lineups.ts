@@ -1046,12 +1046,16 @@ export function autolineupCandidate(
   /**
    * Who no NFL club lists, from `loadOffNflRoster`. Membership means *off*.
    *
-   * **Required rather than optional, and that is deliberate.** Under
-   * `exactOptionalPropertyTypes` an omitted argument cannot even be passed as
-   * `undefined` — but more importantly, the permissive value here is precisely
-   * the bug: a caller who omitted it would silently rank every released player
-   * as available. `autolineup.ts` makes the same argument about `now`: a fact
-   * with no conservative default must be supplied, not defaulted.
+   * **Required rather than optional, and that is deliberate.** The permissive
+   * value here is precisely the bug: a caller who omitted it would silently rank
+   * every released player as available. A fact with no conservative default must
+   * be supplied rather than defaulted — the argument `autolineup.ts` makes about
+   * `now`.
+   *
+   * (An earlier draft credited `exactOptionalPropertyTypes` with forbidding an
+   * explicit `undefined` here. That flag governs optional *properties*, not
+   * optional *parameters*, so it would not have helped — which is why the
+   * parameter is required rather than merely documented.)
    *
    * A set rather than a boolean because this function is exported *so the
    * preview and the write cannot describe different players*. A boolean moves
@@ -1083,12 +1087,19 @@ export function autolineupCandidate(
       different question and none implies another:
 
       - `offNflRoster` — **no NFL club employs him.** From `players.active`, the
-        column the board, the market, the card and the lineup screen all key on.
+        column the board, the market, the card, the scoreboard and the lineup
+        screen all key on — five surfaces, the same count `loadOffNflRoster`
+        gives above, and this bullet undercounted them at four until it was
+        checked.
       - `teamRef === null` — **we cannot locate his game.** His kickoff is then a
         synthesised stand-in rather than a real one, so we do not know when or
         whether he plays.
-      - `kickoffAt === null` — **his club has no game this week.** An ordinary
-        bye. Alive and common; do not read #308 as having killed this clause.
+      - `kickoffAt === null` — **his club has no game this week**, which is an
+        ordinary bye whenever that club is in the season's schedule at all. Alive
+        and common; do not read #308 as having killed this clause. (There is a
+        third route to null — a week with no stored games anywhere, so there is
+        no first kickoff to fall back on. `loadOffNflRoster`'s docstring above
+        spells the branches out.)
 
       **A null kickoff does not imply the others**, which is the trap this block
       has always been about. It reads as though it should: no club, no fixture,

@@ -189,7 +189,7 @@ describe("what a released player's card says — #308", () => {
     PR #304 made a player his NFL club released acquirable on purpose, and
     labelled him where he is *chosen*. The card is where the choosing actually
     happens — it opens from the draft board and from the market, one click after
-    a correct "No NFL club" label — and it contradicted that label in three
+    a correct "FA" — and it contradicted that label in three
     places at once: a blank where the club goes, a stale bye week, and the words
     "Free agent" in the fantasy sense.
   */
