@@ -5,6 +5,8 @@ import useSWR from "swr";
 import { PlayerAvatar } from "./PlayerAvatar";
 import {
   ageOn,
+  byeChip,
+  clubLabel,
   heightText,
   injuryBadge,
   injuryTone,
@@ -38,6 +40,8 @@ interface CardResponse {
     name: string;
     positions: string[];
     teamRef: string | null;
+    /** `players.active` — see `clubLabel`, which needs both this and `teamRef`. */
+    onNflRoster: boolean;
     imageUrl: string | null;
     byeWeek: number | null;
     bio: {
@@ -143,11 +147,18 @@ export function PlayerCard({
               >
                 {group}
               </span>
-              {player?.teamRef && <span>{player.teamRef}</span>}
+              {/*
+                The club, or the reason there is not one. This used to be
+                `{player?.teamRef && …}` with no else, so a released player got a
+                blank — and the card opens one click after the draft board has
+                said "No NFL club" and the market "Not on an NFL roster". Two
+                strings for one fact, which is why `clubLabel` adopts the
+                board's rather than inventing a third. Composed in
+                `lib/player.ts` because this file cannot be tested.
+              */}
+              {player && clubLabel(player) && <span>{clubLabel(player)}</span>}
               {player?.bio.jerseyNumber && <span>#{player.bio.jerseyNumber}</span>}
-              {player?.byeWeek !== null && player?.byeWeek !== undefined && (
-                <span>bye {player.byeWeek}</span>
-              )}
+              {player && byeChip(player) !== null && <span>bye {byeChip(player)}</span>}
               {player?.injury && (
                 <span className={injuryTone(player.injury.designation)}>
                   {injuryBadge(player.injury.designation)}
@@ -161,7 +172,11 @@ export function PlayerCard({
                   ? data.ownedBy.teamId === data.myTeamId
                     ? "On your roster"
                     : `Rostered by ${data.ownedBy.teamName}`
-                  : "Free agent"
+                  : // Fantasy free agency — nobody in this league holds him. A
+                    // released player is separately labelled above, because the
+                    // two "free agent"s mean different things and this line
+                    // reinforced the wrong reading of the other.
+                    "Free agent in this league"
                 : " "}
             </p>
           </div>

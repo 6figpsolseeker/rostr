@@ -53,9 +53,42 @@ export class MatchupError extends Error {
  * all on a week that is not the team's bye. Both used to be indistinguishable
  * from `BYE`, and a bye means the opposite thing to anyone deciding a lineup.
  * See `gameAvailability` in `@rostr/core`.
+ *
+ * ## Related to `GameAvailability`, and not a superset of it
+ *
+ * An earlier draft of this said "superset", which is wrong at the type level:
+ * there is no `SCHEDULED` member here. `gameStateOf` **resolves** that one into
+ * `YET_TO_PLAY`, `IN_PROGRESS` or `FINAL` using the clock and the game status,
+ * and adds `NO_CLUB` — so `GameAvailability` is not assignable to this.
+ *
+ * `NO_CLUB` is the clearest case of why this union exists separately. "His club
+ * released him" is employment rather than fixtures, so it is not something
+ * `gameAvailability` could answer from its inputs — every one of them is a fact
+ * about games.
+ *
+ * **These values are not only labels.** `MatchupSide`'s `yetToPlay`,
+ * `inProgress` and `unscheduled` counters are derived from them, and those feed
+ * the scoreboard's progress line and its poll interval. A `NO_CLUB` starter
+ * counts in none of the three — correct for a player with no fixture, and worth
+ * knowing before adding a member.
  */
 export type PlayerGameState =
-  "BYE" | "UNSCHEDULED" | "TIME_TBD" | "YET_TO_PLAY" | "IN_PROGRESS" | "FINAL";
+  | "BYE"
+  | "UNSCHEDULED"
+  | "TIME_TBD"
+  | "YET_TO_PLAY"
+  | "IN_PROGRESS"
+  | "FINAL"
+  /**
+   * No NFL club lists him, so no fixture is coming — this week or any week.
+   *
+   * Read from `players.active`, which is what the draft board and the player
+   * market already key on. **Not** from `team_ref`: the adapter maps the two
+   * from different provider fields, so they disagree in both directions — a
+   * listed player with a blank club reads `team_ref` null, and a released
+   * player can keep a club abbreviation.
+   */
+  | "NO_CLUB";
 
 export interface PlayerLine {
   readonly playerId: string;
@@ -257,6 +290,8 @@ interface PlayerFacts {
   /** This season's bye week, null when unrecorded. Separates a bye from a
    * fixture whose kickoff time is not fixed yet. */
   readonly byeWeek: number | null;
+  /** `players.active` — whether any NFL club currently lists him. */
+  readonly onNflRoster: boolean;
 }
 
 /**
@@ -279,14 +314,19 @@ async function playerContext(
     status: string | null;
     kickoff_tbd: boolean | null;
     bye_week: number | null;
+    on_nfl_roster: boolean;
   }>(
+    // `p.active` costs no extra join — `players` is already here. It is display
+    // data and this query is not an ownership oracle; nothing downstream of
+    // `gameState` locks, scores or validates.
     `SELECT DISTINCT p.id,
             p.full_name,
             pos.key AS position,
             g.kickoff_at,
             g.status,
             g.kickoff_tbd,
-            ps.bye_week
+            ps.bye_week,
+            p.active AS on_nfl_roster
        FROM roster_entries r
        JOIN teams t ON t.id = r.team_id
        JOIN players p ON p.id = r.player_id
@@ -313,6 +353,7 @@ async function playerContext(
         gameStatus: row.status,
         kickoffTbd: row.kickoff_tbd === true,
         byeWeek: row.bye_week === null ? null : Number(row.bye_week),
+        onNflRoster: row.on_nfl_roster !== false,
       },
     ]),
   );
@@ -347,6 +388,34 @@ function toLine(
 }
 
 function gameStateOf(facts: PlayerFacts | undefined, week: number, now: Date): PlayerGameState {
+  /*
+    No NFL club lists him, so there is no fixture to reason about — checked
+    first, and above the kickoff test rather than inside it.
+
+    **This is the one place `gameAvailability` was answering falsely.** With no
+    club there is no `games` row and, for a player released before the byes were
+    synced, no `player_seasons` row either — so `byeWeek` was null and the branch
+    below returned `BYE`. The screen said the literal word "bye", every week, to
+    both managers, all season: "he is resting, he will be back next week" about a
+    man no club employs.
+
+    A player cut *mid*-season keeps a stale row, so he read `UNSCHEDULED` → "TBD"
+    in most weeks and "bye" only in his old club's bye week. Also wrong, and less
+    loudly.
+
+    Claimed from `onNflRoster` alone, **never** from `byeWeek === null`.
+    `syncByeWeeks` is the only writer of `player_seasons`, so before it has run
+    for a season that map is empty for *everybody* — reading a null bye as "no
+    club" would put the entire league here. That is the failure #182 fixed,
+    inverted, and `availability.ts` argues the same thing about `UNSCHEDULED`.
+
+    It also wins over a *stale* bye row, which a player cut mid-season keeps:
+    `syncByeWeeks` matches on `team_ref`, so it never revisits him to clear it.
+    Consulting the bye first would leave him reading "bye" in his old club's bye
+    week — a specific, plausible, false number.
+  */
+  if (facts && !facts.onNflRoster) return "NO_CLUB";
+
   // No game in this week's schedule, and there are two reasons for that. A bye
   // means he cannot score, and the screen should say so rather than show a
   // hopeful zero. A fixture awaiting its time means he will play and nobody yet

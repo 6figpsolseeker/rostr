@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   ageOn,
+  byeChip,
+  clubLabel,
   heightText,
   initialsOf,
   injuryBadge,
@@ -10,6 +12,7 @@ import {
   positionGroup,
   shortName,
   sizedImage,
+  weekNote,
 } from "./player.js";
 
 describe("positionGroup", () => {
@@ -178,5 +181,128 @@ describe("shortName", () => {
 
   it("leaves a one-word name alone", () => {
     expect(shortName("Cowboys")).toBe("Cowboys");
+  });
+});
+
+describe("what a released player's card says — #308", () => {
+  /*
+    PR #304 made a player his NFL club released acquirable on purpose, and
+    labelled him where he is *chosen*. The card is where the choosing actually
+    happens — it opens from the draft board and from the market, one click after
+    a correct "No NFL club" label — and it contradicted that label in three
+    places at once: a blank where the club goes, a stale bye week, and the words
+    "Free agent" in the fantasy sense.
+  */
+
+  it("names the fact instead of rendering a blank", () => {
+    // Was `{player?.teamRef && <span>…</span>}` with no else, so a released
+    // player got nothing at all and nothing took its place.
+    expect(clubLabel({ teamRef: null, onNflRoster: false })).toBe("No NFL club");
+  });
+
+  it("says nothing for a listed player whose club we do not hold", () => {
+    /*
+      **The half a `teamRef` check gets wrong**, and the half #308 item 3 is
+      about. The adapter reads `team` and `isFreeAgent` separately, so a listed
+      player can arrive with a blank club.
+
+      Not "FA": every caller renders a player somebody rosters, and there that
+      string is false twice over — he is rostered, and that is not why his club
+      column is empty. Not the released sentence either, which would be a claim
+      about his employment we have no basis for. We know he is listed and not
+      where; `null` says exactly that.
+    */
+    expect(clubLabel({ teamRef: null, onNflRoster: true })).toBeNull();
+  });
+
+  it("names the fact even when the provider still prints a club", () => {
+    /*
+      **The other half, and the one nothing in this repo caught before.** A
+      released player can keep a club abbreviation — `active` and `team_ref` come
+      from different provider fields. Keyed on `teamRef` this row reads "PHI" and
+      says nothing is wrong.
+    */
+    expect(clubLabel({ teamRef: "PHI", onNflRoster: false })).toBe("No NFL club");
+    expect(clubLabel({ teamRef: "PHI", onNflRoster: true })).toBe("PHI");
+  });
+
+  it("drops a bye that belongs to the club that cut him", () => {
+    /*
+      `syncByeWeeks` inserts `WHERE team_ref = $3`, so it never revisits a
+      released player to clear the row his old club gave him. The card printed
+      `bye 9` from it — specific, plausible, false, every time it was opened.
+    */
+    expect(byeChip({ byeWeek: 9, onNflRoster: false })).toBeNull();
+  });
+
+  it("keeps the bye for everyone else", () => {
+    // The control. A bye is a real and useful fact about a listed player, and a
+    // blanket suppression would take it from the screen that exists to inform a
+    // draft pick.
+    expect(byeChip({ byeWeek: 9, onNflRoster: true })).toBe(9);
+    expect(byeChip({ byeWeek: null, onNflRoster: true })).toBeNull();
+  });
+});
+
+describe("what a lineup row says about a player's week — #308", () => {
+  const listed = { onNflRoster: true } as const;
+  const cut = { onNflRoster: false } as const;
+
+  it("names a missing club even though his week reads as scheduled", () => {
+    /*
+      **The assertion the issue's own diagnosis would not have produced.**
+
+      #308 says a released player reads "bye" on the lineup screen. He does not
+      — his `availability` is `SCHEDULED`, because `loadRosterForWeek` gives a
+      player whose club has no fixture the week's first kickoff rather than
+      null, so his slot still locks. `gameAvailability` sees a real kickoff and
+      answers accordingly.
+
+      So a fix that consulted the club flag only when the schedule had nothing
+      to say would never fire for the player it was written for. This pins the
+      precedence instead.
+    */
+    expect(weekNote({ availability: "SCHEDULED", ...cut })?.short).toBe("no club");
+  });
+
+  it("outranks a bye, so a stale row cannot speak for him", () => {
+    // A player cut mid-season keeps his old club's `player_seasons` row —
+    // `syncByeWeeks` matches on `team_ref` and never revisits him.
+    expect(weekNote({ availability: "BYE", ...cut })?.short).toBe("no club");
+  });
+
+  it("still calls a listed player's bye a bye", () => {
+    /*
+      The control that stops this becoming #182. `syncByeWeeks` is the only
+      writer of `player_seasons`, so before it has run for a season every player
+      looks bye-less. Claiming "no club" from a missing bye rather than from the
+      flag would relabel the whole league.
+    */
+    expect(weekNote({ availability: "BYE", ...listed })?.short).toBe("bye");
+  });
+
+  it("keeps the two TBDs apart, and says nothing about an ordinary week", () => {
+    // #182's distinction, preserved: a bye says start someone else, a pending
+    // kickoff says he will play and nobody has said at what hour.
+    expect(weekNote({ availability: "TIME_TBD", ...listed })?.detail).toMatch(/not fixed/);
+    expect(weekNote({ availability: "UNSCHEDULED", ...listed })?.detail).toMatch(
+      /not their bye/,
+    );
+    expect(weekNote({ availability: "SCHEDULED", ...listed })).toBeNull();
+  });
+
+  it("gives advice nowhere, on any branch", () => {
+    /*
+      The convention `PlayerMarket` and the off-roster notification both set:
+      state the observable, let the manager decide. It matters most on the
+      no-club branch, where the product's advice and a manager's deliberate
+      choice to stash a flier can legitimately disagree.
+    */
+    for (const availability of ["SCHEDULED", "BYE", "TIME_TBD", "UNSCHEDULED"] as const) {
+      for (const onNflRoster of [true, false]) {
+        const note = weekNote({ availability, onNflRoster });
+        if (note) expect(note.detail, note.detail).not.toMatch(/\byou should\b|\bdrop him\b/i);
+      }
+    }
   });
 });

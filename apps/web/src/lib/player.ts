@@ -198,3 +198,156 @@ export function shortName(name: string): string {
   const initial = [...first][0] ?? "";
   return `${initial}. ${rest}`;
 }
+
+/**
+ * What to show where a player's NFL club goes, and whether a bye means anything.
+ *
+ * ## Why these are functions rather than two `&&`s in a component
+ *
+ * `apps/web` cannot render a component in a test — both vitest projects are
+ * node-environment with no jsdom — so a rule written in `.tsx` is verified only
+ * by being run in production. Every mistake #308 is about was of that shape: a
+ * `{player?.teamRef && …}` with no `else`, and a bye chip that consulted only
+ * whether a number was present.
+ *
+ * ## The fact they read, and the one they must not
+ *
+ * `onNflRoster` comes from `players.active`, which is what the draft board and
+ * the player market already key on. **Never `teamRef`.** The adapter maps the
+ * two from different provider fields, so they disagree in both directions — a
+ * listed player with a blank club reads `teamRef` null, and a released player
+ * can keep a club abbreviation. Keying the label on `teamRef` would put "not on
+ * an NFL roster" on a rostered player and say nothing about some released ones.
+ *
+ * The card opens from the board, the market, a market roster row and the lineup
+ * screen, so it is the screen most likely to contradict a label the manager read
+ * one click earlier. Its own docstring says why that matters: "a player who
+ * reads differently depending on which screen you came from is a player somebody
+ * will mis-draft."
+ */
+export interface ClubFacts {
+  readonly teamRef: string | null;
+  readonly onNflRoster: boolean;
+}
+
+/**
+ * The club chip.
+ *
+ * Three answers, and `null` is one of them.
+ *
+ * **It never says "FA", and that is #308's third item.** "FA" means *fantasy*
+ * free agent, and every screen that calls this renders a player somebody
+ * rosters — so there it is false twice over: he is rostered, and that is not
+ * why his club column is empty. `players/route.ts` already made that ruling for
+ * the market's roster list, in nearly these words.
+ *
+ * So a listed player whose club we do not hold gets `null` and the caller
+ * renders nothing. Silence is honest here: we know he is listed and we do not
+ * know where, and any string would claim more than that.
+ *
+ * **"No NFL club" rather than the market's "Not on an NFL roster"**, because
+ * this lands in chip rows two or three characters wide as well as on the card.
+ * It is the draft board's existing string, so this adds no third phrasing — the
+ * two that exist differ in register rather than meaning, which is worth tidying
+ * in one pass rather than inventing a fourth here.
+ */
+export function clubLabel({ teamRef, onNflRoster }: ClubFacts): string | null {
+  if (!onNflRoster) return "No NFL club";
+  return teamRef;
+}
+
+/**
+ * The bye week to show, or `null` when a bye is not a fact about this player.
+ *
+ * A released player keeps the `player_seasons` row his old club gave him —
+ * `syncByeWeeks` matches on `team_ref`, so it never revisits him to clear it.
+ * The card therefore printed `bye 9` for him: specific, plausible and false,
+ * every time it was opened, beside a blank club.
+ */
+export function byeChip({
+  byeWeek,
+  onNflRoster,
+}: {
+  readonly byeWeek: number | null;
+  readonly onNflRoster: boolean;
+}): number | null {
+  if (!onNflRoster) return null;
+  return byeWeek;
+}
+
+/** What a lineup row should say about a player's week, beside his points. */
+export interface WeekNote {
+  /** The chip. Short — two or three characters, except "no club". */
+  readonly short: string;
+  /** The tooltip. States the observable and gives no advice. */
+  readonly detail: string;
+}
+
+/**
+ * Why this player may not score this week, or `null` when nothing is unusual.
+ *
+ * ## `onNflRoster` wins over everything, including a fixture
+ *
+ * That ordering is the whole function, and it is not obvious, so: a released
+ * player's `availability` is usually **`SCHEDULED`**. `loadRosterForWeek` gates
+ * its fallback on whether the club appears anywhere in the *season's* schedule,
+ * and hands anyone who fails that the week's first kickoff rather than null — on
+ * purpose, so his slot still locks. `gameAvailability` then sees a real kickoff.
+ *
+ * "Usually" because two states escape it: a week with no stored games has no
+ * first kickoff to fall back on, and a released player who kept his club
+ * abbreviation follows that club's fixtures, bye included. The flag is checked
+ * first precisely so none of that matters here.
+ *
+ * So a screen reading `availability` alone shows him as playing a game that
+ * does not exist, with a lock countdown, and marks him "played" from the week's
+ * first kickoff. Checking the club flag only when the schedule has nothing to
+ * say would therefore never fire for the player this exists for.
+ *
+ * ## And it is claimed from the flag alone
+ *
+ * Never from a missing bye. `syncByeWeeks` is the only writer of
+ * `player_seasons`, so before it runs for a season every player looks
+ * bye-less — reading that as "no club" would relabel the entire league. That is
+ * the failure #182 fixed, inverted.
+ */
+export function weekNote({
+  availability,
+  onNflRoster,
+}: {
+  readonly availability: "SCHEDULED" | "TIME_TBD" | "BYE" | "UNSCHEDULED";
+  readonly onNflRoster: boolean;
+}): WeekNote | null {
+  if (!onNflRoster) {
+    return {
+      short: "no club",
+      detail:
+        "He is not listed with an NFL club, so no fixture is stored for him and " +
+        "he cannot score this week.",
+    };
+  }
+
+  if (availability === "BYE") {
+    return { short: "bye", detail: "His club is on its bye this week." };
+  }
+
+  if (availability === "TIME_TBD") {
+    return {
+      short: "TBD",
+      detail:
+        "He plays this week. The NFL has not fixed the kickoff time, so this " +
+        "slot locks at the earliest hour the game could start.",
+    };
+  }
+
+  if (availability === "UNSCHEDULED") {
+    return {
+      short: "TBD",
+      detail:
+        "No fixture stored for his team this week, and it is not their bye. " +
+        "Check back once the schedule syncs.",
+    };
+  }
+
+  return null;
+}

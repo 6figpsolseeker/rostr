@@ -9,7 +9,14 @@ import { previewHeading, whyNot } from "@/lib/autofill";
 import useSWR from "swr";
 import { PlayerAvatar } from "./PlayerAvatar";
 import { PlayerCard } from "./PlayerCard";
-import { injuryBadge, injuryTone, positionColour, positionGroup } from "@/lib/player";
+import {
+  clubLabel,
+  injuryBadge,
+  injuryTone,
+  positionColour,
+  positionGroup,
+  weekNote,
+} from "@/lib/player";
 
 /**
  * The lineup screen.
@@ -44,6 +51,17 @@ interface RosterPlayer {
    * `UNSCHEDULED` is the same news with less of it: no fixture stored at all.
    */
   availability: "SCHEDULED" | "TIME_TBD" | "BYE" | "UNSCHEDULED";
+  /**
+   * Whether any NFL club lists him — orthogonal to `availability`, and read
+   * together with it by `weekNote`.
+   *
+   * **A released player's `availability` is usually `SCHEDULED`**, which is the
+   * whole reason this field exists. `loadRosterForWeek` gives a player whose
+   * club has no games *in the season* the week's first kickoff rather than null,
+   * deliberately, so his slot still locks — and `gameAvailability` reads that as
+   * an ordinary game. `weekNote` carries the exceptions.
+   */
+  onNflRoster: boolean;
   /** Stashed on injured reserve: on the roster, out of the rotation. */
   onIr: boolean;
   /** This week's opponent, or null on a bye and on an un-ingested fixture. */
@@ -570,7 +588,7 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
                       >
                         {positionGroup(player.positions)}
                       </span>
-                      {player.teamRef ?? "FA"}
+                      {clubLabel(player) ?? ""}
                       {/*
                         Who he plays, next to who he plays for. A manager
                         deciding a lineup is comparing matchups, and sending
@@ -637,16 +655,32 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
                         disabled={played}
                       >
                         {candidate.name} ({candidate.positions.join("/")})
-                        {played ? " — played" : ""}
-                        {candidate.availability === "BYE" ? " — bye" : ""}
-                        {/* Not folded into the bye label: a bye scores nothing
-                            and this player will score, once the fixture has a
-                            date. Choosing between them is the point of this
-                            list. */}
-                        {candidate.availability === "UNSCHEDULED" ||
-                        candidate.availability === "TIME_TBD"
-                          ? " — TBD"
-                          : ""}
+                        {/*
+                          "Played" is checked second now, and that ordering is
+                          the fix. A released player is handed the week's first
+                          kickoff so his slot locks, so from that instant this
+                          list marked him "played" and disabled him — a claim
+                          about a game he was never in. `weekNote` answers "no
+                          club" first, and the option stays disabled either way.
+
+                          The bye/TBD split that used to be spelled out here is
+                          inside `weekNote`, with its reasoning: a bye scores
+                          nothing and a pending kickoff will score, and choosing
+                          between them is the point of this list.
+                        */}
+                        {weekNote(candidate) ? ` — ${weekNote(candidate)!.short}` : ""}
+                        {/*
+                          Suppressed **only** for a player with no club, whose
+                          "played" is a claim about a game he was never in — he
+                          is handed the week's first kickoff so his slot locks,
+                          which is what made `played` true for him.
+
+                          A `TIME_TBD` player has a real fixture and may
+                          genuinely have played, so he keeps both labels. An
+                          earlier draft suppressed "played" for every note and
+                          lost that.
+                        */}
+                        {played && candidate.onNflRoster ? " — played" : ""}
                         {candidate.injuryDesignation ? ` — ${candidate.injuryDesignation}` : ""}
                       </option>
                     );
@@ -706,7 +740,7 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
                   <span className="block truncate text-xs">{player.name}</span>
                   <span className="block text-[10px] text-nocturne-neutral-600">
                     {positionGroup(player.positions)}
-                    {player.teamRef ? ` · ${player.teamRef}` : ""}
+                    {clubLabel(player) ? ` · ${clubLabel(player)}` : ""}
                     {/*
                       The bench is where a substitution gets decided, so the
                       matchup matters here at least as much as it does on a
@@ -785,49 +819,32 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
                     To IR
                   </button>
                 )}
-              {player.availability === "BYE" && (
-                <span className="text-nocturne-neutral-600">bye</span>
-              )}
-              {(player.availability === "UNSCHEDULED" ||
-                player.availability === "TIME_TBD") && (
-                <span
-                  className="text-nocturne-neutral-600"
-                  title={
-                    player.availability === "TIME_TBD"
-                      ? "He plays this week. The NFL has not fixed the kickoff time, so this slot locks at the earliest hour the game could start."
-                      : player.teamRef === null
-                        ? // Says less, because the other sentence says something
-                          // false here. A player with no club reference has no
-                          // fixture coming, and "check back once the schedule
-                          // syncs" promises one that never arrives — which is
-                          // the worst kind of wrong on a screen somebody is
-                          // deciding from. Issue #254.
-                          //
-                          // Reports the missing club reference and stops there,
-                          // rather than diagnosing why. `teamRef` is null for a
-                          // player no longer on an NFL roster, and also for a
-                          // stale trade, a blank, or a provider rename — see
-                          // `lineups.ts`.
-                          //
-                          // This used to defer naming the cause until #276 had
-                          // sorted the flag out. #276 was decided on 2026-09-16
-                          // and the answer here is still don't, for a better
-                          // reason: reaching `players.active` means widening
-                          // `loadRosterForWeek`, which is `validateLineup`'s
-                          // ownership oracle and must not gain columns to serve
-                          // a tooltip.
-                          //
-                          // `teamRef` is a proxy and not an exact one — the
-                          // adapter reads `team` and `isFreeAgent` separately,
-                          // so a blank club on a listed player reads as null
-                          // here too. That is why this names the observable
-                          // ("not listed with an NFL club") rather than the
-                          // cause, which is the right sentence either way.
-                          "He is not listed with an NFL club, so no fixture is stored for him."
-                        : "No fixture stored for his team this week, and it is not their bye. Check back once the schedule syncs."
-                  }
-                >
-                  TBD
+              {/*
+                Why this player may not score, composed in `lib/player.ts`.
+
+                **The `teamRef === null` branch that used to live here was
+                deleted rather than repaired.** It required
+                `availability === "UNSCHEDULED"`, which requires a null
+                `kickoffAt`, which for a player with no club requires that *no
+                games at all* are stored for the week — `loadRosterForWeek` hands
+                him the week's first kickoff otherwise, so his slot still locks.
+
+                So it was unreachable in any week that has fixtures stored, which
+                is every operational week. It could fire in a week whose schedule
+                was never ingested, where nothing locks and `setLineup` refuses
+                anyway — an earlier version of this said "could never run", which
+                was too strong. Its sentence now lives in `weekNote`, which
+                covers him in every week rather than only that one.
+
+                #308 records the branch as working for the mid-season-cut
+                sub-case and as unreachable for the other. Both are wrong, for
+                different reasons.
+
+                What he actually got was nothing here and an `FA` chip above.
+              */}
+              {weekNote(player) && (
+                <span className="text-nocturne-neutral-600" title={weekNote(player)!.detail}>
+                  {weekNote(player)!.short}
                 </span>
               )}
               {isBreakout(player) && (
@@ -902,7 +919,7 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
                         <span className="block truncate text-xs">{player.name}</span>
                         <span className="block text-[10px] text-nocturne-neutral-600">
                           {positionGroup(player.positions)}
-                          {player.teamRef ? ` · ${player.teamRef}` : ""}
+                          {clubLabel(player) ? ` · ${clubLabel(player)}` : ""}
                           {player.injuryDesignation ? ` · ${player.injuryDesignation}` : ""}
                         </span>
                       </span>

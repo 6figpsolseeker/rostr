@@ -94,6 +94,27 @@ async function writeStat(
 }
 
 describe("loadPlayerProfile", () => {
+  it("reports a released player as off NFL rosters — #308", async () => {
+    /*
+      The card opens one click after the draft board and the market, both of
+      which already label this from `players.active`. Without the column the
+      card could only read `team_ref`, and the two disagree in both directions —
+      so it rendered a blank club and a bye week belonging to the team that cut
+      him.
+
+      `team_ref` is deliberately left set here. A released player can keep a
+      club abbreviation, because the adapter maps `active` from `isFreeAgent`
+      and `team_ref` from `team` — so this fixture is the case a `teamRef`
+      check gets wrong, and the assertion fails if anybody keys it that way.
+    */
+    const fx = await setup();
+    await fx.client.query("UPDATE players SET active = false WHERE id = $1", [fx.playerId]);
+
+    const profile = await loadPlayerProfile(fx.client, fx.playerId, SEASON);
+
+    expect(profile).toMatchObject({ teamRef: "PHI", onNflRoster: false });
+  });
+
   it("returns the biography as stored", async () => {
     const fx = await setup();
     const profile = await loadPlayerProfile(fx.client, fx.playerId, SEASON);
@@ -101,6 +122,7 @@ describe("loadPlayerProfile", () => {
     expect(profile).toMatchObject({
       fullName: "A. Receiver",
       teamRef: "PHI",
+      onNflRoster: true,
       imageUrl: "https://example.test/p1.png",
       byeWeek: 9,
       bio: {

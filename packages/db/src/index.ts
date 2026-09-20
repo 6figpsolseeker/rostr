@@ -146,6 +146,7 @@ export {
   teamsWithLineupWork,
   LineupError,
   loadByeWeeks,
+  loadOffNflRoster,
   loadLineup,
   loadKickoffs,
   autolineupCandidate,

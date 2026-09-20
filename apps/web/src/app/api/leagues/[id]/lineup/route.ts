@@ -15,6 +15,7 @@ import {
   LineupError,
   loadAverages,
   loadByeWeeks,
+  loadOffNflRoster,
   loadLineup,
   loadProjectedPoints,
   loadKickoffs,
@@ -110,6 +111,11 @@ export async function GET(
     // unlocking one — the lock uses the conservative time exactly as stored.
     const byeWeeks = await loadByeWeeks(client, [...roster.keys()], context.season);
     const tbdKickoffs = await loadTbdKickoffs(client, [...roster.keys()], context.season, week);
+    // Same reasoning, third sibling. A released player is not derivable from
+    // anything already loaded here: his `kickoffAt` is the week's first kickoff
+    // rather than null (deliberately, so his slot still locks), and `teamRef`
+    // disagrees with `active` in both directions.
+    const offNflRoster = await loadOffNflRoster(client, [...roster.keys()]);
 
     // Points so far this week, so a manager can see what their lineup is doing
     // while it is doing it.
@@ -352,6 +358,27 @@ export async function GET(
           byeWeek: byeWeeks.get(player.playerId) ?? null,
           week,
         }),
+        /**
+         * Whether any NFL club lists him — orthogonal to `availability`, and
+         * sent beside it rather than folded in.
+         *
+         * `gameAvailability` answers a question about the *schedule*, and every
+         * input it takes is a fact about games. "His club released him" is
+         * employment, and it is the reason the answer above is `SCHEDULED` for
+         * a player who will not appear in a fixture all season: he is given the
+         * week's first kickoff so his slot still locks, which is correct for
+         * locking and says nothing about whether he can play.
+         *
+         * So the screen needs both, and `lib/player.ts` composes them. Reading
+         * `availability` alone is how this screen came to show an `FA` chip and
+         * " — played" in the swap dropdown for a man with no club.
+         *
+         * The lock countdown beside them is **not** from `availability` — it
+         * comes from `slotLocksAt` over `loadKickoffs` — and it still renders.
+         * Arguably right, since his slot genuinely does lock; it is not fixed
+         * here, and an earlier version of this comment implied it was.
+         */
+        onNflRoster: !offNflRoster.has(player.playerId),
         milliPoints: scorePlayer(stats.get(player.playerId) ?? [], scoring),
         /**
          * This week's projection, under this league's own scoring. `null` when

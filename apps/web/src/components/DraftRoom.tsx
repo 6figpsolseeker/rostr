@@ -8,6 +8,7 @@ import { buildBoard, byDraftValue, focusRound, picksUntilTurn } from "@/lib/draf
 import type { BoardCell, BoardRow } from "@/lib/draft-board";
 import {
   POSITION_ORDER,
+  byeChip,
   injuryBadge,
   injuryTone,
   points,
@@ -877,7 +878,13 @@ function PlayerTable({
               </button>
 
               <span className="text-right text-xs text-nocturne-neutral-600 tabular-nums">
-                {player.byeWeek ?? "—"}
+                {/*
+                  A released player's bye belongs to the club that cut him.
+                  `syncByeWeeks` matches on `team_ref`, so it never revisits him
+                  to clear the row — this column printed that number beside a
+                  correct "No NFL club" label one column to its left.
+                */}
+                {byeChip({ byeWeek: player.byeWeek, onNflRoster: player.active }) ?? "—"}
               </span>
               <span
                 className="text-right text-xs text-nocturne-neutral-600 tabular-nums"

@@ -65,6 +65,17 @@ export interface PlayerProfile {
   readonly positions: readonly string[];
   /** The club, not the fantasy team. */
   readonly teamRef: string | null;
+  /**
+   * `players.active` — whether any NFL club currently lists him.
+   *
+   * Carried because `teamRef` cannot answer it. The adapter maps the two from
+   * different provider fields, so a listed player with a blank club reads
+   * `teamRef` null and a released player can keep a club abbreviation. The card
+   * opens from the draft board and the market, both of which already label this
+   * from `active` — so without it the card contradicts, one click later, a
+   * correct label the manager has just read.
+   */
+  readonly onNflRoster: boolean;
   readonly imageUrl: string | null;
   readonly byeWeek: number | null;
   readonly bio: PlayerBio;
@@ -110,7 +121,13 @@ export async function loadPlayerProfile(
     injury_description: string | null;
     injury_return_date: string | Date | null;
     bye_week: number | null;
+    active: boolean;
   }>(
+    // `p.active` needs no join and no `GROUP BY` change — `p.id` is already
+    // grouped and is the primary key, so every `p.*` column is functionally
+    // dependent on it. This loader is a profile reader, not an ownership
+    // oracle; the standing objection to widening `loadRosterForWeek` does not
+    // reach it.
     `SELECT p.id,
             p.full_name,
             array_agg(DISTINCT pos.key) AS positions,
@@ -127,6 +144,7 @@ export async function loadPlayerProfile(
             p.injury_designation,
             p.injury_description,
             p.injury_return_date,
+            p.active,
             ps.bye_week
        FROM players p
        JOIN positions pos
@@ -148,6 +166,7 @@ export async function loadPlayerProfile(
     fullName: row.full_name,
     positions: row.positions,
     teamRef: row.team_ref,
+    onNflRoster: row.active !== false,
     imageUrl: row.image_url,
     byeWeek: row.bye_week === null ? null : Number(row.bye_week),
     bio: {
