@@ -199,7 +199,7 @@ export function cronHealth(
 
     jobs.push({
       name: job.name,
-      state: stateOf(job, run, minutesSince),
+      state: cronJobState(job, run, minutesSince),
       everyMinutes: job.everyMinutes,
       lastRanAt: run?.lastRanAt ?? null,
       lastOutcome: run?.lastOutcome ?? null,
@@ -234,7 +234,29 @@ export function cronHealth(
   };
 }
 
-function stateOf(
+/**
+ * What one job's row means.
+ *
+ * **Exported under the name twelve comments across seven files already use.**
+ * It was `stateOf`, unexported, while `season-sync.ts`, `stats.ts`,
+ * `score-week.ts`, both cron routes and four tests all referred to
+ * `cronJobState` — a function that did not exist. That is why the ordering
+ * below has never had a test naming it: nothing could address it.
+ *
+ * ## The ordering is deliberate, and it has a known cost
+ *
+ * A non-null outcome outranks staleness because a job failing every minute is
+ * punctual, and reporting it `OK` is the exact failure `last_outcome` was added
+ * to prevent.
+ *
+ * Its cost is that a job which is **both** failing and dead reports `FAILING`,
+ * so the label does not say the scheduler stopped. Nothing is hidden on the
+ * CLI — `cli.ts` prints `last: Nm ago` on the same line whatever the state — but
+ * the label is the wrong one and a reader has to do the arithmetic. Pinned by a
+ * test rather than left implicit, so reversing it is a deliberate act and not a
+ * tidy-up.
+ */
+export function cronJobState(
   job: ExpectedJob,
   run: CronRun | undefined,
   minutesSince: number | null,

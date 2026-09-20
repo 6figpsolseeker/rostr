@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   cronHealth,
+  cronJobState,
   everyMinutesOf,
   expectedJobs,
   stalenessLimitMinutes,
@@ -182,6 +183,46 @@ describe("cronHealth", () => {
 
     expect(health.jobs[0]?.state).toBe("FAILING");
     expect(health.jobs[0]?.lastOutcome).toBe("2 of 3 seasons failed");
+  });
+
+  it("reports a job that is both failing and dead as FAILING, not STALE", () => {
+    /*
+      **The trade this ordering makes, pinned so reversing it is deliberate.**
+
+      `cronJobState` checks the outcome before staleness, because a job failing
+      every minute is punctual and reporting it `OK` is the failure
+      `last_outcome` exists to prevent. The cost is here: a job that is failing
+      *and* has stopped firing gets the label of the less urgent half.
+
+      Nothing is hidden — `cli.ts` prints `last: Nm ago` beside every row
+      whatever the state, so the death is on screen next to the failure. What is
+      wrong is the label, and a reader who does not do the
+      `everyMinutes × 2 + 5` arithmetic can read past it.
+
+      Until this commit `cronJobState` was an unexported `stateOf` while twelve
+      comments named it, so no test could address the ordering at all. This is
+      that test.
+    */
+    const health = cronHealth(jobs, [run("draft-tick", 1440, "2 of 3 drafts failed")], NOW);
+
+    expect(health.jobs[0]?.state).toBe("FAILING");
+    // The staleness is still carried, which is what makes the label survivable.
+    expect(health.jobs[0]?.minutesSince).toBe(1440);
+  });
+
+  it("is addressable directly, which is the point of exporting it", () => {
+    // Twelve comments across seven files named `cronJobState`; the function was
+    // `stateOf` and unexported. Calling it here is the assertion that the name
+    // in the comments and the name in the code are now the same one.
+    const job = { name: "draft-tick", everyMinutes: 1 } as const;
+
+    expect(cronJobState(job, undefined, null)).toBe("NEVER_RAN");
+    expect(cronJobState(job, run("draft-tick", 0), 0)).toBe("OK");
+    expect(cronJobState(job, run("draft-tick", 0, "boom"), 0)).toBe("FAILING");
+    expect(cronJobState(job, run("draft-tick", 99), 99)).toBe("STALE");
+    expect(cronJobState({ name: "x", everyMinutes: null }, run("x", 0), 0)).toBe(
+      "UNKNOWN_SCHEDULE",
+    );
   });
 
   it("calls a job late by more than two intervals STALE", () => {

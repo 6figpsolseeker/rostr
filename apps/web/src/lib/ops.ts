@@ -293,6 +293,16 @@ export function buildOpsView(
  * wrong: it writes a fact about the *run* onto rows that were never attempted,
  * and the retry clause would then pace against it.
  */
+/**
+ * An hour of silence from a ten-minute job is a scheduler problem rather than an
+ * ingest one. Generous on purpose: a single missed tick is not news, and an
+ * alarm that fires on one is an alarm that gets muted.
+ *
+ * Named rather than inline because it is now read twice — once to decide the
+ * state, once to decide whether a failing job should also mention it.
+ */
+const STALE_AFTER_MINUTES = 60;
+
 export function buildRunBanner(
   run: { readonly lastRanAt: Date | null; readonly lastOutcome: string | null } | undefined,
   now: Date,
@@ -300,17 +310,42 @@ export function buildRunBanner(
   if (run === undefined || run.lastRanAt === null) {
     return { state: "NEVER_RAN", detail: "The stats job has no recorded run." };
   }
-  if (run.lastOutcome !== null) {
-    return { state: "FAILING", detail: run.lastOutcome };
-  }
   const minutesAgo = Math.floor((now.getTime() - run.lastRanAt.getTime()) / 60_000);
+
+  /*
+    Failing outranks stale, matching `cronJobState` — but **the staleness is
+    carried in the sentence rather than dropped**, which is the part this used
+    to get wrong.
+
+    `cli.ts` prints `last: Nm ago` beside every row whatever its state, so on
+    that surface a job which is both failing and dead still shows it has not run.
+    This banner had no such column: it returned the outcome string alone, and a
+    `stats` job that was failing *and* had stopped firing read exactly like one
+    that was failing and punctual. The scheduler having died is the more urgent
+    half and it was the half that vanished.
+
+    Two copies of this ordering is itself the problem — `cronJobState` is now
+    exported for that reason, and this cannot call it only because the shapes
+    differ: it holds one job with no schedule to derive a limit from, and it
+    renders prose rather than a label. The ordering is what must not diverge.
+  */
+  if (run.lastOutcome !== null) {
+    return {
+      state: "FAILING",
+      detail:
+        minutesAgo >= STALE_AFTER_MINUTES
+          ? `${run.lastOutcome} — and the job last completed ${minutesAgo} minutes ago, ` +
+            "so the scheduler may have stopped as well."
+          : run.lastOutcome,
+    };
+  }
   /*
     Stale, not failing. The job runs every ten minutes; an hour of silence is a
     scheduler problem rather than an ingest one, and saying so sends somebody to
     the right place. Generous, because a single missed tick is not news and an
     alarm that fires on one is an alarm that gets muted.
   */
-  if (minutesAgo >= 60) {
+  if (minutesAgo >= STALE_AFTER_MINUTES) {
     return {
       state: "STALE",
       detail: `The stats job last completed ${minutesAgo} minutes ago.`,

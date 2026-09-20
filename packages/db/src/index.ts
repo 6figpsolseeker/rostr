@@ -231,6 +231,7 @@ export { listCronRuns, recordCronRun, type CronRun } from "./cron-runs.js";
 
 export {
   cronHealth,
+  cronJobState,
   everyMinutesOf,
   expectedJobs,
   stalenessLimitMinutes,
