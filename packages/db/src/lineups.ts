@@ -1043,6 +1043,26 @@ export function autolineupCandidate(
     readonly averageMilliPoints: number | null;
     readonly projectedMilliPoints: number | null;
   },
+  /**
+   * Who no NFL club lists, from `loadOffNflRoster`. Membership means *off*.
+   *
+   * **Required rather than optional, and that is deliberate.** The permissive
+   * value here is precisely the bug: a caller who omitted it would silently rank
+   * every released player as available. A fact with no conservative default must
+   * be supplied rather than defaulted — the argument `autolineup.ts` makes about
+   * `now`.
+   *
+   * (An earlier draft credited `exactOptionalPropertyTypes` with forbidding an
+   * explicit `undefined` here. That flag governs optional *properties*, not
+   * optional *parameters*, so it would not have helped — which is why the
+   * parameter is required rather than merely documented.)
+   *
+   * A set rather than a boolean because this function is exported *so the
+   * preview and the write cannot describe different players*. A boolean moves
+   * the lookup into both call sites, where one of them can look up the wrong
+   * id and compile clean.
+   */
+  offNflRoster: ReadonlySet<string>,
 ): AutolineupCandidate {
   return {
     playerId: player.playerId,
@@ -1063,17 +1083,53 @@ export function autolineupCandidate(
       promised this behaviour to every member who signed, and it did nothing.
       Issue #269.
 
-      **`teamRef` is checked as well as `kickoffAt`, and a null kickoff does not
-      imply the other.** It reads as though it should: no club, no fixture, no
-      kickoff. But `loadKickoffs` is the *lock* oracle and fails **closed** — a
-      player whose club has no games in the season at all gets the week's first
-      kickoff rather than null, so that an unknown player's slot freezes rather
-      than staying open all Sunday. That is right for a lock and exactly wrong
-      here: it made a player with no NFL club read as **available**, and then
-      ranked him on a projection nothing expires. A receiver cut in week 6 after
-      two good games carries a high season average into week 7 and would be
-      started over a fit bench player, for a guaranteed zero, on an abandoned
+      **Three separate facts, not one checked three ways.** Each answers a
+      different question and none implies another:
+
+      - `offNflRoster` — **no NFL club employs him.** From `players.active`, the
+        column the board, the market, the card, the scoreboard and the lineup
+        screen all key on — five surfaces, the same count `loadOffNflRoster`
+        gives above, and this bullet undercounted them at four until it was
+        checked.
+      - `teamRef === null` — **we cannot locate his game.** His kickoff is then a
+        synthesised stand-in rather than a real one, so we do not know when or
+        whether he plays.
+      - `kickoffAt === null` — **his club has no game this week**, which is an
+        ordinary bye whenever that club is in the season's schedule at all. Alive
+        and common; do not read #308 as having killed this clause. (There is a
+        third route to null — a week with no stored games anywhere, so there is
+        no first kickoff to fall back on. `loadOffNflRoster`'s docstring above
+        spells the branches out.)
+
+      **A null kickoff does not imply the others**, which is the trap this block
+      has always been about. It reads as though it should: no club, no fixture,
+      no kickoff. But `loadKickoffs` is the *lock* oracle and fails **closed** —
+      a player whose club has no games in the season gets the week's first
+      kickoff rather than null, so an unknown player's slot freezes rather than
+      staying open all Sunday. Right for a lock, exactly wrong here.
+
+      **And `teamRef` alone was not enough**, which is #327. A player released
+      mid-season who keeps his club abbreviation takes that club's *real*
+      fixture, so his kickoff is genuine and `teamRef` never fires — he read as
+      fully **available**, and was then ranked on a season average nothing
+      expires. A receiver cut in week 6 after two good games carries it into
+      week 7 and is started over a fit bench player, for a guaranteed zero, on a
       team whose results move other people's playoff seeds.
+
+      **Why both `offNflRoster` and `teamRef`, when `active` is the repo's
+      answer everywhere else.** Because the two disagree in opposite directions
+      and the *defaults* are not symmetric: the adapter maps a missing `team` to
+      null — unavailable — and a missing `isFreeAgent` to `active: true` —
+      available. Keying on `active` alone would swap a fail-closed predicate for
+      a fail-open one, in a module whose siblings advertise failing closed.
+      Keeping both is strictly the more conservative answer, and it costs a
+      demotion rather than an exclusion.
+
+      `CLAUDE.md`'s "never `team_ref`" rule is about *labelling* a player as
+      having no club — where it is exactly right, and where this file no longer
+      does it. Using it as a second demotion term in a ranking is a different
+      thing, and this paragraph exists so the next reader does not read the two
+      as a contradiction.
 
       Latent while a cut player could only arrive by being cut *while* rostered.
       Not latent since 2026-09-16, when he became someone a manager can go and
@@ -1084,6 +1140,7 @@ export function autolineupCandidate(
       would have scored with an empty slot.
     */
     unavailable:
+      offNflRoster.has(player.playerId) ||
       player.kickoffAt === null ||
       player.teamRef === null ||
       unlikelyToPlay(player.injuryDesignation),
@@ -1145,6 +1202,12 @@ export async function autoFillLineup(
 
   const averages = await loadAverages(db, [...roster.keys()], season, week, stored.rules);
 
+  // Over the same id list the candidates are built from, deliberately: the set
+  // means "off an NFL roster" by *membership*, so a set built over a narrower
+  // list would silently exonerate everybody missing from it. Loaded outside the
+  // transaction with the rest — it is not derived from the stored lineup.
+  const offNflRoster = await loadOffNflRoster(db, [...roster.keys()]);
+
   // Only fetched when the league ranks on them. A league set to SEASON_AVERAGE
   // should not pay for a query whose result it ignores.
   const mode = stored.rules.roster.autofill;
@@ -1165,10 +1228,14 @@ export async function autoFillLineup(
   const candidates: AutolineupCandidate[] = [...roster.values()]
     .filter((player) => !player.onIr)
     .map((player) =>
-      autolineupCandidate(player, {
-        averageMilliPoints: averages.get(player.playerId) ?? null,
-        projectedMilliPoints: projected.get(player.playerId) ?? null,
-      }),
+      autolineupCandidate(
+        player,
+        {
+          averageMilliPoints: averages.get(player.playerId) ?? null,
+          projectedMilliPoints: projected.get(player.playerId) ?? null,
+        },
+        offNflRoster,
+      ),
     );
 
   const slotTypeIds = await loadSlotTypeIds(db, stored.rules);

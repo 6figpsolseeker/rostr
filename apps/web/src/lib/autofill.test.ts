@@ -13,8 +13,23 @@ describe("whyNot", () => {
   it("says unavailable without reference to the ranking", () => {
     // A player on a bye did not lose on points, and saying so would invite a
     // manager to argue with a comparison that never happened.
-    expect(whyNot("UNAVAILABLE", "WEEKLY_PROJECTION")).toBe("on a bye or out this week");
-    expect(whyNot("UNAVAILABLE", "SEASON_AVERAGE")).toBe("on a bye or out this week");
+    expect(whyNot("UNAVAILABLE", "WEEKLY_PROJECTION")).toBe("not expected to play this week");
+    expect(whyNot("UNAVAILABLE", "SEASON_AVERAGE")).toBe("not expected to play this week");
+  });
+
+  it("names no cause, because it has four and used to claim two", () => {
+    /*
+      `unavailable` means a bye, an out designation, no NFL club, or a fixture we
+      cannot locate. The sentence read "on a bye or out this week", so a released
+      player was reported as resting — the specific, plausible, false statement
+      `byeChip` and the scoreboard's separate "no club" chip both exist to stop.
+
+      This assertion is the guard against re-specifying it. If somebody adds a
+      fifth cause, or reverts to naming a subset, it goes red.
+    */
+    for (const mode of ["WEEKLY_PROJECTION", "SEASON_AVERAGE"] as const) {
+      expect(whyNot("UNAVAILABLE", mode)).not.toMatch(/bye|out|club|TBD/i);
+    }
   });
 
   it("admits when there is nothing to rank on", () => {

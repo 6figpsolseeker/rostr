@@ -189,40 +189,44 @@ describe("what a released player's card says — #308", () => {
     PR #304 made a player his NFL club released acquirable on purpose, and
     labelled him where he is *chosen*. The card is where the choosing actually
     happens — it opens from the draft board and from the market, one click after
-    a correct "No NFL club" label — and it contradicted that label in three
+    a correct "FA" — and it contradicted that label in three
     places at once: a blank where the club goes, a stale bye week, and the words
     "Free agent" in the fantasy sense.
   */
 
-  it("names the fact instead of rendering a blank", () => {
-    // Was `{player?.teamRef && <span>…</span>}` with no else, so a released
-    // player got nothing at all and nothing took its place.
-    expect(clubLabel({ teamRef: null, onNflRoster: false })).toBe("No NFL club");
+  it("says FA for a player with no NFL team", () => {
+    /*
+      Owner's rule, 2026-09-20: **"FA" means he has no NFL club, and nothing
+      else.** Tyreek Hill, Joe Mixon. It is the convention every other fantasy
+      app uses in this column, and it is a fact about the real world.
+
+      It is *not* "available to add in this league" — that is the free-agency
+      pool, a different fact, and a player can be either, both or neither.
+    */
+    expect(clubLabel({ teamRef: null, onNflRoster: false })).toBe("FA");
   });
 
   it("says nothing for a listed player whose club we do not hold", () => {
     /*
-      **The half a `teamRef` check gets wrong**, and the half #308 item 3 is
-      about. The adapter reads `team` and `isFreeAgent` separately, so a listed
-      player can arrive with a blank club.
+      **The row this column used to call "FA", and the one place those letters
+      were certainly wrong.** The adapter reads `team` and `isFreeAgent`
+      separately, so a listed player can arrive with a blank club.
 
-      Not "FA": every caller renders a player somebody rosters, and there that
-      string is false twice over — he is rostered, and that is not why his club
-      column is empty. Not the released sentence either, which would be a claim
-      about his employment we have no basis for. We know he is listed and not
-      where; `null` says exactly that.
+      Calling him FA claims he has no NFL team when what we actually have is a
+      gap in our own feed — the exact opposite of the fact the letters now mean.
+      `null` says what is true: he is listed, and we do not know where.
     */
     expect(clubLabel({ teamRef: null, onNflRoster: true })).toBeNull();
   });
 
-  it("names the fact even when the provider still prints a club", () => {
+  it("says FA even when the provider still prints a club", () => {
     /*
       **The other half, and the one nothing in this repo caught before.** A
       released player can keep a club abbreviation — `active` and `team_ref` come
       from different provider fields. Keyed on `teamRef` this row reads "PHI" and
       says nothing is wrong.
     */
-    expect(clubLabel({ teamRef: "PHI", onNflRoster: false })).toBe("No NFL club");
+    expect(clubLabel({ teamRef: "PHI", onNflRoster: false })).toBe("FA");
     expect(clubLabel({ teamRef: "PHI", onNflRoster: true })).toBe("PHI");
   });
 

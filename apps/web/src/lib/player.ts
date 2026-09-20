@@ -216,8 +216,8 @@ export function shortName(name: string): string {
  * the player market already key on. **Never `teamRef`.** The adapter maps the
  * two from different provider fields, so they disagree in both directions — a
  * listed player with a blank club reads `teamRef` null, and a released player
- * can keep a club abbreviation. Keying the label on `teamRef` would put "not on
- * an NFL roster" on a rostered player and say nothing about some released ones.
+ * can keep a club abbreviation. Keying the label on `teamRef` would put "FA"
+ * on a rostered player and say nothing about some released ones.
  *
  * The card opens from the board, the market, a market roster row and the lineup
  * screen, so it is the screen most likely to contradict a label the manager read
@@ -231,28 +231,41 @@ export interface ClubFacts {
 }
 
 /**
- * The club chip.
+ * The club chip: his NFL team, `"FA"` when he has none, `null` when we cannot
+ * say.
  *
- * Three answers, and `null` is one of them.
+ * ## "FA" means one thing here, and only one
  *
- * **It never says "FA", and that is #308's third item.** "FA" means *fantasy*
- * free agent, and every screen that calls this renders a player somebody
- * rosters — so there it is false twice over: he is rostered, and that is not
- * why his club column is empty. `players/route.ts` already made that ruling for
- * the market's roster list, in nearly these words.
+ * **No NFL club employs him** — Tyreek Hill, Joe Mixon. Owner's rule,
+ * 2026-09-20. It is the convention every other fantasy app uses in this column,
+ * and it is a fact about the real world rather than about any league.
  *
- * So a listed player whose club we do not hold gets `null` and the caller
- * renders nothing. Silence is honest here: we know he is listed and we do not
- * know where, and any string would claim more than that.
+ * It does **not** mean "available to add in this league". A player nobody has
+ * rostered belongs in the free-agency pool, and that is what that page is for —
+ * but Rashod Bateman sitting in it is on the Baltimore Ravens, so his chip
+ * reads `BAL`. The two facts are independent and all four combinations happen:
+ * Hill can have no NFL club *and* be rostered by somebody; Bateman can be
+ * NFL-rostered *and* unrostered here.
  *
- * **"No NFL club" rather than the market's "Not on an NFL roster"**, because
- * this lands in chip rows two or three characters wide as well as on the card.
- * It is the draft board's existing string, so this adds no third phrasing — the
- * two that exist differ in register rather than meaning, which is worth tidying
- * in one pass rather than inventing a fourth here.
+ * Conflating them is not hypothetical — this column previously showed `"FA"`
+ * for the **opposite** case, a player who *is* NFL-rostered but whose club value
+ * is missing, which is the one row where the letters were certainly wrong.
+ *
+ * ## The three answers
+ *
+ * - `"FA"` — `onNflRoster` is false. He has no NFL team.
+ * - the club — we hold it.
+ * - `null` — he is on an NFL roster and the club value is blank. **Not "FA"**:
+ *   that would claim he has no team when what we have is a gap in our own feed.
+ *   The caller renders nothing. Silence is the honest answer to "we know he is
+ *   listed and not where".
+ *
+ * Keyed on `onNflRoster` (`players.active`) rather than `teamRef`, because the
+ * adapter maps the two from different provider fields and they disagree in both
+ * directions.
  */
 export function clubLabel({ teamRef, onNflRoster }: ClubFacts): string | null {
-  if (!onNflRoster) return "No NFL club";
+  if (!onNflRoster) return "FA";
   return teamRef;
 }
 

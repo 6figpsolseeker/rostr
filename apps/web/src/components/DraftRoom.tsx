@@ -9,6 +9,7 @@ import type { BoardCell, BoardRow } from "@/lib/draft-board";
 import {
   POSITION_ORDER,
   byeChip,
+  clubLabel,
   injuryBadge,
   injuryTone,
   points,
@@ -872,7 +873,8 @@ function PlayerTable({
                     >
                       {group}
                     </span>
-                    {player.active ? (player.teamRef ?? "FA") : "No NFL club"}
+                    {/* "FA" is no NFL club — see `clubLabel`. */}
+                    {clubLabel({ teamRef: player.teamRef, onNflRoster: player.active }) ?? ""}
                   </span>
                 </span>
               </button>
@@ -882,7 +884,7 @@ function PlayerTable({
                   A released player's bye belongs to the club that cut him.
                   `syncByeWeeks` matches on `team_ref`, so it never revisits him
                   to clear the row — this column printed that number beside a
-                  correct "No NFL club" label one column to its left.
+                  correct "FA" one column to its left.
                 */}
                 {byeChip({ byeWeek: player.byeWeek, onNflRoster: player.active }) ?? "—"}
               </span>

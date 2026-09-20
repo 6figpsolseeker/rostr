@@ -27,7 +27,24 @@ export type AutofillMode = "WEEKLY_PROJECTION" | "SEASON_AVERAGE";
 export function whyNot(reason: RunnerUpReason, mode: AutofillMode): string {
   switch (reason) {
     case "UNAVAILABLE":
-      return "on a bye or out this week";
+      /*
+        **Names no cause, deliberately, and it used to name two.**
+
+        `unavailable` has four: a bye, an out designation, no NFL club, and a
+        fixture we cannot locate. The sentence said "on a bye or out this week",
+        so from #327 onwards it told a manager that a released player was
+        resting — specific, plausible and false, which is the failure
+        `byeChip` and the scoreboard's separate "no club" chip both exist to
+        prevent.
+
+        Enumerating all four here would be worse than either: this sentence
+        answers "why was he passed over", and the answer is the same for all of
+        them — he was not a real alternative. **Which** reason applies is a fact
+        about that player, and his own row already carries it precisely, from
+        `weekNote` — "bye", "no club", "TBD" — where a manager deciding whether
+        to hold the roster spot will actually look.
+      */
+      return "not expected to play this week";
     case "NO_DATA":
       return mode === "WEEKLY_PROJECTION"
         ? "has no projection this week"

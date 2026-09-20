@@ -170,10 +170,18 @@ export async function GET(
       roster: [...roster.values()]
         .filter((player) => !player.onIr)
         .map((player) =>
-          autolineupCandidate(player, {
-            averageMilliPoints: averages.get(player.playerId) ?? null,
-            projectedMilliPoints: projected.get(player.playerId) ?? null,
-          }),
+          // `offNflRoster` is already loaded above for the screen's own labels,
+          // over this same id list. The preview and the write pass the same
+          // fact because the parameter is required — omitting it here would be
+          // a compile error rather than a silent disagreement.
+          autolineupCandidate(
+            player,
+            {
+              averageMilliPoints: averages.get(player.playerId) ?? null,
+              projectedMilliPoints: projected.get(player.playerId) ?? null,
+            },
+            offNflRoster,
+          ),
         ),
       mode: context.rules.roster.autofill,
       locked: currentAssignments.filter((entry) => slotIsLocked(entry, kickoffs, now)),
@@ -370,8 +378,14 @@ export async function GET(
          * locking and says nothing about whether he can play.
          *
          * So the screen needs both, and `lib/player.ts` composes them. Reading
-         * `availability` alone is how this screen came to show an `FA` chip and
-         * " — played" in the swap dropdown for a man with no club.
+         * `availability` alone is how this screen came to show " — played" in
+         * the swap dropdown for a man with no club.
+         *
+         * It also showed him an `FA` chip, which was a symptom then and is the
+         * **correct** output now: since the owner's rule of 2026-09-20 those
+         * letters mean *no NFL club*, which is exactly what he is. What was
+         * wrong was the same chip appearing for a player who **is** NFL
+         * rostered with a missing club value.
          *
          * The lock countdown beside them is **not** from `availability` — it
          * comes from `slotLocksAt` over `loadKickoffs` — and it still renders.
