@@ -887,6 +887,14 @@ draft-board loader, the same in the free-agent market, and `byDraftValue` in the
 browser — which is needed because the draft room re-sorts on projections, so the
 server's ordering does not survive the trip.
 
+> **Amended 2026-09-21.** The room no longer re-sorts on _projections_ — it sorts
+> on ADP. Everything else in this section stands, and the demotion matters more
+> rather than less: the room still re-sorts, so the server's ordering still does
+> not survive the trip, and `byDraftValue` still has to restate it. What changed
+> is only which stale store the restatement defends against — `player_rankings_
+current` rather than `player_projections`. Neither expires. See "The draft
+> board runs in ADP order, with projections beside it" below.
+
 **The market's ordering is not cosmetic.** That query had no `ORDER BY` at all
 and the screen renders the first hundred rows it is given. Roughly a third of the
 synced pool is inactive, so admitting cut players unordered would have filled a
@@ -983,3 +991,95 @@ the lock conflicts with that write, so the read either sees `DRAFTING` and
 refuses or sees `IN_SEASON` after the last pick has landed. There is no window
 between them. Read on the bare client and the answer is about a moment that has
 already passed — a mistake `waivers.ts` records having shipped here once.
+
+## The draft board runs in ADP order, with projections beside it
+
+**Decided 2026-09-21 by the owner.** Asked whether the room should sort on ADP or
+on projected season points, he chose ADP: _"i want it to go by ADP, then also
+show their projected points as well."_
+
+The board had sorted on projected season points since the ordering moved out of
+`DraftRoom.tsx`, with ADP as the tiebreak. Both numbers were already on screen —
+the `ADP` and `Proj` columns both predate this — so nothing was added. What
+changed is which of the two decides the order, and `byDraftValue` is the whole of
+it.
+
+### Why ADP won
+
+The case for projections is real and is recorded here because it lost on
+judgement rather than on facts: a projection scored against _this_ league's rules
+is a statement about what a player is worth _here_, while ADP is a crowd's
+opinion filtered through other people's settings. A full-PPR league genuinely
+values a pass-catching back above his ADP.
+
+The case that won is about what a draft room is for. A manager arrives having
+spent a week with a public board, and a list that disagrees with it is not read
+as a second opinion — it is read as broken. The projection sits one column away,
+which is the right weight for a second opinion, and the manager can act on it
+himself.
+
+### What was checked first, because the premise was wrong
+
+The owner's initial instruction was to drop the `active` demotion as well, on the
+reasoning that a player without an NFL club would have a low ADP anyway and sink
+by himself. **He does not sink. He freezes.**
+
+- `player_rankings_current` is `DISTINCT ON (player_id, …) … ORDER BY as_of DESC`
+  over `player_rankings`. Rows are never deleted — only superseded by one with a
+  later `as_of`. Nothing prunes, nothing expires.
+- `syncRankings` inserts only for players in the provider's board _today_. A
+  player who drops out of the feed gets no new row, so his last row stays
+  "current" for ever.
+- There is therefore **no code path that lowers the ADP of a player who has left
+  the feed.** He keeps the number he had on the way out, in perpetuity.
+
+**Stated narrowly on purpose.** A player still _in_ the feed gets a fresh row
+every day and his ADP moves freely in both directions — `syncRankings` even
+rewrites the same day's row in place (`ON CONFLICT … DO UPDATE`). That case is
+healthy and is not what the demotion defends against. The hazard is specifically
+the player the provider has stopped ranking, whose last opinion of him is frozen
+at whatever it was while he still had a club.
+
+Whether Tank01 keeps publishing a degrading ADP for a released player, rather
+than dropping him, was **not** verified — it needs a live `getNFLADP` call and
+the key is in `.env`. It is also close to moot: ADP is the average slot a player
+went in real drafts, drafts happen in August, and no September release can
+retroactively change an August average.
+
+This is the same intuition the 2026-09-16 ruling was checked against and the same
+answer. `active` therefore stays the outer key, now protecting against a stale
+_ADP_ rather than a stale _projection_ — the same hazard from the other store.
+
+### The demotion is a restatement, not a derivation
+
+`rank` already encodes `p.active DESC`, because `loadDraftBoard` puts cut players
+last _before_ numbering. So the `active` branch in `byDraftValue` decides no
+ordering the loader had not already decided.
+
+Deleting the line fails **two** tests — measured, not assumed: the comparator was
+mutated to `a.rank - b.rank` and the suite run, and the cut-player test and its
+narrower direct pin are the pair that died.
+
+It is kept because the day the loader's ordering changes is the day a rank-only
+sort silently reverses a product ruling on the screen where money is committed.
+
+### What was rejected
+
+**Pure ADP, no club guard.** Directly considered and put to the owner. It floats
+a player with no NFL team back to a seven-week-old ADP, reverses 2026-09-16, and
+would have to be done in three places — `byDraftValue`, the loader's `ORDER BY`,
+and the market's — or it produces a split brain where bots and auto-pick bottom a
+player the human's screen does not. Applied to the market it also refills a third
+of the first visible hundred with unrostered players — the failure described
+under "The market's ordering is not cosmetic" in the 2026-09-16 section above.
+
+**A projection tiebreak under ADP.** Unreachable. `rank` is a dense index over
+the board's rows, so two rows never share one, and no test could cover the branch
+against a board the loader can actually produce — only against a hand-built
+fixture asserting a state that cannot occur. `DraftValue` dropped
+`projectedMilliPoints` outright so that reintroducing the key requires widening
+the type.
+
+**Demoting only a no-club player nobody has rostered.** Narrower and defensible,
+but `byDraftValue` receives no roster state and plumbing it through the room to
+reach a sort comparator is more surface than the case justifies.
