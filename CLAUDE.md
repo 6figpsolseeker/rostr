@@ -1170,9 +1170,18 @@ the migration had `NEEDED_SLOT` and `ANY_LEGAL`, which the engine has never emit
 
 #### Projections and how the board is ordered
 
-The board groups by **position** and sorts by **projected season points**, with ADP as
-the tiebreak. Comparing a quarterback's 334 against a kicker's 133 tells you nothing —
-you need one of each. What matters is who is the best one left at a position.
+The board is **one flat list in ADP order**, with a position _filter_ above it and
+projected season points in their own column. Owner's ruling, 2026-09-21: ADP decides the
+order, because a draft room is read against the draft actually happening and a manager
+who arrives with a public board in his head does not experience a differently-ordered
+list as a second opinion. The projection is one column away, which is the right weight
+for one. See `byDraftValue`.
+
+**It does not group by position, and this sentence used to say it did.** The
+per-position sections became a filter row — one click, it shows how many are left at
+each position, and it leaves the default view the honest "best available" a manager is
+actually choosing from. Comparing a quarterback's 334 against a kicker's 133 still tells
+you nothing, which is the job the filter does.
 
 **Projections are stored as raw stats and scored with each league's own rules.**
 `player_projections` (migration `0013`) holds stat lines, never points. Tank01 ships a
@@ -1204,8 +1213,13 @@ See [`docs/TANK01.md`](docs/TANK01.md), which records the verbatim response shap
 
 **Kicker projections are a floor.** The provider gives a total `fgMade` with no distance
 split and our scoring pays 3/4/5 by distance, so everything lands in the 3-point tier.
-Harmless because the board groups by position; do not "fix" it by inventing a
-distribution.
+
+This was filed as harmless "because the board groups by position". **It does not** — one
+flat list with a filter, so in the default view a floored kicker projection does sit
+beside a quarterback's. Still do not "fix" it by inventing a distribution: the objection
+is that a guessed number is worse than a knowable floor, not that nobody sees it. Since
+2026-09-21 the board is ordered by ADP rather than by projection, so the floor no longer
+moves a kicker's position on the list at all — only the number printed beside him.
 
 `syncProjections` batches deliberately. Row-at-a-time against a hosted database was 5,600
 round trips, took minutes, and the connection died partway through. One query for the

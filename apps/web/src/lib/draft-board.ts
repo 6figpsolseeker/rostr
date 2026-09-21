@@ -159,42 +159,55 @@ export function picksUntilTurn(
 /** Only the fields the ordering reads, so a test needs no board row. */
 export interface DraftValue {
   readonly active: boolean;
+  /**
+   * The server's dense 1..n board index. `loadDraftBoard` orders on
+   * `p.active DESC, r.overall_milli NULLS LAST, p.full_name` and numbers the
+   * result — so ascending `rank` is ADP order *within* each club group, with
+   * every cut player already banished to the tail. Not ADP order outright, and
+   * the `active` branch below depends on the difference.
+   */
   readonly rank: number;
-  readonly projectedMilliPoints: number | null;
 }
 
 /**
- * Board order: on an NFL roster first, then best projection, then ADP.
+ * Board order: on an NFL roster first, then ADP.
  *
- * **`active` is the outer key and cannot be folded into either inner one.**
- * Projections are not filtered on it and are never deleted, and
- * `player_rankings_current` is the latest ADP ever recorded with no expiry — so
- * a player cut in September carries July's projection *and* July's ADP, and both
- * inner keys would put him near the top. The owner ruled on 2026-09-16 that he
- * stays draftable and sorts to the bottom; this is the half of that the screen
- * owns.
+ * **Reversed on 2026-09-21 by the owner**, who asked for the board to run in ADP
+ * order with projected points shown beside it rather than deciding it. It
+ * previously sorted on this league's own projection with ADP as the tiebreak.
+ * Both numbers are still on screen; what changed is which one sorts.
  *
- * It agrees with `loadDraftBoard`'s own `ORDER BY p.active DESC, …` by
- * construction rather than by coincidence — the server's `rank` already encodes
- * it. But the inner keys genuinely differ, because the server ranks on ADP and
- * the room ranks on projections, so the outer key has to be restated here or
- * re-sorting silently discards it. That is the whole reason this function
- * exists rather than the room sorting on `rank`.
+ * The argument for the old order was that a projection scored against this
+ * league's rules says what a player is worth *here*, while ADP is a crowd's
+ * opinion filtered through other people's settings. The argument that won is
+ * that a draft room is read against the draft actually happening: managers
+ * arrive with a board already in their heads, and a list that disagrees with it
+ * reads as broken rather than as opinionated. The projection is one column away,
+ * which is the right weight for a second opinion.
  *
- * ADP is the inner fallback rather than the primary: it measures where a player
- * is *being taken*, which is a crowd's opinion filtered through other people's
- * league settings, while a projection scored against this league's own rules is
- * a statement about what he is worth here. Unprojected players sort last but
- * stay draftable — a late flier on someone unranked is a legitimate pick.
+ * **`active` is restated here rather than inherited.** `rank` already encodes it
+ * — the loader's `ORDER BY p.active DESC, r.overall_milli NULLS LAST, …` puts
+ * cut players last *before* numbering — so this line changes no ordering today.
+ * It is kept because it is the only place the screen itself owns the 2026-09-16
+ * ruling that a released player sorts to the bottom, and that ruling is load
+ * bearing: `player_rankings_current` is `DISTINCT ON … as_of DESC` over a table
+ * whose rows are never deleted, only superseded by one with a later `as_of`.
+ * `syncRankings` writes only for players in the provider's feed *that day*, so
+ * a player who drops out of it is never superseded again and keeps the ADP he
+ * had on the way out for ever. A sort that trusted `rank` alone would float him
+ * back into round four the moment the loader's ordering moved. See
+ * `docs/DECISIONS.md`.
+ *
+ * **There is no projection tiebreak, because there can be no tie.** `rank` is a
+ * dense index over the whole board, so two rows never share one — a tiebreak
+ * here would be unreachable against any board the loader can actually produce,
+ * coverable only by a hand-built fixture asserting a state that cannot occur.
+ *
+ * Unranked players still sort last and stay draftable: the loader's `NULLS LAST`
+ * puts them at the end of the numbering, so a late flier on someone with no ADP
+ * remains a legitimate pick.
  */
 export function byDraftValue(a: DraftValue, b: DraftValue): number {
   if (a.active !== b.active) return a.active ? -1 : 1;
-
-  const left = a.projectedMilliPoints;
-  const right = b.projectedMilliPoints;
-
-  if (left === null && right === null) return a.rank - b.rank;
-  if (left === null) return 1;
-  if (right === null) return -1;
-  return right - left || a.rank - b.rank;
+  return a.rank - b.rank;
 }

@@ -146,79 +146,120 @@ describe("picksUntilTurn", () => {
 });
 
 describe("byDraftValue", () => {
-  const value = (
-    active: boolean,
-    rank: number,
-    projectedMilliPoints: number | null,
-  ): DraftValue => ({ active, rank, projectedMilliPoints });
+  const value = (active: boolean, rank: number): DraftValue => ({ active, rank });
 
   /** Names, so a failure says which ordering broke rather than which index. */
   const order = (...players: [string, DraftValue][]): string[] =>
     [...players].sort((x, y) => byDraftValue(x[1], y[1])).map(([name]) => name);
 
-  it("puts a player his club has cut last, however good his projection", () => {
+  it("runs the board in ADP order — owner's ruling, 2026-09-21", () => {
     /*
-      The reason this function exists.
+      **The reversal.** This list used to come back ["best projection", …]: the
+      room sorted on points projected under the league's own rules, and used ADP
+      only to break a tie.
 
-      `loadDraftBoard` already returns cut players last, but the room re-sorts on
-      projections — and `loadProjections` does not filter on `players.active`
-      while `syncProjections` never deletes a row. So a receiver projected for
-      180 points who is cut in September keeps that number for ever, and a sort
-      that consulted only the projection would put him in the top handful.
+      The owner asked for the opposite on 2026-09-21 — ADP decides the order,
+      projected points ride alongside in their own column. A draft room is read
+      against the draft that is actually happening, and a manager who has spent
+      a week with a public board does not experience a differently-ordered list
+      as a second opinion. He experiences it as a bug.
 
-      The server's demotion reaches the draft *engine*, which ranks on `rank`.
-      It does not reach the *screen* unless it is restated here.
+      `rank` is the server's dense 1..n index, assigned after
+      `ORDER BY … r.overall_milli NULLS LAST`, so ascending `rank` *is* ascending
+      ADP. Nothing here re-derives it — see `loadDraftBoard`.
     */
     expect(
-      order(
-        ["cut star", value(false, 40, 180_000)],
-        ["ordinary starter", value(true, 900, 10_000)],
-      ),
+      order(["third", value(true, 31)], ["first", value(true, 3)], ["second", value(true, 12)]),
+    ).toEqual(["first", "second", "third"]);
+  });
+
+  it("puts a player his club has cut last, however early his ADP", () => {
+    /*
+      **The 2026-09-16 ruling, and the only line of it the screen owns.**
+
+      `player_rankings_current` is `DISTINCT ON … as_of DESC` over a table whose
+      rows are never deleted, only superseded by one with a later `as_of`, and
+      `syncRankings` writes only for players in the provider's feed that day. So
+      a player who drops out of that feed is never superseded again and keeps the
+      ADP he had on the way out. Nothing expires it and no job prunes it.
+
+      A player still *in* the feed does get a fresh row daily and his ADP moves
+      in either direction — that case is fine and is not what this defends.
+
+      That is why this survives the reversal rather than being dropped with the
+      projection keys. Under the old order the demotion protected against a stale
+      *projection*; it now protects against a stale *ADP*, which is the same
+      hazard from the other store. Rank 40 against rank 900 is the shape that
+      would put Tyreek Hill in round four.
+    */
+    expect(
+      order(["cut star", value(false, 40)], ["ordinary starter", value(true, 900)]),
     ).toEqual(["ordinary starter", "cut star"]);
   });
 
-  it("puts a cut player below even an active one nobody projected", () => {
-    // The null-projection branch is the one an `active` check placed after the
-    // projection comparison would get wrong.
-    expect(
-      order(["cut", value(false, 5, 200_000)], ["unprojected", value(true, 800, null)]),
-    ).toEqual(["unprojected", "cut"]);
-  });
-
-  it("orders active players on projection, then ADP", () => {
-    // A lock on the behaviour moved out of `DraftRoom.tsx`, so the extraction
-    // is provably faithful rather than a rewrite.
-    expect(
-      order(
-        ["lesser", value(true, 2, 8_000)],
-        ["better", value(true, 90, 12_000)],
-        ["unprojected", value(true, 3, null)],
-      ),
-    ).toEqual(["better", "lesser", "unprojected"]);
-  });
-
-  it("orders two unprojected players on ADP", () => {
+  it("keeps the ruling even when the loader's own ordering would have held", () => {
     /*
-      The branch that had no test, and the widening makes it matter more rather
-      than less: the ~570 players it admits are overwhelmingly unprojected, so
-      this now orders a materially larger tail of the board.
+      The check above is a **restatement, not a derivation**. `rank` already
+      encodes `p.active DESC`, so on today's data this branch decides no
+      ordering the loader had not already decided.
+
+      Deleting the line fails **two** tests — this one and the cut-player test
+      above it. Measured, not assumed: the comparator was mutated to
+      `a.rank - b.rank` and the suite run, and those two are the pair that died.
+      This one is the narrower pin, asserting the branch directly rather than
+      through a sorted list.
+
+      It is kept because the day `loadDraftBoard`'s ordering changes — a new
+      source, a different `ORDER BY`, a caller that re-ranks a filtered pool — is
+      the day a rank-only sort silently reverses a product ruling on the one
+      screen where money is being committed. Pinned here so that deletion is a
+      failing test rather than a quiet regression.
     */
-    expect(order(["later", value(true, 120, null)], ["earlier", value(true, 7, null)])).toEqual(
-      ["earlier", "later"],
-    );
+    expect(byDraftValue(value(false, 1), value(true, 999))).toBeGreaterThan(0);
   });
 
-  it("breaks an equal projection on ADP", () => {
-    expect(
-      order(["later adp", value(true, 50, 9_000)], ["earlier adp", value(true, 12, 9_000)]),
-    ).toEqual(["earlier adp", "later adp"]);
-  });
-
-  it("orders two cut players against each other on the same rules", () => {
+  it("orders two cut players against each other on the same rule", () => {
     // Being cut decides the group, not the order within it — a manager taking a
-    // stash still wants the better of two.
-    expect(
-      order(["worse", value(false, 300, 4_000)], ["better", value(false, 900, 9_000)]),
-    ).toEqual(["better", "worse"]);
+    // stash still wants the earlier-drafted of two.
+    expect(order(["later", value(false, 900)], ["earlier", value(false, 300)])).toEqual([
+      "earlier",
+      "later",
+    ]);
+  });
+
+  it("leaves the unranked tail at the bottom, still draftable", () => {
+    /*
+      Players with no ADP at all — rookies, deep bench, most of the ~570 the
+      board admits — are not special-cased here and must not be. The loader's
+      `NULLS LAST` has already numbered them after everyone ranked, so they
+      arrive carrying large ranks and sort themselves.
+
+      Last, never absent: a late flier on someone unranked is a legitimate pick.
+    */
+    expect(order(["unranked", value(true, 812)], ["ranked", value(true, 44)])).toEqual([
+      "ranked",
+      "unranked",
+    ]);
+  });
+
+  it("is antisymmetric, so the pool's arrival order cannot change the board", () => {
+    /*
+      `Array.prototype.sort` is only stable for elements the comparator calls
+      equal. This one never does — `rank` is dense over the whole board, so two
+      players never share one — which means the rendered order is a function of
+      the data alone and not of which filter the manager clicked first.
+
+      Asserted rather than assumed because the comparator has an early return on
+      a different field, which is the usual way this property gets broken.
+    */
+    const pairs: [DraftValue, DraftValue][] = [
+      [value(true, 3), value(false, 1)],
+      [value(true, 3), value(true, 90)],
+      [value(false, 12), value(false, 400)],
+    ];
+
+    for (const [a, b] of pairs) {
+      expect(Math.sign(byDraftValue(a, b))).toBe(-Math.sign(byDraftValue(b, a)));
+    }
   });
 });

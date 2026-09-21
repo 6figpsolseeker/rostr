@@ -594,8 +594,10 @@ export interface DraftBoardEntry {
    * Already folded into `rank` — it is the first key the board is ordered on,
    * so a cut player sorts below every active one however good his last ADP.
    * Carried separately because a dense integer cannot say *why* somebody is
-   * 1,200th, and the draft room has to re-sort for itself: it ranks on
-   * projections rather than ADP, and those are not filtered on this column.
+   * 1,200th, and because the draft room re-sorts for itself — it filters and
+   * re-orders the pool in the browser, so this ordering does not survive the
+   * trip unless the column does. Nothing expires a ranking, so a cut player's
+   * last ADP would float him back to the top of that re-sort.
    *
    * Deliberately not in `summary`. That block is display-only by contract, and
    * this decides an ordering.
