@@ -201,9 +201,16 @@ async function run(client: SqlClient, now: Date, request: Request): Promise<Next
       );
       return { prefilled: { week, teams: outcome.teamsFilled } };
     } catch (error) {
-      // Counted by `scoreWeekNotes` off the rows themselves. A tally kept here
-      // as well would be a second source for one number, free to disagree with
-      // the array it is supposed to describe.
+      // Reported in the response body and **nowhere else**, deliberately.
+      //
+      // `scoreWeekNotes` used to count these into `cron_runs.last_outcome`, and
+      // every note there turns the job red. `prefill` runs on every tick between
+      // the transaction lock and kickoff, so a single failure is corrected
+      // within ten minutes — not worth reddening the one row that has to be
+      // believed when scoring actually breaks.
+      //
+      // The case that *is* worth something — a failure persisting to kickoff,
+      // which is #288 — a per-run count could never have distinguished anyway.
       return { prefillProblem: error instanceof Error ? error.message : String(error) };
     }
   };

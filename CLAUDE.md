@@ -1956,6 +1956,21 @@ cron response bodies, so `pnpm cron:status` reads green. Both `score-week` (#234
 `waivers` (#223) shipped a catch before they shipped the `cron_runs` note. If you add a
 guard, add the row.
 
+**And the complement, which is the other half and was learned the expensive way.** Every
+note in `last_outcome` is an **alarm**, because `cronJobState` reads any non-null value as
+`FAILING` before it checks staleness — so a permanently-true note pins a job red forever
+_and_ switches off its staleness detector. Four repairs have now been made for forgetting
+that: `stats` twice, `season-sync` once (the week-16/17 fixtures the NFL holds back for
+flex scheduling, red every day), and `score-week` twice.
+
+So the test for a row is not "did something unusual happen" but **"is there something a
+person should go and do"**. A fact worth knowing and not worth doing belongs on the row it
+is a fact about, not in the heartbeat: `games.stats_error`, `undatedGames` in the response,
+and `matchups.finalized_on_fallback` (`0049`) are the three that have taken that route.
+Adding a second channel to `cron_runs` was considered for #323 and rejected — it would not
+survive the upsert, and the red is the only thing that has ever forced a bad note to be
+fixed.
+
 **Nothing is swallowed.** The failure is reported as `bracketProblem`, because a league
 whose bracket can never be built would otherwise look healthy forever. `BracketError`
 carries a `code`: `FIELD_TOO_SMALL` and `NOT_ENOUGH_WEEKS` are that league's own frozen

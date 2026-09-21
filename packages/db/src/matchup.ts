@@ -135,6 +135,20 @@ export interface MatchupView {
   readonly week: number;
   readonly phase: MatchupPhase;
   readonly finalized: boolean;
+  /**
+   * Why this week settled on the correction-window clock rather than on
+   * complete data, or `null` when it settled cleanly.
+   *
+   * **`finalized: true` cannot distinguish the two, and the difference is the
+   * whole point.** A week that ran out of clock has permanently scored the
+   * affected players zero — a finalised week is never rescored — so a manager
+   * looking at a starter with nothing deserves to know his game was never
+   * ingested rather than concluding he had a bad Sunday.
+   *
+   * Also `null` for any week finalised before migration `0049`, which is not
+   * the same claim as "settled cleanly". The screen must not present it as one.
+   */
+  readonly finalizedOnFallback: string | null;
   readonly home: MatchupSide;
   /** `null` on a bye — an odd league leaves one team without an opponent. */
   readonly away: MatchupSide | null;
@@ -169,9 +183,11 @@ export async function loadWeekMatchups(
     home_milli_points: number | null;
     away_milli_points: number | null;
     finalized_at: string | null;
+    finalized_on_fallback: string | null;
   }>(
     `SELECT week, phase, home_team_id, away_team_id,
-            home_milli_points, away_milli_points, finalized_at
+            home_milli_points, away_milli_points, finalized_at,
+            finalized_on_fallback
        FROM matchups
       WHERE league_id = $1 AND week = $2
       ORDER BY id`,
@@ -253,6 +269,7 @@ export async function loadWeekMatchups(
       week: Number(row.week),
       phase: row.phase,
       finalized,
+      finalizedOnFallback: row.finalized_on_fallback,
       home: await side(row.home_team_id, row.home_milli_points),
       away: row.away_team_id ? await side(row.away_team_id, row.away_milli_points) : null,
     });

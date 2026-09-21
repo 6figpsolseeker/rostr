@@ -741,6 +741,99 @@ describe("a game that never finishes — docs/RULES.md §10", () => {
     expect(outcome.finalizedWithUnfinishedGames).toBeUndefined();
   });
 
+  it("remembers on the matchup how it settled, so the fact outlives the run — #323", async () => {
+    /*
+      **The durability half, and the reason this is a column rather than a
+      better cron note.**
+
+      `finalizedWithUnfinishedGames` reached the cron's response body — which
+      Vercel does not retain — and `cron_runs.last_outcome`, which is one
+      upserted row per job. And it could never be regenerated:
+      `resolveLeagueWeeksThrough` selects weeks where *no* row is finalised, so
+      the instant a week settles it is never selected again.
+
+      So the loudest alarm this system can raise — money decided on data we
+      never fetched — had a ten-minute life and was then overwritten by the next
+      tick. #323 proposed a second column on `cron_runs`; it would not have
+      helped, because that column is upserted by the same statement. The fault
+      was storing a fact about a *week* on a row about a *job*.
+    */
+    const fx = await setup();
+    await schedule(fx);
+    await finishGames(fx);
+    await addGame(fx, "g1-postponed", "POSTPONED");
+
+    await resolveLeagueWeek(fx.client, fx.leagueId, WEEK, AFTER_STANDARD);
+
+    const [row] = await fx.client.query<{ finalized_on_fallback: string | null }>(
+      "SELECT finalized_on_fallback FROM matchups WHERE league_id = $1 AND week = $2 LIMIT 1",
+      [fx.leagueId, WEEK],
+    );
+
+    expect(row?.finalized_on_fallback).toMatch(/RULES.md §10/);
+  });
+
+  it("keeps that record after the missing game is later marked FINAL", async () => {
+    /*
+      **The assertion no derive-at-read-time implementation can make**, and the
+      reason this is stored rather than recomputed.
+
+      The inputs heal. The schedule sync eventually stamps the postponed game
+      `FINAL`, and the stats job eventually reads the box score it missed — so a
+      value derived at read time answers from a world that no longer resembles
+      the one the week settled in.
+
+      This fixture heals **half**, deliberately: the game becomes `FINAL` while
+      `stats_synced_at` stays null. So a recomputation today would not read
+      "settled cleanly" — it would report a #140 *stats-pipeline* fault, and
+      re-attribute the week from an abandoned game to our own ingest. A
+      permanent misattribution in the one record a settled week leaves behind,
+      which is worse than saying nothing at all.
+
+      (An earlier version of this claimed the recompute would read clean. It
+      would not, and the stronger claim made this test look like it proved more
+      than it does.)
+
+      What does *not* heal is the scoring: those players are zero for that week
+      permanently, because a finalised week is never rescored.
+    */
+    const fx = await setup();
+    await schedule(fx);
+    await finishGames(fx);
+    await addGame(fx, "g1-postponed", "POSTPONED");
+    await resolveLeagueWeek(fx.client, fx.leagueId, WEEK, AFTER_STANDARD);
+
+    // The provider catches up, days later.
+    await fx.client.query("UPDATE games SET status = 'FINAL' WHERE external_ref = $1", [
+      "g1-postponed",
+    ]);
+
+    const [row] = await fx.client.query<{ finalized_on_fallback: string | null }>(
+      "SELECT finalized_on_fallback FROM matchups WHERE league_id = $1 AND week = $2 LIMIT 1",
+      [fx.leagueId, WEEK],
+    );
+
+    expect(row?.finalized_on_fallback).toMatch(/RULES.md §10/);
+  });
+
+  it("records nothing on a week that settled on complete data", async () => {
+    // The control. A column written unconditionally would make every settled
+    // week look like a fallback, which is worse than not recording it at all —
+    // an alarm true of everybody names nothing.
+    const fx = await setup();
+    await schedule(fx);
+    await finishGames(fx);
+
+    await resolveLeagueWeek(fx.client, fx.leagueId, WEEK, AFTER_STANDARD);
+
+    const [row] = await fx.client.query<{ finalized_on_fallback: string | null }>(
+      "SELECT finalized_on_fallback FROM matchups WHERE league_id = $1 AND week = $2 LIMIT 1",
+      [fx.leagueId, WEEK],
+    );
+
+    expect(row?.finalized_on_fallback).toBeNull();
+  });
+
   it("scores the missing game's players zero and lets the matchup stand", async () => {
     // "Affected players score 0" needs no code of its own: a player with no stat
     // line already scores zero (`results.ts` — absent, empty and zero are three

@@ -235,9 +235,36 @@ describe("buildRunBanner", () => {
       selected" alarm. Every one turns `cron:status` red and left this page
       saying "nothing flagged".
     */
+    // `toEqual` on the whole object, so this doubles as the control for the
+    // staleness clause below: a job failing *on schedule* must not mention the
+    // scheduler, or appending it becomes its own false alarm.
     expect(
       buildRunBanner({ lastRanAt: hoursBefore(0.1), lastOutcome: "pool has no K" }, NOW),
     ).toEqual({ state: "FAILING", detail: "pool has no K" });
+  });
+
+  it("says so when a failing job has also stopped firing", () => {
+    /*
+      **The half this banner used to drop.**
+
+      It returned the outcome string alone for any non-null outcome, so a
+      `stats` job that was failing *and* had not run since Thursday read exactly
+      like one failing on schedule. The scheduler having died is the more urgent
+      fact and it was the one that vanished — `cli.ts` never had this problem,
+      because it prints `last: Nm ago` beside every row whatever the state.
+
+      The state stays `FAILING`, matching `cronJobState`, because two surfaces
+      disagreeing about a label is its own defect. It is the *sentence* that now
+      carries both.
+    */
+    const banner = buildRunBanner(
+      { lastRanAt: hoursBefore(6), lastOutcome: "pool has no K" },
+      NOW,
+    );
+
+    expect(banner.state).toBe("FAILING");
+    expect(banner.detail).toMatch(/pool has no K/);
+    expect(banner.detail).toMatch(/scheduler may have stopped/);
   });
 
   it("tells a job that has not run from a job with nothing to do", () => {
