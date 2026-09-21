@@ -351,10 +351,30 @@ export async function resolveLeagueWeek(
       // drops `rowCount` — without it, a refused write is not merely ignored,
       // it is unobservable.
       const touched = await tx.query<{ id: string }>(
+        // `finalized_on_fallback` is set in the **same statement** as
+        // `finalized_at`, under the same `finalized_at IS NULL` guard, and for
+        // the same reason (#76): a losing concurrent run must not be able to
+        // stamp a row another run has already settled. Two statements would
+        // reopen exactly that race for the column that says how it settled.
+        //
+        // **The guard is what protects it; the `CASE` is not.** Stated because
+        // a mutation test proved the point: replacing this `CASE` with a bare
+        // `= $9` breaks nothing, and the same is true of `finalized_at`'s. The
+        // `WHERE` already restricts every touched row to `finalized_at IS NULL`,
+        // so there is never an existing value in either column for the `ELSE`
+        // branch to preserve.
+        //
+        // Kept anyway, and deliberately mirroring the line above it: the two
+        // columns are written together, mean nothing apart, and a reader
+        // comparing them should see one shape. If the guard is ever relaxed —
+        // which #76 argues at length it must not be — these become load-bearing
+        // together rather than one of them silently not being.
         `UPDATE matchups
             SET home_milli_points = $3,
                 away_milli_points = $4,
-                finalized_at = CASE WHEN $5::boolean THEN $6 ELSE finalized_at END
+                finalized_at = CASE WHEN $5::boolean THEN $6 ELSE finalized_at END,
+                finalized_on_fallback =
+                  CASE WHEN $5::boolean THEN $9 ELSE finalized_on_fallback END
           WHERE league_id = $1 AND week = $2
             AND home_team_id = $7
             AND away_team_id IS NOT DISTINCT FROM $8
@@ -369,6 +389,7 @@ export async function resolveLeagueWeek(
           now.toISOString(),
           result.homeTeamId,
           result.awayTeamId,
+          decision.fallback ?? null,
         ],
       );
 

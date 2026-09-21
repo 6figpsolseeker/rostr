@@ -125,12 +125,21 @@ describe("scoreWeekNotes", () => {
     expect(scoreWeekNotes([prose])).toBeNull();
   });
 
-  it("keeps a permanent settlement out of the failure count but still says it", () => {
+  it("says nothing about a week that settled on the clock — the week records that itself", () => {
     /*
-      A fallback settlement is not "did not get scored" — it is the opposite, the
-      league was scored, once, for good, and no retry reaches it. Counting them
-      together would invite a retry-shaped response to something no retry can
-      touch.
+      **#323's answer, asserted from this side.**
+
+      This used to emit a note, and a note turns the job red — `cronJobState`
+      reads any non-null outcome as FAILING before it checks staleness. So the
+      alarm for "a paying week was decided on data we never fetched" was also
+      the thing that stopped `score-week` ever reporting STALE.
+
+      Worse, it could not be regenerated. The sweep selects weeks where nothing
+      is finalised, so a settled week is never revisited — the note lived for one
+      ten-minute tick and was then overwritten by the next upsert.
+
+      It is now on the week, in `matchups.finalized_on_fallback` (migration
+      `0049`), for as long as the league exists. See `week.test.ts`.
     */
     const note = scoreWeekNotes([
       {
@@ -138,8 +147,7 @@ describe("scoreWeekNotes", () => {
       },
     ]);
 
-    expect(note).toMatch(/permanent/);
-    expect(note).not.toMatch(/had a problem/);
+    expect(note).toBeNull();
   });
 
   it("does not let one healthy league mask another's failure, or vice versa", () => {
@@ -167,12 +175,18 @@ describe("scoreWeekNotes", () => {
     expect(scoreWeekNotes([wedged(3), wedged(5)])).toMatch(/week 3, 5$/);
   });
 
-  it("counts a failure that could not say what it was", () => {
-    // `route.ts` builds these from `error.message`, and an `Error` with an
-    // empty message is legal. The old inline counter incremented in the
-    // `catch` and so counted it; a bare truthiness test drops precisely the
-    // failure with least to say for itself.
-    expect(scoreWeekNotes([{ prefillProblem: "" }])).toMatch(/could not prefill/);
+  it("says nothing about a failed prefill, which is optimistic work", () => {
+    /*
+      Filling next week's lineups early is a convenience: `ensureLineups` runs
+      again before the week is scored, so a failure here costs nothing and
+      nobody needs to act on it. It reported anyway, and every report is an
+      alarm.
+
+      It stays in the response body, where it informs without reddening the one
+      row that has to be believed when scoring actually breaks.
+    */
+    expect(scoreWeekNotes([{ prefillProblem: "boom" }])).toBeNull();
+    expect(scoreWeekNotes([{ prefillProblem: "" }])).toBeNull();
   });
 
   it("says nothing for a run over no leagues at all", () => {

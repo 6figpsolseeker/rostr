@@ -104,18 +104,6 @@ function leagueFailed(row: LeagueRow): boolean {
   );
 }
 
-/**
- * Whether a league reported a problem string at all, empty one included.
- *
- * `route.ts` builds these from `error.message`, and an `Error` with an empty
- * message is not impossible — so a bare truthiness test silently drops the one
- * failure that could say least about itself. The old inline counter incremented
- * in the `catch` and therefore counted it.
- */
-function reported(value: string | undefined): boolean {
-  return value !== undefined;
-}
-
 /** Weeks that will never finalise without somebody intervening. */
 function overdueWeeks(row: LeagueRow): readonly number[] {
   return (row.weeks ?? []).filter((w) => !w.finalized && w.holdCode).map((w) => w.week);
@@ -130,19 +118,40 @@ function overdueWeeks(row: LeagueRow): readonly number[] {
  */
 export function scoreWeekNotes(rows: readonly LeagueRow[]): string | null {
   const failed = rows.filter(leagueFailed).length;
-  const prefillProblems = rows.filter((r) => reported(r.prefillProblem)).length;
 
   /*
-    A week that settled on the clock rather than on complete data.
+    **`onFallback` and `prefillProblem` used to be reported here, and both have
+    left. They are the whole of #323's answer.**
 
-    Deliberately **not** folded into `failed`. That count means "this league did
-    not get scored", which is recoverable and will be retried; a fallback
-    settlement is the opposite — the league was scored, once, for good, and no
-    retry can reach it.
+    Every note written here turns the job red, because `cronJobState` reads any
+    non-null outcome as `FAILING` before it looks at staleness. So a note is not
+    a place to say something; it is an alarm whatever the words are. Three jobs
+    have now been repaired for forgetting that — `stats` twice, `season-sync`
+    once, `score-week` once — and the rule was written into a commit message a
+    month before the last of them shipped.
+
+    The issue proposed a second column on `cron_runs` so a job could speak
+    without shouting. It would not have worked for the case that motivated it:
+    `last_note` is upserted on the same row by the same statement, so the next
+    tick overwrites it exactly as `last_outcome` does.
+
+    **A week that settled on the clock is now recorded on the week**, in
+    `matchups.finalized_on_fallback` (migration `0049`), where it lives as long
+    as the league does and cannot be overwritten — a finalised week is never
+    rewritten. It reached only this note and the response body before, and could
+    never be regenerated: the sweep selects weeks where nothing is finalised, so
+    a settled week is never revisited. The loudest alarm this system can raise
+    had a ten-minute life.
+
+    **A failed prefill is simply not worth a note.** It is optimistic work by
+    its own docstring — filling next week's lineups early — and `ensureLineups`
+    runs again before the week is scored, so nothing is lost by it failing. It
+    stays in the response body.
+
+    What remains here is what the count is named for: a league that did not get
+    scored, and a week that can never finalise. Both are "somebody should go and
+    do something".
   */
-  const onFallback = rows.filter((r) =>
-    r.weeks?.some((w) => w.finalizedWithUnfinishedGames),
-  ).length;
 
   /*
     The wedge, and the reason the bracket gate alone was not enough.
@@ -169,18 +178,6 @@ export function scoreWeekNotes(rows: readonly LeagueRow[]): string | null {
           `${overdue.length} ${overdue.length === 1 ? "week" : "weeks"} can never finalise ` +
             `and are holding the bracket: ` +
             `week ${overdue.join(", ")}`,
-        ]
-      : []),
-    ...(prefillProblems > 0
-      ? [`${prefillProblems} of ${rows.length} leagues could not prefill next week's lineups`]
-      : []),
-    ...(onFallback > 0
-      ? [
-          // Names the field, because the note is where somebody starts and the
-          // JSON is where the detail is. An earlier draft dropped it and left an
-          // operator with a sentence and nothing to grep for.
-          `${onFallback} of ${rows.length} leagues permanently settled a week on the ` +
-            `clock rather than on complete data — see finalizedWithUnfinishedGames`,
         ]
       : []),
   ];
