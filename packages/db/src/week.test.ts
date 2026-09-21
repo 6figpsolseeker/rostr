@@ -778,11 +778,21 @@ describe("a game that never finishes — docs/RULES.md §10", () => {
       **The assertion no derive-at-read-time implementation can make**, and the
       reason this is stored rather than recomputed.
 
-      The condition heals: the schedule sync eventually stamps the postponed
-      game `FINAL`, or the stats job reads the box score it missed. Recomputing
-      afterwards would answer "settled cleanly" — the week would become
-      indistinguishable from one that never had a problem, which is the one-shot
-      bug walking back in wearing a query.
+      The inputs heal. The schedule sync eventually stamps the postponed game
+      `FINAL`, and the stats job eventually reads the box score it missed — so a
+      value derived at read time answers from a world that no longer resembles
+      the one the week settled in.
+
+      This fixture heals **half**, deliberately: the game becomes `FINAL` while
+      `stats_synced_at` stays null. So a recomputation today would not read
+      "settled cleanly" — it would report a #140 *stats-pipeline* fault, and
+      re-attribute the week from an abandoned game to our own ingest. A
+      permanent misattribution in the one record a settled week leaves behind,
+      which is worse than saying nothing at all.
+
+      (An earlier version of this claimed the recompute would read clean. It
+      would not, and the stronger claim made this test look like it proved more
+      than it does.)
 
       What does *not* heal is the scoring: those players are zero for that week
       permanently, because a finalised week is never rescored.

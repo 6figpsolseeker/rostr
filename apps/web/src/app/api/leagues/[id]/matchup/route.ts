@@ -79,6 +79,10 @@ export async function GET(
         week: view.week,
         phase: view.phase,
         finalized: view.finalized,
+        // Sent beside `finalized`, not folded into it: "settled" and "settled
+        // on the clock with games we never read" are different facts, and only
+        // the second is worth a sentence on the screen.
+        finalizedOnFallback: view.finalizedOnFallback,
         home: side(view.home),
         away: view.away ? side(view.away) : null,
       })),

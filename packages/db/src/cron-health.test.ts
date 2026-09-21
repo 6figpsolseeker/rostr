@@ -194,14 +194,15 @@ describe("cronHealth", () => {
       `last_outcome` exists to prevent. The cost is here: a job that is failing
       *and* has stopped firing gets the label of the less urgent half.
 
-      Nothing is hidden — `cli.ts` prints `last: Nm ago` beside every row
-      whatever the state, so the death is on screen next to the failure. What is
-      wrong is the label, and a reader who does not do the
-      `everyMinutes × 2 + 5` arithmetic can read past it.
+      Nothing is hidden — `cli.ts` prints `last: Nm ago` beside every row that
+      has ever run, so the death is on screen next to the failure. What is wrong
+      is the label, and a reader who does not do the `everyMinutes × 2 + 5`
+      arithmetic can read past it.
 
-      Until this commit `cronJobState` was an unexported `stateOf` while twelve
-      comments named it, so no test could address the ordering at all. This is
-      that test.
+      The ordering was always reachable through `cronHealth`, which is what this
+      test calls — so the claim that nothing could address it, in an earlier
+      draft of this comment, was false. What had never been staged is this
+      specific pair: failing *and* stale at once.
     */
     const health = cronHealth(jobs, [run("draft-tick", 1440, "2 of 3 drafts failed")], NOW);
 

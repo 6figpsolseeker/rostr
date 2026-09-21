@@ -27,8 +27,21 @@ import "server-only";
  * constant, and the staleness detector behind it was switched off.
  *
  * **So the test for a note is not "did something unusual happen". It is "is
- * there something a person should go and do".** `onFallback` and `overdue` earn
- * it; a league waiting out its correction window does not.
+ * there something a person should go and do".** `overdue` earns it — a week
+ * that can never finalise needs a human — and a league waiting out its
+ * correction window does not.
+ *
+ * `onFallback` used to be here and no longer is. It is worth *knowing* and not
+ * worth *doing*: nobody can un-settle a week, and a finalised week is never
+ * rescored. It lives on the matchup row now (migration `0049`) and renders on
+ * the scoreboard, where the manager whose starter scored zero is the person it
+ * was always for.
+ *
+ * A failed prefill left too, and the reason is *retried*, not *harmless*:
+ * `prefill` runs on every tick between the transaction lock and kickoff, so one
+ * failure is corrected within ten minutes. One that persists to kickoff is #288
+ * itself and is **not** free — `autoFillLineup` excludes players whose games
+ * have started, so the scoring-time `ensureLineups` cannot recover it.
  */
 
 /** One week, as the run reports it. Mirrors the route's response shape. */
@@ -50,7 +63,7 @@ export interface WeekRow {
 /** One league, as the run reports it. */
 export interface LeagueRow {
   readonly weeks?: readonly WeekRow[];
-  readonly failedWeeks?: readonly { readonly week: number }[];
+  readonly failedWeeks?: readonly { readonly week: number; readonly reason?: string }[];
   readonly deferredWeeks?: readonly number[];
   readonly bracketProblem?: string;
   readonly skipped?: string;
@@ -127,8 +140,8 @@ export function scoreWeekNotes(rows: readonly LeagueRow[]): string | null {
     non-null outcome as `FAILING` before it looks at staleness. So a note is not
     a place to say something; it is an alarm whatever the words are. Three jobs
     have now been repaired for forgetting that — `stats` twice, `season-sync`
-    once, `score-week` once — and the rule was written into a commit message a
-    month before the last of them shipped.
+    once, `score-week` twice counting this one — and the rule was written into a
+    commit message a month before the last of them shipped.
 
     The issue proposed a second column on `cron_runs` so a job could speak
     without shouting. It would not have worked for the case that motivated it:
@@ -143,10 +156,18 @@ export function scoreWeekNotes(rows: readonly LeagueRow[]): string | null {
     a settled week is never revisited. The loudest alarm this system can raise
     had a ten-minute life.
 
-    **A failed prefill is simply not worth a note.** It is optimistic work by
-    its own docstring — filling next week's lineups early — and `ensureLineups`
-    runs again before the week is scored, so nothing is lost by it failing. It
-    stays in the response body.
+    **A failed prefill is retried, not harmless — and retried is why it needs
+    no note.** `prefill` runs on every tick between the transaction lock and
+    kickoff, hundreds of them, so a single failure is corrected within ten
+    minutes and reddening the job for it would be noise.
+
+    A failure that persists all the way to kickoff is a different thing and is
+    **not** free: that is #288 exactly, and the scoring-time `ensureLineups`
+    cannot recover it, because `autoFillLineup` excludes players whose games
+    have already started — an abandoned team then fields about one starter of
+    nine. Nothing here reports that case, and a per-run count never could. An
+    earlier version of this said a prefill failure "costs nothing", which is
+    true of the common case and false of the one that matters.
 
     What remains here is what the count is named for: a league that did not get
     scored, and a week that can never finalise. Both are "somebody should go and
@@ -168,8 +189,30 @@ export function scoreWeekNotes(rows: readonly LeagueRow[]): string | null {
   */
   const overdue = [...new Set(rows.flatMap((r) => overdueWeeks(r)))].sort((a, b) => a - b);
 
+  /*
+    The first failure's own words, appended to the count.
+
+    **A count alone cannot tell an operator what to do**, and the case that
+    proved it is this file's own: deploy a migration-dependent change without
+    running `pnpm db:migrate` and every league fails with
+    `column "…" does not exist` — while the note says only "1 of 1 leagues had a
+    problem". Red, correctly, and with no hint that the fix is one command.
+
+    One reason, not all of them. They are usually the same fault seen N times,
+    and `last_outcome` is a line on a terminal rather than a log.
+  */
+  const firstReason =
+    rows.flatMap((r) => r.failedWeeks ?? []).find((w) => w.reason)?.reason ??
+    rows.find((r) => r.skipped)?.skipped ??
+    null;
+
   const notes = [
-    ...(failed > 0 ? [`${failed} of ${rows.length} leagues had a problem`] : []),
+    ...(failed > 0
+      ? [
+          `${failed} of ${rows.length} leagues had a problem` +
+            (firstReason ? `: ${firstReason}` : ""),
+        ]
+      : []),
     ...(overdue.length > 0
       ? [
           // Deduplicated *before* counting, so the number and the list cannot

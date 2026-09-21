@@ -237,11 +237,17 @@ export function cronHealth(
 /**
  * What one job's row means.
  *
- * **Exported under the name twelve comments across seven files already use.**
- * It was `stateOf`, unexported, while `season-sync.ts`, `stats.ts`,
- * `score-week.ts`, both cron routes and four tests all referred to
- * `cronJobState` — a function that did not exist. That is why the ordering
- * below has never had a test naming it: nothing could address it.
+ * **Exported under the name the rest of the repo already uses.** It was
+ * `stateOf`, unexported, while twelve mentions across seven files — in
+ * `season-sync.ts`, `stats.ts`, `score-week.ts`, the `score-week` cron route
+ * and three tests — all referred to `cronJobState`, a function that did not
+ * exist.
+ *
+ * That did **not** make the ordering untestable, and a first draft of this said
+ * it did. `cronHealth` is exported and calls this for every job, so every
+ * branch was already reachable — the test below proves it by going through
+ * `cronHealth` rather than through this function. What was missing is narrower
+ * and duller: nobody had staged the case where a job is failing *and* stale.
  *
  * ## The ordering is deliberate, and it has a known cost
  *
@@ -251,10 +257,10 @@ export function cronHealth(
  *
  * Its cost is that a job which is **both** failing and dead reports `FAILING`,
  * so the label does not say the scheduler stopped. Nothing is hidden on the
- * CLI — `cli.ts` prints `last: Nm ago` on the same line whatever the state — but
- * the label is the wrong one and a reader has to do the arithmetic. Pinned by a
- * test rather than left implicit, so reversing it is a deliberate act and not a
- * tidy-up.
+ * CLI — `cli.ts` prints `last: Nm ago` beside every row that has ever run, and
+ * `last: never` for one that has not — but the label is the wrong one and a
+ * reader has to do the arithmetic. Pinned by a test rather than left implicit,
+ * so reversing it is a deliberate act and not a tidy-up.
  */
 export function cronJobState(
   job: ExpectedJob,

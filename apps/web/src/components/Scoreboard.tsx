@@ -59,6 +59,7 @@ interface Matchup {
   week: number;
   phase: "REGULAR" | "PLAYOFF" | "CONSOLATION";
   finalized: boolean;
+  finalizedOnFallback: string | null;
   home: Side;
   away: Side | null;
 }
@@ -226,6 +227,33 @@ function FullMatchup({ matchup, myTeamId }: { matchup: Matchup; myTeamId: string
           <p className="pt-6 text-sm text-nocturne-neutral-600">Bye</p>
         )}
       </div>
+
+      {matchup.finalizedOnFallback !== null && (
+        /*
+          Why a starter may read zero on a week that is final.
+
+          `RULES.md` §10 lets a paying week settle when the correction window
+          elapses with games that never reached FINAL, and #140 added the second
+          cause — games marked FINAL whose box score we never read. Either way
+          those players are scored zero **permanently**, because a finalised week
+          is never rescored.
+
+          Until migration `0049` this fact lived for one ten-minute cron tick and
+          was then overwritten, so the manager whose starter scored nothing had
+          no way to tell a bad Sunday from a game we never ingested. It is now on
+          the matchup row, and this is the screen it was always for.
+
+          Sits above the restatement notice deliberately: that one explains a
+          correction that arrived *too late to count*, and this one explains data
+          that never arrived at all. A reader meeting both should meet the cause
+          before the consequence.
+        */
+        <p className="rounded border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-200/80">
+          This week settled on the correction-window clock rather than on complete data:{" "}
+          {matchup.finalizedOnFallback}. Players in those games score zero for the week, and a
+          finalised week is never rescored.
+        </p>
+      )}
 
       {(left.restatedMilliPoints !== null || right?.restatedMilliPoints != null) && (
         <p className="rounded border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-200/80">

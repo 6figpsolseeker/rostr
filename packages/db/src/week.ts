@@ -357,18 +357,26 @@ export async function resolveLeagueWeek(
         // stamp a row another run has already settled. Two statements would
         // reopen exactly that race for the column that says how it settled.
         //
-        // **The guard is what protects it; the `CASE` is not.** Stated because
-        // a mutation test proved the point: replacing this `CASE` with a bare
-        // `= $9` breaks nothing, and the same is true of `finalized_at`'s. The
-        // `WHERE` already restricts every touched row to `finalized_at IS NULL`,
-        // so there is never an existing value in either column for the `ELSE`
-        // branch to preserve.
+        // **The two `CASE`s are not doing the same job, and an earlier version
+        // of this comment said they were.**
         //
-        // Kept anyway, and deliberately mirroring the line above it: the two
-        // columns are written together, mean nothing apart, and a reader
-        // comparing them should see one shape. If the guard is ever relaxed —
-        // which #76 argues at length it must not be — these become load-bearing
-        // together rather than one of them silently not being.
+        // `finalized_at`'s is **load-bearing**. It chooses between stamping `$6`
+        // and writing NULL, so a bare `= $6` would finalise every row this
+        // statement touches — including a run that only scores, inside the
+        // correction window. That deletes the hold outright; five tests fail,
+        // among them "waits the full week when the week does pay".
+        //
+        // `finalized_on_fallback`'s is **redundant**, and not for the reason
+        // first written here. It is not that the `WHERE` leaves nothing to
+        // preserve — it is that `$9` is non-null only when `$5` is true:
+        // `finalizationHold` returns `fallback` only on its `hold: null` branch,
+        // so a run that does not finalise has nothing to write anyway.
+        //
+        // Kept to mirror the line above, where the shape is required. The
+        // correction matters more than the line: the first attempt generalised
+        // one mutation result across two columns, concluded the guard was doing
+        // work the `CASE` does, and would have invited somebody to simplify the
+        // one that cannot be simplified.
         `UPDATE matchups
             SET home_milli_points = $3,
                 away_milli_points = $4,

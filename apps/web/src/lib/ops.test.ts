@@ -235,6 +235,9 @@ describe("buildRunBanner", () => {
       selected" alarm. Every one turns `cron:status` red and left this page
       saying "nothing flagged".
     */
+    // `toEqual` on the whole object, so this doubles as the control for the
+    // staleness clause below: a job failing *on schedule* must not mention the
+    // scheduler, or appending it becomes its own false alarm.
     expect(
       buildRunBanner({ lastRanAt: hoursBefore(0.1), lastOutcome: "pool has no K" }, NOW),
     ).toEqual({ state: "FAILING", detail: "pool has no K" });
@@ -262,15 +265,6 @@ describe("buildRunBanner", () => {
     expect(banner.state).toBe("FAILING");
     expect(banner.detail).toMatch(/pool has no K/);
     expect(banner.detail).toMatch(/scheduler may have stopped/);
-  });
-
-  it("does not mention the scheduler when a failing job is punctual", () => {
-    // The control. Appending it unconditionally would be its own false alarm —
-    // a job failing on schedule has a working scheduler, and saying otherwise
-    // sends somebody to the wrong place.
-    expect(
-      buildRunBanner({ lastRanAt: hoursBefore(0.1), lastOutcome: "pool has no K" }, NOW).detail,
-    ).toBe("pool has no K");
   });
 
   it("tells a job that has not run from a job with nothing to do", () => {

@@ -31,6 +31,41 @@ describe("scoreWeekNotes", () => {
     expect(scoreWeekNotes([healthy])).toBeNull();
   });
 
+  it("names the first reason, so a red row says what to do — #323", () => {
+    /*
+      **The case that proved a count is not enough**, and it is this change's
+      own: ship a migration-dependent commit without running `pnpm db:migrate`
+      and every league fails with `column "…" does not exist`, while the note
+      says only "1 of 1 leagues had a problem". Red, correctly, and with no hint
+      that the fix is one command.
+
+      One reason rather than all of them: they are usually the same fault seen N
+      times, and this is a line on a terminal rather than a log.
+    */
+    const note = scoreWeekNotes([
+      {
+        failedWeeks: [
+          { week: 2, reason: 'column "finalized_on_fallback" does not exist' },
+          { week: 3, reason: "something else" },
+        ],
+      },
+    ]);
+
+    expect(note).toMatch(/1 of 1 leagues had a problem/);
+    expect(note).toMatch(/finalized_on_fallback/);
+    expect(note).not.toMatch(/something else/);
+  });
+
+  it("falls back to a skip reason, and says nothing extra when there is none", () => {
+    // A league that threw before any week was attempted has no `failedWeeks` —
+    // its reason is on `skipped`. And a failure with no words at all must still
+    // produce a clean sentence rather than a dangling colon.
+    expect(scoreWeekNotes([{ skipped: "NO_SCHEDULE" }])).toMatch(/problem: NO_SCHEDULE/);
+    expect(scoreWeekNotes([{ failedWeeks: [{ week: 2 }] }])).toBe(
+      "1 of 1 leagues had a problem",
+    );
+  });
+
   it("still reports a league that could not be scored", () => {
     // `NO_SCHEDULE` is a real `WeekError` code. An earlier draft invented
     // `SCHEDULE_MISSING`, which belongs to nothing — a fixture that cannot

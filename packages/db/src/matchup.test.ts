@@ -346,6 +346,53 @@ describe("what is still to come", () => {
   });
 });
 
+describe("a week that settled on the clock says so — #323", () => {
+  /*
+    The consumer half. `matchups.finalized_on_fallback` (migration `0049`) is
+    written when `RULES.md` §10's window elapses with games that never reached
+    FINAL, or with games marked FINAL whose box score we never read. Those
+    players score zero **permanently** — a finalised week is never rescored.
+
+    Storing it was only half a fix: until this reached `MatchupView` the fact was
+    durable and invisible, readable only from a database session. The manager
+    whose starter scored nothing is the person it was always for.
+  */
+
+  it("carries the reason onto the view a manager reads", async () => {
+    const fx = await setup();
+    await fx.client.query(
+      `UPDATE matchups SET finalized_at = now(),
+              finalized_on_fallback = '1 of 2 games are not marked FINAL'
+        WHERE league_id = $1 AND week = $2`,
+      [fx.leagueId, WEEK],
+    );
+
+    const views = await loadWeekMatchups(fx.client, fx.leagueId, WEEK, BEFORE);
+
+    expect(views[0]?.finalizedOnFallback).toMatch(/1 of 2/);
+  });
+
+  it("says nothing for a week that settled cleanly", async () => {
+    /*
+      The control, and it carries a second claim worth stating: a week finalised
+      **before** `0049` also reads null here. That is "we do not know", not
+      "settled cleanly" — the migration deliberately backfills nothing rather
+      than asserting something no row records. The screen shows the notice only
+      when there is a reason, so an unknown week is silent rather than reassuring.
+    */
+    const fx = await setup();
+    await fx.client.query(
+      "UPDATE matchups SET finalized_at = now() WHERE league_id = $1 AND week = $2",
+      [fx.leagueId, WEEK],
+    );
+
+    const views = await loadWeekMatchups(fx.client, fx.leagueId, WEEK, BEFORE);
+
+    expect(views[0]?.finalized).toBe(true);
+    expect(views[0]?.finalizedOnFallback).toBeNull();
+  });
+});
+
 describe("a player no NFL club lists — #308", () => {
   /*
     PR #304 made a released player acquirable on purpose and labelled him on the

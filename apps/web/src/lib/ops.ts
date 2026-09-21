@@ -275,6 +275,20 @@ export function buildOpsView(
 }
 
 /**
+ * An hour of silence from a ten-minute job is a scheduler problem rather than an
+ * ingest one. Generous on purpose: a single missed tick is not news, and an
+ * alarm that fires on one is an alarm that gets muted.
+ *
+ * Deliberately not `stalenessLimitMinutes`, which the CLI derives per job and
+ * which gives this one 25 minutes. This screen is glanced at; that one is run
+ * on arrival with the intent of finding something.
+ *
+ * Named rather than inline because it is read twice — once to decide the state,
+ * once to decide whether a failing job should also mention it.
+ */
+const STALE_AFTER_MINUTES = 60;
+
+/**
  * The stats job's own last run, rendered above the list.
  *
  * **An empty list beside a job that is not running is a false all-clear**, and it
@@ -293,16 +307,6 @@ export function buildOpsView(
  * wrong: it writes a fact about the *run* onto rows that were never attempted,
  * and the retry clause would then pace against it.
  */
-/**
- * An hour of silence from a ten-minute job is a scheduler problem rather than an
- * ingest one. Generous on purpose: a single missed tick is not news, and an
- * alarm that fires on one is an alarm that gets muted.
- *
- * Named rather than inline because it is now read twice — once to decide the
- * state, once to decide whether a failing job should also mention it.
- */
-const STALE_AFTER_MINUTES = 60;
-
 export function buildRunBanner(
   run: { readonly lastRanAt: Date | null; readonly lastOutcome: string | null } | undefined,
   now: Date,
@@ -313,9 +317,15 @@ export function buildRunBanner(
   const minutesAgo = Math.floor((now.getTime() - run.lastRanAt.getTime()) / 60_000);
 
   /*
-    Failing outranks stale, matching `cronJobState` — but **the staleness is
-    carried in the sentence rather than dropped**, which is the part this used
-    to get wrong.
+    Failing outranks stale, matching `cronJobState`'s ordering — but **the
+    staleness is carried in the sentence rather than dropped**, which is the part
+    this used to get wrong.
+
+    Only the *ordering* matches. The thresholds deliberately do not: the CLI
+    derives one per job from its schedule (25 minutes for this one), and this
+    screen uses a flat hour for the reason given on `STALE_AFTER_MINUTES`. So a
+    stats job silent for half an hour reads `STALE` there and `OK` here, and
+    that divergence is a choice rather than an oversight.
 
     `cli.ts` prints `last: Nm ago` beside every row whatever its state, so on
     that surface a job which is both failing and dead still shows it has not run.
@@ -339,12 +349,9 @@ export function buildRunBanner(
           : run.lastOutcome,
     };
   }
-  /*
-    Stale, not failing. The job runs every ten minutes; an hour of silence is a
-    scheduler problem rather than an ingest one, and saying so sends somebody to
-    the right place. Generous, because a single missed tick is not news and an
-    alarm that fires on one is an alarm that gets muted.
-  */
+  // Stale, not failing — saying so sends somebody to the scheduler rather than
+  // to the ingest. The threshold and its reasoning live on
+  // `STALE_AFTER_MINUTES`; two descriptions of one rule is how they drift.
   if (minutesAgo >= STALE_AFTER_MINUTES) {
     return {
       state: "STALE",
