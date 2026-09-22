@@ -36,11 +36,64 @@ export interface ByeCapableProvider {
   listByeWeeks(season: number): Promise<ReadonlyMap<string, number>>;
 }
 
+/**
+ * A provider's ranking board for one scoring format.
+ *
+ * **One value, because the two halves are not independent.** A `ranking_type`
+ * is a string in *that provider's* vocabulary: ours reads `"PPR"` because
+ * Tank01's `adpType` does, and nothing obliges the next vendor to spell it the
+ * same way or to publish a format split at all. A source without its format, or
+ * a format without its source, names nothing.
+ *
+ * It is also the only shape that survives being handed to a reader. Two
+ * adjacent `string` parameters typecheck when transposed and answer with an
+ * empty board when they are — silently, because an empty board is a legal
+ * board: 1,022 of 1,589 players carry no ADP at all. One argument cannot be
+ * swapped with itself.
+ */
+export interface RankingBoard {
+  /** The provider that published the ADP. Matched against `player_rankings.source`. */
+  readonly source: string;
+  /** The scoring format it assumes — `PPR`, `HALF`, `STANDARD`. */
+  readonly rankingType: string;
+}
+
+/**
+ * The board the draft room is ordered by.
+ *
+ * **Separate from `PRIMARY_PROJECTION_SOURCE` and `PRIMARY_STAT_SOURCE`, even
+ * though one vendor satisfies all three today.** `lineups.ts` makes that
+ * argument for the first pair and it goes a step further here: those two are
+ * chosen for factual accuracy and for model quality. An ADP is neither. It is a
+ * measurement of a crowd — whichever drafting population the provider happens
+ * to observe — and the owner's 2026-09-21 ruling is what makes that the driver,
+ * since the board is ordered by ADP precisely because a manager arrives with a
+ * public board already in his head. The right vendor is the one whose rooms
+ * look like the rooms our managers read, which is not a question about accuracy
+ * and not a question about models.
+ *
+ * Coupling would cost in both directions. Tied to the projections source,
+ * swapping model vendors for a better autofill would silently reorder every
+ * draft board. Tied to the stats source, the board would inherit `RULES.md` §7's
+ * two-provider agreement gate, which §7 is explicit an opinion can never pass.
+ *
+ * **Nothing makes this agree with `Tank01Provider.name` by construction.**
+ * `@rostr/stats` depends only on `@rostr/core`, so the adapter cannot import
+ * this, and no compiler will ever stand between a rename there and a blank
+ * board here. `sync.test.ts` asserts the equality instead; that test is the
+ * whole guard.
+ */
+export const PRIMARY_RANKING_BOARD: RankingBoard = {
+  source: "tank01",
+  rankingType: "PPR",
+};
+
 /** A provider that can also supply a draft board. Optional on the interface. */
 export interface AdpCapableProvider extends StatsProvider {
   listAdp(rankingType?: string): Promise<{
     asOf: string;
-    rankingType: string;
+    /** The format the provider spelled back. A check, never a stored value. */
+    rankingTypeEcho: string;
     entries: readonly {
       externalRef: string;
       fullName: string;
@@ -336,8 +389,17 @@ export async function syncRankings(
   provider: AdpCapableProvider,
   sportKey: string,
   season: number,
-  rankingType = "PPR",
-): Promise<SyncResult & { asOf: string; unmatched: readonly string[] }> {
+  // One literal, shared with the reader. Two constants that happen to agree is
+  // how a draft board goes blank on a Sunday.
+  rankingType: string = PRIMARY_RANKING_BOARD.rankingType,
+): Promise<
+  SyncResult & {
+    asOf: string;
+    unmatched: readonly string[];
+    /** The provider's spelling when it disagreed with ours. Null when it matched. */
+    rankingTypeEcho: string | null;
+  }
+> {
   const ids = await loadSportIds(db, sportKey);
   const board = await provider.listAdp(rankingType);
 
@@ -363,7 +425,14 @@ export async function syncRankings(
         entry.externalRef,
         season,
         provider.name,
-        board.rankingType,
+        // **Ours, not the provider's echo — #307.** This used to be
+        // `board.rankingType`, i.e. `raw.adpType ?? rankingType` from the
+        // adapter, so a key column the draft board matches exactly held a
+        // string the vendor controlled. `getNFLADP` answering "ppr" one morning
+        // would have split every player across two ranking types, and the
+        // loader's `COALESCE` would then have returned each of them twice.
+        // The echo is a check now; see the return value.
+        rankingType,
         entry.overallMilli,
         entry.positionRank,
         board.asOf,
@@ -378,7 +447,30 @@ export async function syncRankings(
     }
   }
 
-  return { inserted, updated: 0, skipped, asOf: board.asOf, unmatched };
+  return {
+    inserted,
+    updated: 0,
+    skipped,
+    asOf: board.asOf,
+    unmatched,
+    /*
+      Reported, because normalising discards information and a vendor that has
+      changed its vocabulary is a fact somebody should act on.
+
+      It belongs in `last_outcome` rather than a run note, and the distinction
+      matters: migration `0049` rejected a second `cron_runs` column for #323 on
+      the grounds that the next tick overwrites it exactly as `last_outcome`
+      does. That argument is about a **one-shot** fact. An echo mismatch is not
+      one — if the vendor renamed its format today it is still renamed tomorrow,
+      so it re-fires every run and survives the overwrite by being true again.
+
+      That also makes it a legitimate red. The rule this repo settled after #325
+      is that every note is an alarm, so the test is whether there is something
+      a person should go and do. There is: decide whether our constant or the
+      vendor's spelling is now right.
+    */
+    rankingTypeEcho: board.rankingTypeEcho === rankingType ? null : board.rankingTypeEcho,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -672,19 +764,54 @@ export interface DraftBoardEntry {
  * It now demotes explicitly. Do not "simplify" that away on the grounds that
  * the board handles it. The board stopped.
  *
- * Dense over **rows**, which is not quite dense over players: the ranking join
- * uses `COALESCE($3, r.source)`, so omitting the argument filters nothing and a
- * player with two ranking sources returns twice. Measured latent on 2026-09-22
- * rather than assumed latent — one `source`/`ranking_type` combination exists
- * (`tank01`/`PPR`) and zero players carry two current rows. Still filed rather
- * than fixed, because choosing the default wrongly empties every ADP on the
- * live board. See #307.
+ * **Dense over players, since #307.** It was dense only over *rows*: the
+ * ranking join used `COALESCE($3, r.source)`, which filters nothing when the
+ * argument is omitted, and all ten call sites omit it — so a player with two
+ * ranking sources came back twice, at two different ADPs, and the pool Maps
+ * downstream kept whichever landed last. It was measured latent rather than
+ * assumed latent (one combination, zero doubled players) and left unfixed
+ * because a default that failed to match what `syncRankings` writes would empty
+ * every ADP on the live board.
+ *
+ * What made that safe to fix was removing the way the two could disagree.
+ * `syncRankings` stored the provider's echoed `adpType` in `ranking_type` — a
+ * key column holding a string the vendor controlled. It now stores the format
+ * *we asked for* and reports any disagreement, so the reader's default can only
+ * be wrong if `Tank01Provider.name` drifts from `PRIMARY_RANKING_BOARD.source`,
+ * which is one string equality and has a test.
+ *
+ * The residual worth knowing: the filter is exact, so a board synced under some
+ * *other* source is invisible here rather than blended in. That is deliberate —
+ * `syncRankings`' fifth parameter can write a `HALF` board, and a fallback that
+ * surfaced those rows would mix scoring formats into one ADP column with
+ * nothing on screen saying so.
  */
 export async function loadDraftBoard(
   db: SqlClient,
   sportKey: string,
   season: number,
-  options: { source?: string; rankingType?: string } = {},
+  /*
+    **Defaults to one board, and that is the fix for #307.**
+
+    This used to be `{ source?, rankingType? }` matched with
+    `COALESCE($3, r.source)` — so omitting the argument meant *no filter*, and
+    all ten call sites in this repo omit it. A player carrying two sources came
+    back as two entries, `rank` stopped meaning "the Nth best player", and the
+    pool Maps downstream silently kept whichever row landed last. An optional
+    filter that defaults to "all" is not a filter; the caller who most needs it
+    is the one who forgets. `loadProjections` above carries the same argument,
+    having had the same defect.
+
+    **One argument rather than two, because two bare strings transpose
+    silently.** `loadDraftBoard(db, "nfl", 2026, "PPR", "tank01")` typechecks,
+    matches nothing, and returns a legal board of 1,589 null ADPs.
+
+    The filter is now exact on `(season, source, ranking_type)`, which with the
+    join on `player_id` is precisely `player_rankings_current`'s own
+    `DISTINCT ON` key — so at most one row can match, by the view's uniqueness
+    rather than by this query's care.
+  */
+  board: RankingBoard = PRIMARY_RANKING_BOARD,
 ): Promise<readonly DraftBoardEntry[]> {
   const ids = await loadSportIds(db, sportKey);
 
@@ -723,13 +850,13 @@ export async function loadDraftBoard(
        LEFT JOIN player_rankings_current r
          ON r.player_id = p.id
         AND r.season = $2
-        AND r.source = COALESCE($3, r.source)
-        AND r.ranking_type = COALESCE($4, r.ranking_type)
+        AND r.source = $3
+        AND r.ranking_type = $4
       WHERE p.sport_id = $1
       GROUP BY p.id, p.external_ref, p.full_name, p.active, r.overall_milli,
                p.image_url, p.team_ref, ps.bye_week, p.injury_designation
       ORDER BY r.overall_milli NULLS LAST, p.full_name`,
-    [ids.sportId, season, options.source ?? null, options.rankingType ?? null],
+    [ids.sportId, season, board.source, board.rankingType],
   );
 
   return rows.map((row, index) => ({

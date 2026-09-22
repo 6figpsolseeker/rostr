@@ -266,6 +266,8 @@ export {
   syncPlayers,
   syncProjections,
   syncRankings,
+  PRIMARY_RANKING_BOARD,
+  type RankingBoard,
   type AdpCapableProvider,
   type ByeCapableProvider,
   type DraftBoardEntry,

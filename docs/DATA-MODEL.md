@@ -112,9 +112,11 @@ column has to survive, and until 2026-09-22 it did not — it printed `rank`, a
 dense board index every unranked player also has, which invented a crowd's
 opinion for 1,022 players. It now prints `adpMilli` or an em dash.
 
-How many ranking combinations exist — which decides whether the loader's
-`COALESCE($3, r.source)` can return a player twice (`packages/db/src/sync.ts`
-files that defect as latent, see #307):
+How many ranking combinations exist. This is the query that unblocked #307 — the
+loader's `COALESCE($3, r.source)` filtered nothing when omitted, and every caller
+omitted it, so a player with two sources came back twice. It was left unfixed
+because a default that failed to match what `syncRankings` writes would blank the
+whole board, and nobody had checked what was actually stored:
 
 ```sql
 SELECT season, source, ranking_type, count(*) AS rows
@@ -127,9 +129,20 @@ SELECT count(*) FROM (
 -- 0
 ```
 
-Latent, still latent, and now **measured** latent rather than assumed latent.
-17,883 rows across 567 players is about 31 dated snapshots each — the daily sync
-is running and ADP is moving.
+One combination, zero doubled players — so the defect was **measured** latent
+rather than assumed latent, and `loadDraftBoard` now filters on
+`PRIMARY_RANKING_BOARD` instead of defaulting to "all". 17,883 rows across 567
+players is about 31 dated snapshots each: the daily sync is running and ADP is
+moving.
+
+What made the hard default safe was closing the way the two sides could
+disagree. `syncRankings` used to store the provider's echoed `adpType` in
+`ranking_type` — a key column holding a string the vendor controlled — and now
+stores the format we asked for, reporting a mismatch through `cron_runs`. The
+only remaining way to blank the board is `Tank01Provider.name` drifting from the
+constant, which is one string equality and has a test that imports the real
+adapter. It cannot be a compile-time guarantee: `@rostr/stats` depends only on
+`@rostr/core`, so the adapter cannot import from `@rostr/db`.
 
 Which rows are **frozen** — a "current" row older than the newest the feed has
 written. `syncRankings` writes only for players in that day's feed, so a player
