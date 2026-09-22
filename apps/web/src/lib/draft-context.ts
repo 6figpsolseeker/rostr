@@ -148,8 +148,13 @@ export async function draftBoard(season: number, rules: LeagueRules): Promise<Ca
           playerId: entry.playerId,
           positions: entry.positions,
           rank: entry.rank,
-          // Read only by the queue, which is consulted before the ranking that
-          // already demotes him. See `autoPick`.
+          // Read twice by `autoPick`, and both readings are deliberate: the
+          // queue skips a player queued in August whose club cut him in
+          // September, and — since 2026-09-22 — the ranking demotes him too,
+          // because the board's `ORDER BY` stopped doing it and the endgame's
+          // per-position scans have no 180-pick margin to hide behind. The
+          // browser's copy of this column sorts nothing. Do not "simplify"
+          // either one away.
           active: entry.active,
         },
       ]),

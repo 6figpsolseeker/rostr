@@ -130,7 +130,36 @@ export function autoPick(context: AutoPickContext): AutoPickResult | null {
     }
   }
 
-  const ranked = [...available].sort((a, b) => a.rank - b.rank);
+  /*
+    A player with no NFL club sorts last **here**, and no longer on the board.
+
+    Until 2026-09-22 this came free: `loadDraftBoard` ordered `p.active DESC`
+    before numbering, so every pool arrived pre-demoted and this sort inherited
+    it. `roster.ts` said as much in `DraftablePlayer.active`'s own docstring.
+    The owner then ruled the board runs on ADP alone — measured, a released
+    player is re-priced downward rather than frozen — and that clause came out.
+    This did not come out with it.
+
+    **The bound that made inheritance look safe never covered the endgame.**
+    Best-available (step 2) scans the whole board, where ~180 picks of active
+    players stand between a bot and anyone club-less. The NEED and fallback
+    scans below do not: they scan one *position*, and every cut player carrying
+    an ADP ranks above all 1,022 carrying none. Exhaust the ranked kickers —
+    ADP puts them around pick 187, per this function's own header — and the next
+    candidate is a man no team employs, who scores zero for the rest of the
+    season, in a starting slot, for a manager who was not there to object.
+
+    A sort key, never a filter. Step 4 exists so a draft never stalls; excluding
+    these players outright could return null and throw `NO_LEGAL_PICK`. The
+    autolineup may legally write an empty slot — auto-pick may not decline to
+    pick.
+
+    `active === false`, never `!active`: the flag is optional and absent means
+    yes (see `DraftablePlayer`), so `!undefined` would demote every hand-built
+    fixture in the repo and quietly rewrite what the existing tests assert.
+  */
+  const demoted = (player: DraftablePlayer): number => (player.active === false ? 1 : 0);
+  const ranked = [...available].sort((a, b) => demoted(a) - demoted(b) || a.rank - b.rank);
   const caps = context.positionCaps ?? defaultPositionCaps(shape);
 
   // 2. Best player available, so long as it keeps the lineup fillable and does

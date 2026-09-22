@@ -330,6 +330,127 @@ describe("autoPick", () => {
     expect(result?.source).toBe("QUEUE");
   });
 
+  /*
+    The club demotion, which lived in SQL until 2026-09-22.
+
+    `loadDraftBoard` ordered `p.active DESC` before numbering, so every pool
+    arrived pre-demoted and `autoPick`'s `sort` inherited it for free.
+    `DraftablePlayer.active` said so in its own docstring. Then the owner ruled
+    the board runs on ADP alone — measured, a released player is re-priced
+    downward rather than frozen — and that clause came out.
+
+    **The guarantee did not come out with it, and these five tests are the whole
+    of why.** Before this block, `describe("autoPick")` covered `active` only on
+    the queue path; steps 2, 3 and 4 had none, because none was needed while the
+    SQL held. The guarantee is now carried by one line of TypeScript, so it is
+    pinned by assertions rather than by a clause nobody can forget.
+  */
+  it("passes over a cut player who outranks every active one", () => {
+    // Step 2. The shape of the bug if the demotion is simply deleted: a
+    // released receiver priced at rank 1 is the first thing best-available
+    // meets, and a bot opens the draft with a man who has no team.
+    const result = autoPick({
+      available: [{ ...player("cutwr", ["WR"], 1), active: false }, player("wr1", ["WR"], 50)],
+      roster: [],
+      queue: [],
+      shape: SHAPE,
+      picksRemainingAfter: 13,
+    });
+
+    expect(result?.player.playerId).toBe("wr1");
+    expect(result?.source).toBe("BEST_AVAILABLE");
+  });
+
+  it("passes over a cut player filling a thin position at the death", () => {
+    /*
+      **Step 3, and the case that actually happens.**
+
+      A 12-team, 15-round draft is 180 picks, and the best club-less ADP in the
+      2026 pool is 249.0 — which is why "bounded by draft depth" was argued and
+      why it is wrong. The NEED scan is not over the board; it is over one
+      *position*. This function's own header notes ADP puts kickers around pick
+      187, and every cut player carrying an ADP outranks all 1,022 carrying
+      none. Exhaust the ranked kickers and the next candidate is club-less.
+
+      Without the demotion a bot fills its last starting slot with a man who
+      scores zero every week for the rest of the season, for a manager who was
+      not there to object. Rank 400 versus 950 is that shape.
+    */
+    const result = autoPick({
+      available: [{ ...player("cutk", ["K"], 400), active: false }, player("k2", ["K"], 950)],
+      roster: [],
+      queue: [],
+      shape: SHAPE,
+      // One pick left and the kicker slot still empty, so NEED runs.
+      picksRemainingAfter: 0,
+    });
+
+    expect(result?.player.playerId).toBe("k2");
+  });
+
+  it("still takes a cut player when he is the only legal pick left", () => {
+    /*
+      A sort key, never a filter — the distinction step 4 exists for. Excluding
+      club-less players outright would return null here and throw
+      `NO_LEGAL_PICK`, stalling the draft for everybody.
+
+      The autolineup may legally write an empty slot. Auto-pick may not decline
+      to pick.
+    */
+    const result = autoPick({
+      available: [{ ...player("cutwr", ["WR"], 5), active: false }],
+      roster: [],
+      queue: [],
+      shape: SHAPE,
+      picksRemainingAfter: 13,
+    });
+
+    expect(result?.player.playerId).toBe("cutwr");
+  });
+
+  it("treats an absent flag as active, so a hand-built pool is not demoted", () => {
+    /*
+      `active === false`, never `!active`. The flag is optional and absent means
+      yes, so `!undefined` would demote every hand-built fixture in this repo.
+
+      **The fixture has to mix an absent flag with an explicit `true`, and this
+      test was wrong once for not doing so.** Two players who both omit it tie
+      under either spelling and fall through to rank, so the answer comes out
+      right by luck and the mutant lives. Here the absent-flag player holds the
+      better rank: under `=== false` neither is demoted and he wins on rank,
+      while under `!active` he alone is demoted and loses to a worse player.
+    */
+    const result = autoPick({
+      available: [
+        player("wrAbsent", ["WR"], 1),
+        { ...player("wrExplicit", ["WR"], 5), active: true },
+      ],
+      roster: [],
+      queue: [],
+      shape: SHAPE,
+      picksRemainingAfter: 13,
+    });
+
+    expect(result?.player.playerId).toBe("wrAbsent");
+  });
+
+  it("orders two cut players against each other by rank", () => {
+    // Being cut decides the group, not the order within it. A manager taking a
+    // stash — or a bot with nothing else legal — still gets the better of two.
+    const result = autoPick({
+      available: [
+        { ...player("cutlate", ["WR"], 900), active: false },
+        { ...player("cutearly", ["WR"], 300), active: false },
+      ],
+      roster: [],
+      queue: [],
+      shape: SHAPE,
+      picksRemainingAfter: 13,
+    });
+
+    expect(result?.player.playerId).toBe("cutearly");
+  });
+
   it("takes the best player available when the queue is exhausted", () => {
     // Not the first unfilled roster slot. An earlier version filled slots in
     // order, so every bot opened with a quarterback — twelve teams taking a QB

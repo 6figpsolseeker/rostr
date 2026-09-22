@@ -34,13 +34,20 @@ export async function GET(
         name: entry.fullName,
         positions: entry.positions,
         rank: entry.rank,
-        // Whether his NFL club still has him. The array already arrives with
-        // the cut players last, but the room re-sorts for itself, so the
-        // server's ordering does not survive the trip unless this column does.
-        // Nothing expires a ranking — `player_rankings_current` is the latest
-        // ADP ever recorded — so a star cut in September keeps July's ADP and
-        // would sort to the *top* without it. Do not drop this from the payload
-        // to save bytes. See `byDraftValue` in `lib/draft-board.ts`.
+        // The provider's ADP in milli-units, null where nobody published one —
+        // 1,022 of 1,589 players on the 2026 board. A different fact from
+        // `rank`, which every unranked player also has: the room prints both,
+        // in adjacent columns, and printing `rank` under the ADP header
+        // invented a crowd's opinion for two rows in three.
+        adpMilli: entry.adpMilli,
+        // Whether his NFL club still has him. Not an ordering input *here*
+        // since 2026-09-22 — this screen runs on ADP alone — though the same
+        // column still demotes explicitly inside `autoPick`, which scans by
+        // position and cannot afford not to. The room needs it regardless: the
+        // "FA" club label, the suppressed bye chip, and the queue's release
+        // note. Do not drop it to save bytes, and do not re-derive it from
+        // `teamRef` — the adapter maps the two independently and they disagree
+        // in both directions.
         active: entry.active,
         // Milli-points, scored with *this league's* rules. Null where the
         // provider has no projection — a deep-bench flier is still draftable,

@@ -1183,6 +1183,28 @@ each position, and it leaves the default view the honest "best available" a mana
 actually choosing from. Comparing a quarterback's 334 against a kicker's 133 still tells
 you nothing, which is the job the filter does.
 
+**And the board stopped carrying the club guard on 2026-09-22; `autoPick` picked it
+up.** A released player now sorts at whatever ADP the provider currently gives him —
+measured 249th or worse for every club-less player in the 2026 pool, against a draft 180
+picks deep. This was ruled the other way twice, both times from the schema:
+`player_rankings` is never pruned, therefore a cut player keeps a good ADP. The first
+half is true and the second does not follow, because the provider keeps ranking him
+rather than dropping him. **Do not re-derive this from the schema a third time** —
+`docs/DATA-MODEL.md` holds the queries and they take a second.
+
+**`autoPick` demotes club-less players itself, and must keep doing so.** Its
+best-available scan is bounded by ~180 picks of active players; its NEED and fallback
+scans are not — they scan one position, and every cut player with an ADP outranks all
+1,022 without one. Inheriting the demotion from the loader's `ORDER BY` worked only while
+that clause existed, and `roster.ts` said so in a docstring that would have outlived it.
+`active === false`, never `!active`: the flag is optional and absent means yes.
+
+**The `ADP` column prints a real ADP or an em dash, never `rank`.** They are different
+facts and `Rk` already prints the second one. Two rows in three have no ADP at all.
+
+The **free-agent market** keeps its own `ORDER BY p.active DESC` for an unrelated reason:
+it has no other ordering and the screen renders the first hundred rows it is handed.
+
 **Projections are stored as raw stats and scored with each league's own rules.**
 `player_projections` (migration `0013`) holds stat lines, never points. Tank01 ships a
 `fantasyPointsDefault` and it is discarded on purpose: ours pays 4 for a passing

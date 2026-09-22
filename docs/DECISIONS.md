@@ -845,7 +845,15 @@ The original text, kept because it is the question that was asked:
 > text existing leagues have signed, and it is what issue #270 would need. Left
 > open deliberately.
 
-## A player his NFL club has cut stays acquirable, and sorts to the bottom
+## A player his NFL club has cut stays acquirable
+
+_Split 2026-09-22 into the three readers it had been conflating: the **draft
+board** drops the demotion, the **free-agent market** keeps it as an admission
+rule, and **`autoPick`** keeps it as an explicit key of its own. Nothing below is
+edited — the amendments at the end of "The demotion has to be stated" say what
+changed and why one column stopped being one answer. The heading lost its second
+half, because an index entry that asserts a withdrawn rule costs more than the
+history it carried._
 
 **Decided 2026-09-16 by the owner**, closing issue #276 and, as a side effect,
 #275. Asked whether a released player should still be addable, he answered:
@@ -894,6 +902,33 @@ server's ordering does not survive the trip.
 > is only which stale store the restatement defends against — `player_rankings_
 current` rather than `player_projections`. Neither expires. See "The draft
 > board runs in ADP order, with projections beside it" below.
+
+> **Amended again 2026-09-22 — the draft board's half of this is withdrawn.**
+> The paragraph above and the amendment under it argue the same way: nothing
+> prunes `player_rankings_current`, therefore a cut player keeps a good ADP,
+> therefore the board must demote him. The first step is true and the second does
+> not follow, because the provider does not stop ranking a released player. It
+> keeps ranking him, worse every week. Measured against production on
+> 2026-09-22: the best ADP held by anyone with no NFL club was **249.0**; Tyreek
+> Hill, cut in September, sat at **297.4** with an `as_of` of the previous day;
+> **42** players in the entire 2026 pool carried a frozen row, 41 of them at 249
+> or worse and the 42nd still rostered, where no guard would have moved him. Nine
+> of the frozen are also cut, and all nine are harmless. The deepest pick in a
+> 12-team, 15-round draft is **180**. There was nothing at the top of the board
+> to defend against. The queries are in `docs/DATA-MODEL.md` — run them before
+> arguing this from the schema a third time.
+>
+> **The market keeps its `ORDER BY p.active DESC`,** for the reason given under
+> "The market's ordering is not cosmetic" below, which no measurement of ADP
+> touches: that query has no other ordering at all and the screen renders the
+> first hundred rows it is handed. The board's problem was a price; the market's
+> is admission.
+>
+> **And `autoPick` keeps the demotion as an explicit key of its own.** It had
+> been inheriting it from the loader's `ORDER BY` — `autopick.ts` sorted on bare
+> `rank` — and deleting that clause without replacing it would have changed what
+> bots draft while changing nothing anybody could see. The three now disagree
+> deliberately, and this is the sentence that says so.
 
 **The market's ordering is not cosmetic.** That query had no `ORDER BY` at all
 and the screen renders the first hundred rows it is given. Roughly a third of the
@@ -1050,6 +1085,30 @@ This is the same intuition the 2026-09-16 ruling was checked against and the sam
 answer. `active` therefore stays the outer key, now protecting against a stale
 _ADP_ rather than a stale _projection_ — the same hazard from the other store.
 
+> **The check was wrong, and wrong in exactly the way this subsection was written
+> to prevent — 2026-09-22.** "He does not sink. He freezes" is a claim about the
+> _provider_, supported here only by claims about our own _schema_. It is false.
+>
+> The tell is three paragraphs up: the live check was declared to need "a live
+> `getNFLADP` call and the key is in `.env`", the fact was therefore known to be
+> unverified, the argument was made anyway, and the subsection then reports
+> agreement with the 2026-09-16 ruling as though two intuitions were evidence.
+>
+> It never needed the provider. `player_rankings_current` **is** our copy of the
+> feed, `as_of` says when each row was written, and one `SELECT` ordered on
+> `overall_milli` across the club-less players answers it in a second. Run
+> 2026-09-22: best 249.0, Hill at 297.4 dated the day before, 42 frozen rows in
+> the whole pool. The claim that "no September release can retroactively change
+> an August average" was also wrong, and the same column would have said so — the
+> provider re-averages and republishes daily, about 31 snapshots per player so
+> far this season.
+>
+> What survives is the bullets. The schema descriptions are accurate, and a
+> player the provider stopped listing _entirely_ would still freeze. Nobody is in
+> that state near the top of the 2026 board. The queries are in
+> `docs/DATA-MODEL.md`; the ruling they produced is the last section of this
+> file.
+
 ### The demotion is a restatement, not a derivation
 
 `rank` already encodes `p.active DESC`, because `loadDraftBoard` puts cut players
@@ -1073,6 +1132,22 @@ player the human's screen does not. Applied to the market it also refills a thir
 of the first visible hundred with unrostered players — the failure described
 under "The market's ordering is not cosmetic" in the 2026-09-16 section above.
 
+> **Adopted 2026-09-22 for the board; still rejected for the market; relocated
+> for the auto-pick.** This paragraph rejected pure ADP partly on a split-brain
+> objection — that bots and auto-pick would bottom a player the human's screen
+> did not. That has now happened **on purpose**, and the objection was right
+> about the mechanism and wrong about the cost. The two readers do not face the
+> same risk. A human meets the board top-down with a club label beside every
+> name. `autoPick`'s endgame scans a single position, where the 180-pick margin
+> that makes the screen safe does not exist and any club-less player carrying an
+> ADP outranks all 1,022 carrying none — so a bot would have filled its last
+> kicker slot with a man who has no team. The guard therefore moved into
+> `autopick.ts`, where the hazard is, instead of staying in an `ORDER BY` that
+> also priced a screen which did not need it. This is the same shape as
+> `wouldStrandStarters`, an auto-pick-only guard the human board deliberately
+> does not apply. And the "seven-week-old ADP" this paragraph fears was measured
+> and is not seven weeks old — it is yesterday's, and it is 297.4.
+
 **A projection tiebreak under ADP.** Unreachable. `rank` is a dense index over
 the board's rows, so two rows never share one, and no test could cover the branch
 against a board the loader can actually produce — only against a hand-built
@@ -1083,3 +1158,104 @@ the type.
 **Demoting only a no-club player nobody has rostered.** Narrower and defensible,
 but `byDraftValue` receives no roster state and plumbing it through the room to
 reach a sort comparator is more surface than the case justifies.
+
+## The draft board is ordered by ADP alone
+
+**Decided 2026-09-22 by the owner**, reversing the board's half of the
+2026-09-16 ruling. A player his NFL club has released now sorts wherever the
+provider prices him, like everybody else.
+
+The owner had said so on 2026-09-21 — _"i think it should go just by ADP, if it
+goes by ADP he should already be very low to the bottom"_ — and asked for it to
+be verified rather than assumed. It was verified, and he was right.
+
+### The numbers are not restated here
+
+They live in `docs/DATA-MODEL.md`, under "What is actually in
+`player_rankings_current`", with the SQL that regenerates them and a date. One
+copy, in the file where re-running it is the obvious move. A ruling is stable; a
+count of rows is not, and a number retyped into five docstrings is a number that
+will disagree with itself within a month.
+
+The short version: the best ADP held by any player with no NFL club is 249.0, a
+12-team 15-round draft ends at pick 180, and Tyreek Hill — the worked example
+this was argued over twice — sits at 297.4 with yesterday's date on it.
+
+### Why the market is different, and stays different
+
+`availablePlayers` orders on `p.active DESC` and nothing else, and it keeps that.
+The two screens are solving different problems. The board's question was a
+_price_: where does this player belong in a ranking. The market's is _admission_:
+which hundred rows does the screen render at all, given a query with no other
+ordering and a pool roughly a third inactive. No measurement of ADP touches the
+second question.
+
+### Why `autoPick` is different, and this is the part that nearly shipped wrong
+
+`autopick.ts` sorted on bare `rank`. Its refusal to spend an absent manager's
+pick on a player with no club was therefore **inherited entirely** from the
+loader's `ORDER BY p.active DESC` — and `DraftablePlayer.active`'s own docstring
+said so, which is what made it invisible. Deleting that clause on its own would
+have changed what bots draft while changing nothing anybody could see, and no
+test in the repo would have failed.
+
+The bound that made inheritance look safe covers step 2 only. Best-available
+scans the whole board, where ~180 picks of active players stand between a bot and
+anyone club-less. The NEED and fallback scans do not: they scan one _position_,
+and every cut player carrying an ADP outranks all 1,022 carrying none. Exhaust
+the ranked kickers — ADP puts them around pick 187, per `autoPick`'s own header —
+and the next candidate is a man no team employs, in a _starting_ slot, scoring
+zero every week for the rest of the season.
+
+So the guard relocated rather than disappearing: an explicit outer key in
+`autopick.ts`, `active === false` rather than `!active` because the flag is
+optional and absent means yes. A sort key, never a filter — step 4 exists so a
+draft never stalls, and excluding these players outright could return null and
+throw `NO_LEGAL_PICK`. This is the same shape as `wouldStrandStarters`: a guard
+auto-pick applies on behalf of someone who was not there to choose, which the
+human board deliberately does not apply.
+
+### What was rejected
+
+**Deleting the ADP column instead of fixing it.** It printed `rank`, the same
+dense index the `Rk` column beside it already printed, so after the ordering
+change the two were byte-identical for all 1,589 rows. Deletion is the smaller
+diff and retires the same lie. Rejected because the owner had asked on
+2026-09-21 for the board to run on ADP and show the numbers, and a column headed
+ADP vanishing the following week reads as the ruling being undone. The real ADP
+was surfaced instead — `loadDraftBoard` already selected `r.overall_milli` and
+discarded it.
+
+**A `db:audit` check asserting no club-less player is reachable inside 180
+picks.** Proposed as a compensating control for downgrading a structural
+invariant to a plumbed one, and a fair idea. Rejected for now because with the
+`autoPick` guard in place the invariant is enforced in code rather than observed,
+and because a permanently-true note pins a cron job red forever — the alarm
+channel failure #323 and #325 were filed for. Worth revisiting if the guard is
+ever removed.
+
+**Leaving the 2026-09-16 prose intact without amendment.** Considered, and the
+opposite of this file's convention. The falsified reasoning is kept — deleting it
+would destroy the one artefact showing how the error was made twice, in the same
+way, by substituting the schema for a query — but it is now marked at every place
+it is asserted.
+
+### The cost, stated rather than discovered later
+
+A released player now appears wherever the provider prices him, which for the
+2026 pool is past the end of a 15-round draft — nowhere a manager reaches by
+scrolling. The exposure is not today's data but tomorrow's: a player the provider
+stops listing altogether keeps his last ADP for ever, and with the demotion out
+of the ordering nothing on the _screen_ stops that number. `autoPick` still stops
+it for bots, which is the half where money moves.
+
+Forty-two players carry a frozen row today. The best is at 121.6 and he is still
+rostered, so no club guard would have moved him anyway. Nine are both frozen and
+cut, and the best of those is 249.0. The intersection this ruling worries about
+already exists and is harmless — which is a better argument than any of the
+schema reasoning that preceded it, because it is the observed case rather than
+the feared one.
+
+This is a monitoring debt, not a code one, and until something carries it the
+payment is somebody remembering. That is the weakest part of this ruling and it
+is recorded here as such.

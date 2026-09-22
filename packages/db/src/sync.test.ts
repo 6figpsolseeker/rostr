@@ -608,19 +608,31 @@ describe("loadDraftBoard", () => {
     expect(board[0]?.active).toBe(false);
   });
 
-  it("sorts a cut player below every active one, however good his last ADP", async () => {
+  it("runs a cut player at his own ADP, not at the bottom — owner, 2026-09-22", async () => {
     /*
-      **The half of the ruling that un-filtering alone does not deliver.**
+      **This test used to assert the opposite, and the fixture is unchanged
+      because it is the right fixture either way.**
 
-      `player_rankings_current` is `DISTINCT ON … as_of DESC` over an
-      append-only table and `syncRankings` only ever inserts what the provider
-      still lists, so a player ranked in July keeps that row for ever. Drop the
-      filter without the new ordering key and the best ADP in this fixture —
-      which belongs to the cut man — puts him *first*.
+      From 2026-09-16 the loader's first sort key was `p.active DESC`, on the
+      reasoning that `player_rankings_current` is `DISTINCT ON … as_of DESC`
+      over a table whose rows are never deleted, so a player ranked in July
+      keeps that row for ever and un-filtering alone would put him *first*.
 
-      So the cut player here is deliberately given the strongest ranking of the
-      three. A version of this test where he is unranked passes against the
-      broken fix, because `NULLS LAST` sinks him for the wrong reason.
+      Measured against production on 2026-09-22, the premise is false. The
+      provider does not stop ranking a released player — it keeps ranking him,
+      worse every week. Best club-less ADP in the whole 2026 pool: 249.0. Tyreek
+      Hill: 297.4, `as_of` the previous day, current rather than frozen. A
+      12-team 15-round draft ends at pick 180. Nothing was up there to defend
+      against. See `docs/DATA-MODEL.md` for the queries.
+
+      The cut player keeps the strongest ranking of the three deliberately. It
+      was chosen so the old assertion could not pass by accident through
+      `NULLS LAST`, and it does the same work inverted: if `p.active DESC` were
+      ever restored, this fixture is the one that notices.
+
+      **What did not change is `autoPick`.** It demotes club-less players
+      itself now, because its endgame scans one position at a time where the
+      180-pick margin does not hold. See `draft.test.ts`.
     */
     const client = await fresh();
     const provider = new FakeProvider([
@@ -640,11 +652,17 @@ describe("loadDraftBoard", () => {
     const board = await loadDraftBoard(client, "nfl", 2026);
 
     expect(board.map((entry) => entry.fullName)).toEqual([
-      "Active Ranked",
-      // No ADP at all, and still above the cut man — which is the point.
-      "Active Unranked",
+      // Best ADP in the fixture, and no longer demoted for having no club.
       "Cut Star",
+      "Active Ranked",
+      // No ADP at all, so `NULLS LAST` puts him behind both — the one part of
+      // this ordering the ruling did not touch.
+      "Active Unranked",
     ]);
+
+    // And the real number now survives the trip, which is what the room's ADP
+    // column prints. `rank` is this board's index; they are different facts.
+    expect(board.map((entry) => entry.adpMilli)).toEqual([1000, 3200, null]);
   });
 
   it("gives a cut player a rank, so nothing downstream has to invent one", async () => {
@@ -658,7 +676,11 @@ describe("loadDraftBoard", () => {
     const board = await loadDraftBoard(client, "nfl", 2026);
 
     expect(board.map((entry) => entry.rank)).toEqual([1, 2]);
-    expect(board.at(-1)?.active).toBe(false);
+
+    // Deliberately no assertion about *which* of the two is last. Neither has a
+    // ranking, so `p.full_name` decides and "Active" < "Cut" — that ordering is
+    // alphabetical accident, not the club rule, and asserting it here would
+    // pin a fact this test is not about.
   });
 
   it("carries positions, so the engine can check slot eligibility", async () => {

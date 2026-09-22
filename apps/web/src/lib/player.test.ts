@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  adp,
   ageOn,
   byeChip,
   clubLabel,
@@ -166,6 +167,28 @@ describe("points", () => {
     // for is a worse answer than showing nothing.
     expect(points(null)).toBe("—");
     expect(points(0)).toBe("0.0");
+  });
+});
+
+describe("adp", () => {
+  it("renders milli-ADP the way the provider says it", () => {
+    // Tank01 publishes "3.2" and `syncRankings` stores `Math.round(adp * 1000)`.
+    // The decimal is the number, not decoration — ADP is genuinely fractional.
+    expect(adp(3200)).toBe("3.2");
+    expect(adp(297_400)).toBe("297.4");
+  });
+
+  it("says nothing for a player nobody has ranked — the whole point", () => {
+    /*
+      An unranked player still carries a dense board `rank`, and the draft room
+      printed *that* under a column headed ADP: a confident invented number for
+      1,022 of the 1,589 players on the 2026 board, two rows in three.
+
+      "Nobody has published one" and "he goes around pick 1,187" are different
+      claims and only one of them is true.
+    */
+    expect(adp(null)).toBe("—");
+    expect(adp(undefined)).toBe("—");
   });
 });
 

@@ -69,11 +69,112 @@ stat_lines        id, player_id, season, week, stat_key_id, value,
 club. The daily sync re-asserts it in both directions for every player the
 provider still lists; a player it stops listing altogether is never updated
 again and keeps whatever value he last had. It is a
-**sort key, never a filter**: a player his club has cut stays draftable and
-addable and sorts to the bottom of the board and the free-agent list (owner's
-ruling, 2026-09-16, issue #276). The one reader that keeps the opposite polarity
-is the notification telling the manager _holding_ him, which asks a different
-question.
+**sort key, never a filter** — and since 2026-09-22, not always a sort key
+either. A player his club has cut stays draftable and addable, sorts to the
+bottom of the **free-agent list**, and sorts on the **draft board** wherever his
+ADP puts him (owner's rulings: 2026-09-16, issue #276; amended 2026-09-22). The
+board dropped the demotion because it was measured to be defending against
+nobody — see "What is actually in `player_rankings_current`" below. The market
+keeps it because that query has no other ordering at all and roughly a third of
+the pool is inactive, which is a problem about admission rather than about
+price. `autoPick` keeps it too, as an explicit key of its own, because its
+endgame scans one position at a time. The three disagree on purpose. The one
+reader that keeps the opposite polarity is the notification telling the manager
+_holding_ him, which asks a different question.
+
+### What is actually in `player_rankings_current` — measured, not reasoned
+
+Established by **querying production**, not by reading the schema. Verified
+2026-09-22 against the 2026 NFL season.
+
+Two product rulings were taken on the schema alone and the second one was wrong,
+in the same way as the first: `player_rankings` is never pruned, therefore a cut
+player keeps a good ADP, therefore the draft board must demote him. The first
+step is true. The second does not follow, because the provider does not stop
+ranking a released player — it keeps ranking him, worse every week. **Run these
+before arguing about what a cut player's ADP does.**
+
+Board size, and how much of it carries an ADP at all:
+
+```sql
+SELECT count(*)                                        AS board_rows,
+       count(*) FILTER (WHERE r.player_id IS NOT NULL) AS with_adp,
+       count(*) FILTER (WHERE r.player_id IS NULL)     AS without_adp
+  FROM players p
+  LEFT JOIN player_rankings_current r
+    ON r.player_id = p.id AND r.season = 2026
+ WHERE p.sport_id = (SELECT id FROM sports WHERE key = 'nfl');
+-- 1589 | 567 | 1022          (2026-09-22)
+```
+
+**Two rows in three carry no ADP.** That is the number the draft room's `ADP`
+column has to survive, and until 2026-09-22 it did not — it printed `rank`, a
+dense board index every unranked player also has, which invented a crowd's
+opinion for 1,022 players. It now prints `adpMilli` or an em dash.
+
+How many ranking combinations exist — which decides whether the loader's
+`COALESCE($3, r.source)` can return a player twice (`packages/db/src/sync.ts`
+files that defect as latent, see #307):
+
+```sql
+SELECT season, source, ranking_type, count(*) AS rows
+  FROM player_rankings GROUP BY 1, 2, 3 ORDER BY rows DESC;
+-- 2026 | tank01 | PPR | 17883     -- one row. One combination exists.
+
+SELECT count(*) FROM (
+  SELECT player_id FROM player_rankings_current WHERE season = 2026
+   GROUP BY player_id HAVING count(*) > 1) duplicated;
+-- 0
+```
+
+Latent, still latent, and now **measured** latent rather than assumed latent.
+17,883 rows across 567 players is about 31 dated snapshots each — the daily sync
+is running and ADP is moving.
+
+Which rows are **frozen** — a "current" row older than the newest the feed has
+written. `syncRankings` writes only for players in that day's feed, so a player
+the provider drops is never superseded again:
+
+```sql
+WITH newest AS (
+  SELECT max(as_of) AS feed FROM player_rankings_current WHERE season = 2026)
+SELECT p.full_name, p.active, r.overall_milli / 1000.0 AS adp, r.as_of
+  FROM player_rankings_current r
+  JOIN players p ON p.id = r.player_id, newest
+ WHERE r.season = 2026 AND r.as_of < newest.feed
+ ORDER BY r.overall_milli;
+-- 42 rows. Best is Jayden Higgins at 121.6 — and he is still on a roster, so
+-- no club guard would ever have moved him. Every other frozen row is 249+.
+-- Nine of them are also cut: Moody 249.0, Chubb 330.6, Hardman 337.5 among
+-- them. "Frozen and cut" is not hypothetical. It is nine players, and every
+-- one of them is harmless.
+```
+
+And the query that decides the question — the best ADP anyone with no NFL club
+holds:
+
+```sql
+SELECT p.full_name, r.overall_milli / 1000.0 AS adp, r.as_of
+  FROM player_rankings_current r
+  JOIN players p ON p.id = r.player_id
+ WHERE r.season = 2026 AND NOT p.active
+ ORDER BY r.overall_milli LIMIT 10;
+-- Jake Moody   249.0
+-- Tyreek Hill  297.4   as_of 2026-09-21   <- current, not frozen
+-- Joe Mixon    320.6                      <- current, not frozen
+```
+
+**A released player is re-priced, not frozen.** A 12-team, 15-round draft is 180
+picks, so the best club-less player in the pool sits 69 picks past the last one
+anybody makes.
+
+What survives, and is the only thing that was ever true here: a player the
+provider stops listing **altogether** is never superseded. No such player is
+anywhere near the top of the 2026 board. That is a fact to monitor, not a
+premise to design from — **re-run the last query rather than re-deriving it.**
+
+`overall_milli` is `Math.round(adp * 1000)` (`packages/stats/src/tank01/adapter.ts`),
+so 297.4 is stored 297400. Divide by 1000 to render.
 
 `status` is written by nothing and read by nothing. It was added in `0003` with
 `NOT NULL DEFAULT 'ACTIVE'`, is absent from `syncPlayers`' insert list, and

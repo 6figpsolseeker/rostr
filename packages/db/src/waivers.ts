@@ -1194,7 +1194,16 @@ export async function processWaivers(
   const pool = new Map<string, DraftablePlayer>(
     board.map((entry) => [
       entry.playerId,
-      { playerId: entry.playerId, positions: entry.positions, rank: entry.rank },
+      {
+        playerId: entry.playerId,
+        positions: entry.positions,
+        rank: entry.rank,
+        // Nothing here reads it — `resolveWaiverClaims` consults this pool for
+        // membership only and never touches `rank`. Carried because it is the
+        // flag `autoPick` demotes on since 2026-09-22, and a second pool in
+        // this repo silently missing it is a trap rather than an economy.
+        active: entry.active,
+      },
     ]),
   );
   const shape = buildRosterShape(stored.rules.roster, NFL);

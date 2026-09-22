@@ -591,20 +591,38 @@ export interface DraftBoardEntry {
   /**
    * Whether his NFL club still has him.
    *
-   * Already folded into `rank` — it is the first key the board is ordered on,
-   * so a cut player sorts below every active one however good his last ADP.
-   * Carried separately because a dense integer cannot say *why* somebody is
-   * 1,200th, and because the draft room re-sorts for itself — it filters and
-   * re-orders the pool in the browser, so this ordering does not survive the
-   * trip unless the column does. Nothing expires a ranking, so a cut player's
-   * last ADP would float him back to the top of that re-sort.
+   * **Not folded into `rank` any more.** It was this query's first sort key
+   * from 2026-09-16 until 2026-09-22, on the reasoning that
+   * `player_rankings_current` never expires a row, so a cut player keeps the
+   * ADP he held while he was playing and un-filtering would float him near the
+   * top. Measured against production on 2026-09-22, that top never arrives: the
+   * provider goes on ranking a released player and goes on ranking him worse.
+   * See `docs/DATA-MODEL.md` for the queries and the numbers.
+   *
+   * Still selected, still returned, and still required — by the club label, the
+   * bye chip, the queue's release note, and by `autoPick`, which re-applies the
+   * demotion as an explicit key of its own because its endgame scans one
+   * position at a time and has no 180-pick margin to hide behind. Deleting this
+   * clause without that guard would have changed what bots draft while changing
+   * nothing anybody could see.
    *
    * Deliberately not in `summary`. That block is display-only by contract, and
-   * this decides an ordering.
+   * the draft context reads this.
    */
   readonly active: boolean;
   /** Lower is better, as the draft engine expects. */
   readonly rank: number;
+  /**
+   * The provider's average draft position, in milli-units — `3.2` is `3200`.
+   * Null when nobody has published one, which on the 2026 board is 1,022 of
+   * 1,589 players.
+   *
+   * Distinct from `rank`, and the distinction is the point: `rank` is this
+   * board's dense index and every unranked player still gets one. Printing it
+   * under a column headed "ADP" invented a crowd's opinion for two rows in
+   * three.
+   */
+  readonly adpMilli: number | null;
   /** Display only. Nothing in the draft engine reads it. */
   readonly summary: PlayerSummary;
 }
@@ -616,7 +634,7 @@ export interface DraftBoardEntry {
  * with no ranking sort last but are still draftable — a late-round flier on
  * someone unranked is a legitimate pick, not an error.
  *
- * ## A player his club has cut stays on the board, at the bottom
+ * ## A player his club has cut stays on the board, priced where the provider prices him
  *
  * `players.active` is cleared by the daily sync for anyone the provider reports
  * as an NFL free agent. It used to be a **filter**, and that decided a rules
@@ -626,25 +644,41 @@ export interface DraftBoardEntry {
  * this column. Three doors, three answers. The owner ruled on 2026-09-16: keep
  * him acquirable, and on a draft board put him at the bottom.
  *
- * So it is the **first sort key** rather than a filter, and it has to be stated
- * rather than left to the ranking. `player_rankings_current` is
- * `DISTINCT ON … as_of DESC` and nothing ever expires a row, so a star cut in
- * September still carries the ADP he had in July: un-filtering alone would put
- * him near the *top*. `p.active` is NOT NULL, so `DESC` needs no NULLS clause.
+ * It was therefore the **first sort key** from 2026-09-16 until 2026-09-22, on
+ * the reasoning that `player_rankings_current` is `DISTINCT ON … as_of DESC`
+ * and nothing ever expires a row, so a star cut in September still carries
+ * July's ADP and un-filtering alone would put him near the *top*.
  *
- * **No active player's rank moves, and that is stronger than it looks.**
- * `p.active DESC` is the *first* key and the ones after it are untouched, so the
- * active prefix of the result is the old board in the old order; the change
- * strictly appends. Cut players take ranks after the last active one. `rank`
- * stays a dense index over this array either way, consumed only by comparison —
- * `OFF_BOARD_RANK` in `draft.ts` depends on its finiteness.
+ * **That top was measured on 2026-09-22 and it does not exist.** The provider
+ * does not stop ranking a released player; it keeps ranking him, worse every
+ * week. The best ADP held by anyone with no NFL club was 249.0, against a
+ * 12-team 15-round draft that ends at pick 180. Tyreek Hill sat at 297.4 with
+ * an `as_of` of the previous day — current, not frozen. So the key came out and
+ * the `ORDER BY` runs on ADP alone, with `p.full_name` last so a re-run numbers
+ * the pool identically. `docs/DATA-MODEL.md` carries the queries; re-run them
+ * rather than re-deriving this from the schema, which is how the demotion got
+ * argued for twice.
+ *
+ * **`rank` renumbers for the whole board, and that is new.** The old key made
+ * the change an append — active ranks were untouched and cut players took the
+ * tail. Removing it moves everybody. `rank` stays a dense index over this array
+ * either way, consumed only by comparison, so `OFF_BOARD_RANK` in `draft.ts`
+ * still depends only on its finiteness.
+ *
+ * **What is *not* inherited any more: `autoPick`'s refusal to spend an absent
+ * manager's pick on a player with no club.** That rode entirely on this clause
+ * — `autopick.ts` sorted on bare `rank` — and its endgame scans one position at
+ * a time, where the 180-pick margin that makes the screen safe does not exist.
+ * It now demotes explicitly. Do not "simplify" that away on the grounds that
+ * the board handles it. The board stopped.
  *
  * Dense over **rows**, which is not quite dense over players: the ranking join
  * uses `COALESCE($3, r.source)`, so omitting the argument filters nothing and a
- * player with two ranking sources returns twice. Latent — one source exists —
- * and the sibling defect in `loadProjections` above has already been fixed this
- * way once. Filed rather than fixed here, because choosing the default wrongly
- * empties every ADP on the live board and that needs checking against it.
+ * player with two ranking sources returns twice. Measured latent on 2026-09-22
+ * rather than assumed latent — one `source`/`ranking_type` combination exists
+ * (`tank01`/`PPR`) and zero players carry two current rows. Still filed rather
+ * than fixed, because choosing the default wrongly empties every ADP on the
+ * live board. See #307.
  */
 export async function loadDraftBoard(
   db: SqlClient,
@@ -694,7 +728,7 @@ export async function loadDraftBoard(
       WHERE p.sport_id = $1
       GROUP BY p.id, p.external_ref, p.full_name, p.active, r.overall_milli,
                p.image_url, p.team_ref, ps.bye_week, p.injury_designation
-      ORDER BY p.active DESC, r.overall_milli NULLS LAST, p.full_name`,
+      ORDER BY r.overall_milli NULLS LAST, p.full_name`,
     [ids.sportId, season, options.source ?? null, options.rankingType ?? null],
   );
 
@@ -705,8 +739,10 @@ export async function loadDraftBoard(
     positions: row.positions,
     active: row.active,
     // Dense 1..n ordering. The engine only compares ranks, so the ADP value
-    // itself does not need to survive — but the ordering does.
+    // does not need to survive for *it* — but the screen prints the real
+    // number beside this one, and they are different facts. See `adpMilli`.
     rank: index + 1,
+    adpMilli: row.overall_milli === null ? null : Number(row.overall_milli),
     summary: {
       imageUrl: row.image_url,
       teamRef: row.team_ref,
