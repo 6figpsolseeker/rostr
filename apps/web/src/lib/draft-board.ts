@@ -156,21 +156,19 @@ export function picksUntilTurn(
   return next ? next.pickNumber - currentPickNumber : null;
 }
 
-/** Only the fields the ordering reads, so a test needs no board row. */
+/** Only the field the ordering reads, so a test needs no board row. */
 export interface DraftValue {
-  readonly active: boolean;
   /**
    * The server's dense 1..n board index. `loadDraftBoard` orders on
-   * `p.active DESC, r.overall_milli NULLS LAST, p.full_name` and numbers the
-   * result — so ascending `rank` is ADP order *within* each club group, with
-   * every cut player already banished to the tail. Not ADP order outright, and
-   * the `active` branch below depends on the difference.
+   * `r.overall_milli NULLS LAST, p.full_name` and numbers the result, so
+   * ascending `rank` is ADP order outright — unranked last, and a player his
+   * club has cut wherever the provider currently prices him.
    */
   readonly rank: number;
 }
 
 /**
- * Board order: on an NFL roster first, then ADP.
+ * Board order: ADP, and nothing else.
  *
  * **Reversed on 2026-09-21 by the owner**, who asked for the board to run in ADP
  * order with projected points shown beside it rather than deciding it. It
@@ -185,29 +183,37 @@ export interface DraftValue {
  * reads as broken rather than as opinionated. The projection is one column away,
  * which is the right weight for a second opinion.
  *
- * **`active` is restated here rather than inherited.** `rank` already encodes it
- * — the loader's `ORDER BY p.active DESC, r.overall_milli NULLS LAST, …` puts
- * cut players last *before* numbering — so this line changes no ordering today.
- * It is kept because it is the only place the screen itself owns the 2026-09-16
- * ruling that a released player sorts to the bottom, and that ruling is load
- * bearing: `player_rankings_current` is `DISTINCT ON … as_of DESC` over a table
- * whose rows are never deleted, only superseded by one with a later `as_of`.
- * `syncRankings` writes only for players in the provider's feed *that day*, so
- * a player who drops out of it is never superseded again and keeps the ADP he
- * had on the way out for ever. A sort that trusted `rank` alone would float him
- * back into round four the moment the loader's ordering moved. See
- * `docs/DECISIONS.md`.
+ * **The club guard left this comparator on 2026-09-22 — it did not leave the
+ * product.** It was here because a released player was believed to keep the ADP
+ * he held while he still had a club, frozen by a `player_rankings_current` that
+ * only ever supersedes a row with a later one, and to float back into round four
+ * on a rank-only sort. The database says otherwise: the best ADP held by anyone
+ * with no NFL club was 249.0; Tyreek Hill sat at 297.4 with an `as_of` of the
+ * previous day, current rather than frozen; and a 12-team, 15-round draft is 180
+ * picks. Nobody this defended the *screen* from is reachable by scrolling.
  *
- * **There is no projection tiebreak, because there can be no tie.** `rank` is a
- * dense index over the whole board, so two rows never share one — a tiebreak
- * here would be unreachable against any board the loader can actually produce,
- * coverable only by a hand-built fixture asserting a state that cannot occur.
+ * **`autoPick` keeps its own guard, and that is not an inconsistency.** A human
+ * reads this list top-down with a club label beside every name; a bot's endgame
+ * scans one position at a time, where the 180-pick margin does not hold and any
+ * club-less player with an ADP outranks all 1,022 with none. So `autopick.ts`
+ * demotes explicitly and this does not — two readers, two different risks, each
+ * stated where it applies. `docs/DECISIONS.md` records why that is not the
+ * "split brain" the 2026-09-21 entry rejected.
+ *
+ * **What survives is the schema, not the consequence.** Nothing expires a
+ * ranking row, and a player the provider stopped listing *entirely* would keep
+ * his last number for ever. Forty-two players carry a frozen row today and not
+ * one is near the top; nine of them are also cut, best-priced at 249.0. Run the
+ * queries in `docs/DATA-MODEL.md` before re-deriving this from the schema, which
+ * is how the guard got argued for twice.
+ *
+ * **There is no second key, because there can be no tie.** `rank` is a dense
+ * index over the whole board, so two rows never share one.
  *
  * Unranked players still sort last and stay draftable: the loader's `NULLS LAST`
  * puts them at the end of the numbering, so a late flier on someone with no ADP
  * remains a legitimate pick.
  */
 export function byDraftValue(a: DraftValue, b: DraftValue): number {
-  if (a.active !== b.active) return a.active ? -1 : 1;
   return a.rank - b.rank;
 }

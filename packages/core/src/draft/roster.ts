@@ -60,12 +60,22 @@ export interface DraftablePlayer {
   /**
    * Whether his NFL club still has him. Optional: absent means yes.
    *
-   * The ranking already carries this — a cut player sits at the tail of the
-   * board's dense order, so best-available reaches him only once nothing else
-   * fits. It is here for the **queue**, which is consulted before the ranking
-   * and therefore cannot see it. Optional rather than required because most
-   * callers build a pool by hand and an absent flag has to mean the ordinary
-   * case, not a silent demotion of every fixture in the repo.
+   * **Read by `autoPick`, not inherited from the ranking — changed
+   * 2026-09-22.** This said the ranking already carried it, because
+   * `loadDraftBoard` sorted `p.active DESC` before numbering. It no longer
+   * does: a released player is priced by ADP like everyone else, measured at
+   * 249th or worse across the whole 2026 pool. `autoPick` therefore applies the
+   * demotion itself, as an explicit outer key, and the queue check at the top
+   * of it reads this same field for the same reason it always did.
+   *
+   * **The bound that made inheritance look safe never covered the endgame.**
+   * Best-available scans the whole board, where ~180 picks of active players
+   * stand in the way. The NEED and fallback scans do not — they scan one
+   * position, and every cut player with an ADP outranks all 1,022 without one.
+   *
+   * Optional rather than required because most callers build a pool by hand and
+   * an absent flag has to mean the ordinary case, not a silent demotion of
+   * every fixture in the repo.
    */
   readonly active?: boolean;
 }

@@ -8,6 +8,7 @@ import { buildBoard, byDraftValue, focusRound, picksUntilTurn } from "@/lib/draf
 import type { BoardCell, BoardRow } from "@/lib/draft-board";
 import {
   POSITION_ORDER,
+  adp,
   byeChip,
   clubLabel,
   injuryBadge,
@@ -41,7 +42,16 @@ interface Player {
   name: string;
   positions: string[];
   rank: number;
-  /** Whether his NFL club still has him. See `byDraftValue`. */
+  /** The provider's ADP in milli-units — `3200` is `3.2`. Null when unranked. */
+  adpMilli: number | null;
+  /**
+   * Whether his NFL club still has him.
+   *
+   * Display and counting only since 2026-09-22 — it decides no ordering on this
+   * screen any more. Read by the club label, the bye chip, the queue's release
+   * note and the filter row's counts, none of which can re-derive it from
+   * `teamRef`. `autoPick` reads the server's copy for a different reason.
+   */
   active: boolean;
   /** Milli-points, scored with this league's rules. Null when unprojected. */
   projectedMilliPoints: number | null;
@@ -189,8 +199,10 @@ export function DraftRoom({ leagueId, leagueName }: { leagueId: string; leagueNa
       // Deliberately narrower than the list below it. This row is read as
       // "how thin is the position getting", and a player no NFL club has is
       // not an answer to that — counting him would say RB is deep when the
-      // choosable ones have run out. He is still in the list, at the bottom,
-      // and still draftable for anyone who wants the stash.
+      // choosable ones have run out. He is still in the list, at whatever ADP
+      // the provider currently gives him, and still draftable for anyone who
+      // wants the stash. He is just not part of the scarcity this number
+      // reports, which is the one question the filter row asks.
       if (!player.active) continue;
       const group = positionGroup(player.positions);
       counts.set(group, (counts.get(group) ?? 0) + 1);
@@ -891,18 +903,20 @@ function PlayerTable({
               <span
                 className="text-right text-xs text-nocturne-neutral-600 tabular-nums"
                 title={
-                  player.active
-                    ? undefined
-                    : "No ADP: he is not on an NFL roster, so his place here is the bottom of the board rather than where anyone is drafting him"
+                  player.adpMilli === null
+                    ? "No ADP published — he is not drafted often enough in public leagues to average. He sorts last here and is still draftable."
+                    : "Average draft position across public leagues, as the provider reports it"
                 }
               >
                 {/*
-                   `rank` is a dense index over the board, and since cut players
-                   sort last it no longer tracks ADP for them — printing it under
-                   an "ADP" header would be inventing a number. Active players
-                   keep ranks 1..n and are unaffected.
+                   The provider's ADP, not this row's index. They are different
+                   numbers and the header names the first: 1,022 of the 1,589
+                   players the board admits have no ADP at all (measured
+                   2026-09-22, see `docs/DATA-MODEL.md`), so printing `rank`
+                   here invented a crowd's opinion for two rows in three — and
+                   for the other third printed the `Rk` column a second time.
                 */}
-                {player.active ? player.rank : "—"}
+                {adp(player.adpMilli)}
               </span>
               <span
                 className="text-right text-sm font-medium tabular-nums"

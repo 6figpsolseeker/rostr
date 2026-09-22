@@ -146,7 +146,7 @@ describe("picksUntilTurn", () => {
 });
 
 describe("byDraftValue", () => {
-  const value = (active: boolean, rank: number): DraftValue => ({ active, rank });
+  const value = (rank: number): DraftValue => ({ rank });
 
   /** Names, so a failure says which ordering broke rather than which index. */
   const order = (...players: [string, DraftValue][]): string[] =>
@@ -165,78 +165,66 @@ describe("byDraftValue", () => {
       as a second opinion. He experiences it as a bug.
 
       `rank` is the server's dense 1..n index, assigned after
-      `ORDER BY … r.overall_milli NULLS LAST`, so ascending `rank` *is* ascending
+      `ORDER BY r.overall_milli NULLS LAST`, so ascending `rank` *is* ascending
       ADP. Nothing here re-derives it — see `loadDraftBoard`.
     */
-    expect(
-      order(["third", value(true, 31)], ["first", value(true, 3)], ["second", value(true, 12)]),
-    ).toEqual(["first", "second", "third"]);
-  });
-
-  it("puts a player his club has cut last, however early his ADP", () => {
-    /*
-      **The 2026-09-16 ruling, and the only line of it the screen owns.**
-
-      `player_rankings_current` is `DISTINCT ON … as_of DESC` over a table whose
-      rows are never deleted, only superseded by one with a later `as_of`, and
-      `syncRankings` writes only for players in the provider's feed that day. So
-      a player who drops out of that feed is never superseded again and keeps the
-      ADP he had on the way out. Nothing expires it and no job prunes it.
-
-      A player still *in* the feed does get a fresh row daily and his ADP moves
-      in either direction — that case is fine and is not what this defends.
-
-      That is why this survives the reversal rather than being dropped with the
-      projection keys. Under the old order the demotion protected against a stale
-      *projection*; it now protects against a stale *ADP*, which is the same
-      hazard from the other store. Rank 40 against rank 900 is the shape that
-      would put Tyreek Hill in round four.
-    */
-    expect(
-      order(["cut star", value(false, 40)], ["ordinary starter", value(true, 900)]),
-    ).toEqual(["ordinary starter", "cut star"]);
-  });
-
-  it("keeps the ruling even when the loader's own ordering would have held", () => {
-    /*
-      The check above is a **restatement, not a derivation**. `rank` already
-      encodes `p.active DESC`, so on today's data this branch decides no
-      ordering the loader had not already decided.
-
-      Deleting the line fails **two** tests — this one and the cut-player test
-      above it. Measured, not assumed: the comparator was mutated to
-      `a.rank - b.rank` and the suite run, and those two are the pair that died.
-      This one is the narrower pin, asserting the branch directly rather than
-      through a sorted list.
-
-      It is kept because the day `loadDraftBoard`'s ordering changes — a new
-      source, a different `ORDER BY`, a caller that re-ranks a filtered pool — is
-      the day a rank-only sort silently reverses a product ruling on the one
-      screen where money is being committed. Pinned here so that deletion is a
-      failing test rather than a quiet regression.
-    */
-    expect(byDraftValue(value(false, 1), value(true, 999))).toBeGreaterThan(0);
-  });
-
-  it("orders two cut players against each other on the same rule", () => {
-    // Being cut decides the group, not the order within it — a manager taking a
-    // stash still wants the earlier-drafted of two.
-    expect(order(["later", value(false, 900)], ["earlier", value(false, 300)])).toEqual([
-      "earlier",
-      "later",
+    expect(order(["third", value(31)], ["first", value(3)], ["second", value(12)])).toEqual([
+      "first",
+      "second",
+      "third",
     ]);
+  });
+
+  it("reads nothing but rank — the club guard left here on 2026-09-22", () => {
+    /*
+      **Two tests were deleted to make room for this one, and this comment is
+      their replacement.** They asserted that a player his club had cut sorted
+      last however early his ADP, and the reasoning they carried is the
+      reasoning that turned out to be wrong: `player_rankings_current` never
+      expires a row, therefore a released player keeps the ADP he had while he
+      was playing, therefore rank 40 against rank 900 "is the shape that would
+      put Tyreek Hill in round four".
+
+      Hill was then measured, against production, on 2026-09-22. **ADP 297.4,
+      `as_of` the day before — current, not frozen.** The provider re-prices a
+      released player downward rather than dropping him: the best club-less ADP
+      in the whole 2026 pool is 249.0, against a 12-team 15-round draft that
+      ends at pick 180. Forty-two players carry a frozen row and nine of those
+      are also cut — Moody 249.0, Chubb 330.6, Hardman 337.5 among them — every
+      one of them harmless, because harmless is what the data does with them.
+
+      So this comparator reads `rank` and nothing else, and `DraftValue` no
+      longer carries `active`: reintroducing the guard means widening the type,
+      which is where that argument should happen. The fixture below deliberately
+      cannot express "cut".
+
+      **The guard itself is not gone.** It lives in `autopick.ts` and is pinned
+      by that suite. What is gone is the claim that this comparator inherits it
+      — a bot's endgame scans one position at a time, where the 180-pick margin
+      that makes this screen safe does not exist.
+
+      What no unit test here can pin: a player the provider stops listing
+      *entirely* would still freeze at his last ADP. That is watched by a query,
+      not an assertion — `docs/DATA-MODEL.md`. Run it before reinstating
+      anything in this file.
+    */
+    expect(order(["early", value(40)], ["late", value(900)])).toEqual(["early", "late"]);
   });
 
   it("leaves the unranked tail at the bottom, still draftable", () => {
     /*
-      Players with no ADP at all — rookies, deep bench, most of the ~570 the
-      board admits — are not special-cased here and must not be. The loader's
-      `NULLS LAST` has already numbered them after everyone ranked, so they
-      arrive carrying large ranks and sort themselves.
+      Players with no ADP at all — rookies, deep bench, practice squads — are
+      not special-cased here and must not be. Measured 2026-09-22, that is
+      **1,022 of the 1,589** players the board admits: two rows in three. The
+      loader's `NULLS LAST` has already numbered them after everyone ranked, so
+      they arrive carrying large ranks and sort themselves.
+
+      It is also why the room's ADP column prints a real ADP or an em dash and
+      never `rank` — see `adp` in `lib/player.ts`.
 
       Last, never absent: a late flier on someone unranked is a legitimate pick.
     */
-    expect(order(["unranked", value(true, 812)], ["ranked", value(true, 44)])).toEqual([
+    expect(order(["unranked", value(812)], ["ranked", value(44)])).toEqual([
       "ranked",
       "unranked",
     ]);
@@ -246,16 +234,13 @@ describe("byDraftValue", () => {
     /*
       `Array.prototype.sort` is only stable for elements the comparator calls
       equal. This one never does — `rank` is dense over the whole board, so two
-      players never share one — which means the rendered order is a function of
-      the data alone and not of which filter the manager clicked first.
-
-      Asserted rather than assumed because the comparator has an early return on
-      a different field, which is the usual way this property gets broken.
+      rows never share one — which means the rendered order is a function of the
+      data alone and not of which filter the manager clicked first.
     */
     const pairs: [DraftValue, DraftValue][] = [
-      [value(true, 3), value(false, 1)],
-      [value(true, 3), value(true, 90)],
-      [value(false, 12), value(false, 400)],
+      [value(3), value(1)],
+      [value(3), value(90)],
+      [value(12), value(400)],
     ];
 
     for (const [a, b] of pairs) {

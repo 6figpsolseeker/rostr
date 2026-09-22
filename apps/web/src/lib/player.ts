@@ -179,6 +179,24 @@ export function points(milli: number | null | undefined): string {
 }
 
 /**
+ * Average draft position, from milli-units. `3200` renders `"3.2"`.
+ *
+ * Same scale and same shape as {@link points} — `syncRankings` stores
+ * `Math.round(adp * 1000)` for the same reason scoring uses milli-points, and
+ * ADP is genuinely fractional, so the decimal is the number rather than
+ * decoration.
+ *
+ * **The em dash is the whole point of this function.** An unranked player still
+ * carries a dense board `rank`, and the room used to print that under a column
+ * headed ADP — a confident invented number for 1,022 of the 1,589 players on
+ * the 2026 board. "Nobody has published one" and "he goes around pick 1,187"
+ * are different claims and only one of them is true.
+ */
+export function adp(milli: number | null | undefined): string {
+  return milli === null || milli === undefined ? "—" : (milli / 1000).toFixed(1);
+}
+
+/**
  * `"Christian McCaffrey"` to `"C. McCaffrey"`.
  *
  * A board cell is about eleven characters wide and a surname is the part that
