@@ -82,7 +82,21 @@ export interface AdpEntry {
 export interface AdpBoard {
   /** The date the provider stamped, as YYYY-MM-DD. */
   readonly asOf: string;
-  readonly rankingType: string;
+  /**
+   * The scoring format **as the provider spelled it back**, not as we asked.
+   *
+   * Named `Echo` on purpose, and renamed from `rankingType` for #307. It used
+   * to be stored verbatim in `player_rankings.ranking_type` — a key column,
+   * matched exactly by the draft board's loader, whose value a vendor could
+   * change without a line of our code moving. `getNFLADP` answering `"ppr"` one
+   * morning would have split every player across two ranking types.
+   *
+   * So it is a **check, never a value**. `syncRankings` stores the format it
+   * requested and compares this against it; a disagreement is reported rather
+   * than written. A name that says what it is makes the old misuse hard to
+   * write rather than merely discouraged.
+   */
+  readonly rankingTypeEcho: string;
   readonly entries: readonly AdpEntry[];
 }
 
@@ -582,7 +596,9 @@ export class Tank01Provider implements StatsProvider {
     return {
       // Tank01 stamps YYYYMMDD.
       asOf: formatAdpDate(raw.adpDate),
-      rankingType: raw.adpType ?? rankingType,
+      // What Tank01 said, verbatim. `syncRankings` compares it against what we
+      // asked for and stores ours — see `AdpBoard.rankingTypeEcho`.
+      rankingTypeEcho: raw.adpType ?? rankingType,
       entries,
     };
   }

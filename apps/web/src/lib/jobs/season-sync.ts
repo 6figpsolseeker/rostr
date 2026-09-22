@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { NFL } from "@rostr/core";
 import {
+  PRIMARY_RANKING_BOARD,
   currentWeek,
   recordCronRun,
   seasonsInPlay,
@@ -96,6 +97,15 @@ export async function runSeasonSyncJob(
     /** Fixtures the provider has not given a kickoff time. See the loop below. */
     undatedGames?: number;
     ranked?: number;
+    /**
+     * The provider's own spelling of the scoring format, when it disagreed with
+     * the one we asked for. Null on the ordinary path.
+     *
+     * `syncRankings` stores the format *we* requested — see #307 — so this is a
+     * report rather than a value, and it is the one thing in this job besides a
+     * genuine failure that reaches `last_outcome`.
+     */
+    rankingTypeEcho?: string | null;
     /** Season-aggregate projection rows, for the draft board. */
     projections?: number;
     /** Weekly projection rows, which the autofill ranks on. */
@@ -238,6 +248,7 @@ export async function runSeasonSyncJob(
         undatedGames: undated,
         weekFailures,
         ranked: rankings.inserted,
+        rankingTypeEcho: rankings.rankingTypeEcho,
         projections: projections.inserted,
         weeklyProjections,
         projectionWeeks,
@@ -337,10 +348,39 @@ export async function runSeasonSyncJob(
     .map(([reason, weeks]) => `weeks ${collapse(weeks)}: ${reason}`)
     .join("; ");
 
+  /*
+    The vendor renaming its scoring format **is** an alarm, unlike the held-back
+    week-16 fixtures above — and the distinction is the test this file settled
+    after #325: is there something a person should go and do.
+
+    There is. `syncRankings` stores the format we asked for and matches it back
+    exactly in `loadDraftBoard`, so a provider that has started spelling it
+    differently means somebody has to decide which of the two is now right. Until
+    they do, the draft board is ordered on a ranking the vendor no longer labels
+    the way we do.
+
+    It re-fires every run rather than once, which is why it survives here where
+    #323's one-shot fact could not: migration `0049` rejected a second
+    `cron_runs` column precisely because the next tick overwrites it. A condition
+    that is still true tomorrow is overwritten by itself.
+  */
+  const echoes = [
+    ...new Set(
+      runs
+        .map((entry) => entry.rankingTypeEcho)
+        .filter((echo): echo is string => Boolean(echo)),
+    ),
+  ];
+
   const outcome =
     [
       failed > 0 ? `${failed} of ${seasons.length} seasons failed — ${problems}` : null,
       weekProblems.length > 0 ? `${weekProblems.length} week(s) failed — ${weekSummary}` : null,
+      echoes.length > 0
+        ? `the provider now calls this ranking ${echoes.join(", ")}, not ${
+            PRIMARY_RANKING_BOARD.rankingType
+          } — decide which is right`
+        : null,
     ]
       .filter((part) => part !== null)
       .join("; ") || null;

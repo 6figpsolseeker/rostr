@@ -1230,6 +1230,29 @@ re-rank every autolineup.
 draft board is its only caller and omitted the argument — so the board would have doubled
 too. An optional filter defaulting to "all" is not a filter.
 
+**`loadDraftBoard` had the identical defect on its ranking join and it was fixed on
+2026-09-22 (#307).** It now takes one `RankingBoard` value defaulting to
+`PRIMARY_RANKING_BOARD`, not two optional strings — two adjacent `string` parameters
+typecheck when transposed and answer with a legal board of 1,589 null ADPs. Two things
+make the hard default safe, and both are load-bearing:
+
+- **`syncRankings` stores the format we asked for, not the provider's echo.**
+  `ranking_type` is a key column the loader matches exactly, and it used to hold
+  `raw.adpType` — a string the vendor could change without a line of our code moving. A
+  mismatch is now reported through `cron_runs.last_outcome`, which is a legitimate red:
+  somebody has to decide whether our constant or the vendor's new spelling is right.
+- **One test guards the rest.** `PRIMARY_RANKING_BOARD.source` must equal
+  `Tank01Provider.name`, and no compiler can enforce it — `@rostr/stats` depends only on
+  `@rostr/core`, so the adapter cannot import the constant. `sync.test.ts` asserts it
+  against the real adapter. Do not "simplify" that into an assertion about
+  `FakeProvider.name`, which is set from the same constant and would compare it to
+  itself.
+
+If the default ever stops matching, nothing in production notices: it is a `LEFT JOIN`,
+so every player still returns, `rank` falls through to its name tiebreak, and the board
+renders alphabetically with an em dash where each ADP was — explained away by the ADP
+column's own "no ADP published" tooltip, 1,589 times.
+
 One provider call covers the whole season — `getNFLProjections` with **no `week`**.
 See [`docs/TANK01.md`](docs/TANK01.md), which records the verbatim response shape.
 

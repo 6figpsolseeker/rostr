@@ -16,6 +16,9 @@ import {
   syncProjections,
   syncRankings,
 } from "./sync.js";
+import { Tank01Provider } from "@rostr/stats";
+import { PRIMARY_RANKING_BOARD } from "./sync.js";
+import { PRIMARY_PROJECTION_SOURCE, PRIMARY_STAT_SOURCE } from "./lineups.js";
 import type { AdpCapableProvider, ProjectionCapableProvider } from "./sync.js";
 import { seedSport } from "./sports.js";
 import { createTestDatabase } from "./testing.js";
@@ -35,7 +38,21 @@ afterEach(async () => {
  * makes this possible — and what makes swapping providers a one-file change.
  */
 class FakeProvider implements AdpCapableProvider {
-  readonly name = "fake";
+  /**
+   * **The production constant, not `"fake"` — and this is load-bearing.**
+   *
+   * `syncRankings` writes `source = provider.name`, and `loadDraftBoard` now
+   * filters on `PRIMARY_RANKING_BOARD.source`. A fixture writing `"fake"` would
+   * have sent every `loadDraftBoard` test red, and the smallest repair — passing
+   * `{ source: "fake" }` at each call site — would have left the default that
+   * all ten real call sites take with **zero** coverage. The fix would have been
+   * tested only on the path nobody uses.
+   *
+   * This is fixture realism, *not* the guard against the constant drifting from
+   * `Tank01Provider.name`: asserting it here would compare the constant to
+   * itself. That guard imports the real adapter — see the test named for it.
+   */
+  readonly name = PRIMARY_RANKING_BOARD.source;
 
   constructor(
     private players: ProviderPlayer[] = [],
@@ -47,6 +64,11 @@ class FakeProvider implements AdpCapableProvider {
       positionRank: string | null;
     }[] = [],
     private adpDate = "2026-08-05",
+    /**
+     * What the provider spells back, when it disagrees with what we asked.
+     * Null means it echoes the request, which is Tank01's measured behaviour.
+     */
+    private adpEcho: string | null = null,
   ) {}
 
   healthCheck(): Promise<ProviderHealth> {
@@ -64,9 +86,9 @@ class FakeProvider implements AdpCapableProvider {
   listInjuries(): Promise<readonly ProviderInjury[]> {
     return Promise.resolve([]);
   }
-  listAdp(): Promise<{
+  listAdp(rankingType: string = PRIMARY_RANKING_BOARD.rankingType): Promise<{
     asOf: string;
-    rankingType: string;
+    rankingTypeEcho: string;
     entries: readonly {
       externalRef: string;
       fullName: string;
@@ -74,7 +96,14 @@ class FakeProvider implements AdpCapableProvider {
       positionRank: string | null;
     }[];
   }> {
-    return Promise.resolve({ asOf: this.adpDate, rankingType: "PPR", entries: this.adp });
+    // Echoes the request by default, which is what Tank01 does. The override
+    // exists so a test can make the vendor disagree — the case that used to be
+    // written straight into `ranking_type`.
+    return Promise.resolve({
+      asOf: this.adpDate,
+      rankingTypeEcho: this.adpEcho ?? rankingType,
+      entries: this.adp,
+    });
   }
 
   setPlayers(players: ProviderPlayer[]): void {
@@ -543,7 +572,56 @@ describe("syncByeWeeks", () => {
 });
 
 describe("loadDraftBoard", () => {
+  it("defaults to the source the real adapter actually writes — #307", () => {
+    /*
+      **The whole guard, and it has to be a test because no compiler can be
+      one.** `@rostr/stats` depends only on `@rostr/core`, so `adapter.ts`
+      cannot import `PRIMARY_RANKING_BOARD` from `@rostr/db` — the dependency
+      arrow forbids it. Two string literals in two packages, and nothing
+      structural holding them together.
+
+      What happens if they drift: `syncRankings` writes `source = provider.name`
+      and `loadDraftBoard` filters on the constant, so a rename in the adapter
+      makes the LEFT JOIN match nothing. Every `overall_milli` comes back null,
+      the board falls through to its `p.full_name` tiebreak, and 1,589 players
+      render alphabetically with an em dash where the ADP was. Nothing in
+      production notices — not a type, not the row count, not a cron, not
+      `cronHealth` — and the room's own tooltip explains each blank away as a
+      player nobody ranks. On a draft day that is unrecoverable in-room.
+
+      Asserted against the **real** provider, deliberately. `FakeProvider.name`
+      is set from this same constant for fixture realism, so asserting there
+      would compare the constant to itself and prove nothing.
+
+      The sibling constants carry the identical latent drift and are covered
+      here rather than left for the next person to discover separately.
+    */
+    const tank01 = new Tank01Provider({ apiKey: "not-used-no-call-is-made" });
+
+    expect(tank01.name).toBe(PRIMARY_RANKING_BOARD.source);
+    expect(tank01.name).toBe(PRIMARY_PROJECTION_SOURCE);
+    expect(tank01.name).toBe(PRIMARY_STAT_SOURCE);
+  });
+
   it("orders by ranking, unranked players last", async () => {
+    /*
+      **The ADPs are deliberately the opposite way round from the names.**
+
+      This test used to give the best ADP to Bijan Robinson, so the expected
+      order read `["Bijan Robinson", "Jahmyr Gibbs", "Unranked Guy"]` — which is
+      also alphabetical order. The `ORDER BY` is
+      `r.overall_milli NULLS LAST, p.full_name`, so a query that matched *no*
+      rankings at all would fall through to the name tiebreak and produce the
+      same array. The repo's headline ordering test passed whether the ranking
+      join worked or not.
+
+      That is not hypothetical. The join filters on `source` and
+      `ranking_type`, and a default that stops matching what `syncRankings`
+      writes returns a full board of null ADPs — alphabetical, every ADP blank,
+      and nothing in production notices. This test is the cheapest place to
+      catch it, so the fixture now makes alphabetical order and ranked order
+      disagree.
+    */
     const client = await fresh();
     const provider = new FakeProvider([
       player("1", "Jahmyr Gibbs", "RB"),
@@ -553,18 +631,192 @@ describe("loadDraftBoard", () => {
     await syncPlayers(client, provider, "nfl", 2026);
 
     provider.setAdp([
-      { externalRef: "2", fullName: "Bijan Robinson", overallMilli: 1500, positionRank: "RB1" },
-      { externalRef: "1", fullName: "Jahmyr Gibbs", overallMilli: 3200, positionRank: "RB2" },
+      { externalRef: "1", fullName: "Jahmyr Gibbs", overallMilli: 1500, positionRank: "RB1" },
+      { externalRef: "2", fullName: "Bijan Robinson", overallMilli: 3200, positionRank: "RB2" },
     ]);
     await syncRankings(client, provider, "nfl", 2026);
 
     const board = await loadDraftBoard(client, "nfl", 2026);
 
+    // Gibbs first on ADP, Robinson second — the reverse of both alphabetical
+    // order and the order they were declared in.
     expect(board.map((entry) => entry.fullName)).toEqual([
-      "Bijan Robinson",
       "Jahmyr Gibbs",
+      "Bijan Robinson",
       "Unranked Guy",
     ]);
+  });
+
+  it("returns one entry per player when a second ranking source exists — #307", async () => {
+    /*
+      **The filed bug.** The join read `r.source = COALESCE($3, r.source)`,
+      which degrades to `r.source = r.source` when the argument is omitted — and
+      all ten call sites in this repo omit it. `player_rankings_current` is
+      `DISTINCT ON (player_id, season, source, ranking_type)`, so a second
+      source survives the view, and `r.overall_milli` is a `GROUP BY` key, so
+      the grouping does not collapse it either.
+
+      The player came back twice, at two different ADPs, and `rank` stopped
+      meaning "the Nth best player". Downstream both pool Maps are keyed on
+      `playerId`, so they silently kept whichever row landed last — which,
+      ordered ascending by ADP, is the **worse** one.
+
+      The second vendor goes in by raw INSERT on purpose: `syncRankings` writes
+      `source = provider.name`, so there is no way through the provider seam to
+      write a second source with one fixture instance.
+
+      Note the symptom was value-dependent, which is what would have made it
+      expensive to diagnose in a live room: two vendors publishing an *identical*
+      ADP collapse through the `GROUP BY`, so a second source duplicates most
+      players and silently not the ones the vendors agree on.
+    */
+    const client = await fresh();
+    const provider = new FakeProvider([player("1", "Two Source Man", "RB")]);
+    await syncPlayers(client, provider, "nfl", 2026);
+
+    provider.setAdp([
+      { externalRef: "1", fullName: "Two Source Man", overallMilli: 1000, positionRank: "RB1" },
+    ]);
+    await syncRankings(client, provider, "nfl", 2026);
+
+    await client.query(
+      `INSERT INTO player_rankings
+         (player_id, season, source, ranking_type, overall_milli, position_rank, as_of)
+       SELECT id, 2026, 'other-vendor', 'PPR', 2000, 'RB2', '2026-08-06'::date
+         FROM players WHERE external_ref = '1'`,
+    );
+
+    const board = await loadDraftBoard(client, "nfl", 2026);
+
+    expect(board).toHaveLength(1);
+    // Ours, not the other vendor's — the filter keeps the number attributable.
+    expect(board[0]?.adpMilli).toBe(1000);
+  });
+
+  it("ignores a second ranking_type rather than duplicating or displacing", async () => {
+    /*
+      The other half of the same `COALESCE`. `syncRankings`' fifth parameter is
+      public — `syncRankings(client, provider, "nfl", 2026, "HALF")` — so a HALF
+      board can be written alongside the PPR one by anyone, with no error.
+
+      Invisible to the board rather than blended into it, deliberately. A
+      fallback that surfaced these rows for players PPR does not rank would mix
+      two scoring formats into one ADP column with nothing on screen saying so,
+      which is the reason a preference-with-fallback join was considered for
+      #307 and rejected.
+    */
+    const client = await fresh();
+    const provider = new FakeProvider([player("1", "Both Formats", "RB")]);
+    await syncPlayers(client, provider, "nfl", 2026);
+
+    provider.setAdp([
+      { externalRef: "1", fullName: "Both Formats", overallMilli: 1000, positionRank: "RB1" },
+    ]);
+    await syncRankings(client, provider, "nfl", 2026);
+
+    provider.setAdp([
+      { externalRef: "1", fullName: "Both Formats", overallMilli: 9000, positionRank: "RB9" },
+    ]);
+    await syncRankings(client, provider, "nfl", 2026, "HALF");
+
+    const [stored] = await client.query<{ count: number }>(
+      "SELECT count(*)::int AS count FROM player_rankings WHERE ranking_type = 'HALF'",
+    );
+    expect(Number(stored?.count)).toBe(1);
+
+    const board = await loadDraftBoard(client, "nfl", 2026);
+    expect(board).toHaveLength(1);
+    expect(board[0]?.adpMilli).toBe(1000);
+  });
+
+  it("stores the ranking type we asked for, not the provider's echo — #307", async () => {
+    /*
+      **The root cause, and the reason the default above is safe to hard-code.**
+
+      `syncRankings` used to store `board.rankingType`, which the adapter
+      computes as `raw.adpType ?? rankingType` — the vendor's own spelling,
+      written verbatim into a key column the loader matches exactly. Tank01
+      answering `"ppr"` one morning would have split every player across two
+      ranking types: under the old `COALESCE` that returned each of them twice,
+      and under any hard default it would blank the board outright.
+
+      A reader with a fixed default can only be right if the writer cannot write
+      something else. Now it cannot.
+    */
+    const client = await fresh();
+    const provider = new FakeProvider(
+      [player("1", "Echo Test", "RB")],
+      [],
+      [{ externalRef: "1", fullName: "Echo Test", overallMilli: 1000, positionRank: "RB1" }],
+      "2026-08-05",
+      "ppr-lowercase-surprise",
+    );
+    await syncPlayers(client, provider, "nfl", 2026);
+
+    const result = await syncRankings(client, provider, "nfl", 2026);
+
+    const [stored] = await client.query<{ ranking_type: string }>(
+      "SELECT ranking_type FROM player_rankings LIMIT 1",
+    );
+    expect(stored?.ranking_type).toBe("PPR");
+
+    // Reported rather than swallowed — normalising discards information, and a
+    // vendor that has changed its vocabulary is something to go and look at.
+    expect(result.rankingTypeEcho).toBe("ppr-lowercase-surprise");
+
+    // And the board still ranks him, which is the point of storing ours.
+    const board = await loadDraftBoard(client, "nfl", 2026);
+    expect(board[0]?.adpMilli).toBe(1000);
+  });
+
+  it("says nothing when the provider echoes what we asked", async () => {
+    // The control. A non-null echo reaches `cron_runs.last_outcome`, and
+    // `cronJobState` reads any non-null outcome as FAILING — so a value here on
+    // the ordinary path would pin season-sync red for ever and switch off its
+    // own staleness detection. That is #325, exactly.
+    const client = await fresh();
+    const provider = new FakeProvider([player("1", "Normal", "RB")]);
+    await syncPlayers(client, provider, "nfl", 2026);
+    provider.setAdp([
+      { externalRef: "1", fullName: "Normal", overallMilli: 1000, positionRank: "RB1" },
+    ]);
+
+    const result = await syncRankings(client, provider, "nfl", 2026);
+    expect(result.rankingTypeEcho).toBeNull();
+  });
+
+  it("returns a full board of nulls when the source matches nothing, and never throws", async () => {
+    /*
+      The catastrophic shape, pinned as a decision rather than left to be
+      discovered. A wrong default does not error — it is a LEFT JOIN, so all the
+      players still come back, `rank` falls through to the `p.full_name`
+      tiebreak, and every ADP is null.
+
+      **Deliberately not a throw.** `season-sync` runs players, then games, then
+      rankings, so a board with players and no rankings is reachable in the
+      ordinary course of every run — and a throw here would be a draft-day
+      outage manufactured by the repair for #307.
+    */
+    const client = await fresh();
+    const provider = new FakeProvider([
+      player("1", "Zebra Last", "RB"),
+      player("2", "Alpha First", "RB"),
+    ]);
+    await syncPlayers(client, provider, "nfl", 2026);
+    provider.setAdp([
+      { externalRef: "1", fullName: "Zebra Last", overallMilli: 1000, positionRank: "RB1" },
+    ]);
+    await syncRankings(client, provider, "nfl", 2026);
+
+    const board = await loadDraftBoard(client, "nfl", 2026, {
+      source: "a-vendor-we-never-synced",
+      rankingType: "PPR",
+    });
+
+    expect(board).toHaveLength(2);
+    expect(board.map((entry) => entry.adpMilli)).toEqual([null, null]);
+    // Alphabetical, which is the tell. The ranked player is no longer first.
+    expect(board.map((entry) => entry.fullName)).toEqual(["Alpha First", "Zebra Last"]);
   });
 
   it("produces dense ranks the draft engine can use directly", async () => {
