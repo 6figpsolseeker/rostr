@@ -544,6 +544,24 @@ describe("syncByeWeeks", () => {
 
 describe("loadDraftBoard", () => {
   it("orders by ranking, unranked players last", async () => {
+    /*
+      **The ADPs are deliberately the opposite way round from the names.**
+
+      This test used to give the best ADP to Bijan Robinson, so the expected
+      order read `["Bijan Robinson", "Jahmyr Gibbs", "Unranked Guy"]` — which is
+      also alphabetical order. The `ORDER BY` is
+      `r.overall_milli NULLS LAST, p.full_name`, so a query that matched *no*
+      rankings at all would fall through to the name tiebreak and produce the
+      same array. The repo's headline ordering test passed whether the ranking
+      join worked or not.
+
+      That is not hypothetical. The join filters on `source` and
+      `ranking_type`, and a default that stops matching what `syncRankings`
+      writes returns a full board of null ADPs — alphabetical, every ADP blank,
+      and nothing in production notices. This test is the cheapest place to
+      catch it, so the fixture now makes alphabetical order and ranked order
+      disagree.
+    */
     const client = await fresh();
     const provider = new FakeProvider([
       player("1", "Jahmyr Gibbs", "RB"),
@@ -553,16 +571,18 @@ describe("loadDraftBoard", () => {
     await syncPlayers(client, provider, "nfl", 2026);
 
     provider.setAdp([
-      { externalRef: "2", fullName: "Bijan Robinson", overallMilli: 1500, positionRank: "RB1" },
-      { externalRef: "1", fullName: "Jahmyr Gibbs", overallMilli: 3200, positionRank: "RB2" },
+      { externalRef: "1", fullName: "Jahmyr Gibbs", overallMilli: 1500, positionRank: "RB1" },
+      { externalRef: "2", fullName: "Bijan Robinson", overallMilli: 3200, positionRank: "RB2" },
     ]);
     await syncRankings(client, provider, "nfl", 2026);
 
     const board = await loadDraftBoard(client, "nfl", 2026);
 
+    // Gibbs first on ADP, Robinson second — the reverse of both alphabetical
+    // order and the order they were declared in.
     expect(board.map((entry) => entry.fullName)).toEqual([
-      "Bijan Robinson",
       "Jahmyr Gibbs",
+      "Bijan Robinson",
       "Unranked Guy",
     ]);
   });
