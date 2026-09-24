@@ -14,6 +14,17 @@ import { cronForbidden } from "@/lib/cron";
 import { draftBoard } from "@/lib/draft-context";
 
 /**
+ * Bounded by *our* timeout rather than the platform's — #312.
+ *
+ * `postgres.ts` sets `statement_timeout: 30_000`, and that cancellation is
+ * what turns a stuck query into a recorded problem the next run retries. A
+ * platform default below 30s kills the function before that can happen, so a
+ * handled failure becomes an unhandled one. 60 clears 30 with headroom and is
+ * the Hobby ceiling. Full reasoning in `lib/cron.ts`.
+ */
+export const maxDuration = 60;
+
+/**
  * Advance every draft whose clock has run out.
  *
  * Until this existed, expiry only happened when somebody *read* a draft — so a

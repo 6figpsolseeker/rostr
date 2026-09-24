@@ -20,6 +20,17 @@ import { cronForbidden } from "@/lib/cron";
 import { scoreWeekNotes } from "@/lib/score-week";
 
 /**
+ * Bounded by *our* timeout rather than the platform's — #312.
+ *
+ * `postgres.ts` sets `statement_timeout: 30_000`, and that cancellation is
+ * what turns a stuck query into a recorded problem the next run retries. A
+ * platform default below 30s kills the function before that can happen, so a
+ * handled failure becomes an unhandled one. 60 clears 30 with headroom and is
+ * the Hobby ceiling. Full reasoning in `lib/cron.ts`.
+ */
+export const maxDuration = 60;
+
+/**
  * Score every active league's current week.
  *
  * Safe to run often — that is how live scores stay current. Each run rewrites

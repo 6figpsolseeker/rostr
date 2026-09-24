@@ -6,6 +6,17 @@ import { cronForbidden } from "@/lib/cron";
 import { runSeasonSyncJob } from "@/lib/jobs/season-sync";
 
 /**
+ * Bounded by *our* timeout rather than the platform's — #312.
+ *
+ * `postgres.ts` sets `statement_timeout: 30_000`, and that cancellation is
+ * what turns a stuck query into a recorded problem the next run retries. A
+ * platform default below 30s kills the function before that can happen, so a
+ * handled failure becomes an unhandled one. 60 clears 30 with headroom and is
+ * the Hobby ceiling. Full reasoning in `lib/cron.ts`.
+ */
+export const maxDuration = 60;
+
+/**
  * Reference data — the schedule, the player pool, byes, rankings, projections.
  *
  * All of it existed and all of it ran only when somebody typed `pnpm db:sync`.
