@@ -251,6 +251,79 @@ describe("laying the first round", () => {
     expect(second.written).toBe(0);
     expect(await fixtures(fx, 15)).toHaveLength(2);
   });
+
+  it("dedups on both orientations, which the constraint does not — #319", async () => {
+    /*
+      **`0050`'s unique constraint is strictly weaker than the `already` set
+      above this insert, and this test is the only thing that says so.**
+
+      The constraint is on `(league_id, week, phase, home_team_id,
+      away_team_id)`, an *ordered* pairing. A fixture stored the other way round
+      — `(B home, A away)` against `(A home, B away)` — is a different key and
+      inserts cleanly. Verified directly against PGlite 16.4 rather than assumed.
+
+      `advancePlayoffs` builds its filter from both orientations, so it catches
+      what the constraint cannot. Anyone reading "one fixture per pairing" as
+      "that pair can only be stored once" will conclude the set is now redundant
+      and delete it. It is not, and this fails when they do.
+
+      The flipped row is hand-inserted because nothing in the repo emits one:
+      `generateSchedule` never reverses a pair. That is exactly why the set is
+      the only defence — its subject cannot be produced by the code it defends.
+
+      **The stored fixture is replaced by its mirror rather than joined by it,
+      and that detail is the whole test.** An earlier version left the original
+      in place and added the flip beside it; the mutant survived, because the
+      forward key still matched the original and `written` came out 0 either
+      way. Only when the mirror is the *sole* record of that game does the
+      second orientation decide anything.
+    */
+    const fx = await setup();
+    await advancePlayoffs(fx.client, fx.leagueId);
+
+    const laid = await fx.client.query<{
+      id: string;
+      week: number;
+      phase: string;
+      round: number;
+      home_team_id: string;
+      away_team_id: string;
+    }>(
+      `SELECT id, week, phase, round, home_team_id, away_team_id FROM matchups
+        WHERE league_id = $1 AND phase <> 'REGULAR' LIMIT 1`,
+      [fx.leagueId],
+    );
+    const game = laid[0];
+    expect(game, "advancePlayoffs must have laid a fixture").toBeDefined();
+
+    // Replace it with its mirror: same game, stored the other way round. The
+    // constraint would have permitted both; the point here is that this is now
+    // the only row recording it.
+    await fx.client.query("DELETE FROM matchups WHERE id = $1", [game!.id]);
+    await fx.client.query(
+      `INSERT INTO matchups (league_id, week, phase, round, home_team_id, away_team_id)
+       VALUES ($1, $2, $3::matchup_phase, $4, $5, $6)`,
+      [
+        fx.leagueId,
+        game!.week,
+        game!.phase,
+        game!.round,
+        game!.away_team_id,
+        game!.home_team_id,
+      ],
+    );
+
+    const before = await fixtures(fx, game!.week);
+
+    // The set reads both orientations, recognises the mirror as that fixture,
+    // and lays nothing. Drop the reversed key and the game reads as missing:
+    // `advancePlayoffs` writes it again, the constraint cannot refuse it because
+    // the orientation differs, and the week holds the same game twice.
+    const again = await advancePlayoffs(fx.client, fx.leagueId);
+
+    expect(again.written).toBe(0);
+    expect(await fixtures(fx, game!.week)).toHaveLength(before.length);
+  });
 });
 
 describe("a pot league too small for a consolation bracket", () => {

@@ -302,13 +302,25 @@ describe("persistSchedule", () => {
       generateSchedule(fx.teamIds, 14, "seed"),
     );
 
+    // A real count since #319. This used to return `schedule.length`, a constant
+    // nobody had measured — which `ON CONFLICT … DO NOTHING` would have made
+    // actively false. It is now the number of rows that landed.
     expect(result.written).toBe(14 * 2);
     expect(await loadScheduledWeek(fx.client, fx.leagueId, WEEK)).toHaveLength(2);
   });
 
   it("refuses to overwrite an existing schedule", async () => {
-    // Rewriting mid-season changes who played whom, and every record derived
-    // from it.
+    /*
+      Rewriting mid-season changes who played whom, and every record derived
+      from it.
+
+      **This guard is not subsumed by `0050`'s unique constraint, and this test
+      is what says so.** A different seed produces different pairings, and
+      different pairings do not conflict — every row of the second schedule
+      would pass the constraint, and the league would end up holding two
+      overlapping seasons where it holds one. The constraint refuses an
+      *identical* fixture; the guard refuses a *different season*.
+    */
     const fx = await setup();
     await schedule(fx);
 
@@ -319,6 +331,83 @@ describe("persistSchedule", () => {
     );
 
     expect(second.written).toBe(0);
+
+    // Separates a mutant that drops the guard from one that keeps it and
+    // miscounts: without the guard these rows are written, not refused.
+    const [row] = await fx.client.query<{ count: number }>(
+      "SELECT count(*)::int AS count FROM matchups WHERE league_id = $1",
+      [fx.leagueId],
+    );
+    expect(Number(row?.count)).toBe(14 * 2);
+  });
+
+  it("a repeated fixture does not take the rest of the schedule with it — #319", async () => {
+    /*
+      **What this proves, and what it does not.**
+
+      It does *not* reproduce the race. That cannot be done here and a test
+      claiming to would be a lie: `writeSchedule`'s guard read and its inserts
+      are both inside the transaction its caller opened, so there is no
+      instruction boundary at which a second writer could interleave — on a
+      single PGlite connection its statements would join that transaction rather
+      than race it. (`week.rescore-race.test.ts` *can* do this for #76 because
+      that guard sits outside the write transaction. The difference is the whole
+      reason this one is written differently.)
+
+      What it pins is the **statement-level consequence** of a conflict, which is
+      the half that decides whether a lost draft pick or a suppressed row is what
+      happens. `writeSchedule` runs inside the transaction that commits the final
+      draft pick; a bare `INSERT` would hand the loser a 23505 and abort that
+      whole transaction, taking the pick, the move to `IN_SEASON` and the waiver
+      priority seeding with it. The duplicate is passed in directly here because
+      the race that would produce it cannot be.
+    */
+    const fx = await setup();
+    const generated = generateSchedule(fx.teamIds, 14, "seed");
+
+    const result = await persistSchedule(fx.client, fx.leagueId, [...generated, generated[0]!]);
+
+    // Resolved rather than threw, and counted rows rather than intent.
+    expect(result.written).toBe(generated.length);
+
+    const [row] = await fx.client.query<{ count: number }>(
+      "SELECT count(*)::int AS count FROM matchups WHERE league_id = $1",
+      [fx.leagueId],
+    );
+    expect(Number(row?.count)).toBe(generated.length);
+  });
+
+  it("treats a bye as a fixture like any other — #319", async () => {
+    /*
+      **The case an ordinary UNIQUE would let through**, and the reason `0050`
+      says `NULLS NOT DISTINCT`.
+
+      `generateSchedule` emits `awayTeamId: null` for a bye. Under Postgres's
+      default, NULLs in a unique key are distinct from one another, so every copy
+      of a bye row satisfies an ordinary UNIQUE however many exist — the
+      constraint would exempt precisely the rows an odd league is made of, on the
+      table where a duplicate moves the standings.
+
+      No league can reach `writeSchedule` with a bye today: `drawDraftOrder`
+      refuses an odd field, so there is no draw and no schedule. `persistSchedule`
+      takes a schedule directly and does not care, which is what makes the rule
+      testable before it is reachable.
+    */
+    const fx = await setup(5);
+    const generated = generateSchedule(fx.teamIds, 14, "seed");
+    const bye = generated.find((matchup) => matchup.awayTeamId === null);
+    expect(bye, "a 5-team league must produce byes").toBeDefined();
+
+    const result = await persistSchedule(fx.client, fx.leagueId, [...generated, bye!]);
+
+    expect(result.written).toBe(generated.length);
+
+    const [row] = await fx.client.query<{ count: number }>(
+      `SELECT count(*)::int AS count FROM matchups
+        WHERE league_id = $1 AND week = $2 AND home_team_id = $3 AND away_team_id IS NULL`,
+      [fx.leagueId, bye!.week, bye!.homeTeamId],
+    );
+    expect(Number(row?.count)).toBe(1);
   });
 });
 

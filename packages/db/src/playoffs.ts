@@ -320,17 +320,46 @@ export async function advancePlayoffs(
   );
   if (missing.length === 0) return { written: 0, games: [] };
 
+  let written = 0;
   await withTransaction(db, async (tx) => {
     for (const { phase, game } of missing) {
-      await tx.query(
+      /*
+        **The `already` set above is the real dedup and stays the real dedup.**
+        It compares *both* orientations; `0050`'s constraint compares one, so a
+        fixture stored the other way round is caught there and nowhere else —
+        verified against 16.4, a reversed pairing inserts cleanly. The constraint
+        is strictly weaker than this filter and can never replace it.
+
+        This clause is the backstop for the case the set cannot see: a second run
+        that read the same rows before either of them wrote. Unlike
+        `writeSchedule`, an abort here would cost little — this transaction is
+        opened by `advancePlayoffs` and holds only these inserts, the error
+        reaches `score-week`'s per-league catch, and the next tick lays the round
+        ten minutes later. It is still wrong to leave: it turns a benign,
+        self-correcting race into a league *reported as a scoring failure*, and
+        somebody investigates a race that cost nothing.
+
+        `RETURNING id` matters more here than in `writeSchedule`, because this
+        count is actually consumed — `score-week` reports it as `bracketGames`.
+        It is the one place an operator could ever see that a duplicate race
+        happened at all.
+      */
+      const inserted = await tx.query<{ id: string }>(
         `INSERT INTO matchups (league_id, week, phase, round, home_team_id, away_team_id)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (league_id, week, phase, home_team_id, away_team_id) DO NOTHING
+         RETURNING id`,
         [leagueId, game.week, phase, game.round, game.homeTeamId, game.awayTeamId],
       );
+      written += inserted.length;
     }
   });
 
-  return { written: missing.length, games: missing.map(({ game }) => game) };
+  // `games` reports every *intended* fixture while `written` reports the rows
+  // that landed. Deliberately allowed to disagree: the caller wants to know what
+  // the bracket says as well as what was inserted, and filtering `games` too
+  // would make a suppressed fixture vanish from the report entirely.
+  return { written, games: missing.map(({ game }) => game) };
 }
 
 /**
