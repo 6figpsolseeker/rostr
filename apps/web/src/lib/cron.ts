@@ -4,6 +4,38 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 
 /**
+ * Why every cron route exports `maxDuration = 60`, written once — #312.
+ *
+ * **The number comes from the database, not from the plan's ceiling.**
+ * `postgres.ts` sets `statement_timeout: 30_000`, and that 30 seconds is the
+ * thing that produces a *clean* failure: the query is cancelled, the cancel is
+ * not a domain error, so the job records a problem, leaves the work undone and
+ * unstranded, and the next scheduled run retries it. Nothing is lost.
+ *
+ * With no `maxDuration` the platform default applies, and it is well under 30
+ * seconds on most plans. The function is then killed **before** Postgres can
+ * cancel anything, so the recovery path above never executes and a bounded,
+ * handled failure becomes an unhandled one. The export exists to make sure our
+ * own safety net fires first.
+ *
+ * So the requirement is only "comfortably more than 30", and 60 is that with
+ * headroom. It is not an estimate of how long these jobs take — in practice
+ * they finish in well under a second, and a run that reached 60 would mean
+ * something is wrong that a larger budget would not fix.
+ *
+ * **60 is also the Hobby plan ceiling**, which is what this project deploys on
+ * today. Raising it is not a code change that stands alone; see the tracking
+ * issue for the signals that would justify the upgrade. If a function is ever
+ * observed being killed at a duration well below 60, suspect a plan cap being
+ * applied rather than a slow query.
+ *
+ * Declared as a literal in each route rather than imported from here: Next.js
+ * reads the segment config statically, and an imported constant is not
+ * guaranteed to be resolved at build time. So the routes carry the number and
+ * this carries the reason — change one, come back and change the other.
+ */
+
+/**
  * The shared guard on the six cron routes.
  *
  * Extracted because it was four identical copies, and a guard that exists four

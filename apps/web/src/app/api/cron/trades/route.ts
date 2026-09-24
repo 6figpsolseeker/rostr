@@ -5,6 +5,17 @@ import { db } from "@/lib/db";
 import { cronForbidden } from "@/lib/cron";
 
 /**
+ * Bounded by *our* timeout rather than the platform's — #312.
+ *
+ * `postgres.ts` sets `statement_timeout: 30_000`, and that cancellation is
+ * what turns a stuck query into a recorded problem the next run retries. A
+ * platform default below 30s kills the function before that can happen, so a
+ * handled failure becomes an unhandled one. 60 clears 30 with headroom and is
+ * the Hobby ceiling. Full reasoning in `lib/cron.ts`.
+ */
+export const maxDuration = 60;
+
+/**
  * Settle every trade whose veto window has closed.
  *
  * Without this nothing ever executes: acceptance only opens the window, and the
@@ -74,6 +85,23 @@ async function run(client: SqlClient, now: Date): Promise<NextResponse> {
     error?: string;
   }[] = [];
 
+  /*
+    Sequential, with no per-league time budget — **deliberate, and revisit it
+    when there are more leagues.**
+
+    #312 proposed one, and the reasoning is right: a league that blocks on the
+    waiver lock consumes part of this invocation, and every league after it in
+    this array is skipped when the function is killed. With `maxDuration = 60`
+    against a 30s `statement_timeout` that is at most two stuck leagues, and the
+    cost is that their trades execute an hour late rather than incorrectly — the
+    trades stay `ACCEPTED` and the next run takes them.
+
+    Not built yet because the fleet is small enough that "every league after the
+    slow one" is a short list, and a budget is a second clock to get wrong: too
+    tight and it abandons a league that was about to succeed, too loose and it
+    does nothing. The signal to add it is leagues being skipped in consecutive
+    hourly runs, which the per-league `runs` entries below make visible.
+  */
   for (const leagueId of due) {
     try {
       const { resolutions, failures } = await resolveDueTrades(client, leagueId, now);
