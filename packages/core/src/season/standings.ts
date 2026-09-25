@@ -349,7 +349,56 @@ export function playoffField(
   return standings.slice(0, playoffTeams);
 }
 
-/** The teams that missed, best first — the consolation bracket's field. */
+/**
+ * How many of the teams that missed the playoffs can play a consolation
+ * bracket — owner's ruling, 2026-09-25, matching Sleeper.
+ *
+ * **A bound on the input, not a check on the output.** The consolation bracket
+ * is single-elimination with derived byes, so a field of `f` needs
+ * `ceil(log2(f))` rounds, and it plays in the same `playoffWeeks` the main
+ * bracket does. Eight teams is exactly three rounds, which is what a normal
+ * playoff window provides — so a capped field can never demand more weeks than
+ * the league has, and `NOT_ENOUGH_WEEKS` becomes unreachable for this phase
+ * rather than merely unlikely.
+ *
+ * That is the point. Rules are frozen at creation, so a league whose
+ * consolation field could not be seated was stuck with it for good: it threw on
+ * every `score-week` tick, and `cronJobState` reads any non-null outcome as
+ * FAILING before it checks staleness, so one such league pinned the job red for
+ * its whole season and blinded the staleness detector for every other league.
+ * Issue #324.
+ *
+ * **Neither ESPN nor Sleeper validates this; both make it impossible, and this
+ * follows Sleeper.** ESPN puts non-playoff teams in a *Consolation Ladder* —
+ * winners move up, losers move down, nobody is eliminated — which has no round
+ * requirement at all and so cannot fail to fit. Sleeper keeps the bracket and
+ * caps the field: "up to 8 teams with the worst records". Changing the
+ * structure is the larger change; bounding the field is a constant.
+ *
+ * **Which eight** is a product call and it went the other way from Sleeper's
+ * wording. Sleeper takes the worst records; the owner ruled the *top* of the
+ * teams that missed — so in a 16-team league with 6 playoff places, seeds 7-14
+ * play and 15-16 sit out. Seeding runs continuously from the main bracket
+ * downward rather than restarting at the bottom.
+ *
+ * Applied where the bracket is built, never to {@link consolationField}. That
+ * function also feeds the standings screen, which shows every team that missed
+ * — capping it there would delete seeds 15-16 from the standings entirely,
+ * which is a worse answer than giving them no consolation game.
+ *
+ * Dormant at the shipped preset: 12 teams and 6 playoff places leaves 6, and
+ * 6 < 8. It binds only above 14 members.
+ */
+export const CONSOLATION_BRACKET_MAX = 8;
+
+/**
+ * The teams that missed, best first.
+ *
+ * **Everyone who missed**, uncapped — this is the standings screen's answer as
+ * well as the bracket's starting point, and a team absent from both groups
+ * would be absent from the standings. The bracket applies
+ * {@link CONSOLATION_BRACKET_MAX} itself.
+ */
 export function consolationField(
   standings: readonly StandingsRow[],
   playoffTeams: number,

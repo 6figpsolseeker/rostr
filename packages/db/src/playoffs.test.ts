@@ -7,6 +7,7 @@ import { seedSport } from "./sports.js";
 import { addTestTeam, createTestDatabase } from "./testing.js";
 import type { PGliteClient } from "./testing.js";
 import { advancePlayoffs, championship, enterPlayoffs, playoffState } from "./playoffs.js";
+import { CONSOLATION_BRACKET_MAX } from "@rostr/core";
 import { loadWeekResults } from "./week.js";
 
 let db: PGliteClient | undefined;
@@ -240,6 +241,68 @@ describe("laying the first round", () => {
     await expect(advancePlayoffs(fx.client, fx.leagueId)).rejects.toMatchObject({
       code: "REGULAR_SEASON_UNFINISHED",
     });
+  });
+
+  it("lays a consolation bracket for a league that could not seat one — #324", async () => {
+    /*
+      **The bug, reproduced at the size that caused it, now passing.**
+
+      Sixteen members and six playoff places leaves ten teams. Ten needs four
+      rounds — `byesFor(10)` is 6 and `roundsNeeded(10, 6)` traces 8 → 4 → 2 → 1
+      — against the three weeks in `playoffWeeks`. `buildBracket` threw
+      `NOT_ENOUGH_WEEKS`, and because rules are frozen at creation that league
+      threw on every `score-week` tick for the rest of its season.
+
+      That is not a lost side tournament. `cronJobState` reads any non-null
+      outcome as FAILING *before* it checks staleness, so one such league pinned
+      the whole job red and, while red, it could never report STALE — the
+      monitoring on the job that decides money, blinded for every league in the
+      deployment, by one league nobody could fix.
+
+      Capping the field at `CONSOLATION_BRACKET_MAX` makes it unreachable rather
+      than merely unlikely: eight teams is exactly three rounds. Before this, the
+      call below rejected.
+    */
+    const fx = await setup(undefined, 16);
+    const state = await playoffState(fx.client, fx.leagueId);
+
+    expect(state.consolation).not.toBeNull();
+    expect(state.consolation?.field).toHaveLength(8);
+  });
+
+  it("seats the top of the teams that missed, not the worst — owner, 2026-09-25", async () => {
+    /*
+      The product call, and it went the other way from Sleeper's own wording
+      ("up to 8 teams with the worst records"). Seeding runs continuously down
+      from the main bracket, so the teams that narrowly missed play and the
+      bottom of the table sits out.
+
+      **Asserted on identity, not on length, and this test failed to do that
+      once.** Its first version checked only that the top seed was absent from
+      the consolation field — true whichever eight are taken — so a
+      `.slice(-CONSOLATION_BRACKET_MAX)` passed it. Length says nothing here;
+      both directions seat exactly eight.
+
+      The fixture's points descend with creation order, so the last team created
+      finishes bottom of the table. Under the ruling it sits out. Under the
+      inverted slice it plays, and the assertion below is what notices.
+    */
+    const fx = await setup(undefined, 16);
+    const state = await playoffState(fx.client, fx.leagueId);
+
+    expect(state.playoffs?.field).toHaveLength(6);
+
+    const seated = new Set(state.consolation?.field ?? []);
+    expect(seated.size).toBe(CONSOLATION_BRACKET_MAX);
+
+    // The bottom of the table sits out; taking the worst eight would seat it.
+    expect(seated.has(fx.teams[15]!)).toBe(false);
+    expect(seated.has(fx.teams[13]!)).toBe(false);
+
+    // And nobody from the playoff field is in it.
+    for (const teamId of state.playoffs?.field ?? []) {
+      expect(seated.has(teamId)).toBe(false);
+    }
   });
 
   it("is idempotent", async () => {

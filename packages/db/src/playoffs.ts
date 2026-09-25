@@ -24,7 +24,13 @@
  * to change.
  */
 
-import { buildBracket, computeStandings, consolationField, playoffField } from "@rostr/core";
+import {
+  buildBracket,
+  computeStandings,
+  CONSOLATION_BRACKET_MAX,
+  consolationField,
+  playoffField,
+} from "@rostr/core";
 import type { Bracket, BracketGame, LeagueRules } from "@rostr/core";
 import type { SqlClient } from "./client.js";
 import { getLeagueRules } from "./leagues.js";
@@ -112,7 +118,29 @@ export async function playoffState(
         leagueId,
         rules,
         "CONSOLATION",
-        consolationField(seeds, rules.schedule.playoffTeams).map((row) => row.teamId),
+        /*
+          Capped here, and only here — issue #324.
+
+          `consolationField` returns everyone who missed, because the standings
+          screen reads the same function and a team in neither group would be
+          missing from the standings altogether. The *bracket* takes at most
+          `CONSOLATION_BRACKET_MAX`, which is what stops an oversized field
+          demanding more rounds than `playoffWeeks` can hold.
+
+          Eight is exactly three rounds. Without the cap, a 16-team league
+          leaves 10 teams needing four rounds against three weeks, `buildBracket`
+          throws `NOT_ENOUGH_WEEKS` on every tick, and — rules being frozen —
+          that league pins `score-week` red for its whole season while
+          `cronJobState` reads the red before it ever checks staleness.
+
+          The top of the field rather than the bottom: seeding runs continuously
+          down from the main bracket, so in a 16-team league seeds 7-14 play and
+          15-16 sit out. Owner's ruling, 2026-09-25. Sleeper caps the same way
+          but takes the worst records instead.
+        */
+        consolationField(seeds, rules.schedule.playoffTeams)
+          .slice(0, CONSOLATION_BRACKET_MAX)
+          .map((row) => row.teamId),
       )
     : null;
 
