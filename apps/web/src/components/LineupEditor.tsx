@@ -6,6 +6,7 @@ import type { LineupEdit } from "@/lib/lineup-edit";
 import { opponentLabel } from "@/lib/opponent";
 import { isIrEligible as irEligible } from "@rostr/core";
 import { previewHeading, whyNot } from "@/lib/autofill";
+import { irGameStarted } from "@/lib/ir-placement";
 import useSWR from "swr";
 import { PlayerAvatar } from "./PlayerAvatar";
 import { PlayerCard } from "./PlayerCard";
@@ -786,13 +787,26 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
                 eliminating them.
 
                 The scoping phrase is load-bearing and was briefly deleted here.
-                `moveToIr` also refuses `GAME_STARTED`, and nothing in this
-                condition consults a kickoff — so "To IR" still renders for a
-                player already playing and still answers 409. That is a smaller,
-                separate gap — issue #321, which also records why the tempting
-                one-line conjunct here would introduce a quieter bug than the
-                one it removes. What is not acceptable is a comment claiming the
-                list is complete when it is not.
+                `moveToIr` also refuses `GAME_STARTED`, and this condition did
+                not consult a kickoff — so "To IR" rendered for a player already
+                playing and answered 409. Closed by #321, and **not** by adding
+                a conjunct: `irGameStarted` disables the button instead, reading
+                `opponentRef` rather than `kickoffAt` alone.
+
+                That distinction is the whole of the issue. `kickoffAt` fails
+                *closed* for a player no club lists — he is handed the week's
+                first kickoff so his lineup slot still freezes — while `moveToIr`
+                fails *open* for him and accepts the placement, because §2's IR
+                test is a designation test with no kickoff condition. Reading
+                `kickoffAt` here would have hidden a button the server honours.
+                See `lib/ir-placement.ts`, which argues it at length.
+
+                Disabled rather than hidden, and that is a departure from the
+                other three refusals on this button. They are league-wide or
+                permanent facts a sentence can cover once; this one is
+                per-player and changes by the minute, so no single line at the
+                top of the screen can say it. `PlayerMarket` licenses hiding
+                only when something else already says why.
 
                 `data.ir.place` is the league-state half, and it is the reachable
                 one during a **draft**: a manager who drafted a player already
@@ -813,7 +827,17 @@ export function LineupEditor({ leagueId, week }: { leagueId: string; week: numbe
                 irEligible(player.injuryDesignation) && (
                   <button
                     onClick={() => void ir(player.playerId, "STASH")}
-                    disabled={saving}
+                    disabled={saving || irGameStarted(player, now)}
+                    // A hint, not the refusal. The server's own sentence still
+                    // arrives through `saveError` if a click lands inside the
+                    // seconds of clock skew around kickoff. Deliberately avoids
+                    // the word "locked", which belongs to the lineup lock — a
+                    // different rule with a different answer for this player.
+                    title={
+                      irGameStarted(player, now)
+                        ? "His game has started — injured reserve reopens next week"
+                        : undefined
+                    }
                     className="text-[10px] text-nocturne-neutral-600 hover:text-nocturne-accent-300 disabled:opacity-40"
                   >
                     To IR
