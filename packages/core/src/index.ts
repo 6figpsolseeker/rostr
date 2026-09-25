@@ -223,6 +223,7 @@ export {
 export {
   computeRecords,
   computeStandings,
+  CONSOLATION_BRACKET_MAX,
   consolationField,
   playoffField,
   StandingsError,

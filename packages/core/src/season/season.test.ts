@@ -11,6 +11,7 @@ import {
 import {
   computeRecords,
   computeStandings,
+  CONSOLATION_BRACKET_MAX,
   consolationField,
   playoffField,
   winPercentageBasisPoints,
@@ -510,5 +511,90 @@ describe("playoff and consolation fields", () => {
     const consolation = consolationField(standings, NFL_DEFAULT_SCHEDULE.playoffTeams);
 
     expect(playoffs.length + consolation.length).toBe(12);
+  });
+
+  it("still accounts for every team in a league bigger than the bracket cap — #324", () => {
+    /*
+      **The reason the cap is not applied here.**
+
+      `consolationField` feeds the standings screen as well as the bracket, and
+      that screen has exactly two groups. A team in neither would be absent from
+      the standings altogether — a worse answer than having no consolation game.
+
+      So at 16 teams this still returns all 10 who missed, and the *bracket*
+      takes the first `CONSOLATION_BRACKET_MAX` of them. Move the cap into this
+      function and seeds 15 and 16 disappear from the league's own table.
+    */
+    const big = computeStandings(teams(16), [], DEFAULT_TIEBREAKERS);
+    const playoffs = playoffField(big, NFL_DEFAULT_SCHEDULE.playoffTeams);
+    const consolation = consolationField(big, NFL_DEFAULT_SCHEDULE.playoffTeams);
+
+    expect(consolation).toHaveLength(10);
+    expect(playoffs.length + consolation.length).toBe(16);
+  });
+});
+
+describe("the consolation bracket's field is capped — #324", () => {
+  /*
+    A bound on the input rather than a check on the output.
+
+    The consolation bracket is single-elimination with derived byes, so a field
+    of `f` needs `ceil(log2(f))` rounds and plays in the same `playoffWeeks` the
+    main bracket does. Ten teams need four rounds; the shipped window is three.
+    `buildBracket` threw `NOT_ENOUGH_WEEKS` for that league on every
+    `score-week` tick, and rules are frozen, so nobody could fix it — while
+    `cronJobState` reads any non-null outcome as FAILING before it checks
+    staleness, blinding the staleness detector for every other league.
+
+    Capping the field makes that unreachable rather than merely unlikely.
+    Neither ESPN nor Sleeper validates this: ESPN uses a *ladder* with no round
+    requirement at all, Sleeper caps the bracket field. This follows Sleeper.
+  */
+
+  it("is eight, which is exactly three rounds", () => {
+    /*
+      The number is not arbitrary and this is the assertion that says so. Three
+      rounds is what a standard playoff window provides, so eight is the largest
+      field that always fits. Raising it to 9 would need a fourth week and
+      reopen #324; the arithmetic, not taste, sets it.
+    */
+    expect(CONSOLATION_BRACKET_MAX).toBe(8);
+    expect(Math.ceil(Math.log2(CONSOLATION_BRACKET_MAX))).toBe(
+      NFL_DEFAULT_SCHEDULE.playoffWeeks.length,
+    );
+  });
+
+  it("never binds at the shipped preset", () => {
+    // 12 members, 6 playoff places, 6 left over. The cap changes nothing for
+    // any league this product can currently create — it guards a future size.
+    const shipped = computeStandings(teams(12), [], DEFAULT_TIEBREAKERS);
+    const field = consolationField(shipped, NFL_DEFAULT_SCHEDULE.playoffTeams);
+
+    expect(field.length).toBeLessThanOrEqual(CONSOLATION_BRACKET_MAX);
+    expect(field).toHaveLength(6);
+  });
+
+  it("takes the top of the teams that missed, not the worst — owner, 2026-09-25", () => {
+    /*
+      **The product call, and it went the other way from Sleeper.**
+
+      Sleeper's own wording is "up to 8 teams with the worst records". The owner
+      ruled the opposite: seeding runs continuously down from the main bracket,
+      so the teams that narrowly missed play and the bottom of the table sits
+      out.
+
+      At 16 teams and 6 playoff places, seeds 7-14 play; 15 and 16 do not. This
+      pins the direction — a `.slice(-CONSOLATION_BRACKET_MAX)` would pass a
+      length check and invert who plays.
+    */
+    const big = computeStandings(teams(16), [], DEFAULT_TIEBREAKERS);
+    const bracketField = consolationField(big, NFL_DEFAULT_SCHEDULE.playoffTeams).slice(
+      0,
+      CONSOLATION_BRACKET_MAX,
+    );
+
+    expect(bracketField).toHaveLength(CONSOLATION_BRACKET_MAX);
+    expect(bracketField[0]?.seed).toBe(7);
+    expect(bracketField.at(-1)?.seed).toBe(14);
   });
 });
