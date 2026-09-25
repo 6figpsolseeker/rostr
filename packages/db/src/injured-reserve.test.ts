@@ -89,6 +89,114 @@ async function setup(): Promise<Fixture> {
   return { client: db, leagueId: league.id, teamId, players };
 }
 
+describe("the kickoff refusal — #321", () => {
+  /*
+    `GAME_STARTED` had no test at all. The guard existed, the error code
+    existed, `waivers.test.ts` asserted a code of the same name on a different
+    path, and nothing anywhere pinned this one.
+
+    It matters more than an untested refusal usually does, because the lineup
+    screen now predicts it. `irGameStarted` in `apps/web/src/lib/ir-placement.ts`
+    reconstructs this rule from `opponentRef`, which works only while
+    `heldRoster` and `loadRosterForWeek` keep joining `games` identically — an
+    agreement `heldRoster` states in prose and, until now, nothing enforced.
+  */
+
+  /** A fixture for the player's club, kicking off at `kickoffAt`. */
+  async function scheduleGame(fx: Fixture, kickoffAt: string): Promise<void> {
+    const [sport] = await fx.client.query<{ id: string }>(
+      "SELECT id FROM sports WHERE key = $1",
+      [NFL.key],
+    );
+    await fx.client.query(
+      `INSERT INTO games
+         (sport_id, external_ref, season, week, home_team_ref, away_team_ref, kickoff_at, status)
+       VALUES ($1, $2, 2026, 1, 'CIN', 'PIT', $3, 'SCHEDULED')`,
+      [sport!.id, `game-${kickoffAt}`, kickoffAt],
+    );
+  }
+
+  it("refuses placement once his game has kicked off", async () => {
+    // The rule the screen mirrors. Deleting the guard in `moveToIr` makes this
+    // the only thing that notices.
+    const fx = await setup();
+    await scheduleGame(fx, "2026-09-16T11:00:00Z"); // an hour before NOW
+
+    await expect(
+      moveToIr(fx.client, {
+        leagueId: fx.leagueId,
+        teamId: fx.teamId,
+        playerId: fx.players.get("hurt")!,
+        week: 1,
+        now: NOW,
+      }),
+    ).rejects.toMatchObject({ code: "GAME_STARTED" });
+  });
+
+  it("accepts placement while his game is still to come", async () => {
+    // The control. Without it a guard that refused unconditionally would pass
+    // the test above.
+    const fx = await setup();
+    await scheduleGame(fx, "2026-09-16T20:00:00Z"); // eight hours after NOW
+
+    await moveToIr(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: fx.teamId,
+      playerId: fx.players.get("hurt")!,
+      week: 1,
+      now: NOW,
+    });
+
+    const [row] = await fx.client.query<{ on_ir: boolean }>(
+      "SELECT on_ir FROM roster_entries WHERE team_id = $1 AND player_id = $2",
+      [fx.teamId, fx.players.get("hurt")],
+    );
+    expect(row?.on_ir).toBe(true);
+  });
+
+  it("accepts a player whose club has no fixture this week — #321", async () => {
+    /*
+      **The behaviour the screen now depends on, and the first test it has
+      ever had.**
+
+      No `games` row matches his club, so `heldRoster`'s LEFT JOIN leaves
+      `kickoff_at` NULL and the guard stays silent. That is not an oversight:
+      `RULES.md` §2's injured-reserve paragraph is a designation test with no
+      club and no kickoff condition, and states its own direction — "a
+      designation nobody here recognises admits him rather than refusing".
+
+      It is also the exact case where this rule and the *lineup lock* disagree.
+      `loadKickoffs` fails closed for this player, handing him the week's first
+      kickoff so his slot still freezes. Injured reserve fails open. Both are
+      right, for different rules.
+
+      If someone later makes `moveToIr` read kickoffs the way `loadKickoffs`
+      does — issue #321's rejected option 2 — this test goes red, and it should:
+      the screen would silently start hiding a button that had stopped being
+      legal, which is the quiet failure the whole issue exists to avoid.
+    */
+    const fx = await setup();
+    await scheduleGame(fx, "2026-09-16T11:00:00Z"); // NOT his club: CIN vs PIT
+    await fx.client.query("UPDATE players SET team_ref = NULL WHERE id = $1", [
+      fx.players.get("hurt"),
+    ]);
+
+    await moveToIr(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: fx.teamId,
+      playerId: fx.players.get("hurt")!,
+      week: 1,
+      now: NOW,
+    });
+
+    const [row] = await fx.client.query<{ on_ir: boolean }>(
+      "SELECT on_ir FROM roster_entries WHERE team_id = $1 AND player_id = $2",
+      [fx.teamId, fx.players.get("hurt")],
+    );
+    expect(row?.on_ir).toBe(true);
+  });
+});
+
 describe("moveToIr", () => {
   it("stashes an injured player without releasing him", async () => {
     const fx = await setup();
