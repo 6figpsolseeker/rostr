@@ -911,18 +911,54 @@ async function writeSchedule(
   if (Number(existing?.count ?? 0) > 0) {
     // Rewriting a schedule mid-season changes who played whom, which changes
     // every record derived from it.
+    //
+    // **Still here, and not subsumed by `0050`'s constraint.** The constraint
+    // refuses a fixture *identical* to one already stored; this refuses a
+    // schedule that is *different*, which is the case that actually arrives — a
+    // second draw under a second seed shares almost no pairings with the first,
+    // so every row of it would pass the constraint and the league would end up
+    // holding two overlapping seasons. The guard is the idempotence contract;
+    // the constraint is the race backstop. Deleting either as redundant breaks
+    // something the other never covered.
     return { written: 0 };
   }
 
+  let written = 0;
   for (const matchup of schedule) {
-    await db.query(
+    /*
+      `DO NOTHING`, and the reason is the transaction this runs inside rather
+      than the duplicate itself.
+
+      The count above is a check-then-act: at READ COMMITTED it is a snapshot
+      taken before the first insert, so a writer committing in between passes it
+      too. And this runs inside the transaction that commits the **final draft
+      pick** (`draft.ts`), alongside the move to `IN_SEASON` and the waiver
+      priority seeding. A bare `INSERT` hands the loser a 23505, which aborts
+      that whole transaction — the league loses the pick, the state change and
+      the priority order, and the draft room hangs on a pick that will never
+      commit. That is strictly worse than the duplicated fixture the constraint
+      exists to stop. `DO NOTHING` makes the loser write nothing and carry on.
+
+      `RETURNING id` is how the row is counted, and it is not decoration. This
+      used to `return { written: schedule.length }` — a constant nobody had
+      measured, which `DO NOTHING` would make actively false. `SqlClient.query`
+      returns rows and nothing else, so a suppressed insert is visible only as an
+      empty result. A count that disagrees with `schedule.length` is also the one
+      signal that `DO NOTHING` has swallowed a *generator* bug — the same fixture
+      emitted twice — rather than a race. Nothing currently reads it at the
+      production call site; see #319.
+    */
+    const inserted = await db.query<{ id: string }>(
       `INSERT INTO matchups (league_id, week, phase, home_team_id, away_team_id)
-       VALUES ($1, $2, 'REGULAR', $3, $4)`,
+       VALUES ($1, $2, 'REGULAR', $3, $4)
+       ON CONFLICT (league_id, week, phase, home_team_id, away_team_id) DO NOTHING
+       RETURNING id`,
       [leagueId, matchup.week, matchup.homeTeamId, matchup.awayTeamId],
     );
+    written += inserted.length;
   }
 
-  return { written: schedule.length };
+  return { written };
 }
 
 /**
