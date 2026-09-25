@@ -1,0 +1,117 @@
+# Is the deployed database in step with `main`?
+#
+# Nothing kept it there and nothing reported the gap — issue #116. On 2026-08-14
+# the database held through version 20 while `main` carried 0027, discovered only
+# by querying `schema_migrations` by hand, because no other signal existed.
+#
+# ## This adds no logic. `pnpm db:status` already does all of it
+#
+# It compares the checkout's migration files against what the database has
+# applied, prints the gap in words, and already exits non-zero:
+#
+#   exit 1  BEHIND — migrations on disk that the database has not applied
+#   exit 1  MISMATCH — a version applied under a different file (checksum)
+#   exit 3  the database could not be read at all
+#
+# So this workflow is a caller, not a check. The single new line is the `run:`.
+#
+# ## Daily, and NOT on push — the cadence is the whole design
+#
+# A push trigger on `packages/db/migrations/**` was the obvious choice and is
+# wrong. The gap opens the instant a migration merges and closes when somebody
+# runs `pnpm db:migrate`, which is minutes later and entirely correct. Firing
+# then means a red X on every migration merge for a condition nobody should act
+# on — and this repo has been bitten four times by alarms that were correct and
+# useless (#323, #325, the week-16 fixtures, `score-week`'s `onFallback`).
+#
+# **The size of the gap is not the signal. The age of it is.** A run the next
+# morning never sees the merge-then-apply window. If it is still behind by then,
+# somebody forgot, which is the case #116 was actually filed for.
+#
+# The acute case — deployed code reading a column that does not exist — is
+# already covered elsewhere and does not wait for this: `scoreWeekNotes` puts
+# `column "…" does not exist` into `cron_runs.last_outcome` within ten minutes.
+#
+# ## Why here and not inside the app
+#
+# Two reasons, and the first is the one that matters.
+#
+# A check inside the app compares the database against **the deployed build**.
+# The drift in #116 is against **`main`**. A stuck or failing deploy would make
+# an in-app check report "up to date" while `main` carries seven unapplied
+# migrations — the same silence, one layer up. A workflow reads the checkout, so
+# it measures the thing the issue is about.
+#
+# And the monitor must not share a failure domain with what it monitors. An
+# in-app check goes quiet exactly when the app is broken, which is one of the
+# states worth being told about. A red scheduled workflow emails the owner;
+# a Vercel cron failure on Hobby does not.
+#
+# (It is also not buildable in the app as things stand: `loadMigrations` does
+# `readdirSync` on a path from `import.meta.url`, `packages/db/dist/` holds zero
+# `.sql`, and a bundler cannot trace it. `index.ts` already refuses to export
+# `migrate.ts` for that reason.)
+#
+# ## The credential is NOT the app's
+#
+# `DB_STATUS_URL` holds a purpose-made Postgres role with `SELECT` on
+# `schema_migrations` and `cron_runs` and nothing else. The production
+# `DATABASE_URL` is deliberately not here: Vercel already holds it, so copying
+# it into GitHub would move nothing and create a second place to lose a
+# credential that can `ALTER TABLE … DISABLE TRIGGER ALL` — the one thing the
+# frozen-rules guarantee exists to prevent. A role that can read fifty public
+# integers is a different question with an easy answer.
+#
+# `cron_runs` is granted deliberately: `cli.ts` reads it with
+# `.catch(() => [])`, so a role without it would swallow the permission error
+# and print "0 have ever run" on every single run. A false alarm built in on
+# day one.
+#
+# ## Do not soften this job
+#
+# No `continue-on-error`, no `|| true`. Exit 1 and exit 3 are the severity axis,
+# and a monitor that cannot go red is indistinguishable from one that is lying.
+# If exit 3 persists for two days, disable the schedule deliberately and say so
+# here — do not swallow it.
+#
+# Not a required check, and not run on pull requests: a PR cannot change the
+# deployed database, so gating one on this would fail for reasons its author
+# cannot fix.
+
+name: DB drift
+
+on:
+  schedule:
+    # 09:10 UTC daily. Past the 09:20 UTC season-sync only by coincidence —
+    # nothing here contends with it, this job takes no locks and only reads.
+    - cron: "10 9 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  status:
+    runs-on: ubuntu-latest
+    # A hung connection against the free-tier cap is worse than a missed run.
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # `db:status` builds the packages first — `dist/` is gitignored and the
+      # CLI lives there, so a fresh checkout cannot run it otherwise (#292).
+      - name: Is the deployed database in step with this checkout?
+        run: pnpm db:status
+        env:
+          DATABASE_URL: ${{ secrets.DB_STATUS_URL }}
