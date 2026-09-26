@@ -94,6 +94,23 @@ async function setup(): Promise<Fixture> {
     [sport!.id, SEASON, WEEK, KICKOFF],
   );
 
+  /*
+    DEN plays in the *next* week, and nothing here reads that week.
+
+    Every bye test below moves a player to DEN, and without this row DEN appeared
+    in no fixture at all — so the suite staged "his club is nowhere in the
+    schedule" and asserted "he is on a bye". Those are different states and
+    telling them apart is what #122 is about: `playerContext`'s season-wide
+    `team_scheduled` EXISTS answers `NO_FIXTURE` for the first and leaves the
+    second to `gameAvailability`. A bye is a club that plays in other weeks and
+    not this one, so the control needs a game in another week to be a bye at all.
+  */
+  await db.query(
+    `INSERT INTO games (sport_id, external_ref, season, week, home_team_ref, away_team_ref, kickoff_at, status)
+     VALUES ($1, 'g2', $2, $3, 'DEN', 'KC', $4, 'SCHEDULED')`,
+    [sport!.id, SEASON, WEEK + 1, new Date(KICKOFF.getTime() + 7 * 24 * 3600 * 1000)],
+  );
+
   const players = new Map<string, string>();
   for (const [index, teamId] of teamIds.entries()) {
     const handle = `qb-${index}`;
@@ -500,6 +517,105 @@ describe("a player no NFL club lists — #308", () => {
     const side = sideOf(views, fx.teamIds[0]!);
 
     expect(side?.starters[0]?.gameState).toBe("BYE");
+  });
+
+  it("calls a club that plays in no week of the season no fixture, not a bye", async () => {
+    /*
+      The filed bug. His `team_ref` is stale after a trade, blank, or an
+      abbreviation the provider renamed, so the fixture join matches nothing in
+      any week — and `gameAvailability`, which never sees the schedule, read his
+      null bye as a bye and put him on the literal word "bye", to both managers,
+      every week of the season.
+
+      `active` is deliberately left alone. `players.active` is `NOT NULL DEFAULT
+      true` and `setup()` omits it, so he is listed — which is the whole point:
+      #308 fixed the *released* half of this class from `players.active`, and
+      `players.active` cannot answer this half because he really is employed.
+
+      Dies if the `!teamScheduled` branch is deleted, and also if it is moved
+      below the kickoff test, where `gameAvailability` would claim him first.
+    */
+    const fx = await setup();
+    await fx.client.query("UPDATE players SET team_ref = 'XXX' WHERE external_ref = 'qb-0'");
+
+    const views = await loadWeekMatchups(fx.client, fx.leagueId, WEEK, BEFORE);
+    const side = sideOf(views, fx.teamIds[0]!);
+
+    expect(side?.starters[0]?.gameState).toBe("NO_FIXTURE");
+  });
+
+  it("does not call him unscheduled, which would tell a manager to hold him", async () => {
+    /*
+      `UNSCHEDULED` is the tempting answer and the wrong one. It renders "TBD",
+      whose documented job is to say a fixture is coming so a manager keeps the
+      roster spot — and nothing is coming for this player. `MatchupSide.unscheduled`
+      also defines itself as a fixture that exists without a kickoff time, and his
+      does not exist.
+
+      Asserted as its own test rather than folded into the one above, because a
+      mutant that returns `UNSCHEDULED` from the new branch is the single most
+      likely wrong implementation and this is the only thing that catches it. The
+      counters are the proof rather than the label: `unscheduled` counts
+      `UNSCHEDULED` and `TIME_TBD` (`matchup.ts`), so a zero here is what
+      distinguishes the two states.
+    */
+    const fx = await setup();
+    await fx.client.query("UPDATE players SET team_ref = 'XXX' WHERE external_ref = 'qb-0'");
+
+    const views = await loadWeekMatchups(fx.client, fx.leagueId, WEEK, BEFORE);
+    const side = sideOf(views, fx.teamIds[0]!);
+
+    expect(side?.unscheduled).toBe(0);
+    expect(side?.yetToPlay).toBe(0);
+    expect(side?.inProgress).toBe(0);
+  });
+
+  it("does not call the whole league no fixture when no schedule is stored", async () => {
+    /*
+      **The control that stops this becoming #182 inverted.**
+
+      `teamScheduled` is false both for a club missing from the schedule and for
+      a schedule that has not been ingested. `season-sync` calls `syncByeWeeks`
+      before its per-week `syncGames` loop and wraps each week in its own
+      try/catch, so byes-without-games is a state it is built to survive — and
+      the matchup route opens on week 1 in preseason by design. Claiming the new
+      state from an empty `games` table would put every starter in every league
+      on "no fixture", which reads as "expect nothing".
+
+      So with no schedule the old answer has to stand. `availability.ts` prefers
+      a wrong `BYE` to a promise invented out of a gap in our own ingest, and
+      that preference is not this branch's to overturn.
+
+      Dies the moment the `seasonScheduled` conjunct is dropped.
+    */
+    const fx = await setup();
+    await fx.client.query("DELETE FROM games WHERE season = $1", [SEASON]);
+
+    const views = await loadWeekMatchups(fx.client, fx.leagueId, WEEK, BEFORE);
+    const side = sideOf(views, fx.teamIds[0]!);
+
+    expect(side?.starters[0]?.gameState).toBe("BYE");
+    expect(side?.starters.some((line) => line.gameState === "NO_FIXTURE")).toBe(false);
+  });
+
+  it("still calls a stale bye row from the club that cut him no club", async () => {
+    /*
+      Ordering control. A released player usually has `team_ref` cleared too, so
+      he satisfies **both** new guards — `!onNflRoster` and `!teamScheduled`.
+      `NO_CLUB` must win: it is read from `players.active`, the column five
+      surfaces already key on, and it is the stronger fact. Dies if the
+      `!teamScheduled` branch is placed above the `NO_CLUB` one, which would
+      regress #308 while every other test still passed.
+    */
+    const fx = await setup();
+    await fx.client.query(
+      "UPDATE players SET active = false, team_ref = 'XXX' WHERE external_ref = 'qb-0'",
+    );
+
+    const views = await loadWeekMatchups(fx.client, fx.leagueId, WEEK, BEFORE);
+    const side = sideOf(views, fx.teamIds[0]!);
+
+    expect(side?.starters[0]?.gameState).toBe("NO_CLUB");
   });
 });
 

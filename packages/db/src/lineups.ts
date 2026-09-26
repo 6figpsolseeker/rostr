@@ -244,7 +244,19 @@ export async function weekHasSchedule(
  * rather than a silent bypass.
  *
  * The three "no game row" cases are the same ones `loadRosterForWeek` documents,
- * and they are resolved here so there is one definition of when a player locks.
+ * and this function is the only definition of when a player **locks**.
+ *
+ * That is a claim about the lock, not about the SQL. The fixture join below —
+ * `g.home_team_ref = p.team_ref OR g.away_team_ref = p.team_ref` — is written out
+ * again in seven other functions across four other files — eleven join
+ * predicates in total, which `grep "home_team_ref = p.team_ref" packages/db/src`
+ * finds in one command. Four of them resolve a missing row differently **on
+ * purpose**:
+ * `heldRoster` fails open so `moveToIr` accepts (`RULES.md` §2 has no kickoff
+ * condition), `refuseIfKickedOff` fails open so an unsigned free agent stays
+ * addable, `loadTbdKickoffs` answers set membership, and `playerContext` reports
+ * `NO_FIXTURE` to a screen. Only `loadRosterForWeek` matches this one, because
+ * the autofill's exclusion needs the same fail-closed answer. See #122.
  */
 export async function loadKickoffs(
   db: SqlClient,
@@ -533,7 +545,14 @@ export async function loadRosterForWeek(
 
   // The conservative lock time for a player whose team is not in the schedule at
   // all. Null when the week has no games — `setLineup` refuses in that case
-  // rather than guessing. Shared with `loadKickoffs` so the two cannot disagree.
+  // rather than guessing.
+  //
+  // `weekFirstKickoff` is the one thing genuinely shared with `loadKickoffs`:
+  // the query above and the branch below are copies of it that agree by
+  // inspection, not by construction. They must keep agreeing — `autolineup.ts`
+  // reads this `kickoffAt` to exclude a player whose game has started, so a
+  // divergence here puts him back in the candidate pool. `heldRoster`
+  // deliberately does not agree; see `apps/web/src/lib/ir-placement.ts`.
   const weekStartsAt = await weekFirstKickoff(db, season, week);
 
   return new Map(

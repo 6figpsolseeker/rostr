@@ -185,10 +185,23 @@ async function heldRoster(
   season: number,
   week: number,
 ): Promise<Held[]> {
-  // Joined the way `loadKickoffs` joins — on `sport_id` and a supplied season,
-  // because `players` carries a sport rather than a season. Deriving it here a
-  // second way is how the two would come to disagree about which game a player
-  // is in.
+  // The ON clause is `loadRosterForWeek`'s, character for character — on
+  // `sport_id` and a supplied season, because `players` carries a sport rather
+  // than a season. That identity is load-bearing: `ir-placement.ts` predicts
+  // this refusal from the `opponentRef` that loader derives, and it can only do
+  // so while both joins select the same fixture.
+  //
+  // **What is deliberately not shared is the resolution.** There is no
+  // `team_scheduled` EXISTS and no `weekFirstKickoff` fallback here, so a player
+  // whose club matches no fixture keeps `kickoff_at` NULL and `moveToIr`
+  // **accepts**, while the lineup lock fails closed on that same player. Two
+  // questions, two answers.
+  //
+  // `RULES.md` §2 states IR eligibility as a designation test and carries no
+  // kickoff condition on it. The kickoff refusal below is grounded in §6 by
+  // analogy — see `moveToIr`'s docstring — not in §2, so §2 does not so much
+  // permit the placement as not govern it. Either way, adding the fallback here
+  // would refuse placements that are accepted today, and nothing would fail.
   return tx.query<Held>(
     `SELECT r.player_id, r.on_ir, p.injury_designation AS designation,
             g.kickoff_at

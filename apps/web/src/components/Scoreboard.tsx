@@ -37,7 +37,14 @@ interface PlayerLine {
    * chain below both need visiting; `pnpm typecheck` will not say so.
    */
   gameState:
-    "BYE" | "UNSCHEDULED" | "TIME_TBD" | "YET_TO_PLAY" | "IN_PROGRESS" | "FINAL" | "NO_CLUB";
+    | "BYE"
+    | "UNSCHEDULED"
+    | "TIME_TBD"
+    | "YET_TO_PLAY"
+    | "IN_PROGRESS"
+    | "FINAL"
+    | "NO_CLUB"
+    | "NO_FIXTURE";
   kickoffAt: string | null;
 }
 
@@ -368,20 +375,27 @@ function Score({ line }: { line: PlayerLine }) {
     // for such a player every week of the season until #308.
     line.gameState === "NO_CLUB"
       ? "no club"
-      : line.gameState === "BYE"
-        ? "bye"
-        : // A fixture whose hour is not fixed. Distinct from a bye, because this
-          // player will play and a bye player cannot — the difference decides
-          // whether a manager holds the roster spot. The stored kickoff is the
-          // earliest the game could start, so it is deliberately not shown as a
-          // time: the date is real and the clock beside it would not be.
-          line.gameState === "TIME_TBD" || line.gameState === "UNSCHEDULED"
-          ? "TBD"
-          : line.gameState === "YET_TO_PLAY"
-            ? kickoffLabel(line.kickoffAt)
-            : line.gameState === "IN_PROGRESS"
-              ? "live"
-              : null;
+      : // A club lists him, but it plays in no week of this season — a stale
+        // `team_ref` after a trade, a blank one, or an abbreviation the provider
+        // renamed. Same instruction as "no club": expect nothing. Deliberately
+        // not "bye", which said he was resting and would be back, and not "TBD",
+        // which says a fixture is coming and to hold the roster spot.
+        line.gameState === "NO_FIXTURE"
+        ? "no fixture"
+        : line.gameState === "BYE"
+          ? "bye"
+          : // A fixture whose hour is not fixed. Distinct from a bye, because this
+            // player will play and a bye player cannot — the difference decides
+            // whether a manager holds the roster spot. The stored kickoff is the
+            // earliest the game could start, so it is deliberately not shown as a
+            // time: the date is real and the clock beside it would not be.
+            line.gameState === "TIME_TBD" || line.gameState === "UNSCHEDULED"
+            ? "TBD"
+            : line.gameState === "YET_TO_PLAY"
+              ? kickoffLabel(line.kickoffAt)
+              : line.gameState === "IN_PROGRESS"
+                ? "live"
+                : null;
 
   return (
     <span className="flex shrink-0 items-baseline gap-1.5">
