@@ -23,8 +23,24 @@
  *
  * Being ahead by twenty with three players left is a different position from
  * being ahead by twenty with none, and no total conveys that. `yetToPlay` and
- * `inProgress` come from `games.kickoff_at` and the game status, the same source
- * every lineup lock is derived from.
+ * `inProgress` come from `games.kickoff_at` and the game status.
+ *
+ * ## Not the query the lineup lock uses, and it must not become one
+ *
+ * `loadKickoffs` resolves a player whose `team_ref` matches no fixture to the
+ * week's first kickoff, so his slot *freezes* rather than never locking.
+ * `playerContext` borrows only that query's season-wide `team_scheduled` EXISTS
+ * — never its fallback — and answers `NO_FIXTURE`. The flag is the honest half:
+ * positive evidence that his club appears nowhere in the schedule. The
+ * synthesised timestamp is not, and reading it here would resolve to
+ * `IN_PROGRESS`, the screen claiming a game is under way for a player who has
+ * none.
+ *
+ * So this screen and the lock still disagree about him, deliberately: the lock
+ * freezes his slot and the scoreboard says no fixture is coming. Both are true.
+ * What is gone is the old answer — `BYE`, which told both managers he was
+ * resting and would be back, every week, all season. See #122, and #308 for the
+ * same defect on the released half of this player class.
  */
 
 import { gameAvailability, indexScoringRules, scoreTeamLineup } from "@rostr/core";
@@ -88,7 +104,31 @@ export type PlayerGameState =
    * listed player with a blank club reads `team_ref` null, and a released
    * player can keep a club abbreviation.
    */
-  | "NO_CLUB";
+  | "NO_CLUB"
+  /**
+   * A club lists him, but that club appears nowhere in this season's schedule.
+   *
+   * His `team_ref` is stale after a trade, blank, or an abbreviation the
+   * provider renamed — so the fixture join matches nothing in *any* week, which
+   * is what separates this from a bye.
+   *
+   * Claimed only when the season **has** a schedule. A season-wide `EXISTS`
+   * over `games` returning false is an absent row, not evidence — and
+   * `season-sync` calls `syncByeWeeks` before its per-week `syncGames` loop,
+   * each week in its own try/catch, so byes-without-games is a state that job is
+   * built to survive. Reading an empty `games` table as "no fixture" would put
+   * every starter in every league here. That is the failure #182 fixed,
+   * inverted, and the same trap `NO_CLUB` above avoids by keying on
+   * `players.active`. The pair of flags is what makes this positive: a schedule
+   * exists, and his club is not in it.
+   *
+   * Distinct from `UNSCHEDULED`, which promises a fixture is coming and renders
+   * as "TBD" to tell a manager to hold the roster spot. Nothing is coming for
+   * this player. Distinct from `NO_CLUB`, which is claimed from `players.active`
+   * and says no club employs him — this one says we cannot locate his club's
+   * games.
+   */
+  | "NO_FIXTURE";
 
 export interface PlayerLine {
   readonly playerId: string;
@@ -309,6 +349,23 @@ interface PlayerFacts {
   readonly byeWeek: number | null;
   /** `players.active` — whether any NFL club currently lists him. */
   readonly onNflRoster: boolean;
+  /**
+   * Does his club appear anywhere in this *season's* schedule?
+   *
+   * Season-wide rather than this week's, and that is the whole point: a club on
+   * a bye is in the schedule and merely absent from this week, so a bye still
+   * reads as a bye. False means `team_ref` matches no fixture at all.
+   */
+  readonly teamScheduled: boolean;
+  /**
+   * Does the season have a stored schedule at all?
+   *
+   * `teamScheduled` is false both for a club that is missing from the schedule
+   * and for a schedule that has not been ingested, and those must not read the
+   * same. Without this, an empty `games` table would label every starter in
+   * every league "no fixture".
+   */
+  readonly seasonScheduled: boolean;
 }
 
 /**
@@ -332,6 +389,8 @@ async function playerContext(
     kickoff_tbd: boolean | null;
     bye_week: number | null;
     on_nfl_roster: boolean;
+    team_scheduled: boolean;
+    season_scheduled: boolean;
   }>(
     // `p.active` costs no extra join — `players` is already here. It is display
     // data and this query is not an ownership oracle; nothing downstream of
@@ -343,7 +402,34 @@ async function playerContext(
             g.status,
             g.kickoff_tbd,
             ps.bye_week,
-            p.active AS on_nfl_roster
+            p.active AS on_nfl_roster,
+            -- Whether his club is in the season's schedule at all. The same
+            -- subquery loadKickoffs and loadRosterForWeek carry, and
+            -- deliberately not their weekFirstKickoff fallback: that synthesises
+            -- a kickoff so a lineup slot still locks, and a display surface
+            -- reading it would say "live" about a game that does not exist. The
+            -- flag is the honest half.
+            EXISTS (
+              SELECT 1
+                FROM games sg
+               WHERE sg.sport_id = p.sport_id
+                 AND sg.season = $2
+                 AND (sg.home_team_ref = p.team_ref OR sg.away_team_ref = p.team_ref)
+            ) AS team_scheduled,
+            -- Whether the season has a schedule at all. Correlated only on
+            -- sport_id, never on team_ref, and that is load-bearing: a season
+            -- whose games all carry a different sport_id turns both flags off
+            -- together, so the conjunct below blocks and the old answer stands
+            -- rather than a league being mislabelled. Without this flag the one
+            -- above cannot tell "his club is missing from the schedule" from
+            -- "the schedule is missing", and season-sync is built to survive the
+            -- second.
+            EXISTS (
+              SELECT 1
+                FROM games ag
+               WHERE ag.sport_id = p.sport_id
+                 AND ag.season = $2
+            ) AS season_scheduled
        FROM roster_entries r
        JOIN teams t ON t.id = r.team_id
        JOIN players p ON p.id = r.player_id
@@ -371,6 +457,8 @@ async function playerContext(
         kickoffTbd: row.kickoff_tbd === true,
         byeWeek: row.bye_week === null ? null : Number(row.bye_week),
         onNflRoster: row.on_nfl_roster !== false,
+        teamScheduled: row.team_scheduled !== false,
+        seasonScheduled: row.season_scheduled === true,
       },
     ]),
   );
@@ -432,6 +520,38 @@ function gameStateOf(facts: PlayerFacts | undefined, week: number, now: Date): P
     week — a specific, plausible, false number.
   */
   if (facts && !facts.onNflRoster) return "NO_CLUB";
+
+  /*
+    A club lists him, but that club plays in no week of this season — so his
+    fixture cannot be located at all. Not a bye: a club on a bye plays in other
+    weeks, and this one plays in none.
+
+    `gameAvailability` cannot tell the two apart, because it never sees the
+    schedule. It reads a null `byeWeek` as a bye (`availability.ts`), which is
+    what put this player on the literal word "bye" — "he is resting, he will be
+    back" about a man whose club cannot be found. #308 fixed the released half of
+    this player class from `players.active`; this is the listed half, and
+    `players.active` cannot answer it because he *is* listed.
+
+    Not `UNSCHEDULED`, which is the other tempting answer and a worse one: it
+    renders "TBD", whose documented job is to say a fixture is coming so a
+    manager holds the roster spot. Nothing is coming. `MatchupSide.unscheduled`
+    also defines itself as a fixture that exists without a kickoff time, and his
+    does not exist.
+
+    Checked above the kickoff test, so a scheduled club on a real bye still
+    reaches `gameAvailability` and still reads `BYE`.
+
+    Gated on `seasonScheduled` because an `EXISTS` that returns false is an
+    absent row, not evidence. `season-sync` writes byes before it writes games
+    and wraps each week separately, so a season with byes and no games is a state
+    it is built to survive — and in it `teamScheduled` is false for *everybody*.
+    Claiming the state from that would put every starter in every league on "no
+    fixture", which is #182 inverted. With no schedule stored, the answer below
+    stands: `availability.ts` prefers a wrong `BYE` to a promise invented out of
+    a gap in our own ingest, and that preference still holds here.
+  */
+  if (facts && facts.seasonScheduled && !facts.teamScheduled) return "NO_FIXTURE";
 
   // No game in this week's schedule, and there are two reasons for that. A bye
   // means he cannot score, and the screen should say so rather than show a
