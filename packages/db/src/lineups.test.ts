@@ -2091,6 +2091,54 @@ describe("the autofill ranks an injured player behind a healthy one — #269", (
     expect(await startedAt(fx, "QB")).toBe(fx.player("thu-qb"));
   });
 
+  it("passes over a player whose club is in no week of the schedule, end to end", async () => {
+    /*
+      **The wiring for the new term**, which the unit tests above cannot see:
+      they build the candidate themselves, so a future `autoFillLineup` that
+      switched loaders or constructed a literal would fail none of them.
+
+      Built the way #327's case is, for the reason its comment gives: this
+      fixture's players carry random ids and `compare` breaks ties on ascending
+      id, so two equally-ranked quarterbacks are a coin toss and a test asserting
+      `thu-qb` against an unranked pair would pass about half the time on unfixed
+      code. `sun-qb` is projected well first, and the control run below proves the
+      edge works — so only a demotion can explain him losing the slot afterwards.
+
+      `active` is deliberately left true and `team_ref` deliberately left set.
+      That is the row neither #308's term nor #327's can catch.
+    */
+    const fx = await setup();
+
+    const [statKey] = await fx.client.query<{ id: string }>(
+      `SELECT k.id FROM stat_keys k JOIN sports s ON s.id = k.sport_id
+        WHERE s.key = $1 AND k.key = 'pass_yd'`,
+      [NFL.key],
+    );
+    await fx.client.query(
+      `INSERT INTO player_projections (player_id, season, week, source, stat_key_id, value)
+       VALUES ($1, $2, $3, $4, $5, 400)`,
+      [fx.player("sun-qb"), SEASON, WEEK, PRIMARY_PROJECTION_SOURCE, statKey!.id],
+    );
+
+    // The control: well projected, and his club is in the schedule, so he starts.
+    await autoFillLineup(fx.client, fx.leagueId, fx.teamId, WEEK, BEFORE_ANYTHING);
+    expect(await startedAt(fx, "QB")).toBe(fx.player("sun-qb"));
+
+    // Now his club matches no fixture in any week. He keeps `active` and keeps a
+    // ref, so only `!teamScheduled` can demote him.
+    await fx.client.query("UPDATE players SET team_ref = 'ZZZ' WHERE id = $1", [
+      fx.player("sun-qb"),
+    ]);
+    await fx.client.query("DELETE FROM lineups WHERE team_id = $1 AND week = $2", [
+      fx.teamId,
+      WEEK,
+    ]);
+
+    await autoFillLineup(fx.client, fx.leagueId, fx.teamId, WEEK, BEFORE_ANYTHING);
+
+    expect(await startedAt(fx, "QB")).toBe(fx.player("thu-qb"));
+  });
+
   it("passes over a released player, end to end — #327", async () => {
     /*
       **The wiring, which no unit test can see.**
@@ -2287,6 +2335,75 @@ describe("the autofill ranks an injured player behind a healthy one — #269", (
     );
 
     expect(candidate.unavailable).toBe(true);
+  });
+
+  it("marks a player whose club is in no week of the schedule unavailable", async () => {
+    /*
+      The third member of the class, and the one neither #308 nor #327 caught.
+
+      He is listed by a club — `players.active` is true — but his `team_ref` is a
+      string no fixture carries, so his game cannot be located in any week.
+      `loadRosterForWeek` hands him the week's first kickoff so his slot still
+      freezes, which is right for a lock and is exactly what hid him here: his
+      kickoff is non-null, his ref is non-null, his designation is clear, and
+      `active` is true. All four existing terms miss him, so he ranked as fully
+      available on an average nothing expires.
+
+      Dies if the `!teamScheduled` conjunct is deleted.
+    */
+    const fx = await setup();
+    await fx.client.query("UPDATE players SET team_ref = 'ZZZ' WHERE id = $1", [
+      fx.player("sun-qb"),
+    ]);
+
+    const roster = await loadRosterForWeek(fx.client, fx.teamId, SEASON, WEEK);
+    const player = roster.get(fx.player("sun-qb"))!;
+
+    // The three premises, because the case exists to show that none of them fire.
+    expect(player.teamRef).not.toBeNull();
+    expect(player.kickoffAt).not.toBeNull();
+    const offNflRoster = await loadOffNflRoster(fx.client, [...roster.keys()]);
+    expect(offNflRoster.has(fx.player("sun-qb"))).toBe(false);
+
+    const candidate = autolineupCandidate(
+      player,
+      { averageMilliPoints: 18_000, projectedMilliPoints: 18_000 },
+      offNflRoster,
+    );
+
+    expect(candidate.unavailable).toBe(true);
+    // Demoted, never excluded: a team with nobody else at the position still
+    // fields him and scores the zero an empty slot would have scored.
+    expect(candidate.playerId).toBe(fx.player("sun-qb"));
+  });
+
+  it("keeps a bye player's club scheduled, because the flag is season-wide", async () => {
+    /*
+      **The only assertion that can see a week-scoped spelling of the flag**, and
+      the reason it needs its own case.
+
+      A bye player is already unavailable through `kickoffAt === null`, so the
+      test below passes whether the flag is season-wide or week-scoped. But narrow
+      it to the week and `teamScheduled` goes false for every club on its bye —
+      and the moment this flag reaches a label, as it did on the scoreboard in
+      #341, that would tell every bye player his club is nowhere in the schedule.
+
+      Asserting the flag directly is what stops that. It also kills a mapper that
+      drops the field or hardcodes it true.
+    */
+    const fx = await setup();
+
+    const roster = await loadRosterForWeek(fx.client, fx.teamId, SEASON, WEEK);
+
+    // SEA plays in WEEK + 1 and not in WEEK — in the schedule, absent this week.
+    expect(roster.get(fx.player("bye-te"))!.teamScheduled).toBe(true);
+    // And the control, so the assertion above cannot pass by the flag being
+    // hardcoded: the unlocatable ref really does read false.
+    await fx.client.query("UPDATE players SET team_ref = 'ZZZ' WHERE id = $1", [
+      fx.player("sun-qb"),
+    ]);
+    const after = await loadRosterForWeek(fx.client, fx.teamId, SEASON, WEEK);
+    expect(after.get(fx.player("sun-qb"))!.teamScheduled).toBe(false);
   });
 
   it("still ranks a bye player unavailable", async () => {

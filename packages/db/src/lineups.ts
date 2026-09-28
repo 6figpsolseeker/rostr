@@ -444,6 +444,10 @@ async function weekFirstKickoff(
  * reads, and the separation is worth keeping visible: a face and a club can be
  * missing, stale or wrong without a single point moving, while the fields they
  * sit beside decide whether an edit is legal.
+ *
+ * `teamScheduled` is the exception to that split, and it is here rather than on
+ * `LineupPlayer` because it decides nothing about legality: the rules never read
+ * it. The autofill ranks on it.
  */
 export type RosterPlayer = LineupPlayer & {
   readonly fullName: string;
@@ -451,6 +455,25 @@ export type RosterPlayer = LineupPlayer & {
   readonly imageUrl: string | null;
   /** The club, not the fantasy team — "PHI". */
   readonly teamRef: string | null;
+  /**
+   * Whether that club appears anywhere in this **season's** schedule.
+   *
+   * False means his game cannot be located in any week, and there are two routes
+   * to it: `team_ref` is a string no fixture carries, or it is null, since
+   * `home_team_ref = NULL` matches nothing and the `EXISTS` is then false either
+   * way. Not an iff on the first route alone.
+   *
+   * Not a bye: a club on a bye is in the schedule and merely absent from this
+   * week, so this stays true for him — which is the whole reason it is
+   * season-wide and must never be narrowed to the week.
+   *
+   * The query already computed this to choose the kickoff fallback below; this
+   * returns the flag rather than deriving a second one. `loadOffNflRoster`'s
+   * docstring forbids these loaders gaining a column **to serve a label**, and
+   * this serves the autofill's ranking, which is this map's own consumer. It also
+   * admits nobody new to the map, which is the widening `CLAUDE.md` warns about.
+   */
+  readonly teamScheduled: boolean;
   /**
    * The provider's own wording, or null when fit.
    *
@@ -564,6 +587,10 @@ export async function loadRosterForWeek(
         positions: row.positions,
         imageUrl: row.image_url,
         teamRef: row.team_ref,
+        // The same value the kickoff fallback below reads, deliberately not
+        // re-normalised. A second normalisation would be a second definition,
+        // and these two readings of the flag have to keep agreeing.
+        teamScheduled: row.team_scheduled,
         injuryDesignation: row.injury_designation,
         onIr: row.on_ir,
         // The other side of his own fixture. Both refs are present or neither
@@ -1056,6 +1083,7 @@ export function autolineupCandidate(
     readonly positions: readonly string[];
     readonly kickoffAt: number | null;
     readonly teamRef: string | null;
+    readonly teamScheduled: boolean;
     readonly injuryDesignation: string | null;
   },
   ranking: {
@@ -1102,7 +1130,7 @@ export function autolineupCandidate(
       promised this behaviour to every member who signed, and it did nothing.
       Issue #269.
 
-      **Three separate facts, not one checked three ways.** Each answers a
+      **Four separate facts, not one checked four ways.** Each answers a
       different question and none implies another:
 
       - `offNflRoster` — **no NFL club employs him.** From `players.active`, the
@@ -1110,9 +1138,20 @@ export function autolineupCandidate(
         screen all key on — five surfaces, the same count `loadOffNflRoster`
         gives above, and this bullet undercounted them at four until it was
         checked.
-      - `teamRef === null` — **we cannot locate his game.** His kickoff is then a
-        synthesised stand-in rather than a real one, so we do not know when or
-        whether he plays.
+      - `teamRef === null` — **no club is recorded for him at all.** Kept even
+        though the clause below subsumes it: this is a per-player fact that no gap
+        in our own ingest can turn off, where a flag read from `games` can go
+        false for everybody at once.
+      - `!teamScheduled` — **his club appears in no week of this season's
+        schedule**, so his game cannot be located. His kickoff is then a
+        synthesised stand-in rather than a real one, and we do not know when or
+        whether he plays. This is the condition the bullet above used to claim:
+        "we cannot locate his game" is what makes the kickoff synthetic, and
+        `loadRosterForWeek` gates that fallback on `team_scheduled`, never on
+        `teamRef`. A present-but-unmatched ref defeated the proxy, so a player
+        nobody could locate ranked as fully available and could be started.
+        Season-wide, never week-scoped: narrowing it to the week would catch every
+        club on its bye.
       - `kickoffAt === null` — **his club has no game this week**, which is an
         ordinary bye whenever that club is in the season's schedule at all. Alive
         and common; do not read #308 as having killed this clause. (There is a
@@ -1162,6 +1201,7 @@ export function autolineupCandidate(
       offNflRoster.has(player.playerId) ||
       player.kickoffAt === null ||
       player.teamRef === null ||
+      !player.teamScheduled ||
       unlikelyToPlay(player.injuryDesignation),
   };
 }
