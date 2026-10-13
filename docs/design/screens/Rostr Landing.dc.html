@@ -28,6 +28,21 @@
   @media (max-width: 980px) {
     .explore { grid-template-columns: minmax(0, 1fr) !important; gap: 28px !important; }
   }
+  @media (max-width: 640px) {
+    .nav-bar { padding: 12px 18px !important; }
+    .nav-links { gap: 10px !important; }
+    .nav-tagline, .nav-howto { display: none !important; }
+    .hero-pad { padding: 64px 20px 0 !important; }
+    .section-pad { padding: 56px 20px 72px !important; }
+    .board-scroll { overflow-x: auto !important; -webkit-mask-image: none !important; mask-image: none !important; }
+    .board-grid { min-width: 470px; }
+    .week-split, .close-grid, .playoff-grid { grid-template-columns: minmax(0, 1fr) !important; }
+    .close-grid { gap: 32px !important; }
+    .rules-table td { display: block; width: auto !important; }
+    .rules-table tr td:first-child { padding-bottom: 2px; border-bottom: 0; }
+    .close-section { padding: 56px 24px !important; margin: 40px 12px 0 !important; }
+    .footer-pad { padding: 32px 20px !important; }
+  }
   @keyframes rostrFade { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 </style>
 </helmet>
@@ -43,13 +58,13 @@
     <button type="button" onClick="{{ replay }}" style="border: 1px solid var(--color-neutral-800); background: transparent; color: var(--color-neutral-400); font: inherit; text-transform: none; letter-spacing: 0; padding: 4px 10px; border-radius: 999px; cursor: pointer;" style-hover="border-color: var(--color-accent-700); color: var(--color-accent-300);">Replay throw</button>
   </div></sc-if>
 
-  <header class="nav" style="position: sticky; top: 0; z-index: 40; display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 14px 40px; background: rgba(22,24,38,0.86); backdrop-filter: blur(10px); border-bottom: 1px solid var(--color-neutral-900);">
+  <header class="nav nav-bar" style="position: sticky; top: 0; z-index: 40; display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 14px 40px; background: rgba(22,24,38,0.86); backdrop-filter: blur(10px); border-bottom: 1px solid var(--color-neutral-900);">
     <div style="display: flex; align-items: baseline; gap: 10px;">
       <span style="font-family: var(--font-heading); font-size: 19px; font-weight: 600; letter-spacing: -0.02em;">rostr</span>
-      <span style="font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-600);">fantasy football</span>
+      <span class="nav-tagline" style="font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-600);">fantasy football</span>
     </div>
-    <nav style="display: flex; align-items: center; gap: 22px; font-size: 13.5px; color: var(--color-neutral-400);">
-      <a href="#explore" style="color: inherit;" style-hover="color: var(--color-text);">How it works</a>
+    <nav class="nav-links" style="display: flex; align-items: center; gap: 22px; font-size: 13.5px; color: var(--color-neutral-400);">
+      <a href="#explore" class="nav-howto" style="color: inherit;" style-hover="color: var(--color-text);">How it works</a>
       <span style="display: flex; align-items: center; gap: 4px;">
         <a href="https://github.com/6figpsolseeker/rostr" aria-label="rostr on GitHub" style="display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: var(--radius-sm); color: var(--color-neutral-500);" style-hover="color: var(--color-text); background: color-mix(in srgb, var(--color-accent) 10%, transparent);">
           <svg width="17" height="17" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.07-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A7.995 7.995 0 0 0 16 8c0-4.42-3.58-8-8-8z"></path></svg>
@@ -173,7 +188,7 @@
     </nav>
   </header>
 
-  <section data-screen-label="Hero" style="position: relative; padding: 104px 40px 0;">
+  <section data-screen-label="Hero" class="hero-pad" style="position: relative; padding: 104px 40px 0;">
     <div ref="{{ heroRef }}" style="position: relative; max-width: 1180px; margin: 0 auto; min-height: 400px;">
 
       <svg ref="{{ arcRef }}" width="100%" height="100%" preserveAspectRatio="none" style="position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; z-index: 1;">
@@ -219,7 +234,7 @@
 
   <div style="height: 1px; max-width: 1180px; margin: 0 auto; background: linear-gradient(90deg, transparent, var(--color-neutral-800) 12%, var(--color-neutral-800) 88%, transparent);"></div>
 
-  <section data-screen-label="Explore" id="explore" style="padding: 76px 40px 96px;">
+  <section data-screen-label="Explore" id="explore" class="section-pad" style="padding: 76px 40px 96px;">
     <div style="max-width: 1180px; margin: 0 auto;">
 
       <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 32px; flex-wrap: wrap; margin-bottom: 40px;">
@@ -336,7 +351,7 @@
           <div>
             <h3 style="font-family: var(--font-heading); font-weight: 500; font-size: 30px; line-height: 1.14; letter-spacing: -0.026em; margin: 0;">The default league, in full.</h3>
             <p style="font-size: 15.5px; line-height: 1.62; color: var(--color-neutral-400); margin: 16px 0 0; max-width: 620px;">This is the whole rule set, not a summary of it. Full detail lives in <a href="https://github.com/6figpsolseeker/rostr/blob/main/docs/RULES.md">docs/RULES.md</a>.</p>
-            <table class="table" style="width: 100%; font-size: 14.5px; margin-top: 30px;">
+            <table class="table rules-table" style="width: 100%; font-size: 14.5px; margin-top: 30px;">
               <tbody>
                 <tr>
                   <td style="width: 156px; color: var(--color-neutral-500); vertical-align: top;">Scoring</td>
@@ -401,8 +416,8 @@
                   </span>
                 </div>
 
-                <div style="-webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 88px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 88px), transparent);">
-                  <div style="display: grid; grid-template-columns: 24px repeat(3, minmax(120px, 1fr)); gap: 3px; align-items: stretch;">
+                <div class="board-scroll" style="-webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 88px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 88px), transparent);">
+                  <div class="board-grid" style="display: grid; grid-template-columns: 24px repeat(3, minmax(120px, 1fr)); gap: 3px; align-items: stretch;">
                     <div></div>
                     <div style="padding: 0 8px 7px; border-bottom: 1px solid var(--color-neutral-900); min-width: 0;">
                       <span style="display: block; font-size: 11.5px; font-weight: 500; color: var(--color-neutral-400); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Pylon Co.</span>
@@ -531,7 +546,7 @@
             <h3 style="font-family: var(--font-heading); font-weight: 500; font-size: 30px; line-height: 1.14; letter-spacing: -0.026em; margin: 0;">The week you already know how to read.</h3>
             <p style="font-size: 15.5px; line-height: 1.62; color: var(--color-neutral-400); margin: 16px 0 0; max-width: 620px; text-wrap: pretty;">Matchups, projections, waiver order, a starting lineup that autofills if you miss kickoff. Nothing about the format is novel — the format is the part that works. What changes is who holds the rules.</p>
 
-            <div style="display: grid; grid-template-columns: minmax(0, 0.62fr) minmax(0, 1fr); gap: 36px; align-items: start; margin-top: 30px;">
+            <div class="week-split" style="display: grid; grid-template-columns: minmax(0, 0.62fr) minmax(0, 1fr); gap: 36px; align-items: start; margin-top: 30px;">
               <div style="display: flex; flex-direction: column; gap: 11px; font-size: 14.5px; color: var(--color-neutral-400);">
                 <div style="display: flex; gap: 12px;"><span style="color: var(--color-accent-500);">&mdash;</span><span>Head-to-head weekly matchups, Weeks 1&ndash;14</span></div>
                 <div style="display: flex; gap: 12px;"><span style="color: var(--color-accent-500);">&mdash;</span><span>Rolling waiver priority: win a claim, go to the back</span></div>
@@ -620,7 +635,7 @@
             <h3 style="font-family: var(--font-heading); font-weight: 500; font-size: 30px; line-height: 1.14; letter-spacing: -0.026em; margin: 0;">The bracket reseeds, and the contract does the rest.</h3>
             <p style="font-size: 15.5px; line-height: 1.62; color: var(--color-neutral-400); margin: 16px 0 0; max-width: 620px; text-wrap: pretty;">Six teams across Weeks 15 to 17. Every round reseeds &mdash; the best surviving seed always draws the worst &mdash; so the bracket cannot be drawn in advance. An upset changes who the top seed plays, not just who survives.</p>
 
-            <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 30px;">
+            <div class="playoff-grid" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 30px;">
               <div class="card" style="padding: 16px; background: var(--color-surface);">
                 <div style="font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-neutral-500);">Week 15 &middot; quarterfinals</div>
                 <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 13px; font-size: 13px;">
@@ -699,8 +714,8 @@
     </div>
   </section>
 
-  <section data-screen-label="Close" id="start" style="margin: 40px 20px 0; border-radius: var(--radius-lg); background: radial-gradient(120% 140% at 12% 0%, var(--color-section-glow) 0%, var(--color-section) 46%, #1d2048 100%); padding: 84px 48px;">
-    <div style="max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 0.72fr); gap: 56px; align-items: end;">
+  <section data-screen-label="Close" id="start" class="close-section" style="margin: 40px 20px 0; border-radius: var(--radius-lg); background: radial-gradient(120% 140% at 12% 0%, var(--color-section-glow) 0%, var(--color-section) 46%, #1d2048 100%); padding: 84px 48px;">
+    <div class="close-grid" style="max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 0.72fr); gap: 56px; align-items: end;">
       <div>
         <h2 style="font-family: var(--font-heading); font-weight: 500; font-size: clamp(34px, 4.4vw, 54px); line-height: 1.06; letter-spacing: -0.03em; margin: 0; text-wrap: pretty;">A league can be joined, created, and drafted end to end today.</h2>
         <p style="font-size: 16.5px; line-height: 1.6; color: var(--color-accent-200); margin: 20px 0 0; max-width: 520px;">Nothing touches money yet. Bring eleven friends, or two &mdash; a single bot can square an odd field.</p>
@@ -716,7 +731,7 @@
     </div>
   </section>
 
-  <footer style="max-width: 1180px; margin: 0 auto; padding: 40px; display: flex; align-items: center; justify-content: space-between; gap: 24px; flex-wrap: wrap; font-size: 13px; color: var(--color-neutral-600);">
+  <footer class="footer-pad" style="max-width: 1180px; margin: 0 auto; padding: 40px; display: flex; align-items: center; justify-content: space-between; gap: 24px; flex-wrap: wrap; font-size: 13px; color: var(--color-neutral-600);">
     <span style="font-family: var(--font-heading); font-size: 15px; font-weight: 600; color: var(--color-neutral-400);">rostr</span>
     <div style="display: flex; gap: 24px; flex-wrap: wrap;">
       <a href="https://github.com/6figpsolseeker/rostr">GitHub</a>

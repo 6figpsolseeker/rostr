@@ -568,7 +568,7 @@ becomes consent, and the three outstanding managers happen to be the two teams t
 would hurt. The screen shows who has not signed and does not editorialise.
 
 **3 · Dissolving.** The copy is specific about what is lost — season stops, no champion,
-rosters keep their NFTs with the transfer restriction relaxed as at settlement, ten weeks of
+rosters stay exactly as they are, ten weeks of
 results stay on chain, and in a pot league every stake returns in full with no fee. The
 aside shows *your own* standing (3rd, inside the playoff cut) next to an irreversible
 decision, deliberately. Unanimity is what stops a losing half ending a season the winning
