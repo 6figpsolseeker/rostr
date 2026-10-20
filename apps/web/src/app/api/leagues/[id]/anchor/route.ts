@@ -1,10 +1,16 @@
 import { NextResponse } from "next/server";
+import { PublicKey } from "@solana/web3.js";
 import {
   anchorTermMismatches,
   expectedTermsFromRules,
   verifyLeagueAnchor,
 } from "@rostr/escrow";
-import { getChainState, getLeagueRules, recordChainAnchor } from "@rostr/db";
+import {
+  commissionerOwnsWallet,
+  getChainState,
+  getLeagueRules,
+  recordChainAnchor,
+} from "@rostr/db";
 import { db } from "@/lib/db";
 import { draftContext, DraftContextError } from "@/lib/draft-context";
 import { EscrowConfigError, readOnlyEscrow } from "@/lib/escrow";
@@ -30,6 +36,16 @@ import { assertRpcCluster, ClusterConfigError } from "@/lib/cluster";
  * `anchorTermMismatches` so the mapping and the comparison are covered by the fast
  * suite, which needs no credentials and no chain. What is left here is the session,
  * the write, and the status codes.
+ *
+ * **Which wallet anchored is recorded too, and it is checked before it is.** The
+ * league's address derives from its id *and* the paying wallet, so that knowing
+ * an id — which the lobby and every invite link publish — is not enough to
+ * create its account. That makes the wallet the input every later instruction
+ * needs. The browser names it; this accepts it only if it is one of the
+ * commissioner's own verified wallets (`commissionerOwnsWallet`), and then reads
+ * the account at the address *that* wallet derives. A stranger's copy of the
+ * league sits at an address derived from the stranger's key, and nothing here
+ * ever looks there.
  *
  * `apps/web` does now have a test project (`pnpm test:web`), but it requires a
  * database and would require a validator to reach this route — so keeping the
@@ -87,8 +103,8 @@ export async function POST(
      * Both the hash and the terms, in one place, because a caller that checked
      * one and not the other is exactly the hole this route exists to close.
      */
-    const inspect = async () => {
-      const verdict = await verifyLeagueAnchor(program, id, stored.hash);
+    const inspect = async (commissioner: PublicKey) => {
+      const verdict = await verifyLeagueAnchor(program, id, commissioner, stored.hash);
       return {
         verdict,
         mismatches: verdict.ok
@@ -107,9 +123,27 @@ export async function POST(
     // existed, and nothing else in the system ever reads the account again —
     // so a league recorded once would be trusted forever on the strength of a
     // check that may never have happened.
+    //
+    // **Checked at the recorded wallet, never one in the request.** The caller
+    // could otherwise name any account and have this report the league healthy.
     const existing = await getChainState(client, id);
     if (existing?.anchoredAt) {
-      const { verdict, mismatches } = await inspect();
+      // Anchored under the old program, whose address derived from the id alone.
+      // No wallet seeds it, so nothing can derive it any more, and guessing the
+      // old address would vouch for an account no instruction can use.
+      if (!existing.commissioner) {
+        return NextResponse.json(
+          {
+            error:
+              "This league was anchored by an earlier version of the escrow program, " +
+              "which this one cannot reach. Create the league again.",
+            reason: "LEGACY_ANCHOR",
+          },
+          { status: 409 },
+        );
+      }
+
+      const { verdict, mismatches } = await inspect(new PublicKey(existing.commissioner));
 
       if (!verdict.ok || mismatches.length > 0) {
         return NextResponse.json(
@@ -129,6 +163,7 @@ export async function POST(
         alreadyRecorded: true,
         cluster: existing.cluster,
         signature: existing.signature,
+        commissioner: existing.commissioner,
       });
     }
 
@@ -137,7 +172,10 @@ export async function POST(
     // nothing here trusts it, and the anchor is accepted or refused entirely on
     // what the account says. Shape-checked only, because a malformed one would
     // be recorded forever in a write-once column.
-    const body = (await request.json().catch(() => ({}))) as { signature?: unknown };
+    const body = (await request.json().catch(() => ({}))) as {
+      signature?: unknown;
+      commissioner?: unknown;
+    };
     const signature = typeof body.signature === "string" ? body.signature.trim() : "";
 
     if (!/^[1-9A-HJ-NP-Za-km-z]{64,88}$/.test(signature)) {
@@ -147,7 +185,37 @@ export async function POST(
       );
     }
 
-    const { verdict, mismatches } = await inspect();
+    // The wallet the browser anchored with. Off the curve cannot sign, so it
+    // cannot have paid for `initialize_league` — refused before any lookup.
+    let wallet: PublicKey;
+    try {
+      wallet = new PublicKey(typeof body.commissioner === "string" ? body.commissioner : "");
+    } catch {
+      wallet = PublicKey.default;
+    }
+    if (wallet.equals(PublicKey.default) || !PublicKey.isOnCurve(wallet.toBytes())) {
+      return NextResponse.json(
+        { error: "The wallet that anchored the league is required", reason: "INVALID_WALLET" },
+        { status: 400 },
+      );
+    }
+
+    // Never an identifier from a body without proving it belongs to the caller.
+    // The session already proved the caller is the commissioner; this proves the
+    // wallet is theirs. Before the RPC read because it is the cheaper refusal.
+    if (!(await commissionerOwnsWallet(client, id, wallet.toBase58()))) {
+      return NextResponse.json(
+        {
+          error:
+            "Anchor from a wallet linked to your account. This one is not, so the league " +
+            "could not be found at its address.",
+          reason: "WALLET_NOT_COMMISSIONERS",
+        },
+        { status: 403 },
+      );
+    }
+
+    const { verdict, mismatches } = await inspect(wallet);
 
     if (!verdict.ok) {
       // Deliberately specific. "Not found" means the transaction has not landed
@@ -171,10 +239,10 @@ export async function POST(
         The third refusal, and it is the one that must not be confused with the
         first: they are indistinguishable from a distance and mean opposite
         things. `NOT_FOUND` invites a retry; this one has to say plainly that
-        retrying is the single action guaranteed not to work. The address
-        derives from the league's id, the program has no `close`, and those
-        bytes are there for good — so the league can only be recreated under a
-        new id.
+        retrying is the single action guaranteed not to work. The program has
+        no `close`, so those bytes are at that address for good. The wallet is
+        a seed of the address, so anchoring from another of the commissioner's
+        wallets reaches a fresh one — nothing has been recorded yet.
 
         Reachable when the program's account layout moves and a league was
         anchored under the older one. Before this it escaped as a 500.
@@ -184,8 +252,8 @@ export async function POST(
           {
             error:
               "This league was anchored by a different version of the escrow program and " +
-              "cannot be read. It cannot be re-anchored — the on-chain address comes from " +
-              "the league's id and nothing can free it. Create the league again.",
+              "cannot be read. That account can never be freed, but anchoring again from " +
+              "another wallet linked to your account creates a fresh one.",
             reason: verdict.reason,
             detail: verdict.detail,
           },
@@ -225,12 +293,32 @@ export async function POST(
       );
     }
 
-    await recordChainAnchor(client, id, { signature, cluster });
+    // Conditional on nothing being recorded yet. Losing means a concurrent request
+    // anchored first — reachable now that a commissioner with two verified wallets
+    // can produce two valid accounts — and the league is whatever it recorded.
+    const recorded = await recordChainAnchor(client, id, {
+      signature,
+      cluster,
+      commissioner: wallet.toBase58(),
+    });
+    if (!recorded) {
+      const winner = await getChainState(client, id);
+      return NextResponse.json(
+        {
+          error: "This league was anchored by another request a moment ago.",
+          reason: "ALREADY_ANCHORED",
+          commissioner: winner?.commissioner ?? null,
+          signature: winner?.signature ?? null,
+        },
+        { status: 409 },
+      );
+    }
 
     return NextResponse.json({
       anchored: true,
       cluster,
       signature,
+      commissioner: wallet.toBase58(),
       address: verdict.league.address.toBase58(),
       rulesHash: verdict.league.rulesHash,
     });

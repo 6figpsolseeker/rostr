@@ -98,7 +98,11 @@ export type InitializeLeagueParams = {
   readonly feeBps: number;
   readonly feeRecipient: PublicKey;
   readonly maxTeams: number;
-  /** Pays rent, and holds no privileges afterwards. */
+  /**
+   * Pays rent, becomes `league.commissioner`, and is a seed of the league's
+   * address — so this exact wallet is the one every later instruction for the
+   * league has to name, and the one the anchor route records.
+   */
   readonly payer: PublicKey;
 };
 
@@ -106,7 +110,7 @@ export async function initializeLeagueIx(
   program: Program<RostrEscrow>,
   params: InitializeLeagueParams,
 ): Promise<TransactionInstruction> {
-  const league = leaguePda(params.leagueId);
+  const league = leaguePda(params.leagueId, params.payer);
 
   return program.methods
     .initializeLeague({
@@ -153,7 +157,7 @@ export async function initializeFreeLeagueIx(
       maxTeams: params.maxTeams,
     })
     .accountsPartial({
-      league: leaguePda(params.leagueId),
+      league: leaguePda(params.leagueId, params.payer),
       payer: params.payer,
       systemProgram: SystemProgram.programId,
     })
@@ -165,13 +169,18 @@ export type JoinLeagueParams = {
   /** The hash the member is accepting. The program requires it to match. */
   readonly rulesHash: Uint8Array;
   readonly member: PublicKey;
+  /**
+   * The wallet that anchored the league — `leagues.chain_commissioner`, never
+   * the connected wallet. It is a seed of the league's address.
+   */
+  readonly commissioner: PublicKey;
 };
 
 export async function joinLeagueIx(
   program: Program<RostrEscrow>,
   params: JoinLeagueParams,
 ): Promise<TransactionInstruction> {
-  const league = leaguePda(params.leagueId);
+  const league = leaguePda(params.leagueId, params.commissioner);
 
   return program.methods
     .joinLeague([...params.rulesHash])
@@ -193,6 +202,11 @@ export type DepositParams = {
    * what a wallet will hold.
    */
   readonly memberTokenAccount?: PublicKey;
+  /**
+   * The wallet that anchored the league — `leagues.chain_commissioner`, never
+   * the connected wallet. It is a seed of the league's address.
+   */
+  readonly commissioner: PublicKey;
 };
 
 /** Stakes exactly the league's buy-in. There is no amount to pass. */
@@ -200,7 +214,7 @@ export async function depositIx(
   program: Program<RostrEscrow>,
   params: DepositParams,
 ): Promise<TransactionInstruction> {
-  const league = leaguePda(params.leagueId);
+  const league = leaguePda(params.leagueId, params.commissioner);
 
   return program.methods
     .deposit()
@@ -218,7 +232,12 @@ export async function depositIx(
 
 export type StartSeasonParams = {
   readonly leagueId: string;
-  /** The wallet that created the league. No other key can send this. */
+  /**
+   * The wallet that created the league — `leagues.chain_commissioner`. No other
+   * key can send this, and it is also a seed of the league's address, so passing
+   * whichever wallet happens to be connected addresses an account that does not
+   * exist.
+   */
   readonly commissioner: PublicKey;
 };
 
@@ -242,7 +261,7 @@ export async function startSeasonIx(
   return program.methods
     .startSeason()
     .accountsPartial({
-      league: leaguePda(params.leagueId),
+      league: leaguePda(params.leagueId, params.commissioner),
       commissioner: params.commissioner,
     })
     .instruction();
@@ -260,7 +279,7 @@ export async function refundStakeIx(
   program: Program<RostrEscrow>,
   params: RefundParams,
 ): Promise<TransactionInstruction> {
-  const league = leaguePda(params.leagueId);
+  const league = leaguePda(params.leagueId, params.commissioner);
 
   return program.methods
     .refundStake()
@@ -278,7 +297,10 @@ export async function refundStakeIx(
 
 export type InitializeScoresParams = {
   readonly leagueId: string;
-  /** The commissioner's wallet. Pays the rent and is the only key accepted. */
+  /**
+   * The wallet that anchored the league — `leagues.chain_commissioner`. Pays the
+   * rent, is the only key accepted, and is a seed of the league's address.
+   */
   readonly commissioner: PublicKey;
   /**
    * Teams in a stable order, each with the wallet its prize would be paid to.
@@ -316,7 +338,7 @@ export async function initializeScoresIx(
   program: Program<RostrEscrow>,
   params: InitializeScoresParams,
 ): Promise<TransactionInstruction> {
-  const league = leaguePda(params.leagueId);
+  const league = leaguePda(params.leagueId, params.commissioner);
 
   return program.methods
     .initializeScores({

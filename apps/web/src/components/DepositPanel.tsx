@@ -25,8 +25,15 @@ export function DepositPanel({
   tokenMint,
   depositsOpen,
   refundUnlockAt,
+  anchorWallet,
 }: {
   leagueId: string;
+  /**
+   * The wallet that anchored the league — a seed of its address, and so of the
+   * vault's. `null` for a league anchored under the old program, which nothing
+   * can reach any more: neither button can work there, and each says so.
+   */
+  anchorWallet: string | null;
   /** The pot token mint (USDC). Required for a deposit. */
   tokenMint: string | null;
   /**
@@ -44,6 +51,16 @@ export function DepositPanel({
 }) {
   const { connection } = useConnection();
   const { publicKey, signTransaction, connected } = useWallet();
+
+  const commissioner = (): PublicKey => {
+    if (!anchorWallet) {
+      throw new Error(
+        "This league was anchored by an earlier version of the escrow program, which " +
+          "this one cannot reach.",
+      );
+    }
+    return new PublicKey(anchorWallet);
+  };
 
   const [busy, setBusy] = useState<"deposit" | "refund" | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -82,6 +99,7 @@ export function DepositPanel({
 
       const ix = await depositIx(program, {
         leagueId,
+        commissioner: commissioner(),
         mint: new PublicKey(tokenMint as string),
         member: publicKey,
       });
@@ -129,6 +147,7 @@ export function DepositPanel({
 
       const ix = await refundStakeIx(program, {
         leagueId,
+        commissioner: commissioner(),
         mint: new PublicKey(tokenMint as string),
         member: publicKey,
       });

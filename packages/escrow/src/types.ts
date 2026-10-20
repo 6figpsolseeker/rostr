@@ -60,6 +60,11 @@ export type RostrEscrow = {
                 "kind": "account",
                 "path": "league.league_id",
                 "account": "league"
+              },
+              {
+                "kind": "account",
+                "path": "league.commissioner",
+                "account": "league"
               }
             ]
           }
@@ -240,6 +245,10 @@ export type RostrEscrow = {
               {
                 "kind": "arg",
                 "path": "args.league_id"
+              },
+              {
+                "kind": "account",
+                "path": "payer"
               }
             ]
           }
@@ -307,6 +316,10 @@ export type RostrEscrow = {
               {
                 "kind": "arg",
                 "path": "args.league_id"
+              },
+              {
+                "kind": "account",
+                "path": "payer"
               }
             ]
           }
@@ -408,6 +421,11 @@ export type RostrEscrow = {
                 "kind": "account",
                 "path": "league.league_id",
                 "account": "league"
+              },
+              {
+                "kind": "account",
+                "path": "league.commissioner",
+                "account": "league"
               }
             ]
           }
@@ -501,6 +519,11 @@ export type RostrEscrow = {
               {
                 "kind": "account",
                 "path": "league.league_id",
+                "account": "league"
+              },
+              {
+                "kind": "account",
+                "path": "league.commissioner",
                 "account": "league"
               }
             ]
@@ -677,6 +700,11 @@ export type RostrEscrow = {
                 "kind": "account",
                 "path": "league.league_id",
                 "account": "league"
+              },
+              {
+                "kind": "account",
+                "path": "league.commissioner",
+                "account": "league"
               }
             ]
           }
@@ -796,6 +824,11 @@ export type RostrEscrow = {
               {
                 "kind": "account",
                 "path": "league.league_id",
+                "account": "league"
+              },
+              {
+                "kind": "account",
+                "path": "league.commissioner",
                 "account": "league"
               }
             ]
@@ -951,6 +984,11 @@ export type RostrEscrow = {
               {
                 "kind": "account",
                 "path": "league.league_id",
+                "account": "league"
+              },
+              {
+                "kind": "account",
+                "path": "league.commissioner",
                 "account": "league"
               }
             ]

@@ -183,6 +183,7 @@ export default async function LobbyPage({ params }: { params: Promise<{ id: stri
       {settlement && (
         <SettlementPanel
           leagueId={league.id}
+          anchorWallet={chain?.commissioner ?? null}
           roster={settlement.roster.map((entry) => ({ ...entry }))}
           oracle={settlement.oracle}
           tiebreakers={settlement.tiebreakers}
@@ -196,6 +197,7 @@ export default async function LobbyPage({ params }: { params: Promise<{ id: stri
 
       <DraftLobby
         leagueId={league.id}
+        anchorWallet={chain?.commissioner ?? null}
         phase={view.phase}
         scheduledAt={view.scheduledAt.toISOString()}
         serverNow={view.now.toISOString()}

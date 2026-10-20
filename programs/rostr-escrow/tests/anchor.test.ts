@@ -179,7 +179,12 @@ describe("create -> anchor -> join", () => {
 
     // Nothing on-chain yet, and the route's answer to that is "retry", not
     // "this league is fraudulent" — the distinction the 409 branches turn on.
-    const before = await verifyLeagueAnchor(program, league.id, league.rulesHash);
+    const before = await verifyLeagueAnchor(
+      program,
+      league.id,
+      provider.wallet.publicKey,
+      league.rulesHash,
+    );
     expect(before.ok).toBe(false);
     if (!before.ok) expect(before.reason).toBe("NOT_FOUND");
 
@@ -188,14 +193,24 @@ describe("create -> anchor -> join", () => {
     // The whole point: the bytes the program stored are the bytes Postgres
     // hashed. Anything wrong with hex conversion, byte order, or the seed
     // derivation surfaces here and nowhere else.
-    const verdict = await verifyLeagueAnchor(program, league.id, league.rulesHash);
+    const verdict = await verifyLeagueAnchor(
+      program,
+      league.id,
+      provider.wallet.publicKey,
+      league.rulesHash,
+    );
     expect(verdict.ok).toBe(true);
     if (verdict.ok) {
       expect(verdict.league.rulesHash).toBe(league.rulesHash);
     }
 
     // And it is a real check rather than one that answers yes to anything.
-    const wrong = await verifyLeagueAnchor(program, league.id, "f".repeat(64));
+    const wrong = await verifyLeagueAnchor(
+      program,
+      league.id,
+      provider.wallet.publicKey,
+      "f".repeat(64),
+    );
     expect(wrong.ok).toBe(false);
     if (!wrong.ok) expect(wrong.reason).toBe("HASH_MISMATCH");
 
@@ -210,6 +225,7 @@ describe("create -> anchor -> join", () => {
     await recordChainAnchor(db, league.id, {
       signature,
       cluster: clusterOf(provider.connection),
+      commissioner: provider.wallet.publicKey.toBase58(),
     });
 
     const chain = await getChainState(db, league.id);
@@ -259,6 +275,7 @@ describe("create -> anchor -> join", () => {
     const verdict = await verifyLeagueAnchor(
       escrowProgram(readOnly),
       league.id,
+      provider.wallet.publicKey,
       league.rulesHash,
     );
     expect(verdict.ok).toBe(true);
@@ -299,7 +316,12 @@ describe("create -> anchor -> join", () => {
     });
 
     // The hash verifies — which is exactly why this was invisible before.
-    const verdict = await verifyLeagueAnchor(program, league.id, league.rulesHash);
+    const verdict = await verifyLeagueAnchor(
+      program,
+      league.id,
+      provider.wallet.publicKey,
+      league.rulesHash,
+    );
     expect(verdict.ok).toBe(true);
 
     if (verdict.ok) {
@@ -337,7 +359,12 @@ describe("create -> anchor -> join", () => {
       commitment: "confirmed",
     });
 
-    const verdict = await verifyLeagueAnchor(program, league.id, league.rulesHash);
+    const verdict = await verifyLeagueAnchor(
+      program,
+      league.id,
+      provider.wallet.publicKey,
+      league.rulesHash,
+    );
     expect(verdict.ok).toBe(true);
     if (verdict.ok) {
       expect(verdict.league.rulesHash).toBe(league.rulesHash);

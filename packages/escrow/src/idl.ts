@@ -74,6 +74,11 @@ export const ESCROW_IDL: EscrowIdl = {
                 "kind": "account",
                 "path": "league.league_id",
                 "account": "League"
+              },
+              {
+                "kind": "account",
+                "path": "league.commissioner",
+                "account": "League"
               }
             ]
           }
@@ -254,6 +259,10 @@ export const ESCROW_IDL: EscrowIdl = {
               {
                 "kind": "arg",
                 "path": "args.league_id"
+              },
+              {
+                "kind": "account",
+                "path": "payer"
               }
             ]
           }
@@ -321,6 +330,10 @@ export const ESCROW_IDL: EscrowIdl = {
               {
                 "kind": "arg",
                 "path": "args.league_id"
+              },
+              {
+                "kind": "account",
+                "path": "payer"
               }
             ]
           }
@@ -422,6 +435,11 @@ export const ESCROW_IDL: EscrowIdl = {
                 "kind": "account",
                 "path": "league.league_id",
                 "account": "League"
+              },
+              {
+                "kind": "account",
+                "path": "league.commissioner",
+                "account": "League"
               }
             ]
           }
@@ -515,6 +533,11 @@ export const ESCROW_IDL: EscrowIdl = {
               {
                 "kind": "account",
                 "path": "league.league_id",
+                "account": "League"
+              },
+              {
+                "kind": "account",
+                "path": "league.commissioner",
                 "account": "League"
               }
             ]
@@ -691,6 +714,11 @@ export const ESCROW_IDL: EscrowIdl = {
                 "kind": "account",
                 "path": "league.league_id",
                 "account": "League"
+              },
+              {
+                "kind": "account",
+                "path": "league.commissioner",
+                "account": "League"
               }
             ]
           }
@@ -810,6 +838,11 @@ export const ESCROW_IDL: EscrowIdl = {
               {
                 "kind": "account",
                 "path": "league.league_id",
+                "account": "League"
+              },
+              {
+                "kind": "account",
+                "path": "league.commissioner",
                 "account": "League"
               }
             ]
@@ -965,6 +998,11 @@ export const ESCROW_IDL: EscrowIdl = {
               {
                 "kind": "account",
                 "path": "league.league_id",
+                "account": "League"
+              },
+              {
+                "kind": "account",
+                "path": "league.commissioner",
                 "account": "League"
               }
             ]

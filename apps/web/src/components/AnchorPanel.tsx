@@ -52,8 +52,17 @@ export function AnchorPanel({
   maxTeams,
   draftScheduledAt,
   pot,
+  linkedWallets,
 }: {
   leagueId: string;
+  /**
+   * The wallets linked to the commissioner's account. The one that anchors
+   * becomes a seed of the league's address and is recorded, and the server
+   * accepts only one of these — so anchoring from anything else would pay rent
+   * for an account the league can never use. Checked here before signing as a
+   * courtesy; the anchor route is the rule.
+   */
+  linkedWallets: readonly string[];
   /** The hash as stored: 64 lower-case hex characters. */
   rulesHash: string;
   maxTeams: number;
@@ -83,6 +92,13 @@ export function AnchorPanel({
     setError(null);
 
     try {
+      if (!linkedWallets.includes(wallet.publicKey.toBase58())) {
+        throw new Error(
+          "Anchor from a wallet linked to your account. This one is not, and the league " +
+            "would be anchored somewhere it can never be found.",
+        );
+      }
+
       const provider = new AnchorProvider(
         connection,
         {
@@ -139,7 +155,10 @@ export function AnchorPanel({
       const response = await fetch(`/api/leagues/${leagueId}/anchor`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ signature }),
+        // Which wallet signed. The league's address derives from it, so the
+        // server needs it to find the account — and accepts it only if it is
+        // one of this commissioner's own verified wallets.
+        body: JSON.stringify({ signature, commissioner: wallet.publicKey.toBase58() }),
       });
 
       if (!response.ok) {

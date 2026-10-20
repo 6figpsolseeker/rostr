@@ -98,8 +98,10 @@ export function uuidToHex(uuid: string): string {
 export async function fetchOnChainScores(
   program: Program<RostrEscrow>,
   leagueId: string,
+  /** The wallet that anchored the league; a seed of its address. */
+  commissioner: PublicKey,
 ): Promise<OnChainScores | null> {
-  const address = scoresPda(leagueId);
+  const address = scoresPda(leagueId, commissioner);
   const account = await program.account["scores"]?.fetchNullable(address);
   if (!account) return null;
 

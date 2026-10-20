@@ -240,6 +240,17 @@ export interface ChainAnchor {
   readonly cluster: string;
 }
 
+/** An anchor, and the wallet that made it. */
+export interface LeagueAnchor extends ChainAnchor {
+  /**
+   * The wallet that paid for `initialize_league` — `league.commissioner` on the
+   * account, and a seed of its address. Every later reader derives the league's
+   * PDA from this, so it must be the wallet that actually anchored, not merely
+   * one the commissioner holds.
+   */
+  readonly commissioner: string;
+}
+
 /**
  * Record that a league's rules are anchored on-chain.
  *
@@ -254,20 +265,57 @@ export interface ChainAnchor {
  * exist here while unanchored, because someone can close a tab. The partial
  * index in migration 0014 is for finding those.
  *
- * Written once. A second call with different values raises, from a trigger
- * rather than from this function, so it holds against psql too.
+ * **Also only after confirming the wallet is one of the commissioner's own** —
+ * `commissionerOwnsWallet`. The wallet decides the address every later
+ * instruction targets, so recording a stranger's would point the league at an
+ * account the stranger created.
+ *
+ * Written once, and answers whether it wrote. `false` means the league was
+ * already anchored — by a concurrent request, which is reachable now that a
+ * commissioner with two verified wallets can produce two valid accounts. The
+ * caller re-reads rather than overwriting; a direct rewrite still raises from the
+ * triggers in `0014` and `0051`, so it holds against psql too.
  */
 export async function recordChainAnchor(
   db: SqlClient,
   leagueId: string,
-  anchor: ChainAnchor,
-): Promise<void> {
-  await db.query(
+  anchor: LeagueAnchor,
+): Promise<boolean> {
+  const rows = await db.query<{ id: string }>(
     `UPDATE leagues
-        SET chain_anchored_at = now(), chain_signature = $1, chain_cluster = $2
-      WHERE id = $3`,
-    [anchor.signature, anchor.cluster, leagueId],
+        SET chain_anchored_at = now(), chain_signature = $1, chain_cluster = $2,
+            chain_commissioner = $3
+      WHERE id = $4 AND chain_anchored_at IS NULL
+      RETURNING id`,
+    [anchor.signature, anchor.cluster, anchor.commissioner, leagueId],
   );
+  return rows.length > 0;
+}
+
+/**
+ * Whether `address` is a verified Solana wallet of this league's commissioner.
+ *
+ * The anchor route's trust check. The browser names the wallet it anchored
+ * with, and this repo never takes an identifier from a request without proving
+ * it belongs to the caller: the route has already established the caller *is*
+ * the commissioner, and this establishes the wallet is theirs — linked by a
+ * signature over a server nonce, or generated for them by Privy, which is what
+ * `verified_at` records.
+ */
+export async function commissionerOwnsWallet(
+  db: SqlClient,
+  leagueId: string,
+  address: string,
+): Promise<boolean> {
+  const rows = await db.query<{ ok: number }>(
+    `SELECT 1 AS ok
+       FROM leagues l
+       JOIN wallets w ON w.user_id = l.commissioner_id
+      WHERE l.id = $1 AND w.address = $2
+        AND w.chain = 'solana' AND w.verified_at IS NOT NULL`,
+    [leagueId, address],
+  );
+  return rows.length > 0;
 }
 
 /**
@@ -311,6 +359,15 @@ export interface LeagueChainState {
   readonly signature: string | null;
   readonly cluster: string | null;
   /**
+   * The wallet that anchored the league, and a seed of its on-chain address.
+   *
+   * `null` with `anchoredAt` set means it was anchored under the old program,
+   * whose address derived from the id alone and which nothing derives any more.
+   * Every on-chain reader must refuse such a league rather than guess — see
+   * migration `0051`.
+   */
+  readonly commissioner: string | null;
+  /**
    * When `start_season` was recorded, or `null` if it never was.
    *
    * Always `null` for a free league: the program refuses `start_season` without
@@ -337,11 +394,12 @@ export async function getChainState(
     chain_anchored_at: Date | null;
     chain_signature: string | null;
     chain_cluster: string | null;
+    chain_commissioner: string | null;
     season_started_at: Date | null;
     season_start_signature: string | null;
     season_start_cluster: string | null;
   }>(
-    `SELECT chain_anchored_at, chain_signature, chain_cluster,
+    `SELECT chain_anchored_at, chain_signature, chain_cluster, chain_commissioner,
             season_started_at, season_start_signature, season_start_cluster
        FROM leagues WHERE id = $1`,
     [leagueId],
@@ -353,6 +411,7 @@ export async function getChainState(
     anchoredAt: row.chain_anchored_at,
     signature: row.chain_signature,
     cluster: row.chain_cluster,
+    commissioner: row.chain_commissioner,
     seasonStartedAt: row.season_started_at,
     seasonStartSignature: row.season_start_signature,
     seasonStartCluster: row.season_start_cluster,

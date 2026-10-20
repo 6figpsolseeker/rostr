@@ -110,6 +110,7 @@ export function JoinPanel({
   signedIn,
   linkedWallets,
   anchored,
+  anchorWallet,
   isCommissioner,
   resumable = false,
   hasPot,
@@ -125,6 +126,14 @@ export function JoinPanel({
   linkedWallets: readonly string[];
   /** Whether the rules are on-chain yet. Joining is refused until they are. */
   anchored: boolean;
+  /**
+   * The wallet that anchored the league, recorded by the anchor route. It is a
+   * seed of the league's on-chain address, so every instruction here is built
+   * from it — never from the member's key or whichever wallet is connected.
+   * `null` when not anchored, or anchored under the old program, which nothing
+   * can reach any more.
+   */
+  anchorWallet: string | null;
   isCommissioner: boolean;
   /**
    * This user joined in Postgres but has no on-chain record yet, so the fifth
@@ -385,7 +394,14 @@ export function JoinPanel({
         { commitment: "confirmed" },
       );
       const program = escrowProgram(provider);
-      const membershipAddress = membershipPda(leaguePda(leagueId), publicKey);
+      if (!anchorWallet) {
+        throw new Error(
+          "This league was anchored by an earlier version of the escrow program, which " +
+            "this one cannot reach, so there is nothing on-chain to join.",
+        );
+      }
+      const commissioner = new PublicKey(anchorWallet);
+      const membershipAddress = membershipPda(leaguePda(leagueId, commissioner), publicKey);
 
       // The account itself, not just whether it exists: `deposited` says whether
       // the stake half is still owed, and `refunded` says whether the server
@@ -436,6 +452,7 @@ export function JoinPanel({
           tx.add(
             await joinLeagueIx(program, {
               leagueId,
+              commissioner,
               rulesHash: hexToBytes(rulesHash),
               member: publicKey,
             }),
@@ -450,6 +467,7 @@ export function JoinPanel({
           tx.add(
             await depositIx(program, {
               leagueId,
+              commissioner,
               mint: new PublicKey(tokenMint),
               member: publicKey,
             }),

@@ -50,6 +50,7 @@ export { withTransaction } from "./transaction.js";
 export { loadSportIds, seedSport, SportNotSeededError, type SportIds } from "./sports.js";
 
 export {
+  commissionerOwnsWallet,
   createLeague,
   getChainState,
   getLeagueRules,
@@ -61,6 +62,7 @@ export {
   type ChainAnchor,
   type CreatedLeague,
   type CreateLeagueInput,
+  type LeagueAnchor,
   type LeagueChainState,
   type PinnedRules,
   type StoredLeagueRules,

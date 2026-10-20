@@ -61,10 +61,25 @@ export function leagueIdFromBytes(bytes: Uint8Array | number[]): string {
   ].join("-");
 }
 
-/** Where a league's terms live. Seeded by its database id. */
-export function leaguePda(leagueId: string): PublicKey {
+/**
+ * Where a league's terms live. Seeded by its database id **and** the wallet
+ * that anchored it, which the program records as `commissioner`.
+ *
+ * The id alone used to be the seed, and ids are public — the lobby lists them
+ * and invite links carry them — so a stranger could create a league's account
+ * first and brick it, or copy its rules and become its commissioner. With the
+ * payer's key in the seed, only that wallet can create the account at this
+ * address; anyone else's attempt lands somewhere nothing reads.
+ *
+ * **`commissioner` is required, never defaulted.** It must be the wallet
+ * recorded when the league was anchored (`leagues.chain_commissioner`), not
+ * whichever wallet is connected — a commissioner may hold several. Leaving it
+ * optional would let a caller that forgot it quietly address the old,
+ * id-only account, which still exists for leagues anchored before this change.
+ */
+export function leaguePda(leagueId: string, commissioner: PublicKey): PublicKey {
   return PublicKey.findProgramAddressSync(
-    [LEAGUE_SEED, leagueIdBytes(leagueId)],
+    [LEAGUE_SEED, leagueIdBytes(leagueId), commissioner.toBytes()],
     ESCROW_PROGRAM_ID,
   )[0];
 }
@@ -83,8 +98,8 @@ export function scoresPdaFor(league: PublicKey): PublicKey {
   )[0];
 }
 
-export function scoresPda(leagueId: string): PublicKey {
-  return scoresPdaFor(leaguePda(leagueId));
+export function scoresPda(leagueId: string, commissioner: PublicKey): PublicKey {
+  return scoresPdaFor(leaguePda(leagueId, commissioner));
 }
 
 /**
@@ -114,7 +129,7 @@ export type LeagueAddresses = {
   readonly vault: PublicKey;
 };
 
-export function leagueAddresses(leagueId: string): LeagueAddresses {
-  const league = leaguePda(leagueId);
+export function leagueAddresses(leagueId: string, commissioner: PublicKey): LeagueAddresses {
+  const league = leaguePda(leagueId, commissioner);
   return { league, vault: vaultPda(league) };
 }

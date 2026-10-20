@@ -177,16 +177,23 @@ describe("deposit and refund are wired (issue #27)", () => {
       refundUnlockFor(DRAFT.scheduledAt),
     );
     const sig = await anchorLeague(league.id, league.rulesHash, rules);
-    const verdict = await verifyLeagueAnchor(program, league.id, league.rulesHash);
+    const verdict = await verifyLeagueAnchor(
+      program,
+      league.id,
+      provider.wallet.publicKey,
+      league.rulesHash,
+    );
     expect(verdict.ok).toBe(true);
     await recordChainAnchor(db, league.id, {
       signature: sig,
       cluster: clusterOf(provider.connection),
+      commissioner: provider.wallet.publicKey.toBase58(),
     });
 
     // One funded member: SOL + buy-in tokens, and joined on-chain.
     const member = await fundedMember(provider, mint, BUY_IN);
     const joinIx = await joinLeagueIx(program, {
+      commissioner: provider.wallet.publicKey,
       leagueId: league.id,
       rulesHash: hexToBytes(league.rulesHash),
       member: member.keypair.publicKey,
@@ -194,7 +201,11 @@ describe("deposit and refund are wired (issue #27)", () => {
     await sendTx(provider, joinIx, [member.keypair]);
 
     const leaguePk = anchor.web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("league"), Buffer.from(league.id.replace(/-/g, ""), "hex")],
+      [
+        Buffer.from("league"),
+        Buffer.from(league.id.replace(/-/g, ""), "hex"),
+        provider.wallet.publicKey.toBuffer(),
+      ],
       program.programId,
     )[0];
     const vault = vaultPda(program, leaguePk);
@@ -202,6 +213,7 @@ describe("deposit and refund are wired (issue #27)", () => {
 
     // Deposit: the member signs; stake moves from their ATA to the vault.
     const depIx = await depositIx(program, {
+      commissioner: provider.wallet.publicKey,
       leagueId: league.id,
       mint,
       member: member.keypair.publicKey,
@@ -211,6 +223,7 @@ describe("deposit and refund are wired (issue #27)", () => {
     const depositVerdict = await verifyOnChainDeposit(
       program,
       league.id,
+      provider.wallet.publicKey,
       member.keypair.publicKey,
     );
     if (!depositVerdict.ok) throw new Error(`deposit not verified: ${depositVerdict.reason}`);
@@ -223,7 +236,12 @@ describe("deposit and refund are wired (issue #27)", () => {
     // the refund verify helper reports correctly for a stranger (NOT_JOINED),
     // which is the server-side gate the /refund route depends on.
     const stranger = anchor.web3.Keypair.fromSeed(new Uint8Array(32).fill(99));
-    const refundVerdict = await verifyOnChainRefund(program, league.id, stranger.publicKey);
+    const refundVerdict = await verifyOnChainRefund(
+      program,
+      league.id,
+      provider.wallet.publicKey,
+      stranger.publicKey,
+    );
     expect(refundVerdict.ok).toBe(false);
     if (!refundVerdict.ok) expect(refundVerdict.reason).toBe("NOT_JOINED");
   });
@@ -237,10 +255,16 @@ describe("deposit and refund are wired (issue #27)", () => {
     await recordChainAnchor(db, league.id, {
       signature: sig,
       cluster: clusterOf(provider.connection),
+      commissioner: provider.wallet.publicKey.toBase58(),
     });
 
     const stakeKeypair = anchor.web3.Keypair.fromSeed(new Uint8Array(32).fill(42));
-    const verdict = await verifyOnChainDeposit(program, league.id, stakeKeypair.publicKey);
+    const verdict = await verifyOnChainDeposit(
+      program,
+      league.id,
+      provider.wallet.publicKey,
+      stakeKeypair.publicKey,
+    );
     expect(verdict.ok).toBe(false);
     if (!verdict.ok) expect(verdict.reason).toBe("NOT_JOINED");
   });
@@ -287,10 +311,12 @@ describe("a completed refund verifies as a refund", () => {
     await recordChainAnchor(db, league.id, {
       signature: sig,
       cluster: clusterOf(provider.connection),
+      commissioner: provider.wallet.publicKey.toBase58(),
     });
 
     const member = await fundedMember(provider, mint, BUY_IN);
     const joinIx = await joinLeagueIx(program, {
+      commissioner: provider.wallet.publicKey,
       leagueId: league.id,
       rulesHash: hexToBytes(league.rulesHash),
       member: member.keypair.publicKey,
@@ -298,6 +324,7 @@ describe("a completed refund verifies as a refund", () => {
     await sendTx(provider, joinIx, [member.keypair]);
 
     const depIx = await depositIx(program, {
+      commissioner: provider.wallet.publicKey,
       leagueId: league.id,
       mint,
       member: member.keypair.publicKey,
@@ -306,15 +333,26 @@ describe("a completed refund verifies as a refund", () => {
 
     // Staked, not yet refunded. Deposit says yes, refund says not-yet — and
     // getting this pair the wrong way round was the whole bug.
-    const staked = await verifyOnChainDeposit(program, league.id, member.keypair.publicKey);
+    const staked = await verifyOnChainDeposit(
+      program,
+      league.id,
+      provider.wallet.publicKey,
+      member.keypair.publicKey,
+    );
     expect(staked.ok).toBe(true);
-    const notYet = await verifyOnChainRefund(program, league.id, member.keypair.publicKey);
+    const notYet = await verifyOnChainRefund(
+      program,
+      league.id,
+      provider.wallet.publicKey,
+      member.keypair.publicKey,
+    );
     expect(notYet.ok).toBe(false);
     if (!notYet.ok) expect(notYet.reason).toBe("NOT_REFUNDED");
 
     await sleep(5000);
 
     const refIx = await refundStakeIx(program, {
+      commissioner: provider.wallet.publicKey,
       leagueId: league.id,
       mint,
       member: member.keypair.publicKey,
@@ -323,13 +361,19 @@ describe("a completed refund verifies as a refund", () => {
 
     // And now they swap. `deposited` is unchanged on-chain — it is history —
     // which is exactly why the deposit verifier must consult `refunded` too.
-    const refunded = await verifyOnChainRefund(program, league.id, member.keypair.publicKey);
+    const refunded = await verifyOnChainRefund(
+      program,
+      league.id,
+      provider.wallet.publicKey,
+      member.keypair.publicKey,
+    );
     expect(refunded.ok).toBe(true);
     if (refunded.ok) expect(refunded.refunded).toBe(BigInt(BUY_IN));
 
     const noLongerStaked = await verifyOnChainDeposit(
       program,
       league.id,
+      provider.wallet.publicKey,
       member.keypair.publicKey,
     );
     expect(noLongerStaked.ok).toBe(false);

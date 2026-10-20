@@ -66,7 +66,7 @@ beforeAll(async () => {
 });
 
 const initialize = async (args: InitArgs): Promise<anchor.web3.PublicKey> => {
-  const league = leaguePda(program, args.leagueId);
+  const league = leaguePda(program, args.leagueId, provider.wallet.publicKey);
   await program.methods
     .initializeLeague(args)
     .accountsPartial({

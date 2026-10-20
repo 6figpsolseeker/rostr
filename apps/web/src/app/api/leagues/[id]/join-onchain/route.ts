@@ -4,7 +4,7 @@ import { verifyOnChainJoin } from "@rostr/escrow";
 import { getChainState, memberWallet, getOnChainJoin, recordOnChainJoin } from "@rostr/db";
 import { db } from "@/lib/db";
 import { currentUser } from "@/lib/session";
-import { EscrowConfigError, readOnlyEscrow } from "@/lib/escrow";
+import { anchoringWallet, EscrowConfigError, readOnlyEscrow } from "@/lib/escrow";
 import { assertRpcCluster, ClusterConfigError } from "@/lib/cluster";
 
 /**
@@ -71,11 +71,11 @@ export async function POST(
     // would be worse, because the PDA is byte-identical everywhere and the row
     // would look right.
     const chain = await getChainState(client, id);
-    if (!chain?.anchoredAt) {
-      return NextResponse.json(
-        { error: "This league is not anchored on-chain yet", reason: "NOT_ANCHORED" },
-        { status: 409 },
-      );
+    const anchored = anchoringWallet(chain);
+    if (!chain || !anchored.ok) {
+      return NextResponse.json(anchored.ok ? { error: "League not found" } : anchored.body, {
+        status: anchored.ok ? 404 : 409,
+      });
     }
 
     // Already recorded is success, not an error — re-posting after a lost
@@ -117,7 +117,12 @@ export async function POST(
       );
     }
 
-    const verdict = await verifyOnChainJoin(program, id, new PublicKey(walletAddress));
+    const verdict = await verifyOnChainJoin(
+      program,
+      id,
+      anchored.commissioner,
+      new PublicKey(walletAddress),
+    );
 
     if (!verdict.ok) {
       return NextResponse.json(

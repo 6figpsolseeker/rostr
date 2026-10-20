@@ -283,8 +283,8 @@ pub mod rostr_escrow {
         // off-chain in `validatePot`, where the season is known. A false refusal
         // here is unrecoverable: the args come from a rule set that is already
         // frozen, so the league cannot be retried with a corrected value, and
-        // the PDA derives from its UUID — it could only be recreated under a new
-        // id. `MAX_DRAFT_LEAD_MS` in the create route keeps the off-chain
+        // the PDA derives from its UUID and the paying wallet — it could only be
+        // recreated under a new id or from another of the commissioner's wallets. `MAX_DRAFT_LEAD_MS` in the create route keeps the off-chain
         // maximum at draft + 365d with a draft at most 300d out, so 665 days is
         // the most a legitimate league can ask for and this leaves 65 days spare.
         //
@@ -573,9 +573,10 @@ pub mod rostr_escrow {
 
         // The vault's authority is the league PDA, so the program signs for it.
         let league_id = ctx.accounts.league.league_id;
-        let league_bump = ctx.accounts.league.bump;
-        let seeds: &[&[u8]] = &[b"league", league_id.as_ref(), &[league_bump]];
-        let signer: &[&[&[u8]]] = &[seeds];
+        let commissioner = ctx.accounts.league.commissioner;
+        let bump = [ctx.accounts.league.bump];
+        let seeds = league_signer_seeds(&league_id, &commissioner, &bump);
+        let signer: &[&[&[u8]]] = &[&seeds];
 
         token::transfer(
             CpiContext::new_with_signer(
@@ -816,6 +817,29 @@ pub struct InitializeFreeLeagueArgs {
     pub max_teams: u8,
 }
 
+/// The seeds the program signs with as a league, for moving tokens out of its
+/// vault. The only place they are built by hand: `refund_stake` and `settle`
+/// both call this, so the two transfers cannot disagree about the address.
+///
+/// They must match the `seeds = [...]` constraints below, which address the
+/// league as `[b"league", league_id, commissioner]`. A mismatch compiles,
+/// passes every constraint, and fails only at the transfer — a vault nobody
+/// can spend, which is the one failure this program exists to rule out.
+///
+/// The commissioner is a seed so that knowing a league's id is not enough to
+/// create its account. Ids are public — the lobby lists them, and invite links
+/// carry them — so with the id alone as the seed a stranger could initialise
+/// the account first, either bricking the league (there is no `close`) or,
+/// with a copy of its rules, becoming its commissioner. With the payer's key
+/// in the seed, the stranger's account lands at an address nobody reads.
+pub(crate) fn league_signer_seeds<'a>(
+    league_id: &'a [u8; 16],
+    commissioner: &'a Pubkey,
+    bump: &'a [u8; 1],
+) -> [&'a [u8]; 4] {
+    [b"league", league_id, commissioner.as_ref(), bump]
+}
+
 #[derive(Accounts)]
 #[instruction(args: InitializeLeagueArgs)]
 pub struct InitializeLeague<'info> {
@@ -823,7 +847,7 @@ pub struct InitializeLeague<'info> {
         init,
         payer = payer,
         space = 8 + League::INIT_SPACE,
-        seeds = [b"league", args.league_id.as_ref()],
+        seeds = [b"league", args.league_id.as_ref(), payer.key().as_ref()],
         bump,
     )]
     pub league: Account<'info, League>,
@@ -862,7 +886,7 @@ pub struct InitializeFreeLeague<'info> {
         init,
         payer = payer,
         space = 8 + League::INIT_SPACE,
-        seeds = [b"league", args.league_id.as_ref()],
+        seeds = [b"league", args.league_id.as_ref(), payer.key().as_ref()],
         bump,
     )]
     pub league: Account<'info, League>,
@@ -877,7 +901,7 @@ pub struct InitializeFreeLeague<'info> {
 pub struct StartSeason<'info> {
     #[account(
         mut,
-        seeds = [b"league", league.league_id.as_ref()],
+        seeds = [b"league", league.league_id.as_ref(), league.commissioner.as_ref()],
         bump = league.bump,
         // The one authority on this account, checked here rather than in the
         // handler so a caller who is not the commissioner cannot even reach it.
@@ -892,7 +916,7 @@ pub struct StartSeason<'info> {
 
 #[derive(Accounts)]
 pub struct JoinLeague<'info> {
-    #[account(mut, seeds = [b"league", league.league_id.as_ref()], bump = league.bump)]
+    #[account(mut, seeds = [b"league", league.league_id.as_ref(), league.commissioner.as_ref()], bump = league.bump)]
     pub league: Account<'info, League>,
 
     /// Seeded by league and member, so one member cannot hold two places in the
@@ -915,7 +939,7 @@ pub struct JoinLeague<'info> {
 
 #[derive(Accounts)]
 pub struct Deposit<'info> {
-    #[account(mut, seeds = [b"league", league.league_id.as_ref()], bump = league.bump)]
+    #[account(mut, seeds = [b"league", league.league_id.as_ref(), league.commissioner.as_ref()], bump = league.bump)]
     pub league: Account<'info, League>,
 
     #[account(
@@ -955,7 +979,7 @@ pub struct Deposit<'info> {
 
 #[derive(Accounts)]
 pub struct RefundStake<'info> {
-    #[account(mut, seeds = [b"league", league.league_id.as_ref()], bump = league.bump)]
+    #[account(mut, seeds = [b"league", league.league_id.as_ref(), league.commissioner.as_ref()], bump = league.bump)]
     pub league: Account<'info, League>,
 
     #[account(

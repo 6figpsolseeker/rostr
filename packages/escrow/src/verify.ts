@@ -104,9 +104,10 @@ export function hexToBytes(hex: string): Uint8Array {
  * class exists.** `fetchNullable` answers `null` for a missing account, which is
  * the ordinary case for a league nobody has anchored yet — and the anchor route
  * documents that as *retry*. An account whose bytes do not fit the current
- * `League` layout also fails to decode, but retrying it can never work: the PDA
- * derives from the league's UUID, there is no `close`, and the account will hold
- * those bytes forever.
+ * `League` layout also fails to decode, but retrying it can never work: there is no
+ * `close`, so the account will hold those bytes forever. The league can be
+ * anchored again only from a different wallet, since the wallet is a seed of
+ * the address — and only if nothing has recorded this one yet.
  *
  * Reachable when the program's account layout changes and a league was anchored
  * under the older one — which happened on 2026-08-17, when `commissioner`,
@@ -121,9 +122,9 @@ export class IncompatibleLeagueAccountError extends Error {
   ) {
     super(
       `The account for league ${leagueId} was written by a different version of ` +
-        `the escrow program and cannot be read by this build. It cannot be ` +
-        `re-anchored: the address derives from the league's id and the program ` +
-        `has no instruction that closes an account.`,
+        `the escrow program and cannot be read by this build. This account ` +
+        `can never be closed; the league can only be anchored again from a ` +
+        `different wallet, which derives a different address.`,
     );
     this.name = "IncompatibleLeagueAccountError";
   }
@@ -132,8 +133,9 @@ export class IncompatibleLeagueAccountError extends Error {
 export async function fetchOnChainLeague(
   program: Program<RostrEscrow>,
   leagueId: string,
+  commissioner: PublicKey,
 ): Promise<OnChainLeague | null> {
-  const address = leaguePda(leagueId);
+  const address = leaguePda(leagueId, commissioner);
 
   // Two failures wear the same coat here, and only one is recoverable. A missing
   // account is `null`; an account that exists and does not decode *throws* out
@@ -215,11 +217,12 @@ export type AnchorVerdict =
 export async function verifyLeagueAnchor(
   program: Program<RostrEscrow>,
   leagueId: string,
+  commissioner: PublicKey,
   expectedRulesHash: string,
 ): Promise<AnchorVerdict> {
   let league: OnChainLeague | null;
   try {
-    league = await fetchOnChainLeague(program, leagueId);
+    league = await fetchOnChainLeague(program, leagueId, commissioner);
   } catch (error) {
     // Answered rather than thrown, because the caller's job is to decide what
     // to record and a 500 gives it nothing to decide with.
@@ -285,10 +288,11 @@ export type SeasonStartVerdict =
 export async function verifyOnChainSeasonStart(
   program: Program<RostrEscrow>,
   leagueId: string,
+  commissioner: PublicKey,
 ): Promise<SeasonStartVerdict> {
   let league: OnChainLeague | null;
   try {
-    league = await fetchOnChainLeague(program, leagueId);
+    league = await fetchOnChainLeague(program, leagueId, commissioner);
   } catch (error) {
     if (error instanceof IncompatibleLeagueAccountError) {
       return { ok: false, reason: "INCOMPATIBLE", detail: error.message };
@@ -339,9 +343,10 @@ export type JoinVerdict =
 export async function verifyOnChainJoin(
   program: Program<RostrEscrow>,
   leagueId: string,
+  commissioner: PublicKey,
   expectedMember: PublicKey,
 ): Promise<JoinVerdict> {
-  const league = leaguePda(leagueId);
+  const league = leaguePda(leagueId, commissioner);
   const address = membershipPda(league, expectedMember);
 
   const account = await program.account["membership"]?.fetchNullable(address);
@@ -564,9 +569,10 @@ export interface OnChainMembership {
 export async function readMembership(
   program: Program<RostrEscrow>,
   leagueId: string,
+  commissioner: PublicKey,
   member: PublicKey,
 ): Promise<OnChainMembership | null> {
-  const league = leaguePda(leagueId);
+  const league = leaguePda(leagueId, commissioner);
   const address = membershipPda(league, member);
 
   const account = await program.account["membership"]?.fetchNullable(address);
@@ -611,9 +617,10 @@ export type DepositVerdict =
 export async function verifyOnChainDeposit(
   program: Program<RostrEscrow>,
   leagueId: string,
+  commissioner: PublicKey,
   member: PublicKey,
 ): Promise<DepositVerdict> {
-  const membership = await readMembership(program, leagueId, member);
+  const membership = await readMembership(program, leagueId, commissioner, member);
   if (!membership) return { ok: false, reason: "NOT_JOINED" };
 
   // `NOT_DEPOSITED`, not `ALREADY_DEPOSITED`. Zero means the money is not in,
@@ -658,9 +665,10 @@ export type RefundVerdict =
 export async function verifyOnChainRefund(
   program: Program<RostrEscrow>,
   leagueId: string,
+  commissioner: PublicKey,
   member: PublicKey,
 ): Promise<RefundVerdict> {
-  const membership = await readMembership(program, leagueId, member);
+  const membership = await readMembership(program, leagueId, commissioner, member);
   if (!membership) return { ok: false, reason: "NOT_JOINED" };
   if (membership.deposited === 0n) return { ok: false, reason: "NOTHING_DEPOSITED" };
   if (!membership.refunded) return { ok: false, reason: "NOT_REFUNDED" };

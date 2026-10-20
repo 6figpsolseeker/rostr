@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { buildLobbyView, pickLabel, picksForPosition, type LobbyInput } from "./lobby";
+import { PublicKey } from "@solana/web3.js";
+import {
+  anchoringKey,
+  buildLobbyView,
+  pickLabel,
+  picksForPosition,
+  type LobbyInput,
+} from "./lobby";
 
 const SCHEDULED = new Date("2026-08-22T20:00:00-04:00");
 
@@ -451,5 +458,24 @@ describe("readiness and a missed start window", () => {
     // A pot league that simply has not pressed the button yet is not a league in
     // trouble, and an amber panel on every lobby would train people to ignore it.
     expect(buildLobbyView(input(potReady)).readiness).toEqual([]);
+  });
+});
+
+describe("anchoringKey", () => {
+  const anchoredBy = new PublicKey("9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin");
+  const other = new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
+
+  it("answers with the anchoring wallet when that is the one connected", () => {
+    expect(anchoringKey(anchoredBy.toBase58(), anchoredBy).equals(anchoredBy)).toBe(true);
+  });
+
+  it("names the wallet to connect rather than signing with another", () => {
+    // Another of the commissioner's wallets derives an address with nothing at
+    // it; the transaction would fail on-chain and say nothing useful.
+    expect(() => anchoringKey(anchoredBy.toBase58(), other)).toThrow(/9xQe…VFin/);
+  });
+
+  it("refuses a league anchored under the old program", () => {
+    expect(() => anchoringKey(null, anchoredBy)).toThrow(/earlier version/);
   });
 });

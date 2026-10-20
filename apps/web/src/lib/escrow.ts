@@ -1,5 +1,5 @@
 import { AnchorProvider, type Wallet } from "@coral-xyz/anchor";
-import { Connection } from "@solana/web3.js";
+import { Connection, PublicKey } from "@solana/web3.js";
 import { escrowProgram } from "@rostr/escrow";
 
 /**
@@ -36,4 +36,50 @@ export class EscrowConfigError extends Error {
     super(message);
     this.name = "EscrowConfigError";
   }
+}
+
+/**
+ * The wallet a league's on-chain address derives from, or why there is none.
+ *
+ * The address is `[b"league", id, commissioner]`, so every reader needs the
+ * wallet that anchored — recorded once by the anchor route as
+ * `leagues.chain_commissioner`. Never the connected wallet: a commissioner may
+ * hold several, and only one of them seeds the address.
+ *
+ * Two refusals, and they ask for different things. `NOT_ANCHORED` is a step not
+ * yet taken. `LEGACY_ANCHOR` is a league anchored under the old program, whose
+ * address derived from the id alone; no wallet seeds it, so nothing derives it
+ * any more, and guessing it would read an account no instruction can use.
+ */
+export type AnchoringWallet =
+  | { readonly ok: true; readonly commissioner: PublicKey }
+  | {
+      readonly ok: false;
+      readonly body: {
+        readonly error: string;
+        readonly reason: "NOT_ANCHORED" | "LEGACY_ANCHOR";
+      };
+    };
+
+export function anchoringWallet(
+  chain: { readonly anchoredAt: Date | null; readonly commissioner: string | null } | null,
+): AnchoringWallet {
+  if (!chain?.anchoredAt) {
+    return {
+      ok: false,
+      body: { error: "This league is not anchored on-chain yet", reason: "NOT_ANCHORED" },
+    };
+  }
+  if (!chain.commissioner) {
+    return {
+      ok: false,
+      body: {
+        error:
+          "This league was anchored by an earlier version of the escrow program, which " +
+          "this one cannot reach. Nothing can be done with it on-chain.",
+        reason: "LEGACY_ANCHOR",
+      },
+    };
+  }
+  return { ok: true, commissioner: new PublicKey(chain.commissioner) };
 }

@@ -362,10 +362,12 @@ one.
   Two things about this check are load-bearing. **It re-runs on an already-anchored
   league** rather than returning early on the stored boolean, because nothing else in the
   system ever reads the account again and a league recorded before the check existed would
-  otherwise be trusted forever. And **a false positive is unrecoverable** — no setter, no
-  `close`, the PDA derived from the league's UUID — so a wrongly refused league can never
-  be anchored, only recreated under a new id. That is why the fee recipient is compared
-  only when a fee is actually charged: fee-free leagues legitimately carry an empty one.
+  otherwise be trusted forever. And **a false positive is expensive** — no setter, no
+  `close`, so a wrongly refused account is there for good. Since 2026-10-20 the PDA also
+  derives from the anchoring wallet, so the commissioner can anchor again from another of
+  their linked wallets; before that, the league could only be recreated under a new id.
+  That is why the fee recipient is compared only when a fee is actually charged: fee-free
+  leagues legitimately carry an empty one.
 
   `expectedTermsFromRules` and `anchorTermMismatches` live in `@rostr/escrow`, not in the
   route, because **`apps/web` cannot test React** — a mapping inline in a component is
@@ -2473,7 +2475,7 @@ interaction. Requiring it would make every free league undraftable.
 `packages/escrow/src/cluster.ts`, `apps/web/src/lib/cluster.ts`.
 
 **The PDA is byte-identical on every cluster.** A league anchored on devnet and the same
-league anchored on mainnet derive the same address from the same UUID, so "the account
+league anchored on mainnet derive the same address from the same UUID and wallet, so "the account
 exists" answers nothing — the only thing separating them is which endpoint you happened
 to ask. `leagues.chain_cluster` records the answer and migration `0014` makes it
 **write-once by trigger**, so a wrong value is permanent and `joinLeague` gates on it.
@@ -2986,10 +2988,33 @@ declaration order of `PrizeKey` in `@rostr/core`. Serialising from the wrong one
 the split with no error anywhere. The test passes the shares deliberately shuffled, because
 in declaration order the bug is invisible.
 
-A league's Postgres UUID is its on-chain seed, so the row and the account address each
-other with no lookup table. `leagueIdBytes` throws rather than guessing — a silently wrong
-id derives an account the program never wrote, which reads as a logic bug rather than bad
-input.
+A league's on-chain address is `[b"league", uuid, commissioner]` — its Postgres UUID **and
+the wallet that anchored it**. `leagueIdBytes` throws rather than guessing — a silently
+wrong id derives an account the program never wrote, which reads as a logic bug rather
+than bad input.
+
+**The UUID alone used to be the seed, and that was a hole (2026-10-20).** League ids are
+public — the lobby lists unanchored ones and every invite link carries one — so a stranger
+could send `initialize_league` first. With no `close`, the real league could then never be
+anchored, or, with a copy of its rules, the stranger became its on-chain commissioner.
+`payer` is a `Signer` and is now the third seed, so only the commissioner can create the
+account at the address the app reads; a stranger's copy lands at an address derived from
+their own key, which nothing looks at.
+
+Three things that are load-bearing:
+
+- **Every reader derives from `leagues.chain_commissioner`** (migration `0051`), never the
+  connected wallet — a commissioner may hold several and only one seeds the address.
+  `leaguePda` takes it as a _required_ parameter so the compiler finds every caller; do not
+  give it a default. Routes go through `anchoringWallet` in `lib/escrow.ts`.
+- **The anchor route records the wallet only after `commissionerOwnsWallet`** — one of the
+  commissioner's verified wallets. Recording a stranger's would point the league at the
+  stranger's account, which is the original attack by another route.
+- **`refund_stake` and `settle` sign through `league_signer_seeds`**, the one place the
+  seeds are built by hand. A drift there compiles and fails only at the transfer.
+
+Leagues anchored before `0051` have a NULL wallet for good and every on-chain step refuses
+them as `LEGACY_ANCHOR`. On 2026-10-20 that was four devnet test leagues, no vaults.
 
 ### The web app
 

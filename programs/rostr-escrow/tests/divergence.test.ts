@@ -117,11 +117,17 @@ describe("on-chain join is now wired (issue #26)", () => {
   it("a member who signs join_league gets a real Membership account", async () => {
     const { league, rules } = await createPotLeague("fixed");
     const sig = await anchorOnChain(league.id, league.rulesHash, rules);
-    const verdict = await verifyLeagueAnchor(program, league.id, league.rulesHash);
+    const verdict = await verifyLeagueAnchor(
+      program,
+      league.id,
+      provider.wallet.publicKey,
+      league.rulesHash,
+    );
     expect(verdict.ok).toBe(true);
     await recordChainAnchor(db, league.id, {
       signature: sig,
       cluster: clusterOf(provider.connection),
+      commissioner: provider.wallet.publicKey.toBase58(),
     });
 
     const wallet = testWallet(31);
@@ -156,6 +162,7 @@ describe("on-chain join is now wired (issue #26)", () => {
     await provider.connection.confirmTransaction({ signature: airdrop, ...bh }, "confirmed");
 
     const ix = await joinLeagueIx(program, {
+      commissioner: provider.wallet.publicKey,
       leagueId: league.id,
       rulesHash: hexToBytes(league.rulesHash),
       member: memberKeypair.publicKey,
@@ -169,6 +176,7 @@ describe("on-chain join is now wired (issue #26)", () => {
     const joinVerdict = await verifyOnChainJoin(
       program,
       league.id,
+      provider.wallet.publicKey,
       new anchor.web3.PublicKey(wallet.address),
     );
     expect(joinVerdict.ok).toBe(true);
@@ -196,6 +204,7 @@ describe("on-chain join is now wired (issue #26)", () => {
     await recordChainAnchor(db, league.id, {
       signature: sig,
       cluster: clusterOf(provider.connection),
+      commissioner: provider.wallet.publicKey.toBase58(),
     });
 
     const wallet = testWallet(32);
@@ -219,6 +228,7 @@ describe("on-chain join is now wired (issue #26)", () => {
     });
 
     const ix = await joinLeagueIx(program, {
+      commissioner: provider.wallet.publicKey,
       leagueId: league.id,
       rulesHash: hexToBytes(league.rulesHash),
       member: new anchor.web3.PublicKey(wallet.address),
@@ -234,7 +244,12 @@ describe("on-chain join is now wired (issue #26)", () => {
       commitment: "confirmed",
     });
 
-    const onChain = await verifyLeagueAnchor(program, league.id, league.rulesHash);
+    const onChain = await verifyLeagueAnchor(
+      program,
+      league.id,
+      provider.wallet.publicKey,
+      league.rulesHash,
+    );
     if (onChain.ok) {
       expect(onChain.league.memberCount).toBe(1);
     } else {
@@ -244,7 +259,11 @@ describe("on-chain join is now wired (issue #26)", () => {
     // Referential sanity: the Membership PDA the program created is the one our
     // client derives.
     const leaguePk = anchor.web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("league"), Buffer.from(league.id.replace(/-/g, ""), "hex")],
+      [
+        Buffer.from("league"),
+        Buffer.from(league.id.replace(/-/g, ""), "hex"),
+        provider.wallet.publicKey.toBuffer(),
+      ],
       program.programId,
     )[0];
     const memberPk = membershipPda(
