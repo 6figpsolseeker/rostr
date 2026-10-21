@@ -174,8 +174,10 @@ describe("initialize_league", () => {
     });
 
     it("cannot create the account at the commissioner's address", async () => {
-      // The front-run itself: the stranger names the address the app will read,
-      // which only the commissioner's signature can create.
+      // Pins the property rather than catching a revert: the stranger names the
+      // address the app will read, and the seeds bind it to a key they do not
+      // hold. (On the old program this address meant nothing either, so the
+      // test above is the one that fails if the fix is undone.)
       const args = validArgs();
       const { keypair: stranger } = await fundedMember(provider, mint, 0);
       const real = leaguePda(program, args.leagueId, provider.wallet.publicKey);

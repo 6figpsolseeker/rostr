@@ -405,6 +405,33 @@ describe("the on-chain anchor", () => {
     ).rejects.toThrow(/without the wallet/);
   });
 
+  it("refuses a row that arrives already anchored without its wallet", async () => {
+    // The INSERT path: no OLD row, the same moment of anchoring. No app code
+    // writes chain columns on insert; this is the floor under a script that might.
+    const { client, commissionerId } = await setup();
+    const created = await league(client, commissionerId);
+    await client.query("CREATE TEMP TABLE copy AS SELECT * FROM leagues WHERE id = $1", [
+      created.id,
+    ]);
+    await client.query(
+      `UPDATE copy SET id = gen_random_uuid(), chain_anchored_at = now(),
+                       chain_signature = 's', chain_cluster = 'localnet'`,
+    );
+
+    await expect(client.query("INSERT INTO leagues SELECT * FROM copy")).rejects.toThrow(
+      /without the wallet/,
+    );
+  });
+
+  it("refuses a wallet that is not shaped like a Solana key", async () => {
+    const { client, commissionerId } = await setup();
+    const created = await league(client, commissionerId);
+
+    await expect(
+      recordChainAnchor(client, created.id, { ...anchor, commissioner: "0OIl" }),
+    ).rejects.toThrow(/chain_commissioner_is_base58/);
+  });
+
   it("never moves the wallet once anchored", async () => {
     const { client, commissionerId } = await setup();
     const created = await league(client, commissionerId);
@@ -478,16 +505,6 @@ describe("the on-chain anchor", () => {
   });
 });
 
-/**
- * And the same again for the season start, which is a different fact with the
- * same properties.
- *
- * `League.started` is set once by the program and never unset. It decides which
- * of two refund schedules a pot league's members are on — the ordinary timelock,
- * or the failed-league opening 48 hours after the draft time — so a record that
- * could be cleared or re-pointed is a record that could be made to disagree with
- * the chain about whether a season ever began. `drawDraftOrder` reads it.
- */
 describe("commissionerOwnsWallet", () => {
   /**
    * The anchor route's trust check. The browser names the wallet it anchored
@@ -551,6 +568,16 @@ describe("commissionerOwnsWallet", () => {
   });
 });
 
+/**
+ * And the same again for the season start, which is a different fact with the
+ * same properties.
+ *
+ * `League.started` is set once by the program and never unset. It decides which
+ * of two refund schedules a pot league's members are on — the ordinary timelock,
+ * or the failed-league opening 48 hours after the draft time — so a record that
+ * could be cleared or re-pointed is a record that could be made to disagree with
+ * the chain about whether a season ever began. `drawDraftOrder` reads it.
+ */
 describe("the season start on-chain", () => {
   const anchor = {
     signature: "5xSig".padEnd(88, "a"),

@@ -53,7 +53,10 @@ export function settlementAccountCheck(): SettlementAccountCheck {
 }
 
 /**
- * Whether a league's settlement account already exists.
+ * Whether the lobby should hide the create-settlement button: `true` when the
+ * account exists, and also when the league has no reachable address — not
+ * anchored, or anchored under the old program — since the button could only send
+ * a transaction that fails.
  *
  * Separate from `scoresMismatches` because the lobby asks a different question:
  * that one decides whether the draw may proceed, this decides whether to show a

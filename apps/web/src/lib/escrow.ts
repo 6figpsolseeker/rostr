@@ -39,6 +39,25 @@ export class EscrowConfigError extends Error {
 }
 
 /**
+ * The anchoring wallet a browser names, parsed, or `null` if it cannot be one.
+ *
+ * The first refusal in the anchor route, before the ownership check. A key off
+ * the ed25519 curve — a PDA, say — has no private key, so it cannot have signed
+ * `initialize_league` as its payer; the all-zero default key is nobody's.
+ */
+export function parseAnchoringWallet(value: unknown): PublicKey | null {
+  if (typeof value !== "string") return null;
+  let key: PublicKey;
+  try {
+    key = new PublicKey(value);
+  } catch {
+    return null;
+  }
+  if (key.equals(PublicKey.default) || !PublicKey.isOnCurve(key.toBytes())) return null;
+  return key;
+}
+
+/**
  * The wallet a league's on-chain address derives from, or why there is none.
  *
  * The address is `[b"league", id, commissioner]`, so every reader needs the

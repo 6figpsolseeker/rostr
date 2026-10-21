@@ -282,10 +282,10 @@ pub mod rostr_escrow {
         // **Deliberately loose, and do not tighten it.** The precise bound lives
         // off-chain in `validatePot`, where the season is known. A false refusal
         // here is unrecoverable: the args come from a rule set that is already
-        // frozen, so the league cannot be retried with a corrected value, and
-        // the PDA derives from its UUID and the paying wallet — it could only be
-        // recreated under a new id or from another of the commissioner's wallets. `MAX_DRAFT_LEAD_MS` in the create route keeps the off-chain
-        // maximum at draft + 365d with a draft at most 300d out, so 665 days is
+        // frozen, so the league cannot be retried with a corrected value — from
+        // this wallet or any other, since every attempt sends the same args. It
+        // could only be recreated under a new id. `MAX_DRAFT_LEAD_MS` in the
+        // create route keeps the off-chain maximum at draft + 365d with a draft at most 300d out, so 665 days is
         // the most a legitimate league can ask for and this leaves 65 days spare.
         //
         // `saturating_add` rather than `+`: overflow here is unreachable in
@@ -653,16 +653,18 @@ pub mod rostr_escrow {
 /// split, the mint and the refund date are written once and read forever.
 ///
 /// This paragraph used to say the account had no authority field at all. It has
-/// one — `commissioner`, whose sole power is `start_season`, and whose sole
-/// effect is which of two refund schedules a member is on. Both end with them
-/// holding their own money. See the field for why that was the least bad way to
-/// let a league that never started give the money back.
+/// one — `commissioner`, whose powers are `start_season` and `initialize_scores`.
+/// The first decides which of two refund schedules a member is on, and both end
+/// with them holding their own money; the second writes a roster and terms the
+/// draw refuses unless they match the signed rules. See the field for why that
+/// was the least bad way to let a league that never started give the money back.
+/// It is also a seed of the account's address, with `league_id`.
 #[account]
 #[derive(InitSpace)]
 pub struct League {
-    /// The league's UUID in Postgres, raw bytes. Also the PDA seed, so the
-    /// off-chain record and the on-chain one address each other with no lookup
-    /// table in between.
+    /// The league's UUID in Postgres, raw bytes. One of the PDA's two seeds, with
+    /// `commissioner`; the off-chain record reaches the account through the
+    /// anchoring wallet it stores beside the id.
     pub league_id: [u8; 16],
     /// SHA-256 of the canonically encoded rule set. The whole trust model.
     pub rules_hash: [u8; 32],
@@ -867,11 +869,12 @@ pub struct InitializeLeague<'info> {
     )]
     pub vault: Account<'info, TokenAccount>,
 
-    /// Pays rent, and is recorded as `league.commissioner`.
+    /// Pays rent, is recorded as `league.commissioner`, and is a seed of the
+    /// league's address — which is why it must sign: knowing a league's id is not
+    /// enough to create its account.
     ///
-    /// This used to say the key held no privileges afterwards and was not
-    /// recorded. It is now recorded, and it holds exactly one: `start_season`.
-    /// That instruction changes no term and moves no token — see the field.
+    /// It holds two instructions afterwards, `start_season` and
+    /// `initialize_scores`. Neither changes a term or moves a token — see the field.
     #[account(mut)]
     pub payer: Signer<'info>,
 

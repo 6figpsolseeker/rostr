@@ -103,7 +103,8 @@ describe("verifyLeagueAnchor's two kinds of absence", () => {
     // The message has to say the thing a retry cannot fix, because the retry is
     // what somebody reaching this will otherwise do.
     if (verdict.reason !== "INCOMPATIBLE") return;
-    expect(verdict.detail).toMatch(/can never be closed|different version/i);
+    expect(verdict.detail).toMatch(/can never be closed/);
+    expect(verdict.detail).toMatch(/different wallet/);
   });
 
   it("surfaces the failure as an answer rather than a throw", async () => {

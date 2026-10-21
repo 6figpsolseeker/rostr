@@ -232,6 +232,18 @@ describe("create -> anchor -> join", () => {
     expect(chain?.anchoredAt).toBeTruthy();
     expect(chain?.signature).toBe(signature);
 
+    // And the wallet Postgres stored is the one that finds the account: read it
+    // back as base58, derive the address from it, and the program's copy is there.
+    // This is the round trip every later reader depends on.
+    expect(chain?.commissioner).toBe(provider.wallet.publicKey.toBase58());
+    const fromStored = await verifyLeagueAnchor(
+      program,
+      league.id,
+      new anchor.web3.PublicKey(chain!.commissioner!),
+      league.rulesHash,
+    );
+    expect(fromStored.ok).toBe(true);
+
     const wallet = testWallet(12);
     const user = await createUser(db, "member@example.com", "Member");
     await linkWallet(db, user.id, wallet.address);

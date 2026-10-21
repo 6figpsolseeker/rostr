@@ -67,7 +67,7 @@ export type SetupBlocker =
  * can enter either. Extracting the link control so it stands on its own is the
  * next piece of #165, and when it lands this order is worth revisiting.
  */
-export const SETUP_ORDER = ["ANCHOR", "LINK", "SEAT", "ONCHAIN"] as const;
+export const SETUP_ORDER = ["LINK", "ANCHOR", "SEAT", "ONCHAIN"] as const;
 
 export interface CommissionerSetupInput {
   /** Whether this viewer created the league. Nothing renders for anyone else. */
@@ -154,18 +154,24 @@ export interface CommissionerSetupView {
  * Steps are checked in `SETUP_ORDER` and the first unsatisfied one wins. The
  * states are otherwise nested by construction rather than by this function's
  * say-so — `joinLeague` requires a linked wallet and an anchored league, and
- * `/join-onchain` derives its wallet from the membership row — with exactly one
- * exception: **ANCHOR and LINK are independent in both directions.** Anchoring
- * signs a transaction from the connected wallet and never consults `wallets`, so
- * it can be done first; and `wallets` is per-user, so a commissioner who linked
- * one on any previous league arrives with LINK already satisfied and ANCHOR
- * outstanding. That second case is the ordinary one for a returning user, and it
- * is why `done` below is each step's own condition.
+ * `/join-onchain` derives its wallet from the membership row.
+ *
+ * **LINK comes before ANCHOR, and the order is enforced.** The anchoring wallet
+ * is a seed of the league's on-chain address and is recorded, so the anchor route
+ * accepts only one of the commissioner's own verified wallets — and `AnchorPanel`
+ * refuses before signing otherwise, rather than spend rent on a 403. This used to
+ * say the two were independent, because anchoring never consulted `wallets`; it
+ * does now. `wallets` is per-user, so a commissioner who linked one on any
+ * previous league arrives with LINK already satisfied — the ordinary case, and
+ * with Privy every account has its generated wallet linked at sign-in.
+ *
+ * `done` below is still each step's own condition: a league anchored before
+ * that rule, by a wallet never linked, is ANCHOR done and LINK outstanding.
  */
 export function commissionerSetupStep(input: CommissionerSetupInput): SetupStep | null {
   if (!input.isCommissioner) return null;
-  if (!input.anchored) return "ANCHOR";
   if (!input.hasLinkedWallet) return "LINK";
+  if (!input.anchored) return "ANCHOR";
   if (!input.hasTeam) return "SEAT";
   if (input.hasPot && !input.onChainJoined) return "ONCHAIN";
   return "DONE";

@@ -25,18 +25,34 @@
 -- longer derives, so nothing on-chain can be done with them — and their column
 -- stays NULL for ever, because no wallet seeds that address. Readers treat NULL on
 -- an anchored league as "anchored under the old program" and refuse every
--- on-chain step rather than guess. On 2026-10-20 that was four test leagues on
--- devnet, none holding a vault.
+-- on-chain step rather than guess.
+--
+-- **That includes their vaults.** `refund_stake` addresses the league by the new
+-- seeds, so a stake sitting in an old-seed vault can never be refunded once the
+-- program is upgraded in place. Counted on-chain, not from these rows, on
+-- 2026-10-20: devnet held four old-seed League accounts, and one of them
+-- (`f38182b9-…`) held two unrefunded test stakes, 10 devnet USDC, whose season was
+-- marked started — so no refund could open before the 2027-02-20 timelock. The
+-- owner's own test wallets; stranding them was accepted. Nothing was on mainnet.
+-- **Never change the League seeds in place on a program holding real deposits**:
+-- deploy a new program id and leave the old one running for its refunds.
 --
 -- That is why this is a trigger and not an extension of `0014`'s
 -- `chain_anchored_together` CHECK. A CHECK is evaluated on every UPDATE of the
 -- row, so a legacy league would fail its next unrelated write — a state change,
 -- say — and be bricked by the migration meant to protect it. The trigger looks
--- only at the transition that matters: the moment of anchoring, and afterwards.
+-- only at the moment of anchoring — an UPDATE that sets the anchor, or an INSERT
+-- that arrives already anchored — and at every change afterwards.
 --
--- Who controls this wallet controls only `start_season`. Taking over the
--- commissioner's *account* here gains nothing on-chain: the key is fixed at
--- anchoring and the program has no instruction to change it.
+-- `0014` also said the program refuses a second `initialize_league` for the same
+-- id. That now holds per wallet only: each of a commissioner's wallets can create
+-- one, which is why `recordChainAnchor` is conditional and the wallet write-once.
+--
+-- Who controls this wallet controls the two commissioner instructions,
+-- `start_season` and `initialize_scores`, and nothing that changes a term or moves
+-- a token. The key is fixed at anchoring and the program has no instruction to
+-- change it, so taking over the commissioner's *account* here gains nothing
+-- on-chain.
 
 ALTER TABLE leagues ADD COLUMN chain_commissioner text;
 
@@ -56,7 +72,9 @@ CREATE FUNCTION leagues_chain_commissioner_is_bound() RETURNS trigger AS $$
 BEGIN
   -- Anchoring now has to say who anchored. Without the wallet the address cannot
   -- be derived, so an anchor recorded without one is an anchor nobody can use.
-  IF OLD.chain_anchored_at IS NULL
+  -- On an INSERT there is no OLD row, and a row arriving already anchored is
+  -- the same moment of anchoring as an UPDATE that sets it.
+  IF (TG_OP = 'INSERT' OR OLD.chain_anchored_at IS NULL)
      AND NEW.chain_anchored_at IS NOT NULL
      AND NEW.chain_commissioner IS NULL THEN
     RAISE EXCEPTION
@@ -66,7 +84,8 @@ BEGIN
 
   -- And once anchored it never moves — including from NULL, which is what keeps
   -- a legacy league from being "repaired" with a wallet that never seeded it.
-  IF OLD.chain_anchored_at IS NOT NULL
+  IF TG_OP = 'UPDATE'
+     AND OLD.chain_anchored_at IS NOT NULL
      AND NEW.chain_commissioner IS DISTINCT FROM OLD.chain_commissioner THEN
     RAISE EXCEPTION
       'League % was anchored by %, and that cannot be rewritten',
@@ -78,5 +97,5 @@ END;
 $$ LANGUAGE plpgsql;
 
 CREATE TRIGGER leagues_chain_commissioner_bound
-  BEFORE UPDATE ON leagues
+  BEFORE INSERT OR UPDATE ON leagues
   FOR EACH ROW EXECUTE FUNCTION leagues_chain_commissioner_is_bound();

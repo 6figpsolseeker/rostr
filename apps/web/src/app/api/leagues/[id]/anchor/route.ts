@@ -13,7 +13,12 @@ import {
 } from "@rostr/db";
 import { db } from "@/lib/db";
 import { draftContext, DraftContextError } from "@/lib/draft-context";
-import { EscrowConfigError, readOnlyEscrow } from "@/lib/escrow";
+import {
+  anchoringWallet,
+  EscrowConfigError,
+  parseAnchoringWallet,
+  readOnlyEscrow,
+} from "@/lib/escrow";
 import { assertRpcCluster, ClusterConfigError } from "@/lib/cluster";
 
 /**
@@ -115,8 +120,9 @@ export async function POST(
 
     // Already anchored is success, not an error. Anchoring is a second
     // transaction the commissioner signs, so a retry after a lost response is
-    // the ordinary case — and the record is write-once anyway, so a second
-    // write would raise from a trigger rather than quietly re-point it.
+    // the ordinary case — and `recordChainAnchor` writes only while nothing is
+    // recorded, so a second call changes nothing; a direct rewrite still raises
+    // from the `0014` and `0051` triggers.
     //
     // **It is still re-checked.** Returning early on the stored boolean alone
     // would mean the terms check never runs for any league anchored before it
@@ -128,22 +134,13 @@ export async function POST(
     // could otherwise name any account and have this report the league healthy.
     const existing = await getChainState(client, id);
     if (existing?.anchoredAt) {
-      // Anchored under the old program, whose address derived from the id alone.
-      // No wallet seeds it, so nothing can derive it any more, and guessing the
-      // old address would vouch for an account no instruction can use.
-      if (!existing.commissioner) {
-        return NextResponse.json(
-          {
-            error:
-              "This league was anchored by an earlier version of the escrow program, " +
-              "which this one cannot reach. Create the league again.",
-            reason: "LEGACY_ANCHOR",
-          },
-          { status: 409 },
-        );
-      }
+      // A league anchored under the old program has no recorded wallet, and
+      // guessing its old address would vouch for an account no instruction can
+      // use — `anchoringWallet` refuses it as `LEGACY_ANCHOR`.
+      const anchored = anchoringWallet(existing);
+      if (!anchored.ok) return NextResponse.json(anchored.body, { status: 409 });
 
-      const { verdict, mismatches } = await inspect(new PublicKey(existing.commissioner));
+      const { verdict, mismatches } = await inspect(anchored.commissioner);
 
       if (!verdict.ok || mismatches.length > 0) {
         return NextResponse.json(
@@ -185,15 +182,10 @@ export async function POST(
       );
     }
 
-    // The wallet the browser anchored with. Off the curve cannot sign, so it
-    // cannot have paid for `initialize_league` — refused before any lookup.
-    let wallet: PublicKey;
-    try {
-      wallet = new PublicKey(typeof body.commissioner === "string" ? body.commissioner : "");
-    } catch {
-      wallet = PublicKey.default;
-    }
-    if (wallet.equals(PublicKey.default) || !PublicKey.isOnCurve(wallet.toBytes())) {
+    // The wallet the browser anchored with, refused before any lookup if it
+    // could not have signed as the payer.
+    const wallet = parseAnchoringWallet(body.commissioner);
+    if (!wallet) {
       return NextResponse.json(
         { error: "The wallet that anchored the league is required", reason: "INVALID_WALLET" },
         { status: 400 },
@@ -241,8 +233,9 @@ export async function POST(
         things. `NOT_FOUND` invites a retry; this one has to say plainly that
         retrying is the single action guaranteed not to work. The program has
         no `close`, so those bytes are at that address for good. The wallet is
-        a seed of the address, so anchoring from another of the commissioner's
-        wallets reaches a fresh one — nothing has been recorded yet.
+        a seed of the address, so another of the commissioner's verified
+        wallets would reach a fresh one — but the Privy flow offers no way to
+        choose a wallet, so the advice given is the one that always works.
 
         Reachable when the program's account layout moves and a league was
         anchored under the older one. Before this it escaped as a 500.
@@ -252,8 +245,7 @@ export async function POST(
           {
             error:
               "This league was anchored by a different version of the escrow program and " +
-              "cannot be read. That account can never be freed, but anchoring again from " +
-              "another wallet linked to your account creates a fresh one.",
+              "cannot be read, and that account can never be freed. Create the league again.",
             reason: verdict.reason,
             detail: verdict.detail,
           },
@@ -294,8 +286,8 @@ export async function POST(
     }
 
     // Conditional on nothing being recorded yet. Losing means a concurrent request
-    // anchored first — reachable now that a commissioner with two verified wallets
-    // can produce two valid accounts — and the league is whatever it recorded.
+    // recorded first: the same POST sent twice, or — now that each of a
+    // commissioner's verified wallets can create an account — a different one.
     const recorded = await recordChainAnchor(client, id, {
       signature,
       cluster,
@@ -303,6 +295,16 @@ export async function POST(
     });
     if (!recorded) {
       const winner = await getChainState(client, id);
+      // The same wallet arriving twice is the double-submit, and it succeeded.
+      if (winner?.commissioner === wallet.toBase58()) {
+        return NextResponse.json({
+          anchored: true,
+          alreadyRecorded: true,
+          cluster: winner.cluster,
+          signature: winner.signature,
+          commissioner: winner.commissioner,
+        });
+      }
       return NextResponse.json(
         {
           error: "This league was anchored by another request a moment ago.",

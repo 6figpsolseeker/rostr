@@ -39,8 +39,8 @@ describe("commissionerSetupStep", () => {
   });
 
   it("walks the four steps in order", () => {
-    expect(commissionerSetupStep(fresh())).toBe("ANCHOR");
-    expect(commissionerSetupStep(fresh({ anchored: true }))).toBe("LINK");
+    expect(commissionerSetupStep(fresh())).toBe("LINK");
+    expect(commissionerSetupStep(fresh({ hasLinkedWallet: true }))).toBe("ANCHOR");
     expect(commissionerSetupStep(fresh({ anchored: true, hasLinkedWallet: true }))).toBe(
       "SEAT",
     );
@@ -51,20 +51,16 @@ describe("commissionerSetupStep", () => {
   });
 
   /**
-   * ANCHOR and LINK are independent in both directions.
-   *
-   * `AnchorPanel` signs from the connected wallet and never consults `wallets`,
-   * so a commissioner can anchor without ever linking; and `wallets` is
-   * per-user, so one who linked on a previous league arrives with LINK already
-   * satisfied. Every other ordering is enforced upstream — `joinLeague` refuses
-   * an unanchored league and an unlinked wallet, and `/join-onchain` derives its
-   * wallet from the membership row that step 3 writes.
+   * LINK comes first: the anchor route accepts only a wallet the commissioner
+   * has proven theirs, because it becomes a seed of the league's address. A
+   * league anchored before that rule can still be anchored and unlinked, and
+   * must then ask for the link rather than pretend the anchor did not happen.
    */
   it("asks for the link after an anchor signed by an unlinked wallet", () => {
     expect(commissionerSetupStep(fresh({ anchored: true }))).toBe("LINK");
   });
 
-  it("does not skip the anchor for a commissioner who linked a wallet first", () => {
+  it("asks for the anchor once a wallet is linked", () => {
     expect(commissionerSetupStep(fresh({ hasLinkedWallet: true }))).toBe("ANCHOR");
   });
 
@@ -135,7 +131,7 @@ describe("commissionerSetup", () => {
 
   it("counts down as steps land", () => {
     expect(commissionerSetup(fresh())!.remaining).toBe(4);
-    expect(commissionerSetup(fresh({ anchored: true }))!.remaining).toBe(3);
+    expect(commissionerSetup(fresh({ hasLinkedWallet: true }))!.remaining).toBe(3);
     expect(
       commissionerSetup(fresh({ anchored: true, hasLinkedWallet: true, hasTeam: true }))!
         .remaining,
@@ -248,7 +244,7 @@ describe("a free league", () => {
 
   it("lists three steps and never names the on-chain one", () => {
     const view = commissionerSetup(free());
-    expect(view?.items.map((item) => item.key)).toEqual(["ANCHOR", "LINK", "SEAT"]);
+    expect(view?.items.map((item) => item.key)).toEqual(["LINK", "ANCHOR", "SEAT"]);
     expect(view?.remaining).toBe(3);
   });
 

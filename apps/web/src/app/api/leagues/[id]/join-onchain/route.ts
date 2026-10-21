@@ -71,11 +71,11 @@ export async function POST(
     // would be worse, because the PDA is byte-identical everywhere and the row
     // would look right.
     const chain = await getChainState(client, id);
-    const anchored = anchoringWallet(chain);
-    if (!chain || !anchored.ok) {
-      return NextResponse.json(anchored.ok ? { error: "League not found" } : anchored.body, {
-        status: anchored.ok ? 404 : 409,
-      });
+    if (!chain?.anchoredAt) {
+      return NextResponse.json(
+        { error: "This league is not anchored on-chain yet", reason: "NOT_ANCHORED" },
+        { status: 409 },
+      );
     }
 
     // Already recorded is success, not an error — re-posting after a lost
@@ -89,6 +89,12 @@ export async function POST(
         signature: existing.signature,
       });
     }
+
+    // After the early return above, deliberately: a join already recorded stays
+    // a success even on a league anchored under the old program, which nothing
+    // on-chain can reach any more.
+    const anchored = anchoringWallet(chain);
+    if (!anchored.ok) return NextResponse.json(anchored.body, { status: 409 });
 
     // The signature is an audit breadcrumb, not the proof. The join is accepted
     // or refused entirely on whether the Membership account exists.

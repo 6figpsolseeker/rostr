@@ -93,11 +93,11 @@ export async function POST(
     }
 
     const chain = await getChainState(client, id);
-    const anchored = anchoringWallet(chain);
-    if (!chain || !anchored.ok) {
-      return NextResponse.json(anchored.ok ? { error: "League not found" } : anchored.body, {
-        status: anchored.ok ? 404 : 409,
-      });
+    if (!chain?.anchoredAt) {
+      return NextResponse.json(
+        { error: "This league is not anchored on-chain yet", reason: "NOT_ANCHORED" },
+        { status: 409 },
+      );
     }
 
     // Already recorded is success, not an error. `start_season` cannot run twice
@@ -112,6 +112,11 @@ export async function POST(
         signature: chain.seasonStartSignature,
       });
     }
+
+    // After the early return above, deliberately: a start already recorded stays
+    // a success even on a league anchored under the old program.
+    const anchored = anchoringWallet(chain);
+    if (!anchored.ok) return NextResponse.json(anchored.body, { status: 409 });
 
     // Shape-checked only, as in the anchor route: it records *which* transaction
     // declared the season started so a stranger can go and look at it. Nothing

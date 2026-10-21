@@ -20,8 +20,9 @@ import { parseCluster, resolveCluster, type Cluster } from "@rostr/escrow";
  * commissioner with it unset signed `initialize_league` against **mainnet**
  * while the server read devnet, found nothing, and returned `NOT_FOUND` — which
  * the route documents as "retry". The account is real, it is on the wrong chain,
- * it cost mainnet rent, and the PDA derives from the league's UUID with no
- * `close` instruction, so that league can never be anchored there again. Worse
+ * it cost mainnet rent, and there is no `close` instruction, so that account
+ * sits at that address for good; the league can be anchored there again only
+ * from a different wallet of the commissioner's. Worse
  * downstream: `deposit` is permissionless once a league exists, so a member
  * could put real USDC into a vault this deployment never looks at.
  *
