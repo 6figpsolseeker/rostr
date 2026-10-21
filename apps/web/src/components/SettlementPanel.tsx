@@ -6,6 +6,7 @@ import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { PublicKey, Transaction } from "@solana/web3.js";
 import { AnchorProvider, type Wallet } from "@coral-xyz/anchor";
 import { escrowProgram, fetchOnChainScores, initializeScoresIx } from "@rostr/escrow";
+import { anchoringKey } from "@/lib/lobby";
 
 /**
  * Writing the league's settlement account, once, before the season starts.
@@ -36,6 +37,12 @@ import { escrowProgram, fetchOnChainScores, initializeScoresIx } from "@rostr/es
 
 export interface SettlementPanelProps {
   readonly leagueId: string;
+  /**
+   * The wallet that anchored the league. It is a seed of the league's address
+   * and the only key the program accepts here, so a commissioner holding several
+   * has to sign with this one.
+   */
+  readonly anchorWallet: string | null;
   readonly roster: readonly { teamId: string; teamName: string; wallet: string }[];
   readonly oracle: string;
   readonly tiebreakers: readonly string[];
@@ -63,12 +70,13 @@ export function SettlementPanel(props: SettlementPanelProps) {
         commitment: "confirmed",
       });
       const program = escrowProgram(provider);
+      const commissioner = anchoringKey(props.anchorWallet, wallet.publicKey);
 
       // Read before writing, like `JoinPanel` does. A commissioner whose
       // response was lost after the transaction confirmed presses again, and
       // `init` fails with "account already in use" — an error that means "you
       // already did this" and must not read as a failure.
-      const existing = await fetchOnChainScores(program, props.leagueId);
+      const existing = await fetchOnChainScores(program, props.leagueId, commissioner);
       if (existing) {
         setDone(true);
         window.location.reload();
@@ -77,7 +85,7 @@ export function SettlementPanel(props: SettlementPanelProps) {
 
       const ix = await initializeScoresIx(program, {
         leagueId: props.leagueId,
-        commissioner: wallet.publicKey,
+        commissioner,
         roster: props.roster.map((entry) => ({
           teamId: entry.teamId,
           wallet: new PublicKey(entry.wallet),

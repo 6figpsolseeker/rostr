@@ -33,8 +33,9 @@ import "@solana/wallet-adapter-react-ui/styles.css";
  * `SOLANA_RPC_URL` said. The commissioner's `initialize_league` landed on
  * mainnet, the server read devnet, found nothing, and returned `NOT_FOUND` —
  * which this route documents as "retry". Retrying cannot work, the account is
- * real, it cost mainnet rent, and the PDA derives from the league's UUID with no
- * `close`, so that league can never be anchored there again.
+ * real, it cost mainnet rent, and with no `close` that account sits at that
+ * address for good; the league can be anchored there again only from a
+ * different wallet of the commissioner's.
  *
  * Devnet is the fallback because it is the one that fails *visibly*: nothing
  * verifies, nobody loses anything, and the misconfiguration surfaces in minutes.

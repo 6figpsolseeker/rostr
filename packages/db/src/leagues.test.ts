@@ -10,6 +10,7 @@ import {
 } from "@rostr/core";
 import type { DraftRules, LeagueRules, PotRules } from "@rostr/core";
 import {
+  commissionerOwnsWallet,
   createLeague,
   getChainState,
   getLeagueRules,
@@ -53,6 +54,10 @@ function rules(overrides: Partial<LeagueRules> = {}): LeagueRules {
     ...overrides,
   } as LeagueRules;
 }
+
+/** Real ed25519 keys, for the wallets that anchor in these fixtures. */
+const ANCHOR_WALLET = "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin";
+const OTHER_WALLET = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 
 async function setup(): Promise<{ client: PGliteClient; commissionerId: string }> {
   db = await createTestDatabase();
@@ -315,7 +320,11 @@ describe("createLeague", () => {
 });
 
 describe("the on-chain anchor", () => {
-  const anchor = { signature: "5xSig".padEnd(88, "a"), cluster: "localnet" };
+  const anchor = {
+    signature: "5xSig".padEnd(88, "a"),
+    cluster: "localnet",
+    commissioner: ANCHOR_WALLET,
+  };
 
   async function league(client: PGliteClient, commissionerId: string) {
     return createLeague(client, NFL, { name: "L", commissionerId, rules: rules() });
@@ -344,6 +353,15 @@ describe("the on-chain anchor", () => {
     expect(state?.cluster).toBe("localnet");
   });
 
+  it("records the wallet that anchored it, which the address derives from", async () => {
+    const { client, commissionerId } = await setup();
+    const created = await league(client, commissionerId);
+
+    expect((await getChainState(client, created.id))?.commissioner).toBeNull();
+    await expect(recordChainAnchor(client, created.id, anchor)).resolves.toBe(true);
+    expect((await getChainState(client, created.id))?.commissioner).toBe(ANCHOR_WALLET);
+  });
+
   it("cannot be rewritten to point at a different transaction", async () => {
     const { client, commissionerId } = await setup();
     const created = await league(client, commissionerId);
@@ -351,12 +369,123 @@ describe("the on-chain anchor", () => {
 
     // The real anchor exists on-chain and cannot be undone. Letting the record
     // move is how a genuine anchor gets papered over with a fake one later.
+    //
+    // A second call writes nothing and says so — the losing half of two
+    // concurrent anchors, which the route turns into a re-read rather than a
+    // 500. Going round the function still hits the trigger.
     await expect(
-      recordChainAnchor(client, created.id, { signature: "other", cluster: "mainnet-beta" }),
+      recordChainAnchor(client, created.id, {
+        signature: "other",
+        cluster: "mainnet-beta",
+        commissioner: OTHER_WALLET,
+      }),
+    ).resolves.toBe(false);
+    await expect(
+      client.query("UPDATE leagues SET chain_signature = 'other' WHERE id = $1", [created.id]),
     ).rejects.toThrow(/anchored/);
 
     const state = await getChainState(client, created.id);
     expect(state?.signature).toBe(anchor.signature);
+    expect(state?.commissioner).toBe(ANCHOR_WALLET);
+  });
+
+  it("refuses an anchor that does not say which wallet made it", async () => {
+    // Without the wallet nothing can derive the league's address, so an anchor
+    // recorded without one is an anchor nobody can use.
+    const { client, commissionerId } = await setup();
+    const created = await league(client, commissionerId);
+
+    await expect(
+      client.query(
+        `UPDATE leagues SET chain_anchored_at = now(), chain_signature = 's',
+                            chain_cluster = 'localnet'
+          WHERE id = $1`,
+        [created.id],
+      ),
+    ).rejects.toThrow(/without the wallet/);
+  });
+
+  it("refuses a row that arrives already anchored without its wallet", async () => {
+    // The INSERT path: no OLD row, the same moment of anchoring. No app code
+    // writes chain columns on insert; this is the floor under a script that might.
+    const { client, commissionerId } = await setup();
+    const created = await league(client, commissionerId);
+    await client.query("CREATE TEMP TABLE copy AS SELECT * FROM leagues WHERE id = $1", [
+      created.id,
+    ]);
+    await client.query(
+      `UPDATE copy SET id = gen_random_uuid(), chain_anchored_at = now(),
+                       chain_signature = 's', chain_cluster = 'localnet'`,
+    );
+
+    await expect(client.query("INSERT INTO leagues SELECT * FROM copy")).rejects.toThrow(
+      /without the wallet/,
+    );
+  });
+
+  it("refuses a wallet that is not shaped like a Solana key", async () => {
+    const { client, commissionerId } = await setup();
+    const created = await league(client, commissionerId);
+
+    await expect(
+      recordChainAnchor(client, created.id, { ...anchor, commissioner: "0OIl" }),
+    ).rejects.toThrow(/chain_commissioner_is_base58/);
+  });
+
+  it("never moves the wallet once anchored", async () => {
+    const { client, commissionerId } = await setup();
+    const created = await league(client, commissionerId);
+    await recordChainAnchor(client, created.id, anchor);
+
+    await expect(
+      client.query("UPDATE leagues SET chain_commissioner = $1 WHERE id = $2", [
+        OTHER_WALLET,
+        created.id,
+      ]),
+    ).rejects.toThrow(/cannot be rewritten/);
+    await expect(
+      client.query("UPDATE leagues SET chain_commissioner = NULL WHERE id = $1", [created.id]),
+    ).rejects.toThrow(/cannot be rewritten/);
+  });
+
+  it("refuses a wallet with no anchor beside it", async () => {
+    const { client, commissionerId } = await setup();
+    const created = await league(client, commissionerId);
+
+    await expect(
+      client.query("UPDATE leagues SET chain_commissioner = $1 WHERE id = $2", [
+        ANCHOR_WALLET,
+        created.id,
+      ]),
+    ).rejects.toThrow(/chain_commissioner_needs_anchor/);
+  });
+
+  it("leaves a league anchored under the old program writable, and unrepairable", async () => {
+    // Anchored before 0051: no wallet, and none can be added, because none
+    // seeded its address. What must still work is every unrelated write — a
+    // CHECK binding the four columns together would fail this league's next
+    // state change and brick it, which is why 0051 is a trigger.
+    const { client, commissionerId } = await setup();
+    const created = await league(client, commissionerId);
+    await client.query("ALTER TABLE leagues DISABLE TRIGGER leagues_chain_commissioner_bound");
+    await client.query(
+      `UPDATE leagues SET chain_anchored_at = now(), chain_signature = 'legacy',
+                          chain_cluster = 'devnet'
+        WHERE id = $1`,
+      [created.id],
+    );
+    await client.query("ALTER TABLE leagues ENABLE TRIGGER leagues_chain_commissioner_bound");
+
+    await expect(
+      client.query("UPDATE leagues SET state = 'DRAFTING' WHERE id = $1", [created.id]),
+    ).resolves.toBeDefined();
+    await expect(
+      client.query("UPDATE leagues SET chain_commissioner = $1 WHERE id = $2", [
+        ANCHOR_WALLET,
+        created.id,
+      ]),
+    ).rejects.toThrow(/an unrecorded wallet/);
+    expect((await getChainState(client, created.id))?.commissioner).toBeNull();
   });
 
   it("refuses a timestamp with no transaction behind it", async () => {
@@ -376,6 +505,69 @@ describe("the on-chain anchor", () => {
   });
 });
 
+describe("commissionerOwnsWallet", () => {
+  /**
+   * The anchor route's trust check. The browser names the wallet it anchored
+   * with; the address of every later instruction derives from it, so it has to
+   * be the commissioner's own, and proven theirs.
+   */
+  async function fixture() {
+    const { client, commissionerId } = await setup();
+    const created = await createLeague(client, NFL, {
+      name: "L",
+      commissionerId,
+      rules: rules(),
+    });
+    const [stranger] = await client.query<{ id: string }>(
+      "INSERT INTO users (email, display_name) VALUES ('s@example.com', 'S') RETURNING id",
+    );
+    return { client, leagueId: created.id, commissionerId, strangerId: stranger!.id };
+  }
+
+  async function wallet(
+    client: PGliteClient,
+    userId: string,
+    address: string,
+    verified: boolean,
+    chain = "solana",
+  ) {
+    await client.query(
+      `INSERT INTO wallets (user_id, address, chain, is_primary, verified_at)
+       VALUES ($1, $2, $3, false, CASE WHEN $4 THEN now() ELSE NULL END)`,
+      [userId, address, chain, verified],
+    );
+  }
+
+  it("accepts the commissioner's verified wallet", async () => {
+    const { client, leagueId, commissionerId } = await fixture();
+    await wallet(client, commissionerId, ANCHOR_WALLET, true);
+    await expect(commissionerOwnsWallet(client, leagueId, ANCHOR_WALLET)).resolves.toBe(true);
+  });
+
+  it("refuses a wallet nobody has proven", async () => {
+    const { client, leagueId, commissionerId } = await fixture();
+    await wallet(client, commissionerId, ANCHOR_WALLET, false);
+    await expect(commissionerOwnsWallet(client, leagueId, ANCHOR_WALLET)).resolves.toBe(false);
+  });
+
+  it("refuses somebody else's verified wallet", async () => {
+    const { client, leagueId, strangerId } = await fixture();
+    await wallet(client, strangerId, OTHER_WALLET, true);
+    await expect(commissionerOwnsWallet(client, leagueId, OTHER_WALLET)).resolves.toBe(false);
+  });
+
+  it("refuses a wallet on another chain", async () => {
+    const { client, leagueId, commissionerId } = await fixture();
+    await wallet(client, commissionerId, ANCHOR_WALLET, true, "ethereum");
+    await expect(commissionerOwnsWallet(client, leagueId, ANCHOR_WALLET)).resolves.toBe(false);
+  });
+
+  it("refuses a wallet nobody linked at all", async () => {
+    const { client, leagueId } = await fixture();
+    await expect(commissionerOwnsWallet(client, leagueId, ANCHOR_WALLET)).resolves.toBe(false);
+  });
+});
+
 /**
  * And the same again for the season start, which is a different fact with the
  * same properties.
@@ -387,7 +579,11 @@ describe("the on-chain anchor", () => {
  * the chain about whether a season ever began. `drawDraftOrder` reads it.
  */
 describe("the season start on-chain", () => {
-  const anchor = { signature: "5xSig".padEnd(88, "a"), cluster: "localnet" };
+  const anchor = {
+    signature: "5xSig".padEnd(88, "a"),
+    cluster: "localnet",
+    commissioner: ANCHOR_WALLET,
+  };
   const start = { signature: "6".repeat(88), cluster: "localnet" };
 
   async function league(client: PGliteClient, commissionerId: string) {
@@ -505,7 +701,11 @@ describe("the frozen rules are frozen against ordinary SQL", () => {
     const created = await frozenLeague(client, commissionerId);
 
     await setRulesUri(client, created.id, { uri: "ipfs://bafyfake", hash: created.rulesHash });
-    await recordChainAnchor(client, created.id, { signature: "sig", cluster: "localnet" });
+    await recordChainAnchor(client, created.id, {
+      signature: "sig",
+      cluster: "localnet",
+      commissioner: ANCHOR_WALLET,
+    });
 
     expect((await getChainState(client, created.id))?.cluster).toBe("localnet");
   });
@@ -1059,7 +1259,11 @@ describe("the rules URI is written once — #69 §3, §4", () => {
     });
 
     await client.query("UPDATE leagues SET name = $2 WHERE id = $1", [league.id, "Renamed"]);
-    await recordChainAnchor(client, league.id, { signature: "sig", cluster: "localnet" });
+    await recordChainAnchor(client, league.id, {
+      signature: "sig",
+      cluster: "localnet",
+      commissioner: ANCHOR_WALLET,
+    });
 
     expect((await getChainState(client, league.id))?.cluster).toBe("localnet");
     expect(await storedUri(client, league.id)).toBeNull();

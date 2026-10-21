@@ -5,7 +5,7 @@ import type { Connection } from "@solana/web3.js";
  *
  * This matters more here than in most Solana apps, because **the PDA is
  * byte-identical on every cluster**. A league anchored on devnet and the same
- * league anchored on mainnet derive the same address from the same UUID, so
+ * league anchored on mainnet derive the same address from the same UUID and wallet, so
  * "the account exists" answers nothing on its own — a devnet anchor is not an
  * anchor for a mainnet stake, and the only thing separating them is which
  * endpoint you happened to ask.

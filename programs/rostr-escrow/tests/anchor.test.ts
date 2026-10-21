@@ -179,7 +179,12 @@ describe("create -> anchor -> join", () => {
 
     // Nothing on-chain yet, and the route's answer to that is "retry", not
     // "this league is fraudulent" — the distinction the 409 branches turn on.
-    const before = await verifyLeagueAnchor(program, league.id, league.rulesHash);
+    const before = await verifyLeagueAnchor(
+      program,
+      league.id,
+      provider.wallet.publicKey,
+      league.rulesHash,
+    );
     expect(before.ok).toBe(false);
     if (!before.ok) expect(before.reason).toBe("NOT_FOUND");
 
@@ -188,14 +193,24 @@ describe("create -> anchor -> join", () => {
     // The whole point: the bytes the program stored are the bytes Postgres
     // hashed. Anything wrong with hex conversion, byte order, or the seed
     // derivation surfaces here and nowhere else.
-    const verdict = await verifyLeagueAnchor(program, league.id, league.rulesHash);
+    const verdict = await verifyLeagueAnchor(
+      program,
+      league.id,
+      provider.wallet.publicKey,
+      league.rulesHash,
+    );
     expect(verdict.ok).toBe(true);
     if (verdict.ok) {
       expect(verdict.league.rulesHash).toBe(league.rulesHash);
     }
 
     // And it is a real check rather than one that answers yes to anything.
-    const wrong = await verifyLeagueAnchor(program, league.id, "f".repeat(64));
+    const wrong = await verifyLeagueAnchor(
+      program,
+      league.id,
+      provider.wallet.publicKey,
+      "f".repeat(64),
+    );
     expect(wrong.ok).toBe(false);
     if (!wrong.ok) expect(wrong.reason).toBe("HASH_MISMATCH");
 
@@ -210,11 +225,24 @@ describe("create -> anchor -> join", () => {
     await recordChainAnchor(db, league.id, {
       signature,
       cluster: clusterOf(provider.connection),
+      commissioner: provider.wallet.publicKey.toBase58(),
     });
 
     const chain = await getChainState(db, league.id);
     expect(chain?.anchoredAt).toBeTruthy();
     expect(chain?.signature).toBe(signature);
+
+    // And the wallet Postgres stored is the one that finds the account: read it
+    // back as base58, derive the address from it, and the program's copy is there.
+    // This is the round trip every later reader depends on.
+    expect(chain?.commissioner).toBe(provider.wallet.publicKey.toBase58());
+    const fromStored = await verifyLeagueAnchor(
+      program,
+      league.id,
+      new anchor.web3.PublicKey(chain!.commissioner!),
+      league.rulesHash,
+    );
+    expect(fromStored.ok).toBe(true);
 
     const wallet = testWallet(12);
     const user = await createUser(db, "member@example.com", "Member");
@@ -259,6 +287,7 @@ describe("create -> anchor -> join", () => {
     const verdict = await verifyLeagueAnchor(
       escrowProgram(readOnly),
       league.id,
+      provider.wallet.publicKey,
       league.rulesHash,
     );
     expect(verdict.ok).toBe(true);
@@ -299,7 +328,12 @@ describe("create -> anchor -> join", () => {
     });
 
     // The hash verifies — which is exactly why this was invisible before.
-    const verdict = await verifyLeagueAnchor(program, league.id, league.rulesHash);
+    const verdict = await verifyLeagueAnchor(
+      program,
+      league.id,
+      provider.wallet.publicKey,
+      league.rulesHash,
+    );
     expect(verdict.ok).toBe(true);
 
     if (verdict.ok) {
@@ -337,7 +371,12 @@ describe("create -> anchor -> join", () => {
       commitment: "confirmed",
     });
 
-    const verdict = await verifyLeagueAnchor(program, league.id, league.rulesHash);
+    const verdict = await verifyLeagueAnchor(
+      program,
+      league.id,
+      provider.wallet.publicKey,
+      league.rulesHash,
+    );
     expect(verdict.ok).toBe(true);
     if (verdict.ok) {
       expect(verdict.league.rulesHash).toBe(league.rulesHash);

@@ -17,6 +17,7 @@
 
 import { explainOrderDraw, pickPosition } from "@rostr/core";
 import { seasonStartState, startDeadlineFor } from "@rostr/escrow";
+import { PublicKey } from "@solana/web3.js";
 
 /** Which of the two lobby states a league is in. */
 export type LobbyPhase = "BEFORE_DRAW" | "DRAWN";
@@ -462,4 +463,32 @@ function readiness(input: LobbyInput, humans: number, season: SeasonStart): Read
   }
 
   return out;
+}
+
+/**
+ * The key a commissioner's transaction for this league must be built from and
+ * signed by: the wallet that anchored it.
+ *
+ * It is `league.commissioner` on-chain and a seed of the league's address, so
+ * it is both the only signer `start_season` and `initialize_scores` accept and
+ * the only key that finds the account. A commissioner may hold several wallets
+ * — the Privy one and an extension — and signing with another derives an
+ * address with nothing at it, which fails on-chain with an error nobody could
+ * act on. This says which wallet to connect before anything is sent.
+ */
+export function anchoringKey(anchorWallet: string | null, connected: PublicKey): PublicKey {
+  if (!anchorWallet) {
+    throw new Error(
+      "This league was anchored by an earlier version of the escrow program, which this " +
+        "one cannot reach.",
+    );
+  }
+  const key = new PublicKey(anchorWallet);
+  if (!key.equals(connected)) {
+    throw new Error(
+      `Connect the wallet that anchored this league (${anchorWallet.slice(0, 4)}…` +
+        `${anchorWallet.slice(-4)}). Only that wallet can sign for it.`,
+    );
+  }
+  return key;
 }

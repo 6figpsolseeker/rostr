@@ -51,7 +51,7 @@ const scoresPda = (league: anchor.web3.PublicKey): anchor.web3.PublicKey =>
   )[0];
 
 const initialize = async (args: InitArgs): Promise<anchor.web3.PublicKey> => {
-  const league = leaguePda(program, args.leagueId);
+  const league = leaguePda(program, args.leagueId, provider.wallet.publicKey);
   await program.methods
     .initializeLeague(args)
     .accountsPartial({
@@ -338,7 +338,7 @@ describe("the payee roster", () => {
   it("refuses a free league", async () => {
     // No vault, no `Membership`, nothing to settle and no wallet to derive.
     const freeArgs = validFreeArgs();
-    const league = leaguePda(program, freeArgs.leagueId);
+    const league = leaguePda(program, freeArgs.leagueId, provider.wallet.publicKey);
     await program.methods
       .initializeFreeLeague(freeArgs)
       .accountsPartial({

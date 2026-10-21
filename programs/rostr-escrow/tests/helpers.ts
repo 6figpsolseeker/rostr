@@ -90,9 +90,14 @@ export const freshLeagueId = (): number[] => [
   ...anchor.web3.Keypair.generate().publicKey.toBytes().slice(0, 16),
 ];
 
-export const leaguePda = (program: EscrowProgram, leagueId: number[]): anchor.web3.PublicKey =>
+/** Seeded by the id and the wallet that paid for `initialize_*`, as the program is. */
+export const leaguePda = (
+  program: EscrowProgram,
+  leagueId: number[],
+  commissioner: anchor.web3.PublicKey,
+): anchor.web3.PublicKey =>
   anchor.web3.PublicKey.findProgramAddressSync(
-    [Buffer.from("league"), Buffer.from(leagueId)],
+    [Buffer.from("league"), Buffer.from(leagueId), commissioner.toBuffer()],
     program.programId,
   )[0];
 

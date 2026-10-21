@@ -3,7 +3,7 @@ import { verifyOnChainSeasonStart } from "@rostr/escrow";
 import { getChainState, getLeagueRules, recordSeasonStart } from "@rostr/db";
 import { db } from "@/lib/db";
 import { draftContext, DraftContextError } from "@/lib/draft-context";
-import { EscrowConfigError, readOnlyEscrow } from "@/lib/escrow";
+import { anchoringWallet, EscrowConfigError, readOnlyEscrow } from "@/lib/escrow";
 import { assertRpcCluster, ClusterConfigError } from "@/lib/cluster";
 
 /**
@@ -113,6 +113,11 @@ export async function POST(
       });
     }
 
+    // After the early return above, deliberately: a start already recorded stays
+    // a success even on a league anchored under the old program.
+    const anchored = anchoringWallet(chain);
+    if (!anchored.ok) return NextResponse.json(anchored.body, { status: 409 });
+
     // Shape-checked only, as in the anchor route: it records *which* transaction
     // declared the season started so a stranger can go and look at it. Nothing
     // trusts it, and a malformed one would sit in a write-once column forever.
@@ -146,22 +151,20 @@ export async function POST(
       );
     }
 
-    const verdict = await verifyOnChainSeasonStart(program, id);
+    const verdict = await verifyOnChainSeasonStart(program, id, anchored.commissioner);
 
     if (!verdict.ok) {
       // Three refusals that look alike from a distance and mean different
       // things. `NOT_FOUND` and `NOT_STARTED` are retries — the transaction has
       // not landed, or has not confirmed. `INCOMPATIBLE` is not: the account was
-      // written by another build of the program, the address derives from the
-      // league's id, and there is no `close`.
+      // written by another build of the program, and there is no `close`.
       const message =
         verdict.reason === "NOT_FOUND"
           ? "No league account exists on-chain yet. If the transaction was just sent, give " +
             "it a moment and try again."
           : verdict.reason === "INCOMPATIBLE"
             ? "This league was anchored by a different version of the escrow program and " +
-              "cannot be read. It cannot be re-anchored — the on-chain address comes from " +
-              "the league's id and nothing can free it."
+              "cannot be read, and nothing can free that account."
             : verdict.reason === "NO_POT"
               ? "The on-chain account for this league holds no pot, so start_season does not " +
                 "apply to it. The rules here say otherwise, which means the anchor and the " +

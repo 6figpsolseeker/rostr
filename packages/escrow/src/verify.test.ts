@@ -4,6 +4,8 @@ import type { ExpectedTerms, OnChainLeague } from "./verify.js";
 import { startDeadlineFor } from "./start.js";
 import { PublicKey } from "@solana/web3.js";
 
+const COMMISSIONER = new PublicKey("9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin");
+
 /**
  * The security property: verifying a league anchor by its rules hash is not
  * enough, because the program stores the economic terms as a separate copy the
@@ -63,8 +65,8 @@ const RULES_DRAFT = { scheduledAt: DRAFT_AT } as const;
  * throws for the other — and they mean opposite things to whoever reads the
  * answer. `NOT_FOUND` means the anchor never landed and should be retried;
  * `INCOMPATIBLE` means it landed under an older program layout and can never be
- * used, because the address derives from the league's id and there is no
- * `close`. Retrying is the one action guaranteed not to help.
+ * used: there is no `close`, so that address holds those bytes forever.
+ * Retrying it is the one action guaranteed not to help.
  *
  * Reached on 2026-08-17, when the failed-league refund appended three fields to
  * `League` (#170). Before that the decode threw past every handler as a 500.
@@ -79,6 +81,7 @@ describe("verifyLeagueAnchor's two kinds of absence", () => {
     const verdict = await verifyLeagueAnchor(
       programThat(async () => null),
       leagueId,
+      COMMISSIONER,
       "a".repeat(64),
     );
     expect(verdict).toEqual({ ok: false, reason: "NOT_FOUND" });
@@ -90,6 +93,7 @@ describe("verifyLeagueAnchor's two kinds of absence", () => {
         throw new Error("Invalid account discriminator");
       }),
       leagueId,
+      COMMISSIONER,
       "a".repeat(64),
     );
 
@@ -99,7 +103,8 @@ describe("verifyLeagueAnchor's two kinds of absence", () => {
     // The message has to say the thing a retry cannot fix, because the retry is
     // what somebody reaching this will otherwise do.
     if (verdict.reason !== "INCOMPATIBLE") return;
-    expect(verdict.detail).toMatch(/cannot be re-anchored|different version/i);
+    expect(verdict.detail).toMatch(/can never be closed/);
+    expect(verdict.detail).toMatch(/different wallet/);
   });
 
   it("surfaces the failure as an answer rather than a throw", async () => {
@@ -111,6 +116,7 @@ describe("verifyLeagueAnchor's two kinds of absence", () => {
           throw new Error("unexpected end of buffer");
         }),
         leagueId,
+        COMMISSIONER,
         "a".repeat(64),
       ),
     ).resolves.toBeDefined();

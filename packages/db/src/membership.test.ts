@@ -106,6 +106,7 @@ async function setup(overrides: Partial<LeagueRules> = {}): Promise<Fixture> {
   await recordChainAnchor(db, league.id, {
     signature: "5".repeat(88),
     cluster: "localnet",
+    commissioner: "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin",
   });
 
   return {
@@ -170,6 +171,7 @@ describe("the field locks when the seed exists", () => {
     await recordChainAnchor(db, league.id, {
       signature: "5".repeat(88),
       cluster: "localnet",
+      commissioner: "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin",
     });
 
     // The team is seated *before* the draft row exists, which is the only order
@@ -727,6 +729,7 @@ describe("bots", () => {
     await recordChainAnchor(db, league.id, {
       signature: "5".repeat(88),
       cluster: "localnet",
+      commissioner: "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin",
     });
 
     for (let i = 0; i < humans; i++) {
@@ -1039,6 +1042,7 @@ describe("joining an unanchored league", () => {
     await recordChainAnchor(fx.client, fx.leagueId, {
       signature: "5".repeat(88),
       cluster: "localnet",
+      commissioner: "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin",
     });
 
     await expect(
@@ -1062,6 +1066,7 @@ describe("joining an unanchored league", () => {
     await recordChainAnchor(fx.client, fx.leagueId, {
       signature: "5".repeat(88),
       cluster: "devnet",
+      commissioner: "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin",
     });
 
     await expect(
@@ -1083,6 +1088,7 @@ describe("joining an unanchored league", () => {
     await recordChainAnchor(fx.client, fx.leagueId, {
       signature: "5".repeat(88),
       cluster: "mainnet-beta",
+      commissioner: "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin",
     });
 
     await expect(

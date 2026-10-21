@@ -47,7 +47,7 @@ let provider: anchor.AnchorProvider;
 let mint: anchor.web3.PublicKey;
 
 const initialize = async (args: InitArgs): Promise<anchor.web3.PublicKey> => {
-  const league = leaguePda(program, args.leagueId);
+  const league = leaguePda(program, args.leagueId, provider.wallet.publicKey);
   await program.methods
     .initializeLeague(args)
     .accountsPartial({
@@ -277,7 +277,7 @@ describe("deposit", () => {
 
   it("rejects a stake in a league that plays for nothing", async () => {
     const args: FreeLeagueArgs = validFreeArgs();
-    const league = leaguePda(program, args.leagueId);
+    const league = leaguePda(program, args.leagueId, provider.wallet.publicKey);
     await program.methods
       .initializeFreeLeague(args)
       .accountsPartial({
@@ -346,7 +346,7 @@ describe("the @rostr/escrow client", () => {
       }),
     );
 
-    const league = clientLeaguePda(leagueId);
+    const league = clientLeaguePda(leagueId, provider.wallet.publicKey);
     const onChain = await program.account.league.fetch(league);
     expect([...onChain.rulesHash]).toEqual([...rulesHash]);
     expect(onChain.feeBps).toBe(100);
@@ -354,11 +354,17 @@ describe("the @rostr/escrow client", () => {
     // 2. A member joins by accepting the hash, then stakes.
     const member = await fundedMember(provider, mint, BUY_IN);
     await send(
-      await joinLeagueIx(client, { leagueId, rulesHash, member: member.keypair.publicKey }),
+      await joinLeagueIx(client, {
+        commissioner: provider.wallet.publicKey,
+        leagueId,
+        rulesHash,
+        member: member.keypair.publicKey,
+      }),
       member,
     );
     await send(
       await depositIx(client, {
+        commissioner: provider.wallet.publicKey,
         leagueId,
         mint,
         member: member.keypair.publicKey,
@@ -373,6 +379,7 @@ describe("the @rostr/escrow client", () => {
     await sleep(5000);
     await send(
       await refundStakeIx(client, {
+        commissioner: provider.wallet.publicKey,
         leagueId,
         mint,
         member: member.keypair.publicKey,
@@ -398,7 +405,9 @@ describe("the @rostr/escrow client", () => {
     });
     await provider.sendAndConfirm(new anchor.web3.Transaction().add(ix), []);
 
-    const onChain = await program.account.league.fetch(clientLeaguePda(leagueId));
+    const onChain = await program.account.league.fetch(
+      clientLeaguePda(leagueId, provider.wallet.publicKey),
+    );
     expect(onChain.hasPot).toBe(false);
     expect([...onChain.rulesHash]).toEqual([...rulesHash]);
   });

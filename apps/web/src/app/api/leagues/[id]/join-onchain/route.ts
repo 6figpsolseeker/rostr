@@ -4,7 +4,7 @@ import { verifyOnChainJoin } from "@rostr/escrow";
 import { getChainState, memberWallet, getOnChainJoin, recordOnChainJoin } from "@rostr/db";
 import { db } from "@/lib/db";
 import { currentUser } from "@/lib/session";
-import { EscrowConfigError, readOnlyEscrow } from "@/lib/escrow";
+import { anchoringWallet, EscrowConfigError, readOnlyEscrow } from "@/lib/escrow";
 import { assertRpcCluster, ClusterConfigError } from "@/lib/cluster";
 
 /**
@@ -90,6 +90,12 @@ export async function POST(
       });
     }
 
+    // After the early return above, deliberately: a join already recorded stays
+    // a success even on a league anchored under the old program, which nothing
+    // on-chain can reach any more.
+    const anchored = anchoringWallet(chain);
+    if (!anchored.ok) return NextResponse.json(anchored.body, { status: 409 });
+
     // The signature is an audit breadcrumb, not the proof. The join is accepted
     // or refused entirely on whether the Membership account exists.
     const { connection, program } = readOnlyEscrow();
@@ -117,7 +123,12 @@ export async function POST(
       );
     }
 
-    const verdict = await verifyOnChainJoin(program, id, new PublicKey(walletAddress));
+    const verdict = await verifyOnChainJoin(
+      program,
+      id,
+      anchored.commissioner,
+      new PublicKey(walletAddress),
+    );
 
     if (!verdict.ok) {
       return NextResponse.json(

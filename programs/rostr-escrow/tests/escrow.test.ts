@@ -24,6 +24,7 @@ import {
   PRIZE,
   createPotMint,
   expectError,
+  fundedMember,
   getProgram,
   getProvider,
   leaguePda,
@@ -48,7 +49,7 @@ let provider: anchor.AnchorProvider;
 let mint: anchor.web3.PublicKey;
 
 const initialize = async (args: InitArgs) => {
-  const league = leaguePda(program, args.leagueId);
+  const league = leaguePda(program, args.leagueId, provider.wallet.publicKey);
   return program.methods
     .initializeLeague(args)
     .accountsPartial({
@@ -66,7 +67,7 @@ const initializeFree = async (args: FreeLeagueArgs) =>
   program.methods
     .initializeFreeLeague(args)
     .accountsPartial({
-      league: leaguePda(program, args.leagueId),
+      league: leaguePda(program, args.leagueId, provider.wallet.publicKey),
       payer: provider.wallet.publicKey,
       systemProgram: anchor.web3.SystemProgram.programId,
     })
@@ -83,7 +84,9 @@ describe("initialize_league", () => {
     const args = validArgs();
     await initialize(args);
 
-    const league = await program.account.league.fetch(leaguePda(program, args.leagueId));
+    const league = await program.account.league.fetch(
+      leaguePda(program, args.leagueId, provider.wallet.publicKey),
+    );
 
     expect([...league.rulesHash]).toEqual(args.rulesHash);
     expect(league.tokenMint.toBase58()).toBe(mint.toBase58());
@@ -97,7 +100,7 @@ describe("initialize_league", () => {
     const args = validArgs();
     await initialize(args);
 
-    const league = leaguePda(program, args.leagueId);
+    const league = leaguePda(program, args.leagueId, provider.wallet.publicKey);
     const vault = await getAccount(provider.connection, vaultPda(program, league));
 
     // The vault's authority is the league PDA, so no key held by any person can
@@ -111,7 +114,9 @@ describe("initialize_league", () => {
     const args = validArgs();
     await initialize(args);
 
-    const league = await program.account.league.fetch(leaguePda(program, args.leagueId));
+    const league = await program.account.league.fetch(
+      leaguePda(program, args.leagueId, provider.wallet.publicKey),
+    );
     expect(league.memberCount).toBe(0);
     expect(league.totalDeposited.toString()).toBe("0");
   });
@@ -122,6 +127,64 @@ describe("initialize_league", () => {
     // The second init hits the system program's "account already in use" rather
     // than one of ours, which is the point: the PDA itself is the guard.
     await expect(initialize(args)).rejects.toThrow();
+  });
+
+  /**
+   * League ids are public — the lobby lists them, invite links carry them. With
+   * the id alone as the seed, a stranger could initialise a league first: the
+   * real one could then never be anchored (there is no `close`), or, with a
+   * copy of its rules, the stranger became its commissioner. The payer's key is
+   * now a seed, so neither works.
+   */
+  describe("a stranger who knows the league id", () => {
+    const strangerInit = async (
+      args: InitArgs,
+      league: anchor.web3.PublicKey,
+      stranger: anchor.web3.Keypair,
+    ) =>
+      program.methods
+        .initializeLeague(args)
+        .accountsPartial({
+          league,
+          mint,
+          vault: vaultPda(program, league),
+          payer: stranger.publicKey,
+          tokenProgram: anchor.utils.token.TOKEN_PROGRAM_ID,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
+        .signers([stranger])
+        .rpc();
+
+    it("can only create the league at an address nobody reads", async () => {
+      const args = validArgs();
+      const { keypair: stranger } = await fundedMember(provider, mint, 0);
+
+      // An exact copy — same id, same hash, same terms — sent first.
+      const squat = leaguePda(program, args.leagueId, stranger.publicKey);
+      await strangerInit(args, squat, stranger);
+
+      // The commissioner is not blocked, and is the commissioner.
+      await initialize(args);
+      const real = leaguePda(program, args.leagueId, provider.wallet.publicKey);
+      expect(real.toBase58()).not.toBe(squat.toBase58());
+
+      const league = await program.account.league.fetch(real);
+      expect(league.commissioner.toBase58()).toBe(provider.wallet.publicKey.toBase58());
+      expect([...league.rulesHash]).toEqual(args.rulesHash);
+    });
+
+    it("cannot create the account at the commissioner's address", async () => {
+      // Pins the property rather than catching a revert: the stranger names the
+      // address the app will read, and the seeds bind it to a key they do not
+      // hold. (On the old program this address meant nothing either, so the
+      // test above is the one that fails if the fix is undone.)
+      const args = validArgs();
+      const { keypair: stranger } = await fundedMember(provider, mint, 0);
+      const real = leaguePda(program, args.leagueId, provider.wallet.publicKey);
+
+      await expectError(strangerInit(args, real, stranger), "ConstraintSeeds");
+      await initialize(args);
+    });
   });
 
   it("rejects an all-zero rules hash", async () => {
@@ -154,14 +217,18 @@ describe("initialize_league", () => {
   it("accepts a buy-in exactly at the cap", async () => {
     const args = validArgs({ buyIn: new anchor.BN(MAX_BUY_IN_BASE_UNITS) });
     await initialize(args);
-    const league = await program.account.league.fetch(leaguePda(program, args.leagueId));
+    const league = await program.account.league.fetch(
+      leaguePda(program, args.leagueId, provider.wallet.publicKey),
+    );
     expect(league.buyIn.toString()).toBe(String(MAX_BUY_IN_BASE_UNITS));
   });
 
   it("accepts a buy-in exactly at the minimum", async () => {
     const args = validArgs({ buyIn: new anchor.BN(MIN_BUY_IN_BASE_UNITS) });
     await initialize(args);
-    const league = await program.account.league.fetch(leaguePda(program, args.leagueId));
+    const league = await program.account.league.fetch(
+      leaguePda(program, args.leagueId, provider.wallet.publicKey),
+    );
     expect(league.buyIn.toString()).toBe(String(MIN_BUY_IN_BASE_UNITS));
   });
 
@@ -187,7 +254,9 @@ describe("initialize_league", () => {
   ])("accepts %s", async (_label, units) => {
     const args = validArgs({ buyIn: new anchor.BN(units) });
     await initialize(args);
-    const league = await program.account.league.fetch(leaguePda(program, args.leagueId));
+    const league = await program.account.league.fetch(
+      leaguePda(program, args.leagueId, provider.wallet.publicKey),
+    );
     expect(league.buyIn.toString()).toBe(String(units));
   });
 
@@ -274,7 +343,7 @@ describe("initialize_league", () => {
     // mean 0.05 SOL instead — the same constant, a different amount of money.
     const nineDecimals = await createPotMint(provider, 9);
     const args = validArgs();
-    const league = leaguePda(program, args.leagueId);
+    const league = leaguePda(program, args.leagueId, provider.wallet.publicKey);
 
     await expectError(
       program.methods
@@ -310,13 +379,15 @@ describe("@rostr/escrow address derivation", () => {
 
     await initialize(args);
 
-    const fromClient = clientLeaguePda(uuid);
+    const fromClient = clientLeaguePda(uuid, provider.wallet.publicKey);
     // Fetching through the client's address proves the seeds agree: a wrong
     // derivation returns "account does not exist", not a wrong league.
     const league = await program.account.league.fetch(fromClient);
     expect([...league.rulesHash]).toEqual(args.rulesHash);
 
-    expect(fromClient.toBase58()).toBe(leaguePda(program, args.leagueId).toBase58());
+    expect(fromClient.toBase58()).toBe(
+      leaguePda(program, args.leagueId, provider.wallet.publicKey).toBase58(),
+    );
     expect(clientVaultPda(fromClient).toBase58()).toBe(
       vaultPda(program, fromClient).toBase58(),
     );
@@ -332,7 +403,9 @@ describe("the protocol fee", () => {
     const args = validArgs();
     await initialize(args);
 
-    const league = await program.account.league.fetch(leaguePda(program, args.leagueId));
+    const league = await program.account.league.fetch(
+      leaguePda(program, args.leagueId, provider.wallet.publicKey),
+    );
     expect(league.feeBps).toBe(DEFAULT_FEE_BPS);
     expect(league.feeRecipient.toBase58()).toBe(args.feeRecipient.toBase58());
   });
@@ -344,7 +417,9 @@ describe("the protocol fee", () => {
     });
     await initialize(args);
 
-    const league = await program.account.league.fetch(leaguePda(program, args.leagueId));
+    const league = await program.account.league.fetch(
+      leaguePda(program, args.leagueId, provider.wallet.publicKey),
+    );
     expect(league.feeBps).toBe(0);
   });
 
@@ -352,7 +427,9 @@ describe("the protocol fee", () => {
     const args = validArgs({ feeBps: MAX_FEE_BPS });
     await initialize(args);
 
-    const league = await program.account.league.fetch(leaguePda(program, args.leagueId));
+    const league = await program.account.league.fetch(
+      leaguePda(program, args.leagueId, provider.wallet.publicKey),
+    );
     expect(league.feeBps).toBe(MAX_FEE_BPS);
   });
 
@@ -379,7 +456,9 @@ describe("initialize_free_league", () => {
     const args = validFreeArgs();
     await initializeFree(args);
 
-    const league = await program.account.league.fetch(leaguePda(program, args.leagueId));
+    const league = await program.account.league.fetch(
+      leaguePda(program, args.leagueId, provider.wallet.publicKey),
+    );
     expect([...league.rulesHash]).toEqual(args.rulesHash);
     expect(league.hasPot).toBe(false);
     expect(league.buyIn.toString()).toBe("0");
@@ -421,7 +500,7 @@ describe("verifyLeagueAnchor", () => {
     await initialize(validArgs({ leagueId: [...leagueIdBytes(leagueId)], rulesHash }));
 
     const client = escrowProgram(provider);
-    const onChain = await fetchOnChainLeague(client, leagueId);
+    const onChain = await fetchOnChainLeague(client, leagueId, provider.wallet.publicKey);
 
     // The conversion is the whole test. A hash that round-trips wrong here is a
     // verifier that always fails, or worse, always passes.
@@ -437,6 +516,7 @@ describe("verifyLeagueAnchor", () => {
     const verdict = await verifyLeagueAnchor(
       escrowProgram(provider),
       leagueId,
+      provider.wallet.publicKey,
       hexOf(rulesHash),
     );
 
@@ -458,6 +538,7 @@ describe("verifyLeagueAnchor", () => {
     const verdict = await verifyLeagueAnchor(
       escrowProgram(provider),
       leagueId,
+      provider.wallet.publicKey,
       hexOf(different),
     );
 
@@ -476,11 +557,18 @@ describe("verifyLeagueAnchor", () => {
     const verdict = await verifyLeagueAnchor(
       escrowProgram(provider),
       randomUUID(),
+      provider.wallet.publicKey,
       "a".repeat(64),
     );
 
     expect(verdict).toEqual({ ok: false, reason: "NOT_FOUND" });
-    expect(await fetchOnChainLeague(escrowProgram(provider), randomUUID())).toBeNull();
+    expect(
+      await fetchOnChainLeague(
+        escrowProgram(provider),
+        randomUUID(),
+        provider.wallet.publicKey,
+      ),
+    ).toBeNull();
   });
 
   it("is case-insensitive, because the two sides come from different places", async () => {
@@ -489,7 +577,16 @@ describe("verifyLeagueAnchor", () => {
     await initialize(validArgs({ leagueId: [...leagueIdBytes(leagueId)], rulesHash }));
 
     const upper = hexOf(rulesHash).toUpperCase();
-    expect((await verifyLeagueAnchor(escrowProgram(provider), leagueId, upper)).ok).toBe(true);
+    expect(
+      (
+        await verifyLeagueAnchor(
+          escrowProgram(provider),
+          leagueId,
+          provider.wallet.publicKey,
+          upper,
+        )
+      ).ok,
+    ).toBe(true);
   });
 
   it("round-trips a stored hex hash through the instruction args", async () => {
@@ -503,7 +600,12 @@ describe("verifyLeagueAnchor", () => {
       validArgs({ leagueId: [...leagueIdBytes(leagueId)], rulesHash: [...hexToBytes(stored)] }),
     );
 
-    const verdict = await verifyLeagueAnchor(escrowProgram(provider), leagueId, stored);
+    const verdict = await verifyLeagueAnchor(
+      escrowProgram(provider),
+      leagueId,
+      provider.wallet.publicKey,
+      stored,
+    );
     expect(verdict.ok).toBe(true);
   });
 

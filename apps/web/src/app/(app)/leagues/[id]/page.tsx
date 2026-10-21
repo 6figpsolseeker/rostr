@@ -230,6 +230,7 @@ export default async function LeaguePage({ params }: { params: Promise<{ id: str
           rulesHash={stored.hash}
           maxTeams={stored.rules.league.maxTeams}
           draftScheduledAt={stored.rules.draft.scheduledAt}
+          linkedWallets={wallets.map((wallet) => wallet.address)}
           pot={
             stored.rules.pot
               ? {
@@ -256,6 +257,7 @@ export default async function LeaguePage({ params }: { params: Promise<{ id: str
         signedIn={user !== null}
         linkedWallets={wallets.map((wallet) => wallet.address)}
         anchored={anchored}
+        anchorWallet={chain?.commissioner ?? null}
         isCommissioner={isCommissioner}
         hasPot={stored.rules.pot !== null}
         /*
@@ -296,6 +298,7 @@ export default async function LeaguePage({ params }: { params: Promise<{ id: str
           tokenMint={stored.rules.pot.tokenMint}
           depositsOpen={depositsOpen()}
           refundUnlockAt={stored.rules.pot.refundUnlockAt}
+          anchorWallet={chain?.commissioner ?? null}
         />
       )}
     </div>

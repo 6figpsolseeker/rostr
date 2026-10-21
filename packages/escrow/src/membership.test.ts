@@ -28,6 +28,7 @@ import type { RostrEscrow } from "./types.js";
 
 const LEAGUE_ID = "8f14e45f-ceea-467a-9a3c-8e6b7c1f2a3d";
 const MEMBER = new PublicKey("9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin");
+const COMMISSIONER = new PublicKey("So11111111111111111111111111111111111111112");
 
 /** A program whose one `Membership` account is whatever this returns. */
 function withMembership(
@@ -54,10 +55,10 @@ function withMembership(
 }
 
 const verifyDeposit = (a: { deposited: bigint; refunded: boolean } | null) =>
-  verifyOnChainDeposit(withMembership(a), LEAGUE_ID, MEMBER);
+  verifyOnChainDeposit(withMembership(a), LEAGUE_ID, COMMISSIONER, MEMBER);
 
 const verifyRefund = (a: { deposited: bigint; refunded: boolean } | null) =>
-  verifyOnChainRefund(withMembership(a), LEAGUE_ID, MEMBER);
+  verifyOnChainRefund(withMembership(a), LEAGUE_ID, COMMISSIONER, MEMBER);
 
 describe("verifyOnChainDeposit", () => {
   it("accepts a member whose stake is in the vault", async () => {

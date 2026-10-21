@@ -186,8 +186,9 @@ export async function POST(request: Request): Promise<NextResponse> {
   //
   // Without this the only thing catching that league is the program's own
   // horizon at `initialize_league` — which refuses it, but *fatally*: the rules
-  // are already frozen and the PDA derives from the league's UUID, so it can
-  // never be anchored and therefore never joined, only recreated under a new id.
+  // are already frozen, so every attempt from any wallet is refused the same way.
+  // It can never be anchored and therefore never joined, only recreated under a
+  // new id.
   // This turns an unrecoverable failure at anchor time into a 400 before
   // anything is written.
   //

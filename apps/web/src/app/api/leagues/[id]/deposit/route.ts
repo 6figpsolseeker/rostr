@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { PublicKey } from "@solana/web3.js";
 import { verifyOnChainDeposit } from "@rostr/escrow";
 import {
+  getChainState,
   getLeagueRules,
   getOnChainDeposit,
   memberWallet,
@@ -10,7 +11,7 @@ import {
 import { db } from "@/lib/db";
 import { currentUser } from "@/lib/session";
 import { assertRpcCluster, ClusterConfigError } from "@/lib/cluster";
-import { EscrowConfigError, readOnlyEscrow } from "@/lib/escrow";
+import { anchoringWallet, EscrowConfigError, readOnlyEscrow } from "@/lib/escrow";
 import { depositsOpen } from "@/lib/pot";
 
 /**
@@ -121,7 +122,17 @@ export async function POST(
     const { connection, program } = readOnlyEscrow();
     const cluster = await assertRpcCluster(connection);
 
-    const verdict = await verifyOnChainDeposit(program, id, new PublicKey(walletAddress));
+    // The league's address derives from the wallet that anchored it, so that is
+    // what is read — never the member's, never whichever is connected.
+    const anchored = anchoringWallet(await getChainState(client, id));
+    if (!anchored.ok) return NextResponse.json(anchored.body, { status: 409 });
+
+    const verdict = await verifyOnChainDeposit(
+      program,
+      id,
+      anchored.commissioner,
+      new PublicKey(walletAddress),
+    );
 
     if (!verdict.ok) {
       const message =

@@ -125,8 +125,8 @@ See [`docs/BUILD-PLAN.md`](docs/BUILD-PLAN.md) for the full commit-by-commit pla
   waiting for the instruction that feeds it scores. Count them in `lib.rs` before
   repeating a number from here.
 
-- **The on-chain anchor recorded** (migration `0014`) — transaction and cluster, write-once
-  by trigger. `recordChainAnchor` / `getChainState` in `packages/db/src/leagues.ts`.
+- **The on-chain anchor recorded** (migrations `0014`, `0051`) — transaction, cluster and
+  anchoring wallet, write-once by trigger. `recordChainAnchor` / `getChainState` in `packages/db/src/leagues.ts`.
 
 **Aug 22 is covered in code — create → join → draft. Sep 9 is not, and this paragraph
 used to say it was.**
@@ -362,10 +362,12 @@ one.
   Two things about this check are load-bearing. **It re-runs on an already-anchored
   league** rather than returning early on the stored boolean, because nothing else in the
   system ever reads the account again and a league recorded before the check existed would
-  otherwise be trusted forever. And **a false positive is unrecoverable** — no setter, no
-  `close`, the PDA derived from the league's UUID — so a wrongly refused league can never
-  be anchored, only recreated under a new id. That is why the fee recipient is compared
-  only when a fee is actually charged: fee-free leagues legitimately carry an empty one.
+  otherwise be trusted forever. And **a false positive is expensive** — no setter, no
+  `close`, so a wrongly refused account is there for good. Since 2026-10-20 the wallet is a
+  seed, so a refusal caused by the account's own bytes can be retried from another of the
+  commissioner's verified wallets — but only before anything is recorded, and never for a
+  refusal rooted in the frozen rules, which every wallet would repeat. That is why the fee recipient is compared only when a fee is actually charged: fee-free
+  leagues legitimately carry an empty one.
 
   `expectedTermsFromRules` and `anchorTermMismatches` live in `@rostr/escrow`, not in the
   route, because **`apps/web` cannot test React** — a mapping inline in a component is
@@ -2473,7 +2475,7 @@ interaction. Requiring it would make every free league undraftable.
 `packages/escrow/src/cluster.ts`, `apps/web/src/lib/cluster.ts`.
 
 **The PDA is byte-identical on every cluster.** A league anchored on devnet and the same
-league anchored on mainnet derive the same address from the same UUID, so "the account
+league anchored on mainnet derive the same address from the same UUID and wallet, so "the account
 exists" answers nothing — the only thing separating them is which endpoint you happened
 to ask. `leagues.chain_cluster` records the answer and migration `0014` makes it
 **write-once by trigger**, so a wrong value is permanent and `joinLeague` gates on it.
@@ -2490,8 +2492,9 @@ two:
 The dangerous default was on the one that signs. A commissioner with it unset sent
 `initialize_league` to **mainnet** while the server read devnet, found nothing, and
 returned `NOT_FOUND` — which the route documents as "retry". Retrying cannot work; the
-account is real, it cost mainnet rent, and with no `close` instruction that league can
-never be anchored there again, only recreated under a new id. Worse downstream: `deposit`
+account is real, it cost mainnet rent, and with no `close` instruction that account sits
+at that address for good — the league can be anchored there again only from a different
+wallet of the commissioner's, or recreated under a new id. Worse downstream: `deposit`
 is permissionless once a league exists, so a member could put real USDC into a vault this
 deployment never looks at.
 
@@ -2940,7 +2943,8 @@ stand-in for the other: the database tests anchor a league by calling `recordCha
 with a made-up signature, and the program tests hash rules no league ever had. **Both pass
 whether or not the two agree.**
 
-They have to agree on exactly 32 bytes. Postgres stores them as hex, the program stores
+They have to agree on exactly 32 bytes — and, since `0051`, on the anchoring wallet that
+seeds the address, which the test now reads back from Postgres and resolves on-chain. Postgres stores them as hex, the program stores
 them as raw bytes, and the only symptom of a wrong conversion is that `verifyLeagueAnchor`
 reports a mismatch on a league that is correctly anchored — nobody can join, and nothing
 else in the repo fails. So this drives the real `createLeague`, sends the real instruction
@@ -2986,10 +2990,41 @@ declaration order of `PrizeKey` in `@rostr/core`. Serialising from the wrong one
 the split with no error anywhere. The test passes the shares deliberately shuffled, because
 in declaration order the bug is invisible.
 
-A league's Postgres UUID is its on-chain seed, so the row and the account address each
-other with no lookup table. `leagueIdBytes` throws rather than guessing — a silently wrong
-id derives an account the program never wrote, which reads as a logic bug rather than bad
-input.
+A league's on-chain address is `[b"league", uuid, commissioner]` — its Postgres UUID **and
+the wallet that anchored it**. `leagueIdBytes` throws rather than guessing — a silently
+wrong id derives an account the program never wrote, which reads as a logic bug rather
+than bad input.
+
+**The UUID alone used to be the seed, and that was a hole (2026-10-20).** League ids are
+public — the lobby lists unanchored ones and every invite link carries one — so a stranger
+could send `initialize_league` first. With no `close`, the real league could then never be
+anchored, or, with a copy of its rules, the stranger became its on-chain commissioner.
+`payer` is a `Signer` and is now the third seed, so only the commissioner can create the
+account at the address the app reads; a stranger's copy lands at an address derived from
+their own key, which nothing looks at.
+
+Three things that are load-bearing:
+
+- **Every reader derives from `leagues.chain_commissioner`** (migration `0051`), never the
+  connected wallet — a commissioner may hold several and only one seeds the address.
+  `leaguePda` takes it as a _required_ parameter so the compiler finds every caller; do not
+  give it a default. Routes go through `anchoringWallet` in `lib/escrow.ts`.
+- **The anchor route records the wallet only after `commissionerOwnsWallet`** — one of the
+  commissioner's verified wallets. Recording a stranger's would point the league at the
+  stranger's account, which is the original attack by another route.
+- **`refund_stake` and `settle` sign through `league_signer_seeds`**, the one place the
+  seeds are built by hand. A drift there compiles and fails only at the transfer.
+
+Leagues anchored before `0051` have a NULL wallet for good and every on-chain step refuses
+them as `LEGACY_ANCHOR` — refunds included, because `refund_stake` addresses the league by
+the new seeds. Counted on-chain on 2026-10-20: four old-seed devnet leagues, one holding two
+unrefunded test stakes (10 devnet USDC) that could not be refunded before the 2027-02-20
+timelock. Owner's test wallets; stranding them was accepted.
+
+**Never change the League seeds in place on a program that holds real deposits.** Deploy
+a new program id and leave the old one running so its stakes can still be refunded. And
+count vaults on-chain before deciding, not from `leagues` rows: the first census here
+mistyped the token program id, read the RPC error as "no accounts", and reported no vaults.
 
 ### The web app
 
@@ -3256,12 +3291,14 @@ production — the same reasoning that put `expectedTermsFromRules` in `@rostr/e
 the lobby's view model in `lib/lobby.ts`, and in the `@rostr/escrow` case both defects
 review found were in the mapping rather than in the rule.
 
-**Anchor is step one here, and the issue's plan tabulates it second.** That table is right
-about the happy path — linking is the first wallet interaction — but linking is reachable
-only from `JoinPanel`, and `JoinPanel` renders a bare "not open yet" notice with no link
-control until the league is anchored. A checklist naming a step that has no button
-anywhere on the page is worse than no checklist. Anchoring is also the only step that
-blocks _other people_. Revisit the order when the link control is extracted.
+**Link is step one, anchor step two — since 2026-10-20, and it used to be the other way
+round.** The anchoring wallet became a seed of the league's address and is recorded, so the
+anchor route accepts only one of the commissioner's verified wallets, and `AnchorPanel`
+refuses an unlinked one before signing rather than spend rent on a 403. The old order was
+chosen because linking was reachable only from `JoinPanel`, which shows no link control
+until the league is anchored; the link step now points at `/welcome`, which offers it to
+exactly the accounts with no verified wallet. With Privy every account has its generated
+wallet linked at sign-in, so for almost everyone LINK is already ticked.
 
 **Every input is a row, never a step counter.** All eight come from state the page already
 loads, so the position survives a reload, a second tab, and the wallet popup in the middle
@@ -3271,11 +3308,10 @@ wizard inside `CreateLeagueForm` would hold its position in `useState` and stran
 commissioner exactly when a popup stole focus, which is the failure `JoinPanel`'s
 `resumable` already exists to prevent.
 
-**`done` is each step's own condition, not "sits before the current one".** ANCHOR and
-LINK are independent in both directions: `AnchorPanel` signs from the connected wallet and
-never consults `wallets`, so anchoring can come first; and `wallets` is per-**user**, so a
-commissioner who linked one on any previous league arrives with LINK already satisfied —
-which is the ordinary case for a returning user. A list telling them they had not done
+**`done` is each step's own condition, not "sits before the current one".** `wallets` is
+per-**user**, so a commissioner who linked one on any previous league arrives with LINK
+already satisfied — the ordinary case for a returning user — and a league anchored before
+the order changed can be ANCHOR done with LINK outstanding. A list telling them they had not done
 what they just did would be the screen contradicting the thing it reports on.
 
 That per-user scope is also the one place the checklist is coarser than the control it

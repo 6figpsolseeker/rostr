@@ -60,6 +60,11 @@ export type RostrEscrow = {
                 "kind": "account",
                 "path": "league.league_id",
                 "account": "league"
+              },
+              {
+                "kind": "account",
+                "path": "league.commissioner",
+                "account": "league"
               }
             ]
           }
@@ -240,6 +245,10 @@ export type RostrEscrow = {
               {
                 "kind": "arg",
                 "path": "args.league_id"
+              },
+              {
+                "kind": "account",
+                "path": "payer"
               }
             ]
           }
@@ -307,6 +316,10 @@ export type RostrEscrow = {
               {
                 "kind": "arg",
                 "path": "args.league_id"
+              },
+              {
+                "kind": "account",
+                "path": "payer"
               }
             ]
           }
@@ -344,11 +357,12 @@ export type RostrEscrow = {
         {
           "name": "payer",
           "docs": [
-            "Pays rent, and is recorded as `league.commissioner`.",
+            "Pays rent, is recorded as `league.commissioner`, and is a seed of the",
+            "league's address — which is why it must sign: knowing a league's id is not",
+            "enough to create its account.",
             "",
-            "This used to say the key held no privileges afterwards and was not",
-            "recorded. It is now recorded, and it holds exactly one: `start_season`.",
-            "That instruction changes no term and moves no token — see the field."
+            "It holds two instructions afterwards, `start_season` and",
+            "`initialize_scores`. Neither changes a term or moves a token — see the field."
           ],
           "writable": true,
           "signer": true
@@ -407,6 +421,11 @@ export type RostrEscrow = {
               {
                 "kind": "account",
                 "path": "league.league_id",
+                "account": "league"
+              },
+              {
+                "kind": "account",
+                "path": "league.commissioner",
                 "account": "league"
               }
             ]
@@ -501,6 +520,11 @@ export type RostrEscrow = {
               {
                 "kind": "account",
                 "path": "league.league_id",
+                "account": "league"
+              },
+              {
+                "kind": "account",
+                "path": "league.commissioner",
                 "account": "league"
               }
             ]
@@ -677,6 +701,11 @@ export type RostrEscrow = {
                 "kind": "account",
                 "path": "league.league_id",
                 "account": "league"
+              },
+              {
+                "kind": "account",
+                "path": "league.commissioner",
+                "account": "league"
               }
             ]
           }
@@ -796,6 +825,11 @@ export type RostrEscrow = {
               {
                 "kind": "account",
                 "path": "league.league_id",
+                "account": "league"
+              },
+              {
+                "kind": "account",
+                "path": "league.commissioner",
                 "account": "league"
               }
             ]
@@ -951,6 +985,11 @@ export type RostrEscrow = {
               {
                 "kind": "account",
                 "path": "league.league_id",
+                "account": "league"
+              },
+              {
+                "kind": "account",
+                "path": "league.commissioner",
                 "account": "league"
               }
             ]
@@ -1462,10 +1501,12 @@ export type RostrEscrow = {
         "split, the mint and the refund date are written once and read forever.",
         "",
         "This paragraph used to say the account had no authority field at all. It has",
-        "one — `commissioner`, whose sole power is `start_season`, and whose sole",
-        "effect is which of two refund schedules a member is on. Both end with them",
-        "holding their own money. See the field for why that was the least bad way to",
-        "let a league that never started give the money back."
+        "one — `commissioner`, whose powers are `start_season` and `initialize_scores`.",
+        "The first decides which of two refund schedules a member is on, and both end",
+        "with them holding their own money; the second writes a roster and terms the",
+        "draw refuses unless they match the signed rules. See the field for why that",
+        "was the least bad way to let a league that never started give the money back.",
+        "It is also a seed of the account's address, with `league_id`."
       ],
       "type": {
         "kind": "struct",
@@ -1473,9 +1514,9 @@ export type RostrEscrow = {
           {
             "name": "leagueId",
             "docs": [
-              "The league's UUID in Postgres, raw bytes. Also the PDA seed, so the",
-              "off-chain record and the on-chain one address each other with no lookup",
-              "table in between."
+              "The league's UUID in Postgres, raw bytes. One of the PDA's two seeds, with",
+              "`commissioner`; the off-chain record reaches the account through the",
+              "anchoring wallet it stores beside the id."
             ],
             "type": {
               "array": [

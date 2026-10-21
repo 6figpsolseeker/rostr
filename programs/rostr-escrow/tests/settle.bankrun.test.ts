@@ -215,7 +215,11 @@ describe("settle pays the prizes", () => {
 
       // --- the league ------------------------------------------------------
       const leagueId = uuidBytes(9);
-      const league = pda([Buffer.from("league"), Buffer.from(leagueId)]);
+      const league = pda([
+        Buffer.from("league"),
+        Buffer.from(leagueId),
+        commissioner.publicKey.toBuffer(),
+      ]);
       const vault = pda([Buffer.from("vault"), league.toBuffer()]);
       const scores = pda([Buffer.from("scores"), league.toBuffer()]);
       const membership = (m: anchor.web3.PublicKey) =>

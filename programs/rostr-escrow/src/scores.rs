@@ -227,7 +227,7 @@ pub struct InitializeScoresArgs {
 #[derive(Accounts)]
 pub struct InitializeScores<'info> {
     #[account(
-        seeds = [b"league", league.league_id.as_ref()],
+        seeds = [b"league", league.league_id.as_ref(), league.commissioner.as_ref()],
         bump = league.bump,
         // The commissioner creates this, not the oracle — the oracle key is
         // *content* of this account, so at creation there is nothing stored to
@@ -470,7 +470,7 @@ fn payable(payout_bps: &[u16; PRIZE_COUNT]) -> Result<()> {
 pub struct Settle<'info> {
     #[account(
         mut,
-        seeds = [b"league", league.league_id.as_ref()],
+        seeds = [b"league", league.league_id.as_ref(), league.commissioner.as_ref()],
         bump = league.bump,
     )]
     pub league: Box<Account<'info, League>>,
@@ -631,9 +631,10 @@ pub fn settle(ctx: Context<Settle>) -> Result<()> {
     }
 
     let league_id = ctx.accounts.league.league_id;
-    let bump = ctx.accounts.league.bump;
-    let seeds: &[&[u8]] = &[b"league", league_id.as_ref(), &[bump]];
-    let signer: &[&[&[u8]]] = &[seeds];
+    let commissioner = ctx.accounts.league.commissioner;
+    let bump = [ctx.accounts.league.bump];
+    let seeds = crate::league_signer_seeds(&league_id, &commissioner, &bump);
+    let signer: &[&[&[u8]]] = &[&seeds];
 
     for (amount, to) in [
         (champion, ctx.accounts.champion_tokens.to_account_info()),

@@ -1,6 +1,6 @@
 import { expectedScoreTerms, fetchOnChainScores, scoresTermMismatches } from "@rostr/escrow";
-import { getLeagueRules, type SettlementAccountCheck } from "@rostr/db";
-import { readOnlyEscrow } from "./escrow";
+import { getChainState, getLeagueRules, type SettlementAccountCheck } from "@rostr/db";
+import { anchoringWallet, readOnlyEscrow } from "./escrow";
 import { db } from "./db";
 
 /**
@@ -33,7 +33,13 @@ export function settlementAccountCheck(): SettlementAccountCheck {
       const stored = await getLeagueRules(db(), leagueId);
       if (!stored) return ["this league has no stored rules to compare against"];
 
-      const onChain = await fetchOnChainScores(program, leagueId);
+      // The account hangs off the league's address, which derives from the
+      // wallet that anchored it. No recorded wallet is no account to compare —
+      // the same fail-closed answer as a missing one.
+      const anchored = anchoringWallet(await getChainState(db(), leagueId));
+      if (!anchored.ok) return [anchored.body.error];
+
+      const onChain = await fetchOnChainScores(program, leagueId, anchored.commissioner);
       if (!onChain) {
         return [
           "no settlement account exists on-chain, so this league has no payee roster and " +
@@ -47,7 +53,10 @@ export function settlementAccountCheck(): SettlementAccountCheck {
 }
 
 /**
- * Whether a league's settlement account already exists.
+ * Whether the lobby should hide the create-settlement button: `true` when the
+ * account exists, and also when the league has no reachable address — not
+ * anchored, or anchored under the old program — since the button could only send
+ * a transaction that fails.
  *
  * Separate from `scoresMismatches` because the lobby asks a different question:
  * that one decides whether the draw may proceed, this decides whether to show a
@@ -56,5 +65,9 @@ export function settlementAccountCheck(): SettlementAccountCheck {
  */
 export async function scoresAlreadyWritten(leagueId: string): Promise<boolean> {
   const { program } = readOnlyEscrow();
-  return (await fetchOnChainScores(program, leagueId)) !== null;
+  // A league with no reachable address has no account to create either, so it
+  // is answered as written: the button would only send a transaction that fails.
+  const anchored = anchoringWallet(await getChainState(db(), leagueId));
+  if (!anchored.ok) return true;
+  return (await fetchOnChainScores(program, leagueId, anchored.commissioner)) !== null;
 }

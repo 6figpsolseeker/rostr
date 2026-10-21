@@ -28,14 +28,15 @@ const COPY: Record<SetupStepKey, { title: string; detail: string }> = {
   ANCHOR: {
     title: "Anchor the rules on-chain",
     detail:
-      "Your wallet, one transaction. Until the hash is on-chain nobody can check that these " +
+      "Your linked wallet, one transaction. Until the hash is on-chain nobody can check that these " +
       "rules are fixed, so nobody can join — not your members, and not you.",
   },
   LINK: {
     title: "Prove a wallet is yours",
     detail:
-      "One signature over a message we issue. It moves no funds. Without it, linking a wallet " +
-      "would be typing an address, and anyone could claim one.",
+      "One signature over a message we issue, at /welcome. It moves no funds. The " +
+      "anchor has to come from a wallet proven yours, because that wallet becomes part of the " +
+      "league's on-chain address.",
   },
   SEAT: {
     title: "Sign the rules and take your seat",

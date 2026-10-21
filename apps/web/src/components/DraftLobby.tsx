@@ -7,6 +7,7 @@ import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { Transaction } from "@solana/web3.js";
 import { AnchorProvider, type Wallet } from "@coral-xyz/anchor";
 import { escrowProgram, startSeasonIx } from "@rostr/escrow";
+import { anchoringKey } from "@/lib/lobby";
 
 /**
  * The lobby, in its two states: before the draw and after it.
@@ -28,6 +29,12 @@ export interface LobbySeatView {
 
 export interface DraftLobbyProps {
   readonly leagueId: string;
+  /**
+   * The wallet that anchored the league — `league.commissioner` and a seed of
+   * its address, so `start_season` is built from it and must be signed by it.
+   * `null` until anchored, and for a league anchored under the old program.
+   */
+  readonly anchorWallet: string | null;
   readonly phase: "BEFORE_DRAW" | "DRAWN";
   /** ISO, both from the server — see the countdown note below. */
   readonly scheduledAt: string;
@@ -290,7 +297,7 @@ function SeasonStartControl(props: DraftLobbyProps) {
       const tx = new Transaction().add(
         await startSeasonIx(program, {
           leagueId: props.leagueId,
-          commissioner: wallet.publicKey,
+          commissioner: anchoringKey(props.anchorWallet, wallet.publicKey),
         }),
       );
       const signature = await provider.sendAndConfirm(tx, [], { commitment: "confirmed" });
