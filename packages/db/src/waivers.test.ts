@@ -1127,6 +1127,35 @@ describe("processing", () => {
     ).toBe("ON_WAIVERS");
   });
 
+  it("puts a claim's dropped player on the wire inside the run's transaction — #82", async () => {
+    // The run committed the release and then wrote the wire row on the bare
+    // client, so between the two the player read as a free agent to anyone
+    // polling. The same defect #90 item 4 fixed in `addFreeAgent`, asserted the
+    // same way: PGlite has one connection, so the window itself cannot be shown.
+    const fx = await setup();
+    await dropPlayer(fx.client, fx.leagueId, fx.teams[0]!, fx.players.get("held")!, MONDAY);
+    await submitClaim(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: fx.teams[0]!,
+      addPlayerId: fx.players.get("held")!,
+      dropPlayerId: fx.players.get("fresh")!,
+      now: MONDAY,
+    });
+    const rec = recordStatements(fx.client);
+
+    await processWaivers(rec.client, fx.leagueId, WEDNESDAY);
+
+    const begin = rec.statements.findIndex((sql) => sql.trim() === "BEGIN");
+    const commit = rec.statements.findIndex((sql) => sql.trim() === "COMMIT");
+    const wire = rec.statements.findIndex((sql) => sql.includes("INSERT INTO waiver_wire"));
+
+    expect(wire, "the dropped player is put on the wire at all").toBeGreaterThanOrEqual(0);
+    expect(wire, "inside the transaction").toBeGreaterThan(begin);
+    expect(wire, "and before it commits").toBeLessThan(commit);
+    expect(rec.connections[wire]).toBe(rec.connections[begin]);
+    expect(rec.connections[wire]).not.toBe("outer");
+  });
+
   it("is replayable — same inputs, same result", async () => {
     // The property that lets a disputed run be re-run rather than argued about.
     const fx = await setup();
