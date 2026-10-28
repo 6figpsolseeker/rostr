@@ -1261,6 +1261,27 @@ export async function processWaivers(
     const priority = await loadWaiverPriority(tx, leagueId);
 
     /*
+      Stamp each pending claim with where its team stands at this run (#355).
+
+      `priority_at_claim` was written once, by `submitClaim`, at filing — so a
+      claim filed before an earlier run moved the team kept the old number, and
+      the results panel printed it and sorted by it. Its own documentation says
+      "where this team stood when the run began", which is this.
+
+      The position in `priority`, not the raw `waiver_priority`, because that is
+      what `resolveWaiverClaims` decides by: it also places a team with no
+      priority yet. Written before any priority moves below, and to every
+      pending claim, so a deferred claim is restamped by whichever run settles it.
+    */
+    await tx.query(
+      `UPDATE waiver_claims c
+          SET priority_at_claim = p.n::smallint
+         FROM unnest($2::uuid[]) WITH ORDINALITY AS p(team_id, n)
+        WHERE c.league_id = $1 AND c.state = 'PENDING' AND c.team_id = p.team_id`,
+      [leagueId, priority],
+    );
+
+    /*
       The same two IR columns `addFreeAgent` reads, and for the same reason.
 
       Until #237 this query took `team_id, player_id` only, so the capacity

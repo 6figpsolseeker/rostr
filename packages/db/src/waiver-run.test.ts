@@ -173,6 +173,41 @@ describe("lastWaiverRun", () => {
     expect(run?.claims.map((claim) => claim.priorityAtClaim)).toEqual([1, 2]);
   });
 
+  it("carries the priority from when the run began, not from when the claim was filed — #355", async () => {
+    // Both teams file at 1 and 2. Then something — an earlier run, in a real
+    // league — moves them before this run settles the claims. The panel used to
+    // print the filing-time numbers, naming the loser as the better priority.
+    const fx = await setup();
+    await dropPlayer(fx.client, fx.leagueId, fx.teams[0]!, fx.players.get("prize")!, MONDAY);
+    for (const teamId of fx.teams) {
+      await submitClaim(fx.client, {
+        leagueId: fx.leagueId,
+        teamId,
+        addPlayerId: fx.players.get("prize")!,
+        dropPlayerId: null,
+        now: MONDAY,
+      });
+    }
+    const [first] = await fx.client.query<{ id: string }>(
+      "SELECT id FROM teams WHERE league_id = $1 AND waiver_priority = 1",
+      [fx.leagueId],
+    );
+    const second = fx.teams.find((teamId) => teamId !== first!.id)!;
+    await fx.client.query("UPDATE teams SET waiver_priority = 3 WHERE id = $1", [first!.id]);
+    await fx.client.query("UPDATE teams SET waiver_priority = 1 WHERE id = $1", [second]);
+
+    await processWaivers(fx.client, fx.leagueId, WEDNESDAY);
+
+    const run = await lastWaiverRun(fx.client, fx.leagueId);
+    const winner = run!.claims.find((claim) => claim.awarded)!;
+    expect(winner.teamId).toBe(second);
+    expect(winner.priorityAtClaim).toBe(1);
+    // Its position in the order the run used — second of two — not the raw 3
+    // stored on the team.
+    expect(run!.claims.find((claim) => !claim.awarded)!.priorityAtClaim).toBe(2);
+    expect(run!.claims.map((claim) => claim.teamId)).toEqual([second, first!.id]);
+  });
+
   it("names the players rather than making the screen look them up", async () => {
     const fx = await setup();
     await contestedRun(fx);
