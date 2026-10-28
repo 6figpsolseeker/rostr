@@ -53,6 +53,14 @@ export interface WaiverRun {
  * teams — "somebody with better priority took him" is unverifiable if you can
  * only see your own row — and `RULES.md` makes the resolution public by design.
  * Who may look at all is `leagueReadAccess`'s question, asked by the route.
+ *
+ * **Sorted by each team's own ranking, and the rank itself is never returned**
+ * (#125). Each team's claims are kept together and listed in the order the run
+ * tried them. Grouped by team first because `priority_at_claim` is stamped when
+ * a claim is filed, so one team's claims can carry different values (#355) —
+ * sorting on it directly would split them. The raw rank would leak: ranks 1 and 3 on the panel tell every rival that the
+ * team holds a rank-2 claim still waiting for a later run, and claims are blind
+ * until they resolve.
  */
 export async function lastWaiverRun(
   db: SqlClient,
@@ -88,7 +96,8 @@ export async function lastWaiverRun(
        JOIN players ap ON ap.id = c.add_player_id
        LEFT JOIN players dp ON dp.id = c.drop_player_id
       WHERE c.league_id = $1 AND c.processed_at = $2
-      ORDER BY c.priority_at_claim NULLS LAST, c.created_at`,
+      ORDER BY min(c.priority_at_claim) OVER (PARTITION BY c.team_id) NULLS LAST,
+               c.team_id, c.claim_rank NULLS LAST, c.created_at, c.id`,
     [leagueId, latest.processed_at],
   );
 

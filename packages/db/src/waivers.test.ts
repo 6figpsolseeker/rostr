@@ -4,9 +4,11 @@ import type { DraftRules, LeagueRules } from "@rostr/core";
 import { createLeague } from "./leagues.js";
 import { createUser } from "./identity.js";
 import { seedSport } from "./sports.js";
-import { addTestTeam, createTestDatabase, recordStatements } from "./testing.js";
+import { addTestTeam, createTestDatabase, PGliteClient, recordStatements } from "./testing.js";
+import { PGlite } from "@electric-sql/pglite";
+import { loadMigrations, migrate } from "./migrate.js";
+import { lastWaiverRun } from "./waiver-run.js";
 import { moveToIr } from "./injured-reserve.js";
-import type { PGliteClient } from "./testing.js";
 import {
   leaguesDueForWaivers,
   nextWaiverRun,
@@ -18,6 +20,7 @@ import {
   loadWaiverPriority,
   pendingClaims,
   processWaivers,
+  reorderClaims,
   seedWaiverPriority,
   marketClosedReason,
   submitClaim,
@@ -1405,6 +1408,285 @@ describe("RULES.md §6 — a claim waits for its player to clear", () => {
     );
     expect(wire).toHaveLength(0);
     expect(await availabilityOf(fx.client, fx.leagueId, victim, RUN)).toBe("FREE_AGENT");
+  });
+});
+
+describe("a manager ranks their own claims — #125", () => {
+  const WEDNESDAY = new Date(MONDAY.getTime() + 2 * DAY);
+
+  /** Team 4 (best priority) holds `spare`; three players sit on the wire. */
+  async function ranked(): Promise<
+    Fixture & { team: string; file: (add: string) => Promise<string> }
+  > {
+    const fx = await setup();
+    const team = fx.teams[3]!;
+    await fx.client.query(
+      `INSERT INTO roster_entries (team_id, player_id, acquired_via, acquired_at)
+       VALUES ($1, $2, 'DRAFT', $3)`,
+      [team, fx.players.get("spare")!, new Date(MONDAY.getTime() - 7 * DAY)],
+    );
+    // `held` starts on team 1; free him so there are three claimable players.
+    await fx.client.query(
+      "UPDATE roster_entries SET released_at = $2 WHERE player_id = $1 AND released_at IS NULL",
+      [fx.players.get("held")!, MONDAY],
+    );
+    for (const handle of ["target", "other", "held"]) {
+      await fx.client.query(
+        `INSERT INTO waiver_wire (league_id, player_id, clears_at) VALUES ($1, $2, $3)
+         ON CONFLICT (league_id, player_id) DO NOTHING`,
+        [fx.leagueId, fx.players.get(handle)!, new Date(MONDAY.getTime() + DAY)],
+      );
+    }
+    // Every claim offers `spare`, so whichever is tried first spends the one
+    // roster move and the order is the whole outcome.
+    const file = async (add: string): Promise<string> =>
+      (
+        await submitClaim(fx.client, {
+          leagueId: fx.leagueId,
+          teamId: team,
+          addPlayerId: fx.players.get(add)!,
+          dropPlayerId: fx.players.get("spare")!,
+          now: MONDAY,
+        })
+      ).claimId;
+    return { ...fx, team, file };
+  }
+
+  const ranks = async (fx: Fixture, team: string): Promise<(number | null)[]> =>
+    (
+      await fx.client.query<{ claim_rank: number | null }>(
+        `SELECT claim_rank FROM waiver_claims WHERE team_id = $1 AND state = 'PENDING'
+          ORDER BY created_at, id`,
+        [team],
+      )
+    ).map((row) => row.claim_rank);
+
+  it("files each new claim at the bottom, and never reuses a rank after a withdraw", async () => {
+    const fx = await ranked();
+    await fx.file("target");
+    const second = await fx.file("other");
+    await fx.file("held");
+    expect(await ranks(fx, fx.team)).toEqual([1, 2, 3]);
+
+    // max+1, not count+1: after withdrawing #2, a count would hand out 3 again.
+    await cancelClaim(fx.client, fx.leagueId, fx.team, second);
+    await fx.file("other");
+    expect(await ranks(fx, fx.team)).toEqual([1, 3, 4]);
+  });
+
+  it("shows the new order in the pending list once reordered", async () => {
+    const fx = await ranked();
+    const a = await fx.file("target");
+    const b = await fx.file("other");
+    const c = await fx.file("held");
+
+    await reorderClaims(fx.client, fx.leagueId, fx.team, [c, a, b]);
+
+    expect(
+      (await pendingClaims(fx.client, fx.leagueId, fx.team)).map((p) => p.claimId),
+    ).toEqual([c, a, b]);
+  });
+
+  it("awards the claim ranked first, though it was filed second", async () => {
+    // The wiring no core test can see: that `claim_rank` is selected by the run
+    // and threaded into `WaiverClaim`.
+    const fx = await ranked();
+    const first = await fx.file("target");
+    const second = await fx.file("other");
+    await reorderClaims(fx.client, fx.leagueId, fx.team, [second, first]);
+
+    await processWaivers(fx.client, fx.leagueId, WEDNESDAY);
+
+    const [won] = await fx.client.query<{ player_id: string }>(
+      `SELECT player_id FROM roster_entries
+        WHERE team_id = $1 AND released_at IS NULL AND acquired_via = 'WAIVER'`,
+      [fx.team],
+    );
+    expect(won?.player_id).toBe(fx.players.get("other"));
+  });
+
+  it("refuses any list that is not exactly the team's pending claims, and writes nothing", async () => {
+    const fx = await ranked();
+    const a = await fx.file("target");
+    const b = await fx.file("other");
+    const c = await fx.file("held");
+    const [foreign] = await fx.client.query<{ id: string }>(
+      `INSERT INTO waiver_claims (league_id, team_id, add_player_id, claim_rank)
+       VALUES ($1, $2, $3, 1) RETURNING id`,
+      [fx.leagueId, fx.teams[0], fx.players.get("target")],
+    );
+
+    for (const bad of [
+      [a, b], // missing
+      [a, b, c, foreign!.id], // extra, and another team's
+      [a, a, b], // a duplicate standing in for one
+      [c, b, foreign!.id], // another team's in place of one of ours
+      [a, b, "not-a-uuid"], // never reaches a uuid cast
+    ]) {
+      await expect(reorderClaims(fx.client, fx.leagueId, fx.team, bad)).rejects.toMatchObject({
+        code: "CLAIMS_CHANGED",
+      });
+    }
+    expect(await ranks(fx, fx.team)).toEqual([1, 2, 3]);
+
+    // A withdrawn claim is no longer in the set either.
+    await cancelClaim(fx.client, fx.leagueId, fx.team, c);
+    await expect(
+      reorderClaims(fx.client, fx.leagueId, fx.team, [b, a, c]),
+    ).rejects.toMatchObject({
+      code: "CLAIMS_CHANGED",
+    });
+  });
+
+  it("locks the league, then this team's claims in id order, before it writes", async () => {
+    // The order the waiver run takes them in. PGlite cannot show either wait —
+    // one connection — so this pins the statements and the handle they run on.
+    const fx = await ranked();
+    const a = await fx.file("target");
+    const b = await fx.file("other");
+    const rec = recordStatements(fx.client);
+
+    await reorderClaims(rec.client, fx.leagueId, fx.team, [b, a]);
+
+    const at = (test: (sql: string) => boolean): number => rec.statements.findIndex(test);
+    const begin = at((sql) => sql.trim() === "BEGIN");
+    const league = at((sql) => /FROM leagues[\s\S]*FOR SHARE/.test(sql));
+    const claims = at((sql) =>
+      /FROM waiver_claims[\s\S]*ORDER BY id[\s\S]*FOR UPDATE/.test(sql),
+    );
+    const write = at((sql) => sql.includes("UPDATE waiver_claims"));
+    const commit = at((sql) => sql.trim() === "COMMIT");
+
+    expect(begin).toBeGreaterThanOrEqual(0);
+    expect(league, "league locked first").toBe(begin + 1);
+    expect(claims, "then the claims").toBeGreaterThan(league);
+    expect(write, "then the write").toBeGreaterThan(claims);
+    expect(commit).toBeGreaterThan(write);
+    for (const index of [league, claims, write]) {
+      expect(rec.connections[index]).toBe(rec.connections[begin]);
+      expect(rec.connections[index]).not.toBe("outer");
+    }
+  });
+
+  it("lists a team's claims on the results panel in the order tried, without the rank", async () => {
+    const fx = await ranked();
+    const first = await fx.file("target");
+    const second = await fx.file("other");
+    await reorderClaims(fx.client, fx.leagueId, fx.team, [second, first]);
+    await processWaivers(fx.client, fx.leagueId, WEDNESDAY);
+
+    const run = await lastWaiverRun(fx.client, fx.leagueId);
+    const mine = run!.claims.filter((claim) => claim.teamId === fx.team);
+    expect(mine.map((claim) => claim.claimId)).toEqual([second, first]);
+    // Ranks 1 and 3 on a public panel would tell rivals a rank-2 claim is still
+    // waiting. Sorted by, never shown.
+    for (const claim of mine) expect(Object.keys(claim)).not.toContain("claimRank");
+  });
+
+  it("keeps one team's claims together on the panel when their filing priorities differ", async () => {
+    // `priority_at_claim` is stamped at filing (#355), so one team's two claims
+    // can carry 1 and 3 with a rival's 2 between them. Sorting on it directly
+    // splits the team and shows its claims in an order the run never used.
+    const fx = await ranked();
+    const first = await fx.file("target");
+    const second = await fx.file("other");
+    const rival = fx.teams[2]!;
+    const { claimId: theirs } = await submitClaim(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: rival,
+      addPlayerId: fx.players.get("held")!,
+      dropPlayerId: null,
+      now: MONDAY,
+    });
+    for (const [id, priority] of [
+      [first, 1],
+      [theirs, 2],
+      [second, 3],
+    ] as const) {
+      await fx.client.query("UPDATE waiver_claims SET priority_at_claim = $2 WHERE id = $1", [
+        id,
+        priority,
+      ]);
+    }
+    await reorderClaims(fx.client, fx.leagueId, fx.team, [second, first]);
+    await processWaivers(fx.client, fx.leagueId, WEDNESDAY);
+
+    const run = await lastWaiverRun(fx.client, fx.leagueId);
+    expect(run!.claims.map((claim) => claim.claimId)).toEqual([second, first, theirs]);
+  });
+});
+
+describe("0052 backfills ranks in the order claims were already tried — #125", () => {
+  it("numbers each team's pending claims by filing time then id, and leaves settled claims unranked", async () => {
+    const client = new PGliteClient(new PGlite());
+    db = client;
+    await migrate(
+      client,
+      loadMigrations().filter((m) => m.version < 52),
+    );
+    await seedSport(client, NFL);
+    const commissioner = await createUser(client, "c@example.com", "C");
+    const league = await createLeague(client, NFL, {
+      name: "Backfill",
+      commissionerId: commissioner.id,
+      rules: buildNflPprRules({ seasonYear: 2026, draft: DRAFT }) as LeagueRules,
+    });
+    const teamA = (await addTestTeam(client, league.id, "A")).teamId;
+    const teamB = (await addTestTeam(client, league.id, "B")).teamId;
+    const [sport] = await client.query<{ id: string }>("SELECT id FROM sports WHERE key = $1", [
+      NFL.key,
+    ]);
+    const [position] = await client.query<{ id: string }>(
+      "SELECT id FROM positions WHERE sport_id = $1 LIMIT 1",
+      [sport!.id],
+    );
+    const player = async (ref: string): Promise<string> =>
+      (
+        await client.query<{ id: string }>(
+          `INSERT INTO players (sport_id, external_ref, full_name, primary_position_id)
+           VALUES ($1, $2, $2, $3) RETURNING id`,
+          [sport!.id, ref, position!.id],
+        )
+      )[0]!.id;
+
+    const claim = async (team: string, at: string, state = "PENDING", id?: string) =>
+      (
+        await client.query<{ id: string }>(
+          `INSERT INTO waiver_claims (id, league_id, team_id, add_player_id, state, created_at)
+           VALUES (COALESCE($1::uuid, gen_random_uuid()), $2, $3, $4, $5, $6) RETURNING id`,
+          [id ?? null, league.id, team, await player(`p${Math.random()}`), state, at],
+        )
+      )[0]!.id;
+
+    // Two at the same instant, so only the `id` tie-break can order them.
+    const late = await claim(teamA, "2026-09-14T12:00:00Z");
+    const tieHigh = await claim(
+      teamA,
+      "2026-09-14T10:00:00Z",
+      "PENDING",
+      "ffffffff-0000-4000-8000-000000000000",
+    );
+    const tieLow = await claim(
+      teamA,
+      "2026-09-14T10:00:00Z",
+      "PENDING",
+      "00000000-0000-4000-8000-000000000000",
+    );
+    const settled = await claim(teamA, "2026-09-14T09:00:00Z", "FAILED");
+    const otherTeam = await claim(teamB, "2026-09-14T11:00:00Z");
+
+    await migrate(client);
+
+    const rank = new Map(
+      (
+        await client.query<{ id: string; claim_rank: number | null }>(
+          "SELECT id, claim_rank FROM waiver_claims",
+        )
+      ).map((row) => [row.id, row.claim_rank]),
+    );
+    expect([tieLow, tieHigh, late].map((id) => rank.get(id))).toEqual([1, 2, 3]);
+    expect(rank.get(otherTeam)).toBe(1);
+    expect(rank.get(settled)).toBeNull();
   });
 });
 

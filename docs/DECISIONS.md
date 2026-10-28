@@ -1259,3 +1259,46 @@ the feared one.
 This is a monitoring debt, not a code one, and until something carries it the
 payment is somebody remembering. That is the weakest part of this ruling and it
 is recorded here as such.
+
+## A manager ranks their own waiver claims
+
+**Decided by the owner, 2026-10-28.** Issue #125. A team's own pending claims are tried in
+the order the manager drags them into, as ESPN's _Pending Moves_ panel does. They were tried
+in filing order, which was an approximation: claim the insurance pick on Monday and the
+breakout back on Tuesday, and filing order hands you the insurance pick. Withdraw-and-refile
+was the only way out, and only somebody who read the source knew it.
+
+### Not a change to the signed rules
+
+Claim order is not a field in the hashed rule set — `WaiverRules` carries only the system,
+the period and the schedule — and `RulesView` does not render it. So no league's hash moves
+and nobody re-signs. `RULES.md` §6 described filing order and now describes ranking: the
+owner ruled this an implementation of "rolling priority", not a new rule.
+
+### What the screen says, and what it leaves out
+
+Ranking orders claims **decided in the same run**. A claim waits for the run its player
+clears at, so a lower-ranked claim can be decided a week before a higher one. `RULES.md` §6
+says so in full. The screen's label is the short one, "Tried in this order — drag to
+change", by the owner's choice over a longer label carrying the caveat.
+
+### Drag-and-drop, not arrows
+
+Arrows were proposed as simpler and keyboard-friendly. The owner chose drag-and-drop to
+match ESPN. `@dnd-kit` covers mouse, touch and keyboard, and the list uses a drag handle so
+a phone still scrolls the page.
+
+### What was rejected
+
+**A unique index on the rank.** #125 called duplicates a trap because they would fall back
+to a random UUID. They no longer do — a tie falls to `created_at`, which is deterministic —
+and Postgres checks a non-deferrable unique index row by row, so a reorder that swaps two
+ranks would fail on its first row.
+
+**Reusing #277's per-team capacity lock.** The waiver run never takes it, so a reorder
+arriving mid-run would have written part of its order and answered success. `reorderClaims`
+takes the league row, then the team's claims, in the run's own order.
+
+**Showing the rank on the results panel.** The panel is public to the league. Ranks 1 and 3
+on it would tell rivals the team holds a rank-2 claim still waiting, and claims are blind
+until they resolve. The panel sorts by rank and never returns it.

@@ -1,9 +1,26 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useId, useMemo, useRef, useState } from "react";
 import useSWR from "swr";
+import {
+  closestCenter,
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type Announcements,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
 import { PlayerAvatar } from "./PlayerAvatar";
 import { PlayerCard } from "./PlayerCard";
+import { moveClaim } from "@/lib/claim-order";
 import {
   clubLabel,
   injuryBadge,
@@ -104,10 +121,13 @@ function clearsIn(iso: string | null): string {
 }
 
 export function PlayerMarket({ leagueId }: { leagueId: string }) {
+  // While a claim is being dragged, the 30-second refresh must not reshuffle the
+  // list under the pointer. Read by SWR on each tick, so a ref, not state.
+  const dragging = useRef(false);
   const { data, error, mutate } = useSWR<MarketResponse>(
     `/api/leagues/${leagueId}/players`,
     fetcher,
-    { refreshInterval: 30_000 },
+    { refreshInterval: 30_000, isPaused: () => dragging.current },
   );
 
   const [position, setPosition] = useState<(typeof POSITIONS)[number]>("ALL");
@@ -179,6 +199,58 @@ export function PlayerMarket({ leagueId }: { leagueId: string }) {
     }
   }
 
+  /*
+    Not through `act()`, which clears the "drop to make room" choice on every
+    success — a drag must not wipe what the manager picked below it.
+
+    Optimistic: the list shows the new order at once and SWR rolls it back if the
+    write fails. A 409 means the claims changed under the manager (a run, another
+    tab), so the fresh list is loaded and they are told rather than left looking
+    at an order that was never saved.
+  */
+  async function reorder(claimIds: readonly string[]): Promise<void> {
+    const byId = new Map(data!.claims.map((claim) => [claim.claimId, claim]));
+    setBusy(true);
+    setNote(null);
+    setFailure(null);
+
+    try {
+      await mutate(
+        async () => {
+          const response = await fetch(`/api/leagues/${leagueId}/players`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "REORDER_CLAIMS", claimIds }),
+          });
+          if (!response.ok) {
+            const payload = (await response.json().catch(() => ({}))) as { error?: string };
+            throw Object.assign(new Error(payload.error ?? "That did not work"), {
+              status: response.status,
+            });
+          }
+          return undefined;
+        },
+        {
+          optimisticData: (current) => ({
+            ...current!,
+            claims: claimIds.map((id) => byId.get(id)!),
+          }),
+          rollbackOnError: true,
+          populateCache: false,
+          revalidate: true,
+        },
+      );
+    } catch (e) {
+      if ((e as { status?: number }).status === 409) void mutate();
+      setFailure(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const nameOf = (playerId: string): string =>
+    data.available.find((p) => p.playerId === playerId)?.name ?? playerId;
+
   return (
     <div className="space-y-6">
       {note && (
@@ -207,23 +279,16 @@ export function PlayerMarket({ leagueId }: { leagueId: string }) {
               blind — nobody sees them until they resolve
             </span>
           </h2>
-          <ul className="space-y-1 text-xs">
-            {data.claims.map((claim) => (
-              <li key={claim.claimId} className="flex items-center gap-2">
-                <span className="flex-1 truncate">
-                  {data.available.find((p) => p.playerId === claim.addPlayerId)?.name ??
-                    claim.addPlayerId}
-                </span>
-                <button
-                  onClick={() => void act({ action: "CANCEL_CLAIM", claimId: claim.claimId })}
-                  disabled={busy}
-                  className="text-nocturne-neutral-600 hover:text-nocturne-text disabled:opacity-30"
-                >
-                  withdraw
-                </button>
-              </li>
-            ))}
-          </ul>
+          <PendingClaims
+            claims={data.claims}
+            nameOf={nameOf}
+            busy={busy}
+            onDragging={(now) => {
+              dragging.current = now;
+            }}
+            onReorder={(claimIds) => void reorder(claimIds)}
+            onWithdraw={(claimId) => void act({ action: "CANCEL_CLAIM", claimId })}
+          />
         </section>
       )}
 
@@ -422,5 +487,157 @@ export function PlayerMarket({ leagueId }: { leagueId: string }) {
         re-adding him to skip the queue.
       </p>
     </div>
+  );
+}
+
+/**
+ * A team's pending claims, in the order they will be tried, dragged to reorder.
+ * Issue #125, matching ESPN's Pending Moves panel.
+ *
+ * Every decision lives in `lib/claim-order.ts`, where a test can reach it; this
+ * only wires the gestures. Three things about the wiring are deliberate:
+ *
+ *   - **A drag handle, not a draggable row.** On a phone the rest of the row
+ *     still scrolls the page, and tapping "withdraw" can never start a drag.
+ *     `touch-none` on the handle alone is what lets a touch drag it.
+ *   - **Announcements name the player.** dnd-kit's defaults read the item id,
+ *     which here is a claim UUID.
+ *   - **One claim shows no handle and no number**: there is nothing to order.
+ */
+function PendingClaims({
+  claims,
+  nameOf,
+  busy,
+  onDragging,
+  onReorder,
+  onWithdraw,
+}: {
+  claims: readonly Claim[];
+  nameOf: (playerId: string) => string;
+  busy: boolean;
+  onDragging: (dragging: boolean) => void;
+  onReorder: (claimIds: readonly string[]) => void;
+  onWithdraw: (claimId: string) => void;
+}) {
+  const id = useId();
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+  const ids = claims.map((claim) => claim.claimId);
+  const sortable = claims.length > 1;
+
+  const label = (claimId: unknown): string => {
+    const claim = claims.find((c) => c.claimId === claimId);
+    return claim ? nameOf(claim.addPlayerId) : "claim";
+  };
+  const place = (claimId: unknown): string =>
+    `position ${ids.indexOf(String(claimId)) + 1} of ${ids.length}`;
+  const announcements: Announcements = {
+    onDragStart: ({ active }) => `Picked up ${label(active.id)}, ${place(active.id)}.`,
+    onDragOver: ({ active, over }) =>
+      over
+        ? `${label(active.id)} is over ${place(over.id)}.`
+        : `${label(active.id)} is not over a claim.`,
+    onDragEnd: ({ active, over }) =>
+      over
+        ? `${label(active.id)} dropped at ${place(over.id)}.`
+        : `${label(active.id)} dropped.`,
+    onDragCancel: ({ active }) => `Moving ${label(active.id)} cancelled.`,
+  };
+
+  function onDragEnd({ active, over }: DragEndEvent): void {
+    onDragging(false);
+    if (!over) return;
+    const next = moveClaim(ids, String(active.id), String(over.id));
+    if (next !== ids) onReorder(next);
+  }
+
+  return (
+    <>
+      {sortable && (
+        <p className="text-xs text-nocturne-neutral-600">
+          Tried in this order — drag to change
+        </p>
+      )}
+      <DndContext
+        id={id}
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        accessibility={{ announcements }}
+        onDragStart={() => onDragging(true)}
+        onDragEnd={onDragEnd}
+        onDragCancel={() => onDragging(false)}
+      >
+        <SortableContext items={ids} strategy={verticalListSortingStrategy}>
+          <ol className="space-y-1 text-xs">
+            {claims.map((claim, index) => (
+              <PendingClaimRow
+                key={claim.claimId}
+                claim={claim}
+                position={sortable ? index + 1 : null}
+                name={nameOf(claim.addPlayerId)}
+                busy={busy}
+                onWithdraw={onWithdraw}
+              />
+            ))}
+          </ol>
+        </SortableContext>
+      </DndContext>
+    </>
+  );
+}
+
+function PendingClaimRow({
+  claim,
+  position,
+  name,
+  busy,
+  onWithdraw,
+}: {
+  claim: Claim;
+  /** 1-based, or `null` when there is only one claim and nothing to order. */
+  position: number | null;
+  name: string;
+  busy: boolean;
+  onWithdraw: (claimId: string) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: claim.claimId,
+    disabled: busy || position === null,
+  });
+
+  return (
+    <li
+      ref={setNodeRef}
+      style={{
+        transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
+        transition,
+      }}
+      className={`flex items-center gap-2 rounded ${isDragging ? "bg-nocturne-neutral-900" : ""}`}
+    >
+      {position !== null && (
+        <>
+          <button
+            type="button"
+            {...attributes}
+            {...listeners}
+            aria-label={`Reorder ${name}`}
+            className="flex h-11 w-8 shrink-0 cursor-grab touch-none items-center justify-center text-nocturne-neutral-600 hover:text-nocturne-text active:cursor-grabbing aria-disabled:cursor-default aria-disabled:opacity-30"
+          >
+            ⠿
+          </button>
+          <span className="w-4 text-right text-nocturne-neutral-600">{position}.</span>
+        </>
+      )}
+      <span className="flex-1 truncate">{name}</span>
+      <button
+        onClick={() => onWithdraw(claim.claimId)}
+        disabled={busy}
+        className="text-nocturne-neutral-600 hover:text-nocturne-text disabled:opacity-30"
+      >
+        withdraw
+      </button>
+    </li>
   );
 }

@@ -8,10 +8,11 @@
  *
  * **Blind means no team's outcome depends on when another team filed**, and the
  * resolution below is written so it does not: waiver priority decides every
- * contest *between* teams, and submission time is consulted only to order one
- * team's own claims against each other. Filing early buys you nothing against
- * anybody but yourself. A commit-reveal scheme still works — a team commits to
- * its own ordering inside the commitment and reveals it to nobody early.
+ * contest *between* teams, and the manager's own ranking — then submission time
+ * — is consulted only to order one team's own claims against each other.
+ * Neither buys you anything against anybody but yourself. A commit-reveal scheme
+ * still works — a team commits to its own ordering inside the commitment and
+ * reveals it to nobody early.
  *
  * This paragraph used to claim the stronger property, that the resolution was
  * "deliberately independent of *when* claims arrived", and the code never
@@ -24,7 +25,7 @@
  * Resolution is otherwise simple and entirely deterministic:
  *
  *   1. Sort claims by the claiming team's waiver priority, then by the order
- *      that team filed its own.
+ *      that team ranked its own (#125), then by when it filed them.
  *   2. Award each in turn, skipping any whose player is already gone or whose
  *      roster cannot take him.
  *   3. A team that wins moves to the back of the order. A team that loses does
@@ -42,12 +43,23 @@ export interface WaiverClaim {
   /** Player to drop to make room. Required when the roster is full. */
   readonly dropPlayerId: string | null;
   /**
+   * Where the manager ranked this claim among their own — `waiver_claims.claim_rank`,
+   * 1 tried first (#125). `null` for a claim with no rank, which sorts after
+   * every ranked one.
+   *
+   * **Required, so a caller cannot forget it**, the same reason as `irExempt`:
+   * an omitted rank would quietly fall back to filing order and the manager's
+   * ranking would do nothing. Ranks may tie — nothing makes them unique — and a
+   * tie falls through to `submittedAt`.
+   */
+  readonly claimRank: number | null;
+  /**
    * When the team filed this claim — `waiver_claims.created_at`.
    *
-   * Orders a team's *own* claims against each other and decides nothing else;
-   * see the sort in `resolveWaiverClaims`. It is data on the claim rather than
-   * a clock read, so the function stays pure and a disputed run replays from
-   * the stored rows exactly.
+   * Orders a team's *own* claims against each other after `claimRank`, and
+   * decides nothing else; see the sort in `resolveWaiverClaims`. It is data on
+   * the claim rather than a clock read, so the function stays pure and a
+   * disputed run replays from the stored rows exactly.
    */
   readonly submittedAt: Date;
 }
@@ -139,14 +151,15 @@ export function resolveWaiverClaims(input: ResolveInput): WaiverResolution {
 
   const rank = new Map(priority.map((teamId, index) => [teamId, index]));
 
-  // Priority first. Then, within one team, the order that team filed its own
-  // claims, so a manager with one open spot and two claims gets the player they
-  // asked for first. `claimId` closes the sort so it stays total: a comparator
+  // Priority first. Then, within one team, the order the manager ranked their
+  // own claims (#125), and after that the order they filed them, so a manager
+  // with one open spot and two claims gets the player they put first.
+  // `claimId` closes the sort so it stays total: a comparator
   // that returned 0 for two distinct claims would leave the result riding on
   // `sort` stability, and therefore on database row order.
   //
-  // **`submittedAt` is only ever compared between two claims that tied on
-  // priority, and a tie means one team.** `loadWaiverPriority` lists every team
+  // **`claimRank` and `submittedAt` are only ever compared between two claims
+  // that tied on priority, and a tie means one team.** `loadWaiverPriority` lists every team
   // in the league exactly once, so two claims share a rank only when they share
   // a team. That is what keeps this blind: no team's outcome can move because of
   // when a *different* team filed.
@@ -182,6 +195,9 @@ export function resolveWaiverClaims(input: ResolveInput): WaiverResolution {
       (rank.get(a.teamId) ?? Number.MAX_SAFE_INTEGER) -
       (rank.get(b.teamId) ?? Number.MAX_SAFE_INTEGER);
     if (byPriority !== 0) return byPriority;
+
+    const byRank = compareClaimRank(a.claimRank, b.claimRank);
+    if (byRank !== 0) return byRank;
 
     const byTime = a.submittedAt.getTime() - b.submittedAt.getTime();
     return byTime !== 0 ? byTime : a.claimId.localeCompare(b.claimId);
@@ -319,6 +335,43 @@ export function resolveWaiverClaims(input: ResolveInput): WaiverResolution {
     outcomes,
     priorityAfter: [...priority.filter((teamId) => !winners.includes(teamId)), ...winners],
   };
+}
+
+/**
+ * Lower rank first; an unranked claim after every ranked one.
+ *
+ * Branches rather than subtraction, and that is the point. `a - b` with one
+ * side null coerces it to 0 and sorts the unranked claim *first*; mapping null
+ * to `Infinity` makes two unranked claims compare as `NaN`, and a comparator
+ * returning `NaN` makes the sort implementation-defined — the replayability
+ * `resolveWaiverClaims` exists to provide.
+ */
+function compareClaimRank(a: number | null, b: number | null): number {
+  if (a === b) return 0;
+  if (a === null) return 1;
+  if (b === null) return -1;
+  return a < b ? -1 : 1;
+}
+
+/**
+ * Whether `proposed` names exactly the claims in `current`, each once, in any
+ * order — what a reorder must send.
+ *
+ * Every condition is load-bearing. Same length plus "each proposed id is
+ * current" passes `[a, a, b]` against `{a, b, c}`, leaving `c` unranked and two
+ * ranks on `a`; set equality alone ignores the duplicate the same way.
+ */
+export function isPermutationOf(
+  proposed: readonly string[],
+  current: readonly string[],
+): boolean {
+  if (proposed.length !== current.length) return false;
+  const remaining = new Set(current);
+  if (remaining.size !== current.length) return false;
+  for (const id of proposed) {
+    if (!remaining.delete(id)) return false;
+  }
+  return true;
 }
 
 /**

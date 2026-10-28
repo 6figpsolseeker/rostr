@@ -155,6 +155,7 @@ export {
 
 export {
   initialWaiverPriority,
+  isPermutationOf,
   resolveWaiverClaims,
   type ClaimFailure,
   type ClaimOutcome,
