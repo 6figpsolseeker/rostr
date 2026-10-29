@@ -15,7 +15,7 @@ import { createLeague, recordSeasonStart } from "./leagues.js";
 import { createUser } from "./identity.js";
 import { seedSport } from "./sports.js";
 import { addBot } from "./membership.js";
-import { addTestTeam, createTestDatabase } from "./testing.js";
+import { addTestTeam, createTestDatabase, recordStatements } from "./testing.js";
 import type { PGliteClient } from "./testing.js";
 import { FixedBeacon } from "./randomness.js";
 import {
@@ -823,6 +823,32 @@ describe("clocks", () => {
     const draft = await loadDraft(fx.client, fx.leagueId);
 
     expect(isCurrentPickExpired(draft!, new Date("2030-01-01T00:00:00Z"))).toBe(false);
+  });
+
+  it("starts the draft and moves the league in one transaction — #82", async () => {
+    // Two statements on a pool are not guaranteed one connection, and a failure
+    // between them left the draft IN_PROGRESS on a FORMING league with no way
+    // back. PGlite has one connection, so this pins the shape, as #90's does.
+    const fx = await setup();
+    await scheduled(fx);
+    const rec = recordStatements(fx.client);
+
+    await startDraft(rec.client, fx.leagueId, SCHEDULED);
+
+    const begin = rec.statements.findIndex((sql) => sql.trim() === "BEGIN");
+    const commit = rec.statements.findIndex((sql) => sql.trim() === "COMMIT");
+    const draft = rec.statements.findIndex((sql) => sql.includes("UPDATE drafts"));
+    const league = rec.statements.findIndex((sql) => sql.includes("UPDATE leagues"));
+
+    for (const [label, index] of [
+      ["drafts", draft],
+      ["leagues", league],
+    ] as const) {
+      expect(index, `${label} is written inside the transaction`).toBeGreaterThan(begin);
+      expect(index, `${label} is written before it commits`).toBeLessThan(commit);
+      expect(rec.connections[index], label).toBe(rec.connections[begin]);
+      expect(rec.connections[index], label).not.toBe("outer");
+    }
   });
 
   it("expires once the pick clock elapses", async () => {
