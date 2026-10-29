@@ -12,6 +12,7 @@ import {
   recordCronRun,
   resolveLeagueWeeksThrough,
   transactionWeek,
+  waiverRunOwed,
   WeekError,
 } from "@rostr/db";
 import type { SqlClient } from "@rostr/db";
@@ -190,6 +191,8 @@ async function run(client: SqlClient, now: Date, request: Request): Promise<Next
         lastPlayedWeek: lastPlayedWeek(stored.rules.schedule),
         now,
         waivers: stored.rules.waivers,
+        // The run itself, not just its scheduled time (#266).
+        waiverRunOwed: await waiverRunOwed(client, league.id, stored.rules, now),
       });
       if (week === null) return {};
 
