@@ -478,10 +478,15 @@ visually distinct: **on waivers** (accent, "Claim") versus **free agent** (neutr
 now"), and only players on waivers appear in the run.
 
 The state 2 result is built to teach three rules at once: priority settles every contest
-with another manager; **a failed claim costs nothing**; and your own filing order only
+with another manager; **a failed claim costs nothing**; and your own claim order only
 decides which of *your* claims gets your last roster spot. Claims 1 and 3 both need the
-same roster spot, claim 1 loses to priority 3, and claim 3 therefore wins — file the
-player you want most first. Winning two claims in one run moves priority **once**.
+same roster spot, claim 1 loses to priority 3, and claim 3 therefore wins. Winning two
+claims in one run moves priority **once**.
+
+**Superseded in one respect (#125):** the mock says order comes from filing, and its copy
+("filing order is the only lever you hold", "had you filed Fontaine first") predates
+ranking. Claims are now dragged into order on the market screen; the HTML mocks were not
+edited, so read their wording about filing as "ranking".
 
 ### 10. `Rostr Trade Veto.dc.html` — 4 states
 The screen no other fantasy platform has. A one-for-two trade in escrow, its 48-hour

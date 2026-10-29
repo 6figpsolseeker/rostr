@@ -1754,7 +1754,8 @@ what waivers exist to prevent.
 
 Two properties of `processWaivers` are load-bearing: it is **blind** (no team's outcome
 depends on when another team filed — priority decides every contest between teams, and
-submission time only orders a team's own claims against each other) and **replayable**
+the manager's own ranking, then submission time, only orders a team's own claims against
+each other) and **replayable**
 (pure, so a disputed run can be re-run rather than argued about). Both come from
 `resolveWaiverClaims`; do not reimplement them here.
 
@@ -1763,15 +1764,25 @@ code never did that either: one team's two claims tie on priority and fell throu
 `claimId`, a v4 UUID. A coin flip chose which of a team's own claims was tried first — and
 therefore which player was left on the board for the next team down, so it moved outcomes
 **across** teams, not merely within one. `created_at` is deliberately left to the database
-rather than written from `input.now`: now that it decides who gets a player, a caller-
-settable submission time would be a way to file a claim and then move it to the front of
-your own queue.
+rather than written from `input.now`: it still breaks ties and seeds a new claim's rank, so
+no caller may name it.
 
-**ESPN, Sleeper and Yahoo all let a manager rank their own pending claims** — ESPN's
-_Pending Moves_ panel says "Reorder claims by dragging them into your preferred priority".
-Filing order is an _approximation_ of that, not conformance with it, and the app shows the
-order without labelling it. The explicit rank is separate work; do not describe the current
-behaviour as matching ESPN.
+**A manager ranks their own pending claims by dragging them (#125)**, as ESPN's _Pending
+Moves_ panel does ("Reorder claims by dragging them into your preferred priority").
+`waiver_claims.claim_rank` (`0052`) holds the order; a new claim goes to the bottom, and a
+tie falls through to `created_at`, then `id`. Four things about it are load-bearing:
+
+- **No unique index on the rank.** A tie is deterministic now that it falls to filing time,
+  and Postgres checks a non-deferrable unique index row by row, so a swap would fail.
+- **`reorderClaims` locks the league `FOR SHARE`, then the team's claims `FOR UPDATE` in id
+  order**, the run's order. The per-team capacity lock from #277 is the wrong tool here:
+  the run never takes it. PGlite cannot show either wait.
+- **Every reader of claim order sorts by rank**: the resolver, `pendingClaims`, and the
+  results panel. The panel never returns the rank itself — a gap would tell rivals a team
+  holds a claim still waiting.
+- **Rank orders claims decided in the same run.** A claim waits for its player to clear, so
+  a lower-ranked claim can be decided first. `RULES.md` §6 says so; the screen's short
+  label ("Tried in this order — drag to change") was the owner's choice.
 
 Priority is seeded at draft completion, reversed from the draft order. Winners move to the
 back, losers do not move at all — a failed claim costs nothing, so there is no reason to

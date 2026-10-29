@@ -12,7 +12,7 @@ import {
   nextWeeklyLockAt,
   waiverClearsAt,
 } from "./schedule.js";
-import { initialWaiverPriority, resolveWaiverClaims } from "./claims.js";
+import { initialWaiverPriority, isPermutationOf, resolveWaiverClaims } from "./claims.js";
 import type { WaiverClaim, WaiverResolution } from "./claims.js";
 
 /** No stashed players. Every case here is about priority and capacity, not IR. */
@@ -312,14 +312,16 @@ const AT = (minutes: number): Date => new Date(Date.UTC(2026, 8, 16, 7, minutes)
 
 // `submittedAt` defaults to one shared instant, so every test that does not care
 // about filing order ties there and falls through to `claimId` exactly as it did
-// before that term existed.
+// before that term existed. `claimRank` defaults to unranked for the same reason:
+// the filing-order tests below keep testing the fallback a tie lands on.
 const claim = (
   claimId: string,
   teamId: string,
   addPlayerId: string,
   dropPlayerId: string | null = null,
   submittedAt: Date = AT(0),
-): WaiverClaim => ({ claimId, teamId, addPlayerId, dropPlayerId, submittedAt });
+  claimRank: number | null = null,
+): WaiverClaim => ({ claimId, teamId, addPlayerId, dropPlayerId, claimRank, submittedAt });
 
 const POOL = new Map(["star", "other", "third"].map((id) => [id, player(id)] as const));
 
@@ -557,6 +559,115 @@ describe("resolveWaiverClaims", () => {
     });
   });
 
+  describe("a manager's own ranking — #125", () => {
+    // One open spot. Two claims from team-a; whichever is tried first wins.
+    const nearlyFull = Array.from({ length: SHAPE.totalSlots - 1 }, (_, i) => player(`p${i}`));
+    const run = (claims: WaiverClaim[]) =>
+      resolveWaiverClaims({
+        claims,
+        priority,
+        rosters: new Map([...emptyRosters, ["team-a", nearlyFull]]),
+        pool: POOL,
+        shape: SHAPE,
+        irExempt: NO_IR,
+      });
+    const winner = (claims: WaiverClaim[]) =>
+      run(claims).outcomes.find((o) => o.awarded)?.addPlayerId;
+
+    it("tries the claim ranked first, even when it was filed later", () => {
+      expect(
+        winner([
+          claim("c1", "team-a", "star", null, AT(1), 2),
+          claim("c2", "team-a", "other", null, AT(2), 1),
+        ]),
+      ).toBe("other");
+    });
+
+    it("puts a ranked claim before an unranked one, and orders two unranked by filing", () => {
+      expect(
+        winner([
+          claim("c1", "team-a", "star", null, AT(1), null),
+          claim("c2", "team-a", "other", null, AT(2), 5),
+        ]),
+      ).toBe("other");
+      // Passed in reverse filing order on purpose. Two unranked claims compared as
+      // `Infinity - Infinity` give `NaN`, which `sort` treats as "equal", so input
+      // order would decide — and this order makes that visible.
+      expect(
+        winner([
+          claim("c2", "team-a", "other", null, AT(2), null),
+          claim("c1", "team-a", "star", null, AT(1), null),
+        ]),
+      ).toBe("star");
+    });
+
+    it("falls back to filing order when two ranks tie", () => {
+      expect(
+        winner([
+          claim("c2", "team-a", "other", null, AT(2), 1),
+          claim("c1", "team-a", "star", null, AT(1), 1),
+        ]),
+      ).toBe("star");
+    });
+
+    it("never lets a rank cross teams: priority still decides between them", () => {
+      // team-a holds priority 1 and ranks its claim 9; team-b ranks its own 1.
+      const result = resolveWaiverClaims({
+        claims: [
+          claim("cb", "team-b", "star", null, AT(0), 1),
+          claim("ca", "team-a", "star", null, AT(5), 9),
+        ],
+        priority,
+        rosters: emptyRosters,
+        pool: POOL,
+        shape: SHAPE,
+        irExempt: NO_IR,
+      });
+      expect(result.outcomes.find((o) => o.awarded)?.teamId).toBe("team-a");
+    });
+
+    it("gives the same outcome whatever order the claims arrive in", () => {
+      // A NaN comparator or a rank term conditioned on team shows up here as an
+      // outcome that moves with input order.
+      const base = [
+        claim("c1", "team-a", "star", null, AT(1), null),
+        claim("c2", "team-a", "other", null, AT(2), null),
+        claim("c3", "team-a", "third", null, AT(3), 2),
+        claim("c4", "team-b", "other", null, AT(0), 1),
+      ];
+      const expected = run(base)
+        .outcomes.map((o) => `${o.claimId}:${o.awarded}`)
+        .sort();
+      for (const order of [
+        [3, 2, 1, 0],
+        [1, 3, 0, 2],
+        [2, 0, 3, 1],
+      ]) {
+        const shuffled = order.map((i) => base[i]!);
+        expect(
+          run(shuffled)
+            .outcomes.map((o) => `${o.claimId}:${o.awarded}`)
+            .sort(),
+        ).toEqual(expected);
+      }
+    });
+  });
+
+  describe("isPermutationOf", () => {
+    it("accepts the same ids in any order, and two empty lists", () => {
+      expect(isPermutationOf(["b", "a"], ["a", "b"])).toBe(true);
+      expect(isPermutationOf([], [])).toBe(true);
+    });
+
+    it("refuses a missing id, an extra id, and a duplicate standing in for one", () => {
+      expect(isPermutationOf(["a"], ["a", "b"])).toBe(false);
+      expect(isPermutationOf(["a", "b", "c"], ["a", "b"])).toBe(false);
+      expect(isPermutationOf(["a", "a"], ["a", "b"])).toBe(false);
+      expect(isPermutationOf(["a", "a", "b"], ["a", "b", "c"])).toBe(false);
+      expect(isPermutationOf(["a", "b", "b"], ["a", "b"])).toBe(false);
+    });
+  });
+
   it("does not let one team's filing order decide a rival's claim by chance", () => {
     // The reason this is a defect and not a preference. team-a outranks team-b
     // and has one spot; it filed for "star" first, so "other" must still be on
@@ -702,6 +813,7 @@ describe("injured reserve and the roster limit — #237", () => {
           teamId: "team-a",
           addPlayerId: "wanted",
           dropPlayerId,
+          claimRank: null,
           submittedAt: new Date("2026-09-15T12:00:00Z"),
         },
       ],
