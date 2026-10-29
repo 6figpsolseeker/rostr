@@ -506,6 +506,30 @@ describe("resolveWaiverClaims", () => {
     });
   });
 
+  it("says a shared drop was spent by the team's own earlier win, not that it was never there — #127", () => {
+    // Two claims naming one drop is how a manager says "only one of these".
+    // The first wins and uses the drop; the second must not read as a claim the
+    // manager filed wrongly.
+    const result = resolveWaiverClaims({
+      claims: [
+        claim("c1", "team-a", "star", "spare", AT(1)),
+        claim("c2", "team-a", "other", "spare", AT(2)),
+        claim("c3", "team-a", "third", "not-mine", AT(3)),
+      ],
+      priority,
+      rosters: new Map([["team-a", [player("spare")]]]),
+      pool: POOL,
+      shape: SHAPE,
+      irExempt: NO_IR,
+    });
+
+    const by = new Map(result.outcomes.map((o) => [o.claimId, o]));
+    expect(by.get("c1")).toMatchObject({ awarded: true });
+    expect(by.get("c2")).toMatchObject({ awarded: false, reason: "DROP_ALREADY_SPENT" });
+    // A drop that was never on the roster keeps the old reason.
+    expect(by.get("c3")).toMatchObject({ awarded: false, reason: "DROP_NOT_ON_ROSTER" });
+  });
+
   it("tries a team's own claims in the order the team filed them", () => {
     // One open spot, two claims. The claim ids are chosen so `c9` sorts *after*
     // `c1`: an id-only tiebreak awards "other" and fails "star", so this fails

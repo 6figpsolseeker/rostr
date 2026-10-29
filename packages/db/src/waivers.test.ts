@@ -956,7 +956,7 @@ describe("processing", () => {
     // The wiring, which no test in `@rostr/core` can see: that `created_at` is
     // actually selected and threaded into `WaiverClaim`. Room is expressed as a
     // shared drop rather than by fabricating a full roster — whichever claim is
-    // tried first spends `spare`, and the other fails DROP_NOT_ON_ROSTER.
+    // tried first spends `spare`, and the other fails DROP_ALREADY_SPENT (#127).
     const fx = await setup();
     const team = fx.teams[3]!; // best priority, the reverse of the draft order
     const rival = fx.teams[1]!;
@@ -1000,6 +1000,15 @@ describe("processing", () => {
     const owner = new Map(rows.map((r) => [r.player_id, r.team_id]));
 
     expect(owner.get(fx.players.get("target")!)).toBe(team);
+
+    // And the loser is recorded as spent by the team's own win, which is what
+    // the results panel reads — not as a drop that was never there.
+    const [loser] = await fx.client.query<{ failure_reason: string }>(
+      `SELECT failure_reason FROM waiver_claims
+        WHERE team_id = $1 AND add_player_id = $2`,
+      [team, fx.players.get("other")!],
+    );
+    expect(loser?.failure_reason).toBe("DROP_ALREADY_SPENT");
     // And the rival gets the player the first team could no longer take.
     expect(owner.get(fx.players.get("other")!)).toBe(rival);
   });
@@ -1126,6 +1135,35 @@ describe("processing", () => {
     expect(
       await availabilityOf(fx.client, fx.leagueId, fx.players.get("fresh")!, WEDNESDAY),
     ).toBe("ON_WAIVERS");
+  });
+
+  it("puts a claim's dropped player on the wire inside the run's transaction — #82", async () => {
+    // The run committed the release and then wrote the wire row on the bare
+    // client, so between the two the player read as a free agent to anyone
+    // polling. The same defect #90 item 4 fixed in `addFreeAgent`, asserted the
+    // same way: PGlite has one connection, so the window itself cannot be shown.
+    const fx = await setup();
+    await dropPlayer(fx.client, fx.leagueId, fx.teams[0]!, fx.players.get("held")!, MONDAY);
+    await submitClaim(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: fx.teams[0]!,
+      addPlayerId: fx.players.get("held")!,
+      dropPlayerId: fx.players.get("fresh")!,
+      now: MONDAY,
+    });
+    const rec = recordStatements(fx.client);
+
+    await processWaivers(rec.client, fx.leagueId, WEDNESDAY);
+
+    const begin = rec.statements.findIndex((sql) => sql.trim() === "BEGIN");
+    const commit = rec.statements.findIndex((sql) => sql.trim() === "COMMIT");
+    const wire = rec.statements.findIndex((sql) => sql.includes("INSERT INTO waiver_wire"));
+
+    expect(wire, "the dropped player is put on the wire at all").toBeGreaterThanOrEqual(0);
+    expect(wire, "inside the transaction").toBeGreaterThan(begin);
+    expect(wire, "and before it commits").toBeLessThan(commit);
+    expect(rec.connections[wire]).toBe(rec.connections[begin]);
+    expect(rec.connections[wire]).not.toBe("outer");
   });
 
   it("is replayable — same inputs, same result", async () => {

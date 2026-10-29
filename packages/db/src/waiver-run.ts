@@ -24,7 +24,11 @@ export interface WaiverRunClaim {
   readonly addPlayerName: string;
   readonly dropPlayerId: string | null;
   readonly dropPlayerName: string | null;
-  /** Where this team stood when the run began. Recorded, never recomputed. */
+  /**
+   * Where this team stood when the run began — its position in the order the
+   * run decided by. Stamped by the run that settled the claim (#355), never
+   * recomputed afterwards.
+   */
   readonly priorityAtClaim: number | null;
   readonly awarded: boolean;
   /** `null` on a winner, and on a loser from before `0039` recorded reasons. */

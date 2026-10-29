@@ -929,8 +929,8 @@ export async function addFreeAgent(db: SqlClient, input: AddInput): Promise<void
       by two people clicking at once. Issue #90 item 4.
 
       `dropPlayer` has always written its wire row inside its own transaction,
-      for the same reason and with the same comment. This is the one release
-      path that did not.
+      for the same reason and with the same comment. This and the waiver run
+      were the two release paths that did not; the run's moved inside under #82.
 
       There is no window to close on the other side: the release and the wire
       row now commit together, so a reader sees the player rostered or sees him
@@ -1262,6 +1262,27 @@ export async function processWaivers(
     const priority = await loadWaiverPriority(tx, leagueId);
 
     /*
+      Stamp each pending claim with where its team stands at this run (#355).
+
+      `priority_at_claim` was written once, by `submitClaim`, at filing — so a
+      claim filed before an earlier run moved the team kept the old number, and
+      the results panel printed it and sorted by it. Its own documentation says
+      "where this team stood when the run began", which is this.
+
+      The position in `priority`, not the raw `waiver_priority`, because that is
+      what `resolveWaiverClaims` decides by: it also places a team with no
+      priority yet. Written before any priority moves below, and to every
+      pending claim, so a deferred claim is restamped by whichever run settles it.
+    */
+    await tx.query(
+      `UPDATE waiver_claims c
+          SET priority_at_claim = p.n::smallint
+         FROM unnest($2::uuid[]) WITH ORDINALITY AS p(team_id, n)
+        WHERE c.league_id = $1 AND c.state = 'PENDING' AND c.team_id = p.team_id`,
+      [leagueId, priority],
+    );
+
+    /*
       The same two IR columns `addFreeAgent` reads, and for the same reason.
 
       Until #237 this query took `team_id, player_id` only, so the capacity
@@ -1510,7 +1531,7 @@ export async function processWaivers(
     }
 
     // Players this run actually released, which is not the same as every player
-    // any pending claim happens to name. See the loop below the transaction.
+    // any pending claim happens to name. See the loop at the end of the run.
     const dropped: string[] = [];
 
     for (const outcome of resolution.outcomes) {
@@ -1599,48 +1620,47 @@ export async function processWaivers(
     // only the first explains why a manager's claim is still outstanding.
     const deferred = claims.length - awarded - failed;
 
+    // Players nobody claimed become free agents once their wire time passes.
+    // Removing the row is what makes them free — absent means available.
+    const cleared = await tx.query<{ player_id: string }>(
+      `DELETE FROM waiver_wire
+        WHERE league_id = $1 AND clears_at <= $2
+        RETURNING player_id`,
+      [leagueId, now.toISOString()],
+    );
+
+    // Anyone dropped in the same run must not be swept up by that clear: he
+    // landed after it, and his own wire time has not passed.
+    //
+    // **Players this run released, not players some pending claim mentions.** It
+    // used to walk every pending claim, so a claim that failed — or, now that
+    // claims can be deferred, one that has simply not resolved yet — re-dated the
+    // wire row of a player it never touched. That is somebody else's player: a
+    // manager who legitimately dropped him watched his `clears_at` pushed a week
+    // further out by a stranger's losing claim, hourly, for as long as the claim
+    // sat there. Since `waiverClearsAt(now) > now` always, he could never clear.
+    //
+    // **Inside the transaction, which it was not.** This was the last release
+    // path writing its wire row after the commit — the shape #90 item 4 removed
+    // from `addFreeAgent`. In the gap the dropped player was released with no
+    // wire row, so `availabilityOf` answered `FREE_AGENT` and anyone polling
+    // could sign a player on his way to waivers; a run that died in the gap left
+    // him a free agent for good. The clear moved in with it so the order above
+    // still holds.
+    for (const playerId of dropped) {
+      await placeDroppedPlayer(tx, leagueId, playerId, now, stored.rules);
+    }
+
     return {
       awarded,
       failed,
       deferred,
-      dropped,
       priorityAfter: resolution.priorityAfter,
+      cleared: cleared.length,
     };
   });
 
-  const { awarded, failed, deferred, dropped } = run;
-
-  // Players nobody claimed become free agents once their wire time passes.
-  // Removing the row is what makes them free — absent means available.
-  const cleared = await db.query<{ player_id: string }>(
-    `DELETE FROM waiver_wire
-      WHERE league_id = $1 AND clears_at <= $2
-      RETURNING player_id`,
-    [leagueId, now.toISOString()],
-  );
-
-  // Anyone dropped in the same run must not be swept up by that clear: he landed
-  // after it, and his own wire time has not passed.
-  //
-  // **Players this run released, not players some pending claim mentions.** It
-  // used to walk every pending claim, so a claim that failed — or, now that
-  // claims can be deferred, one that has simply not resolved yet — re-dated the
-  // wire row of a player it never touched. That is somebody else's player: a
-  // manager who legitimately dropped him watched his `clears_at` pushed a week
-  // further out by a stranger's losing claim, hourly, for as long as the claim
-  // sat there. Since `waiverClearsAt(now) > now` always, he could never clear.
-  for (const playerId of dropped) {
-    await placeDroppedPlayer(db, leagueId, playerId, now, stored.rules);
-  }
-
-  return {
-    leagueId,
-    awarded,
-    failed,
-    deferred,
-    priorityAfter: run.priorityAfter,
-    cleared: cleared.length,
-  };
+  return { leagueId, ...run };
 }
 
 /** When this league's next waiver run is due. */
