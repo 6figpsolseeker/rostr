@@ -1045,32 +1045,44 @@ export async function submitClaim(
     );
   }
 
-  const [existing] = await db.query<{ id: string }>(
-    `SELECT id FROM waiver_claims
-      WHERE league_id = $1 AND team_id = $2 AND add_player_id = $3 AND state = 'PENDING'`,
-    [input.leagueId, input.teamId, input.addPlayerId],
-  );
-  if (existing) throw new WaiverError("You already claimed that player", "DUPLICATE_CLAIM");
+  /*
+    One pending claim per player per team, decided by the index rather than by a
+    read first (#354). The read used to come first, and two tabs pressing Claim
+    at once both read nothing and both inserted — a duplicate that later showed
+    up as a loss the manager never filed. `0053`'s partial unique index refuses
+    the second insert whatever the timing.
 
-  // A new claim goes to the bottom of the team's own ranking (#125), so a
-  // manager who never reorders gets exactly filing order. Computed in the same
-  // statement, under no lock: two tabs filing at once can tie, and a tie falls
-  // through to `created_at` — the order those two would have had anyway.
-  const [row] = await db.query<{ id: string }>(
-    `INSERT INTO waiver_claims
-       (league_id, team_id, add_player_id, drop_player_id, priority_at_claim, claim_rank)
-     VALUES ($1, $2, $3, $4, $5,
-       (SELECT COALESCE(max(claim_rank), 0) + 1 FROM waiver_claims
-         WHERE team_id = $2 AND state = 'PENDING'))
-     RETURNING id`,
-    [
-      input.leagueId,
-      input.teamId,
-      input.addPlayerId,
-      input.dropPlayerId ?? null,
-      league.waiver_priority,
-    ],
-  );
+    Catching is safe here because this runs in autocommit, not inside a caller's
+    transaction, where a failed statement would abort everything after it. The
+    only unique index on `waiver_claims` besides the primary key is that one, so
+    a unique violation means exactly this.
+
+    A new claim goes to the bottom of the team's own ranking (#125), so a
+    manager who never reorders gets exactly filing order. Computed in the same
+    statement, under no lock: two tabs filing at once can tie, and a tie falls
+    through to `created_at` — the order those two would have had anyway.
+  */
+  let row: { id: string } | undefined;
+  try {
+    [row] = await db.query<{ id: string }>(
+      `INSERT INTO waiver_claims
+         (league_id, team_id, add_player_id, drop_player_id, priority_at_claim, claim_rank)
+       VALUES ($1, $2, $3, $4, $5,
+         (SELECT COALESCE(max(claim_rank), 0) + 1 FROM waiver_claims
+           WHERE team_id = $2 AND state = 'PENDING'))
+       RETURNING id`,
+      [
+        input.leagueId,
+        input.teamId,
+        input.addPlayerId,
+        input.dropPlayerId ?? null,
+        league.waiver_priority,
+      ],
+    );
+  } catch (cause) {
+    if (!isUniqueViolation(cause)) throw cause;
+    throw new WaiverError("You already claimed that player", "DUPLICATE_CLAIM");
+  }
 
   return { claimId: row!.id };
 }

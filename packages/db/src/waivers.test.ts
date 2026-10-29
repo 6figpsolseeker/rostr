@@ -469,6 +469,55 @@ describe("claims", () => {
     });
   });
 
+  it("refuses a duplicate at the index, so two tabs at once cannot both file — #354", async () => {
+    // The race needs two connections, which PGlite does not have. What it can
+    // show is that the table itself refuses the second row, so no interleaving of
+    // two `submitClaim` calls can get past it — the read they used to rely on is gone.
+    const fx = await setup();
+    const playerId = await onWaivers(fx);
+    await fx.client.query(
+      `INSERT INTO waiver_claims (league_id, team_id, add_player_id) VALUES ($1, $2, $3)`,
+      [fx.leagueId, fx.teams[1], playerId],
+    );
+    await expect(
+      fx.client.query(
+        `INSERT INTO waiver_claims (league_id, team_id, add_player_id) VALUES ($1, $2, $3)`,
+        [fx.leagueId, fx.teams[1], playerId],
+      ),
+    ).rejects.toMatchObject({ code: "23505" });
+  });
+
+  it("lets a team claim the player again once the first claim is withdrawn", async () => {
+    // The index is partial on PENDING for exactly this.
+    const fx = await setup();
+    const playerId = await onWaivers(fx);
+    const claim = {
+      leagueId: fx.leagueId,
+      teamId: fx.teams[1]!,
+      addPlayerId: playerId,
+      now: MONDAY,
+    };
+
+    const { claimId } = await submitClaim(fx.client, claim);
+    await cancelClaim(fx.client, fx.leagueId, fx.teams[1]!, claimId);
+    await expect(submitClaim(fx.client, claim)).resolves.toMatchObject({
+      claimId: expect.any(String),
+    });
+  });
+
+  it("still lets a different team claim the same player", async () => {
+    const fx = await setup();
+    const playerId = await onWaivers(fx);
+    for (const teamId of [fx.teams[1]!, fx.teams[2]!]) {
+      await submitClaim(fx.client, {
+        leagueId: fx.leagueId,
+        teamId,
+        addPlayerId: playerId,
+        now: MONDAY,
+      });
+    }
+  });
+
   it("can be withdrawn", async () => {
     const fx = await setup();
     const playerId = await onWaivers(fx);
@@ -1789,6 +1838,64 @@ describe("0052 backfills ranks in the order claims were already tried — #125",
     expect([tieLow, tieHigh, late].map((id) => rank.get(id))).toEqual([1, 2, 3]);
     expect(rank.get(otherTeam)).toBe(1);
     expect(rank.get(settled)).toBeNull();
+  });
+});
+
+describe("0053 clears duplicates the race already made — #354", () => {
+  it("keeps each team's earliest pending claim per player and withdraws the rest", async () => {
+    const client = new PGliteClient(new PGlite());
+    db = client;
+    await migrate(
+      client,
+      loadMigrations().filter((m) => m.version < 53),
+    );
+    await seedSport(client, NFL);
+    const commissioner = await createUser(client, "c@example.com", "C");
+    const league = await createLeague(client, NFL, {
+      name: "Dedupe",
+      commissionerId: commissioner.id,
+      rules: buildNflPprRules({ seasonYear: 2026, draft: DRAFT }) as LeagueRules,
+    });
+    const teamA = (await addTestTeam(client, league.id, "A")).teamId;
+    const teamB = (await addTestTeam(client, league.id, "B")).teamId;
+    const [sport] = await client.query<{ id: string }>("SELECT id FROM sports WHERE key = $1", [
+      NFL.key,
+    ]);
+    const [position] = await client.query<{ id: string }>(
+      "SELECT id FROM positions WHERE sport_id = $1 LIMIT 1",
+      [sport!.id],
+    );
+    const [player] = await client.query<{ id: string }>(
+      `INSERT INTO players (sport_id, external_ref, full_name, primary_position_id)
+       VALUES ($1, 'dup', 'dup', $2) RETURNING id`,
+      [sport!.id, position!.id],
+    );
+
+    const claim = async (team: string, at: string, state = "PENDING") =>
+      (
+        await client.query<{ id: string }>(
+          `INSERT INTO waiver_claims (league_id, team_id, add_player_id, state, created_at)
+           VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+          [league.id, team, player!.id, state, at],
+        )
+      )[0]!.id;
+
+    const later = await claim(teamA, "2026-09-14T12:00:00Z");
+    const earliest = await claim(teamA, "2026-09-14T10:00:00Z");
+    const withdrawn = await claim(teamA, "2026-09-14T09:00:00Z", "CANCELLED");
+    const otherTeam = await claim(teamB, "2026-09-14T11:00:00Z");
+
+    await migrate(client);
+
+    const state = new Map(
+      (
+        await client.query<{ id: string; state: string }>("SELECT id, state FROM waiver_claims")
+      ).map((row) => [row.id, row.state]),
+    );
+    expect(state.get(earliest)).toBe("PENDING");
+    expect(state.get(later)).toBe("CANCELLED");
+    expect(state.get(withdrawn)).toBe("CANCELLED");
+    expect(state.get(otherTeam)).toBe("PENDING");
   });
 });
 
