@@ -21,6 +21,7 @@ import {
   pendingClaims,
   processWaivers,
   reorderClaims,
+  waiverRunOwed,
   seedWaiverPriority,
   marketClosedReason,
   submitClaim,
@@ -958,7 +959,7 @@ describe("processing", () => {
     // The wiring, which no test in `@rostr/core` can see: that `created_at` is
     // actually selected and threaded into `WaiverClaim`. Room is expressed as a
     // shared drop rather than by fabricating a full roster — whichever claim is
-    // tried first spends `spare`, and the other fails DROP_NOT_ON_ROSTER.
+    // tried first spends `spare`, and the other fails DROP_ALREADY_SPENT (#127).
     const fx = await setup();
     const team = fx.teams[3]!; // best priority, the reverse of the draft order
     const rival = fx.teams[1]!;
@@ -1002,6 +1003,15 @@ describe("processing", () => {
     const owner = new Map(rows.map((r) => [r.player_id, r.team_id]));
 
     expect(owner.get(fx.players.get("target")!)).toBe(team);
+
+    // And the loser is recorded as spent by the team's own win, which is what
+    // the results panel reads — not as a drop that was never there.
+    const [loser] = await fx.client.query<{ failure_reason: string }>(
+      `SELECT failure_reason FROM waiver_claims
+        WHERE team_id = $1 AND add_player_id = $2`,
+      [team, fx.players.get("other")!],
+    );
+    expect(loser?.failure_reason).toBe("DROP_ALREADY_SPENT");
     // And the rival gets the player the first team could no longer take.
     expect(owner.get(fx.players.get("other")!)).toBe(rival);
   });
@@ -1128,6 +1138,35 @@ describe("processing", () => {
     expect(
       await availabilityOf(fx.client, fx.leagueId, fx.players.get("fresh")!, WEDNESDAY),
     ).toBe("ON_WAIVERS");
+  });
+
+  it("puts a claim's dropped player on the wire inside the run's transaction — #82", async () => {
+    // The run committed the release and then wrote the wire row on the bare
+    // client, so between the two the player read as a free agent to anyone
+    // polling. The same defect #90 item 4 fixed in `addFreeAgent`, asserted the
+    // same way: PGlite has one connection, so the window itself cannot be shown.
+    const fx = await setup();
+    await dropPlayer(fx.client, fx.leagueId, fx.teams[0]!, fx.players.get("held")!, MONDAY);
+    await submitClaim(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: fx.teams[0]!,
+      addPlayerId: fx.players.get("held")!,
+      dropPlayerId: fx.players.get("fresh")!,
+      now: MONDAY,
+    });
+    const rec = recordStatements(fx.client);
+
+    await processWaivers(rec.client, fx.leagueId, WEDNESDAY);
+
+    const begin = rec.statements.findIndex((sql) => sql.trim() === "BEGIN");
+    const commit = rec.statements.findIndex((sql) => sql.trim() === "COMMIT");
+    const wire = rec.statements.findIndex((sql) => sql.includes("INSERT INTO waiver_wire"));
+
+    expect(wire, "the dropped player is put on the wire at all").toBeGreaterThanOrEqual(0);
+    expect(wire, "inside the transaction").toBeGreaterThan(begin);
+    expect(wire, "and before it commits").toBeLessThan(commit);
+    expect(rec.connections[wire]).toBe(rec.connections[begin]);
+    expect(rec.connections[wire]).not.toBe("outer");
   });
 
   it("is replayable — same inputs, same result", async () => {
@@ -1411,6 +1450,67 @@ describe("RULES.md §6 — a claim waits for its player to clear", () => {
   });
 });
 
+describe("waiverRunOwed — #266", () => {
+  /** Wednesday 03:05 ET, five minutes after processing was due. */
+  const AFTER_PROCESSING = new Date("2026-09-16T07:05:00Z");
+
+  it("owes nothing when there are no claims", async () => {
+    const fx = await setup();
+    expect(await waiverRunOwed(fx.client, fx.leagueId, fx.rules, AFTER_PROCESSING)).toBe(false);
+  });
+
+  it("owes a claim whose player has cleared, until the run decides it", async () => {
+    const fx = await setup();
+    await dropPlayer(fx.client, fx.leagueId, fx.teams[0]!, fx.players.get("held")!, MONDAY);
+    const { claimId } = await submitClaim(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: fx.teams[3]!,
+      addPlayerId: fx.players.get("held")!,
+      dropPlayerId: null,
+      now: MONDAY,
+    });
+    // `created_at` comes from the database clock, which is real time, not the
+    // fixture's Monday — pinned, or this test changes answer with the calendar
+    // (the #305 time bomb).
+    await fx.client.query("UPDATE waiver_claims SET created_at = $2 WHERE id = $1", [
+      claimId,
+      MONDAY,
+    ]);
+
+    // The run is late: processing was due at 03:00 and has not happened.
+    expect(await waiverRunOwed(fx.client, fx.leagueId, fx.rules, AFTER_PROCESSING)).toBe(true);
+
+    await processWaivers(fx.client, fx.leagueId, AFTER_PROCESSING);
+    expect(await waiverRunOwed(fx.client, fx.leagueId, fx.rules, AFTER_PROCESSING)).toBe(false);
+  });
+
+  it("does not owe a claim whose player clears at a later run", async () => {
+    // A deferred claim keeps the league "due" every hour (#108); it must not
+    // hold the fill all week.
+    const fx = await setup();
+    await fx.client.query(
+      "INSERT INTO waiver_wire (league_id, player_id, clears_at) VALUES ($1, $2, $3)",
+      [fx.leagueId, fx.players.get("target")!, new Date(AFTER_PROCESSING.getTime() + 7 * DAY)],
+    );
+    await fx.client.query(
+      `INSERT INTO waiver_claims (league_id, team_id, add_player_id, created_at)
+       VALUES ($1, $2, $3, $4)`,
+      [fx.leagueId, fx.teams[3], fx.players.get("target")!, MONDAY],
+    );
+    expect(await waiverRunOwed(fx.client, fx.leagueId, fx.rules, AFTER_PROCESSING)).toBe(false);
+  });
+
+  it("does not owe a claim filed after the processing moment, which is next cycle's", async () => {
+    const fx = await setup();
+    await fx.client.query(
+      `INSERT INTO waiver_claims (league_id, team_id, add_player_id, created_at)
+       VALUES ($1, $2, $3, $4)`,
+      [fx.leagueId, fx.teams[3], fx.players.get("target")!, new Date("2026-09-16T07:02:00Z")],
+    );
+    expect(await waiverRunOwed(fx.client, fx.leagueId, fx.rules, AFTER_PROCESSING)).toBe(false);
+  });
+});
+
 describe("a manager ranks their own claims — #125", () => {
   const WEDNESDAY = new Date(MONDAY.getTime() + 2 * DAY);
 
@@ -1583,10 +1683,12 @@ describe("a manager ranks their own claims — #125", () => {
     for (const claim of mine) expect(Object.keys(claim)).not.toContain("claimRank");
   });
 
-  it("keeps one team's claims together on the panel when their filing priorities differ", async () => {
-    // `priority_at_claim` is stamped at filing (#355), so one team's two claims
-    // can carry 1 and 3 with a rival's 2 between them. Sorting on it directly
-    // splits the team and shows its claims in an order the run never used.
+  it("keeps one team's claims together on the panel when their stored priorities differ", async () => {
+    // Since #355 a run stamps every claim of one team with the same priority, so
+    // a run cannot produce this any more. A claim settled before that change
+    // still carries its filing-time value, and one team's two claims can hold 1
+    // and 3 with a rival's 2 between them. Written after the run to reproduce
+    // those rows; sorting on the value directly would split the team.
     const fx = await ranked();
     const first = await fx.file("target");
     const second = await fx.file("other");
@@ -1598,6 +1700,8 @@ describe("a manager ranks their own claims — #125", () => {
       dropPlayerId: null,
       now: MONDAY,
     });
+    await reorderClaims(fx.client, fx.leagueId, fx.team, [second, first]);
+    await processWaivers(fx.client, fx.leagueId, WEDNESDAY);
     for (const [id, priority] of [
       [first, 1],
       [theirs, 2],
@@ -1608,8 +1712,6 @@ describe("a manager ranks their own claims — #125", () => {
         priority,
       ]);
     }
-    await reorderClaims(fx.client, fx.leagueId, fx.team, [second, first]);
-    await processWaivers(fx.client, fx.leagueId, WEDNESDAY);
 
     const run = await lastWaiverRun(fx.client, fx.leagueId);
     expect(run!.claims.map((claim) => claim.claimId)).toEqual([second, first, theirs]);

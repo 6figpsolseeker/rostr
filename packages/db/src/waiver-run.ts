@@ -24,7 +24,11 @@ export interface WaiverRunClaim {
   readonly addPlayerName: string;
   readonly dropPlayerId: string | null;
   readonly dropPlayerName: string | null;
-  /** Where this team stood when the run began. Recorded, never recomputed. */
+  /**
+   * Where this team stood when the run began — its position in the order the
+   * run decided by. Stamped by the run that settled the claim (#355), never
+   * recomputed afterwards.
+   */
   readonly priorityAtClaim: number | null;
   readonly awarded: boolean;
   /** `null` on a winner, and on a loser from before `0039` recorded reasons. */
@@ -56,9 +60,10 @@ export interface WaiverRun {
  *
  * **Sorted by each team's own ranking, and the rank itself is never returned**
  * (#125). Each team's claims are kept together and listed in the order the run
- * tried them. Grouped by team first because `priority_at_claim` is stamped when
- * a claim is filed, so one team's claims can carry different values (#355) —
- * sorting on it directly would split them. The raw rank would leak: ranks 1 and 3 on the panel tell every rival that the
+ * tried them. Grouped by team first: since #355 a run stamps all of one team's
+ * claims with the same priority, but a claim settled before that carries the
+ * value from when it was filed, and sorting on that directly would split a team.
+ * The raw rank would leak: ranks 1 and 3 on the panel tell every rival that the
  * team holds a rank-2 claim still waiting for a later run, and claims are blind
  * until they resolve.
  */
