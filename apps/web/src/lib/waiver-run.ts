@@ -20,6 +20,8 @@
  *     again next Wednesday unless told.
  *   - `DROP_NOT_ON_ROSTER` is a claim that went stale — the player they offered
  *     to drop left by some other route before the run.
+ *   - `DROP_ALREADY_SPENT` is not stale at all: the team's own earlier claim
+ *     won in the same run and used that drop.
  *   - `ALREADY_ROSTERED` means somebody had him before the run even started.
  *
  * An unrecognised value falls back to a plain statement rather than throwing or
@@ -76,6 +78,11 @@ export function whyClaimFailed(reason: string | null): string {
       return "the player you dropped was on injured reserve, so dropping him freed no roster space";
     case "DROP_NOT_ON_ROSTER":
       return "the player you offered to drop was no longer on your roster";
+    case "DROP_ALREADY_SPENT":
+      // The manager's own earlier claim won and used this drop, which is how a
+      // shared drop says "only one of these" (#127). Saying "no longer on your
+      // roster" here implied they filed something invalid.
+      return "another of your claims won this run and already used that drop";
     case "ALREADY_ROSTERED":
       return "somebody already held him when the run began";
     case null:

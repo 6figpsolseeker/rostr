@@ -955,7 +955,7 @@ describe("processing", () => {
     // The wiring, which no test in `@rostr/core` can see: that `created_at` is
     // actually selected and threaded into `WaiverClaim`. Room is expressed as a
     // shared drop rather than by fabricating a full roster — whichever claim is
-    // tried first spends `spare`, and the other fails DROP_NOT_ON_ROSTER.
+    // tried first spends `spare`, and the other fails DROP_ALREADY_SPENT (#127).
     const fx = await setup();
     const team = fx.teams[3]!; // best priority, the reverse of the draft order
     const rival = fx.teams[1]!;
@@ -999,6 +999,15 @@ describe("processing", () => {
     const owner = new Map(rows.map((r) => [r.player_id, r.team_id]));
 
     expect(owner.get(fx.players.get("target")!)).toBe(team);
+
+    // And the loser is recorded as spent by the team's own win, which is what
+    // the results panel reads — not as a drop that was never there.
+    const [loser] = await fx.client.query<{ failure_reason: string }>(
+      `SELECT failure_reason FROM waiver_claims
+        WHERE team_id = $1 AND add_player_id = $2`,
+      [team, fx.players.get("other")!],
+    );
+    expect(loser?.failure_reason).toBe("DROP_ALREADY_SPENT");
     // And the rival gets the player the first team could no longer take.
     expect(owner.get(fx.players.get("other")!)).toBe(rival);
   });

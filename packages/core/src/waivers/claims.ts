@@ -57,6 +57,13 @@ export type ClaimFailure =
   | "ROSTER_FULL"
   | "ALREADY_ROSTERED"
   | "DROP_NOT_ON_ROSTER"
+  /**
+   * The drop was on the roster when the claim was filed, and an earlier claim
+   * by the same team won in this run and dropped him. Not the manager's mistake:
+   * Yahoo documents sharing one drop across several claims as the way to say
+   * "only one of these", and voids the rest exactly like this (#127).
+   */
+  | "DROP_ALREADY_SPENT"
   | "DROP_ON_IR"
   /** The team's remaining room is committed to a trade it has already accepted. */
   | "SLOT_HELD_FOR_TRADE"
@@ -191,6 +198,8 @@ export function resolveWaiverClaims(input: ResolveInput): WaiverResolution {
     [...rosters].map(([teamId, roster]) => [teamId, [...roster]]),
   );
   const taken = new Set<string>();
+  // Drops spent by claims awarded earlier in this run, keyed `team:player`.
+  const spent = new Set<string>();
   const outcomes: ClaimOutcome[] = [];
   const winners: string[] = [];
 
@@ -247,7 +256,14 @@ export function resolveWaiverClaims(input: ResolveInput): WaiverResolution {
     let afterDrop = roster;
     if (claim.dropPlayerId) {
       if (!roster.some((p) => p.playerId === claim.dropPlayerId)) {
-        outcomes.push({ ...base, awarded: false, reason: "DROP_NOT_ON_ROSTER" });
+        // Gone because this team's own earlier claim won, or gone for a reason
+        // the run cannot see. The first is the strategy working, the second a
+        // stale claim; one message for both told the manager they filed
+        // something invalid when they had not.
+        const reason = spent.has(`${claim.teamId}:${claim.dropPlayerId}`)
+          ? "DROP_ALREADY_SPENT"
+          : "DROP_NOT_ON_ROSTER";
+        outcomes.push({ ...base, awarded: false, reason });
         continue;
       }
       afterDrop = roster.filter((p) => p.playerId !== claim.dropPlayerId);
@@ -309,6 +325,7 @@ export function resolveWaiverClaims(input: ResolveInput): WaiverResolution {
 
     working.set(claim.teamId, [...afterDrop, player]);
     taken.add(claim.addPlayerId);
+    if (claim.dropPlayerId) spent.add(`${claim.teamId}:${claim.dropPlayerId}`);
     outcomes.push({ ...base, awarded: true });
 
     // A team moves once, however many claims it wins in a round.

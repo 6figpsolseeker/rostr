@@ -14,6 +14,11 @@ describe("whyClaimFailed", () => {
     expect(whyClaimFailed("DROP_NOT_ON_ROSTER")).toContain("no longer on your roster");
   });
 
+  it("does not call a drop spent by the manager's own earlier win stale — #127", () => {
+    expect(whyClaimFailed("DROP_ALREADY_SPENT")).toContain("another of your claims won");
+    expect(whyClaimFailed("DROP_ALREADY_SPENT")).not.toBe(whyClaimFailed("DROP_NOT_ON_ROSTER"));
+  });
+
   it("explains a player who was never available", () => {
     expect(whyClaimFailed("ALREADY_ROSTERED")).toContain("already held him");
   });
