@@ -1767,13 +1767,13 @@ describe("a manager ranks their own claims — #125", () => {
   });
 });
 
-describe("0052 backfills ranks in the order claims were already tried — #125", () => {
+describe("0054 backfills ranks in the order claims were already tried — #125", () => {
   it("numbers each team's pending claims by filing time then id, and leaves settled claims unranked", async () => {
     const client = new PGliteClient(new PGlite());
     db = client;
     await migrate(
       client,
-      loadMigrations().filter((m) => m.version < 52),
+      loadMigrations().filter((m) => m.version < 54),
     );
     await seedSport(client, NFL);
     const commissioner = await createUser(client, "c@example.com", "C");

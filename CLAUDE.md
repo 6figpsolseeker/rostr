@@ -1769,7 +1769,7 @@ no caller may name it.
 
 **A manager ranks their own pending claims by dragging them (#125)**, as ESPN's _Pending
 Moves_ panel does ("Reorder claims by dragging them into your preferred priority").
-`waiver_claims.claim_rank` (`0052`) holds the order; a new claim goes to the bottom, and a
+`waiver_claims.claim_rank` (`0054`) holds the order; a new claim goes to the bottom, and a
 tie falls through to `created_at`, then `id`. Four things about it are load-bearing:
 
 - **No unique index on the rank.** A tie is deterministic now that it falls to filing time,
