@@ -18,6 +18,7 @@ import {
   loadWaiverPriority,
   pendingClaims,
   processWaivers,
+  waiverRunOwed,
   seedWaiverPriority,
   marketClosedReason,
   submitClaim,
@@ -1405,6 +1406,67 @@ describe("RULES.md §6 — a claim waits for its player to clear", () => {
     );
     expect(wire).toHaveLength(0);
     expect(await availabilityOf(fx.client, fx.leagueId, victim, RUN)).toBe("FREE_AGENT");
+  });
+});
+
+describe("waiverRunOwed — #266", () => {
+  /** Wednesday 03:05 ET, five minutes after processing was due. */
+  const AFTER_PROCESSING = new Date("2026-09-16T07:05:00Z");
+
+  it("owes nothing when there are no claims", async () => {
+    const fx = await setup();
+    expect(await waiverRunOwed(fx.client, fx.leagueId, fx.rules, AFTER_PROCESSING)).toBe(false);
+  });
+
+  it("owes a claim whose player has cleared, until the run decides it", async () => {
+    const fx = await setup();
+    await dropPlayer(fx.client, fx.leagueId, fx.teams[0]!, fx.players.get("held")!, MONDAY);
+    const { claimId } = await submitClaim(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: fx.teams[3]!,
+      addPlayerId: fx.players.get("held")!,
+      dropPlayerId: null,
+      now: MONDAY,
+    });
+    // `created_at` comes from the database clock, which is real time, not the
+    // fixture's Monday — pinned, or this test changes answer with the calendar
+    // (the #305 time bomb).
+    await fx.client.query("UPDATE waiver_claims SET created_at = $2 WHERE id = $1", [
+      claimId,
+      MONDAY,
+    ]);
+
+    // The run is late: processing was due at 03:00 and has not happened.
+    expect(await waiverRunOwed(fx.client, fx.leagueId, fx.rules, AFTER_PROCESSING)).toBe(true);
+
+    await processWaivers(fx.client, fx.leagueId, AFTER_PROCESSING);
+    expect(await waiverRunOwed(fx.client, fx.leagueId, fx.rules, AFTER_PROCESSING)).toBe(false);
+  });
+
+  it("does not owe a claim whose player clears at a later run", async () => {
+    // A deferred claim keeps the league "due" every hour (#108); it must not
+    // hold the fill all week.
+    const fx = await setup();
+    await fx.client.query(
+      "INSERT INTO waiver_wire (league_id, player_id, clears_at) VALUES ($1, $2, $3)",
+      [fx.leagueId, fx.players.get("target")!, new Date(AFTER_PROCESSING.getTime() + 7 * DAY)],
+    );
+    await fx.client.query(
+      `INSERT INTO waiver_claims (league_id, team_id, add_player_id, created_at)
+       VALUES ($1, $2, $3, $4)`,
+      [fx.leagueId, fx.teams[3], fx.players.get("target")!, MONDAY],
+    );
+    expect(await waiverRunOwed(fx.client, fx.leagueId, fx.rules, AFTER_PROCESSING)).toBe(false);
+  });
+
+  it("does not owe a claim filed after the processing moment, which is next cycle's", async () => {
+    const fx = await setup();
+    await fx.client.query(
+      `INSERT INTO waiver_claims (league_id, team_id, add_player_id, created_at)
+       VALUES ($1, $2, $3, $4)`,
+      [fx.leagueId, fx.teams[3], fx.players.get("target")!, new Date("2026-09-16T07:02:00Z")],
+    );
+    expect(await waiverRunOwed(fx.client, fx.leagueId, fx.rules, AFTER_PROCESSING)).toBe(false);
   });
 });
 

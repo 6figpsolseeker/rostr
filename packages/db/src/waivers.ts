@@ -42,6 +42,7 @@ import {
   countedRosterSize,
   reservedByTrades,
   isIrEligible,
+  latestWeekly,
   dropDestination,
   initialWaiverPriority,
   NFL,
@@ -1645,6 +1646,46 @@ export async function processWaivers(
 /** When this league's next waiver run is due. */
 export function nextWaiverRun(rules: LeagueRules, now: Date): Date {
   return nextProcessingAt(now, rules.waivers);
+}
+
+/**
+ * Whether this cycle's waiver run still has claims to decide. Issue #266.
+ *
+ * The lineup prefill waits on this. It used to wait on the clock alone — "has
+ * Wednesday 03:00 passed" — which held only because the waivers cron fires at
+ * :00 and the prefill at :05. A slow or failed run let the prefill fill from the
+ * pre-waiver roster, and the player the run then awarded sat on the bench.
+ *
+ * A claim is owed when the run at the most recent processing moment would have
+ * decided it: still PENDING, filed by then, and its player clear — no wire row,
+ * or `clears_at <= now`, the run's own test in `processWaivers`. A successful run
+ * leaves none, because it awards or fails every claim that passes that test.
+ *
+ * **Not `leaguesDueForWaivers`.** A deferred claim — its player not yet clear —
+ * keeps a league "due" every hour until it resolves (#108), so gating on that
+ * would hold the fill all week for a claim no run can decide yet. A deferred
+ * claim is not owed here, and neither is one filed after the run, which belongs
+ * to the next cycle.
+ */
+export async function waiverRunOwed(
+  db: SqlClient,
+  leagueId: string,
+  rules: LeagueRules,
+  now: Date,
+): Promise<boolean> {
+  const processed = latestWeekly(now, rules.waivers.processing, rules.waivers.timezone);
+  const [row] = await db.query<{ owed: boolean }>(
+    `SELECT EXISTS (
+       SELECT 1 FROM waiver_claims c
+        WHERE c.league_id = $1 AND c.state = 'PENDING' AND c.created_at <= $2
+          AND NOT EXISTS (
+            SELECT 1 FROM waiver_wire w
+             WHERE w.league_id = c.league_id AND w.player_id = c.add_player_id
+               AND w.clears_at > $3)
+     ) AS owed`,
+    [leagueId, processed.toISOString(), now.toISOString()],
+  );
+  return row?.owed === true;
 }
 
 /**

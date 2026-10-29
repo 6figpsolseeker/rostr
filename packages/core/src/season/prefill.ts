@@ -33,7 +33,24 @@ export interface PrefillInput {
   readonly lastPlayedWeek: number;
   readonly now: Date;
   readonly waivers: WaiverRules;
+  /**
+   * Whether this cycle's waiver run still has claims to decide — `waiverRunOwed`
+   * in `@rostr/db`. Required, so a caller cannot forget to ask: an omitted
+   * answer would read as "done" and reopen #266.
+   */
+  readonly waiverRunOwed: boolean;
 }
+
+/**
+ * How long past the processing moment the fill waits for an unfinished waiver
+ * run before filling anyway.
+ *
+ * The waivers cron runs hourly, so six missed runs means it is broken rather
+ * than slow — and a broken run must not also leave every abandoned team empty at
+ * kickoff. Past this, the fill does what it did before #266: uses the roster as
+ * it stands.
+ */
+export const WAIVER_RUN_GRACE_MS = 6 * 60 * 60 * 1000;
 
 /**
  * The week to fill early, or `null` for "nothing to do".
@@ -57,9 +74,15 @@ export interface PrefillInput {
  * "have this week's waivers run yet" in the league's own timezone, via the same
  * `latestWeekly` the waiver cycle uses — which is walked rather than computed as
  * `now - 7 days`, so it stays correct across the November fall-back.
+ *
+ * **And the run must actually have happened, not just been due** (#266). The
+ * clock check alone held only because the waivers cron fires at :00 and this at
+ * :05; a slow or failed run meant the fill used the pre-waiver roster anyway. So
+ * while the run still owes claims, wait — for at most `WAIVER_RUN_GRACE_MS`,
+ * after which a run that is still owing is a broken one.
  */
 export function weekToPrefill(input: PrefillInput): number | null {
-  const { ahead, lagging, lastPlayedWeek, now, waivers } = input;
+  const { ahead, lagging, lastPlayedWeek, now, waivers, waiverRunOwed } = input;
 
   if (ahead === null) return null;
   if (ahead > lastPlayedWeek) return null;
@@ -68,6 +91,8 @@ export function weekToPrefill(input: PrefillInput): number | null {
   const lock = latestWeekly(now, waivers.weeklyLock, waivers.timezone);
   const processed = latestWeekly(now, waivers.processing, waivers.timezone);
   if (processed.getTime() <= lock.getTime()) return null;
+
+  if (waiverRunOwed && now.getTime() - processed.getTime() < WAIVER_RUN_GRACE_MS) return null;
 
   return ahead;
 }
