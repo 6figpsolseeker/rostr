@@ -406,9 +406,13 @@ which would leave the rest of the league no real chance to claim him.
   reason to hoard claims.
 - A team that wins several claims in one run moves once.
 - Starting order is the **reverse of the draft order**.
-- **Your own claims are tried in the order you filed them.** Priority decides every contest
-  with another manager; filing order only decides which of _your_ claims gets your last
-  roster spot. So file the player you want most first.
+- **Your own claims are tried in the order you rank them.** Drag your pending claims into
+  the order you want; a new claim goes to the bottom. Priority decides every contest with
+  another manager; your ranking only decides which of _your_ claims gets your last roster
+  spot, or uses a player you offered to drop in more than one claim.
+- **Ranking orders claims decided in the same run.** A claim waits for the run its player
+  clears at, so a claim you ranked lower can be decided a week before one you ranked
+  higher, if its player clears first.
 
 #### Locks
 

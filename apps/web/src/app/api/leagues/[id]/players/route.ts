@@ -6,11 +6,13 @@ import {
   dropPlayer,
   marketClosedReason,
   pendingClaims,
+  reorderClaims,
   submitClaim,
   WaiverError,
 } from "@rostr/db";
 import { db } from "@/lib/db";
 import { draftContext, DraftContextError } from "@/lib/draft-context";
+import { parseClaimIds } from "@/lib/claim-order";
 
 const STATUS: Record<string, number> = {
   LEAGUE_NOT_FOUND: 404,
@@ -28,6 +30,9 @@ const STATUS: Record<string, number> = {
   // Nothing pending to cancel — already awarded, already failed, already
   // withdrawn, or another team's. A state conflict like the rest of these.
   CLAIM_NOT_PENDING: 409,
+  // A reorder sent against a list that has since changed (#125). The screen
+  // reloads on this; the fallback below would call it a malformed request.
+  CLAIMS_CHANGED: 409,
   IN_A_TRADE: 409,
   // The league is not playing. A conflict with its state, like every other 409
   // here, and the fallback below would call it a malformed request.
@@ -160,10 +165,11 @@ export async function POST(
     }
 
     const body = (await request.json()) as {
-      action?: "ADD" | "DROP" | "CANCEL_CLAIM";
+      action?: "ADD" | "DROP" | "CANCEL_CLAIM" | "REORDER_CLAIMS";
       playerId?: string;
       dropPlayerId?: string | null;
       claimId?: string;
+      claimIds?: unknown;
     };
 
     const client = db();
@@ -180,6 +186,19 @@ export async function POST(
       // nothing else, which is what success looks like too.
       await cancelClaim(client, id, context.myTeamId, body.claimId);
       return NextResponse.json({ cancelled: true });
+    }
+
+    // Above the `playerId` check, which every action below it needs and this one
+    // does not — an action that reached it would fall through to the ADD path.
+    if (body.action === "REORDER_CLAIMS") {
+      const claimIds = parseClaimIds(body.claimIds);
+      if (!claimIds) {
+        return NextResponse.json({ error: "claimIds must be a list of ids" }, { status: 400 });
+      }
+      // The team is the session's, never the request's; `reorderClaims` refuses
+      // any id that is not one of that team's pending claims.
+      await reorderClaims(client, id, context.myTeamId, claimIds);
+      return NextResponse.json({ reordered: true });
     }
 
     if (!body.playerId) {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildNflPprRules } from "../rules/nfl-ppr.js";
-import { lastPlayedWeek, weekToPrefill } from "./prefill.js";
+import { lastPlayedWeek, WAIVER_RUN_GRACE_MS, weekToPrefill } from "./prefill.js";
 import type { PrefillInput } from "./prefill.js";
 
 const RULES = buildNflPprRules({
@@ -21,9 +21,14 @@ function input(overrides: Partial<PrefillInput> = {}): PrefillInput {
     lastPlayedWeek: lastPlayedWeek(RULES.schedule),
     now: WEDNESDAY_0400_ET,
     waivers: RULES.waivers,
+    waiverRunOwed: false,
     ...overrides,
   };
 }
+
+/** Wednesday 03:00 ET, the processing moment before `WEDNESDAY_0400_ET`. */
+const PROCESSED = new Date("2026-12-16T08:00:00Z");
+const after = (ms: number): Date => new Date(PROCESSED.getTime() + ms);
 
 describe("weekToPrefill", () => {
   it("names the coming week once this cycle's waivers have run", () => {
@@ -61,6 +66,29 @@ describe("weekToPrefill", () => {
 
   it("names the first week before a league has scored anything", () => {
     expect(weekToPrefill(input({ ahead: 1, lagging: null }))).toBe(1);
+  });
+
+  describe("waits for the waiver run itself, not just its scheduled time — #266", () => {
+    it("names nothing while the run still owes claims", () => {
+      // 04:00, an hour after processing was due, and the run has not decided
+      // its claims. Filling now would bench the player it is about to award.
+      expect(weekToPrefill(input({ waiverRunOwed: true }))).toBeNull();
+    });
+
+    it("waits up to the grace period and no longer", () => {
+      expect(
+        weekToPrefill(input({ waiverRunOwed: true, now: after(WAIVER_RUN_GRACE_MS - 1) })),
+      ).toBeNull();
+      // Six missed runs is a broken run. A broken run must not also leave every
+      // abandoned team empty at kickoff, so the fill goes ahead as it used to.
+      expect(
+        weekToPrefill(input({ waiverRunOwed: true, now: after(WAIVER_RUN_GRACE_MS) })),
+      ).toBe(15);
+    });
+
+    it("fills straight away once the run has nothing left to decide", () => {
+      expect(weekToPrefill(input({ waiverRunOwed: false, now: after(60_000) }))).toBe(15);
+    });
   });
 });
 

@@ -762,28 +762,36 @@ function toRecord(
  *
  * Refuses until the order has been drawn. Without one there is no rotation, so
  * there is nobody on the clock and no answer to "whose pick is it".
+ *
+ * **Both writes are one transaction**, and they were two statements on a pool,
+ * not guaranteed the same connection (#82). A failure between them left the
+ * draft `IN_PROGRESS` and the league `FORMING` — the state the second write
+ * exists to prevent — and a second press could not repair it, because the
+ * first UPDATE's status guard then matches nothing and throws `ALREADY_STARTED`.
  */
 export async function startDraft(db: SqlClient, leagueId: string, now: Date): Promise<void> {
-  const rows = await db.query<{ id: string }>(
-    `UPDATE drafts
-        SET status = 'IN_PROGRESS', clock_started_at = $2, started_at = COALESCE(started_at, $2)
-      WHERE league_id = $1 AND status IN ('SCHEDULED', 'PAUSED')
-        AND order_drawn_at IS NOT NULL
-      RETURNING id`,
-    [leagueId, now],
-  );
+  const started = await withTransaction(db, async (tx) => {
+    const rows = await tx.query<{ id: string }>(
+      `UPDATE drafts
+          SET status = 'IN_PROGRESS', clock_started_at = $2, started_at = COALESCE(started_at, $2)
+        WHERE league_id = $1 AND status IN ('SCHEDULED', 'PAUSED')
+          AND order_drawn_at IS NOT NULL
+        RETURNING id`,
+      [leagueId, now],
+    );
+    if (rows.length === 0) return false;
 
-  if (rows.length > 0) {
     // Nothing else moved league state, so a drafted league stayed FORMING
     // forever — which meant it kept accepting members and never appeared to any
     // job that works on live leagues.
-    await db.query(
+    await tx.query(
       "UPDATE leagues SET state = 'DRAFTING' WHERE id = $1 AND state = 'FORMING'",
       [leagueId],
     );
-  }
+    return true;
+  });
 
-  if (rows.length === 0) {
+  if (!started) {
     const draft = await loadDraft(db, leagueId);
     if (!draft) throw new DraftPersistenceError("League has no draft", "DRAFT_NOT_FOUND");
     if (!draft.draw) {

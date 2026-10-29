@@ -126,4 +126,46 @@ describe("linkWallet", () => {
       (e: unknown) => e instanceof IdentityError && e.code === "WALLET_TAKEN",
     );
   });
+
+  /*
+    Two tabs linking two different wallets both count zero wallets and both ask
+    for primary. The loser used to hit `wallets_one_primary_per_user` and be told
+    WALLET_TAKEN about a wallet nobody holds (#82). Staged by making the count
+    miss the first tab's row — PGlite has one connection, so the interleaving
+    itself cannot be produced.
+  */
+  async function racedSecondLink(client: PGliteClient, userId: string) {
+    await linkWallet(client, userId, address(1));
+    const raced: PGliteClient = Object.create(client);
+    raced.query = (sql, values) =>
+      sql.includes("count(*)")
+        ? Promise.resolve([{ n: 0 }] as never)
+        : client.query(sql, values);
+    return raced;
+  }
+
+  it("links the loser of a primary race as a second wallet, not WALLET_TAKEN", async () => {
+    const client = await fresh();
+    const alice = await createUser(client, "a@example.com", "Alice");
+    const raced = await racedSecondLink(client, alice.id);
+
+    const second = await linkWallet(raced, alice.id, address(2));
+
+    expect(second.isPrimary).toBe(false);
+    const wallets = await getWallets(client, alice.id);
+    expect(wallets.map((w) => w.isPrimary).sort()).toEqual([false, true]);
+  });
+
+  it("survives that race inside a transaction, where a retry after an error cannot run", async () => {
+    const client = await fresh();
+    const alice = await createUser(client, "a@example.com", "Alice");
+    const raced = await racedSecondLink(client, alice.id);
+
+    await raced.query("BEGIN");
+    const second = await linkWallet(raced, alice.id, address(2));
+    await raced.query("COMMIT");
+
+    expect(second.isPrimary).toBe(false);
+    expect(await getWallets(client, alice.id)).toHaveLength(2);
+  });
 });

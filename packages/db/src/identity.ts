@@ -180,14 +180,28 @@ export async function linkWallet(
   // linking the same address can both pass it. `UNIQUE (chain, address)` refuses
   // the loser — which is the right outcome and the wrong error, because the
   // reason is the one this function already has a name for.
-  let row: { id: string; address: string; is_primary: boolean } | undefined;
-  try {
-    [row] = await db.query<{ id: string; address: string; is_primary: boolean }>(
+  //
+  // **`isFirst` is racy the same way, and losing that race is not an error.** Two
+  // tabs linking two *different* wallets both count zero and both ask for
+  // primary; `wallets_one_primary_per_user` refuses one, and the catch below
+  // used to report it as WALLET_TAKEN — "already linked to another account",
+  // about a wallet nobody had claimed (#82). The loser is simply a second
+  // wallet. `ON CONFLICT ... DO NOTHING` rather than catch-and-retry, because
+  // `signInWithPrivy` calls this inside a transaction, and after a failed
+  // statement Postgres refuses every later one in it — the retry could never run.
+  const insert = (primary: boolean) =>
+    db.query<{ id: string; address: string; is_primary: boolean }>(
       `INSERT INTO wallets (user_id, address, is_primary, verified_at)
        VALUES ($1, $2, $3, CASE WHEN $4 THEN now() ELSE NULL END)
+       ON CONFLICT (user_id) WHERE is_primary DO NOTHING
        RETURNING id, address, is_primary`,
-      [userId, address, isFirst, options.verified === true],
+      [userId, address, primary, options.verified === true],
     );
+
+  let row: { id: string; address: string; is_primary: boolean } | undefined;
+  try {
+    [row] = await insert(isFirst);
+    if (!row) [row] = await insert(false);
   } catch (error) {
     if (isUniqueViolation(error)) {
       throw new IdentityError("Wallet is already linked to another account", "WALLET_TAKEN");

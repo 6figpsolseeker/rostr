@@ -23,8 +23,9 @@
  *   * **Blind.** Nobody sees anyone else's claims before they resolve, so no
  *     team's outcome may depend on when another team filed — and
  *     `resolveWaiverClaims` is written so it does not: waiver priority decides
- *     every contest between teams, and submission time only orders a team's own
- *     claims against each other. This used to say the resolution "cannot depend
+ *     every contest between teams, and the manager's own ranking — then
+ *     submission time — only orders a team's own claims against each other
+ *     (#125). This used to say the resolution "cannot depend
  *     on submission order" at all. That is stronger than blindness needs, and it
  *     was untrue of the code: two claims by one team tie on priority and the
  *     sort fell through to a v4 UUID.
@@ -42,8 +43,10 @@ import {
   countedRosterSize,
   reservedByTrades,
   isIrEligible,
+  latestWeekly,
   dropDestination,
   initialWaiverPriority,
+  isPermutationOf,
   NFL,
   nextProcessingAt,
   resolveWaiverClaims,
@@ -87,7 +90,15 @@ export class WaiverError extends Error {
        * distinction the manager can act on, and naming it would leak whether a
        * claim they do not own exists.
        */
-      | "CLAIM_NOT_PENDING",
+      | "CLAIM_NOT_PENDING"
+      /**
+       * A reorder named a set of claims that is not this team's pending set.
+       *
+       * A run processed some, or another tab filed or withdrew one, since the
+       * screen loaded. Reload and drag again. Like `CLAIM_NOT_PENDING`, it does
+       * not say which id was wrong.
+       */
+      | "CLAIMS_CHANGED",
   ) {
     super(message);
     this.name = "WaiverError";
@@ -928,8 +939,8 @@ export async function addFreeAgent(db: SqlClient, input: AddInput): Promise<void
       by two people clicking at once. Issue #90 item 4.
 
       `dropPlayer` has always written its wire row inside its own transaction,
-      for the same reason and with the same comment. This is the one release
-      path that did not.
+      for the same reason and with the same comment. This and the waiver run
+      were the two release paths that did not; the run's moved inside under #82.
 
       There is no window to close on the other side: the release and the wire
       row now commit together, so a reader sees the player rostered or sees him
@@ -979,13 +990,13 @@ async function placeDroppedPlayer(
  * the claimant nothing about who else has claimed — and a failed claim costs
  * nothing, so there is no reason to hoard them.
  *
- * **`created_at` is left to the database, and that now decides something.** The
+ * **`created_at` is left to the database, and it still decides something.** The
  * column defaults to `now()` and this function deliberately does not write
- * `input.now`, so the order a team's own claims are tried in comes from the
- * server clock at the instant each INSERT commits and no caller can name it.
- * Since that order became load-bearing, that is a property rather than an
- * omission: a writable submission time is a way to file a claim and then move it
- * to the front of your own queue. `input.now` decides availability only.
+ * `input.now`. Since #125 a manager orders their own claims by ranking them, so
+ * filing time is only the tiebreak after rank, and the source of the starting
+ * rank a new claim gets — but it still decides a tie, and it is still what
+ * `leaguesDueForWaivers` reads, so no caller may name it. `input.now` decides
+ * availability only.
  */
 export async function submitClaim(
   db: SqlClient,
@@ -1045,13 +1056,20 @@ export async function submitClaim(
     transaction, where a failed statement would abort everything after it. The
     only unique index on `waiver_claims` besides the primary key is that one, so
     a unique violation means exactly this.
+
+    A new claim goes to the bottom of the team's own ranking (#125), so a
+    manager who never reorders gets exactly filing order. Computed in the same
+    statement, under no lock: two tabs filing at once can tie, and a tie falls
+    through to `created_at` — the order those two would have had anyway.
   */
   let row: { id: string } | undefined;
   try {
     [row] = await db.query<{ id: string }>(
       `INSERT INTO waiver_claims
-         (league_id, team_id, add_player_id, drop_player_id, priority_at_claim)
-       VALUES ($1, $2, $3, $4, $5)
+         (league_id, team_id, add_player_id, drop_player_id, priority_at_claim, claim_rank)
+       VALUES ($1, $2, $3, $4, $5,
+         (SELECT COALESCE(max(claim_rank), 0) + 1 FROM waiver_claims
+           WHERE team_id = $2 AND state = 'PENDING'))
        RETURNING id`,
       [
         input.leagueId,
@@ -1113,15 +1131,79 @@ export async function cancelClaim(
 }
 
 /**
- * A team's own pending claims, newest last — which is the order they will be
- * tried in.
+ * Put a team's pending claims in the order the manager wants them tried. #125.
+ *
+ * `claimIds` must name exactly the team's pending claims, each once, in the new
+ * order; anything else is `CLAIMS_CHANGED` and nothing is written. Sending the
+ * whole list rather than "move X above Y" is what makes a stale screen fail
+ * loudly instead of writing an order nobody chose.
+ *
+ * **Locks, in the run's order.** The league row `FOR SHARE` first, the same as
+ * `addFreeAgent`: the waiver run holds it `FOR UPDATE` for its whole
+ * transaction, so a reorder arriving mid-run waits, then finds the claims the
+ * run decided are no longer pending and refuses. Then this team's pending claim
+ * rows `FOR UPDATE`, in id order, so two tabs reordering at once queue rather
+ * than deadlock. Both waits are invisible on PGlite's single connection; the
+ * statement-order test pins the shape and nothing more.
+ *
+ * Ungated by league state, like `cancelClaim`: it edits only the manager's own
+ * pending claims, and a manager may always withdraw or reorder those.
+ * `created_at` is never touched, so `leaguesDueForWaivers` is unaffected.
+ */
+export async function reorderClaims(
+  db: SqlClient,
+  leagueId: string,
+  teamId: string,
+  claimIds: readonly string[],
+): Promise<void> {
+  await withTransaction(db, async (tx) => {
+    await tx.query("SELECT id FROM leagues WHERE id = $1 FOR SHARE", [leagueId]);
+
+    const pending = await tx.query<{ id: string }>(
+      `SELECT id FROM waiver_claims
+        WHERE league_id = $1 AND team_id = $2 AND state = 'PENDING'
+        ORDER BY id
+        FOR UPDATE`,
+      [leagueId, teamId],
+    );
+
+    // Compared in TypeScript against ids the database returned, so a caller's
+    // string never reaches a `::uuid` cast — a malformed id is a mismatch, not a
+    // 500.
+    if (
+      !isPermutationOf(
+        claimIds,
+        pending.map((row) => row.id),
+      )
+    ) {
+      throw new WaiverError(
+        "Your claims changed since this page loaded. Here is the current list.",
+        "CLAIMS_CHANGED",
+      );
+    }
+    if (claimIds.length === 0) return;
+
+    await tx.query(
+      `UPDATE waiver_claims c
+          SET claim_rank = ordered.n
+         FROM unnest($1::uuid[]) WITH ORDINALITY AS ordered(id, n)
+        WHERE c.id = ordered.id AND c.team_id = $2 AND c.state = 'PENDING'`,
+      [claimIds, teamId],
+    );
+  });
+}
+
+/**
+ * A team's own pending claims, in the order the run will try them against each
+ * other: the manager's ranking, then filing order (#125).
  *
  * **Their order relative to each other, and nothing further.** Waiver priority
  * decides every contest against another team, and a claim for a player who has
- * not cleared yet waits for a later run than one filed after it — so this
- * predicts neither who wins nor which run resolves it. It used to say it was
- * "not the order they resolve in" at all, which stopped being true when the
- * intra-team tiebreak stopped being a random UUID.
+ * not cleared yet waits for a later run than one ranked below it — so this
+ * predicts neither who wins nor which run resolves it.
+ *
+ * Must stay the same order `resolveWaiverClaims` sorts by, or the screen shows
+ * one order and the run uses another.
  */
 export async function pendingClaims(
   db: SqlClient,
@@ -1135,7 +1217,7 @@ export async function pendingClaims(
   }>(
     `SELECT id, add_player_id, drop_player_id FROM waiver_claims
       WHERE league_id = $1 AND team_id = $2 AND state = 'PENDING'
-      ORDER BY created_at`,
+      ORDER BY claim_rank NULLS LAST, created_at, id`,
     [leagueId, teamId],
   );
 
@@ -1234,6 +1316,7 @@ export async function processWaivers(
       team_id: string;
       add_player_id: string;
       drop_player_id: string | null;
+      claim_rank: number | null;
       created_at: string;
     }>(
       /*
@@ -1259,17 +1342,39 @@ export async function processWaivers(
         Ordering: `leagues` then `waiver_claims`, and nothing takes them the
         other way round. `submitClaim` does read `leagues`, but neither it nor
         `cancelClaim` holds a claim lock while waiting on anything — both run in
-        autocommit and take no row lock at all, so neither can be the other edge
-        of a cycle. This is the only transaction in the schema that locks a
-        claim row.
+        autocommit, so neither can be the other edge of a cycle.
+        `reorderClaims` is the one other transaction that locks claim rows, and
+        it takes them in the same order: the league first (`FOR SHARE`, which
+        this `FOR UPDATE` excludes), then the claims.
       */
-      `SELECT id, team_id, add_player_id, drop_player_id, created_at
+      `SELECT id, team_id, add_player_id, drop_player_id, claim_rank, created_at
          FROM waiver_claims WHERE league_id = $1 AND state = 'PENDING'
          FOR UPDATE`,
       [leagueId],
     );
 
     const priority = await loadWaiverPriority(tx, leagueId);
+
+    /*
+      Stamp each pending claim with where its team stands at this run (#355).
+
+      `priority_at_claim` was written once, by `submitClaim`, at filing — so a
+      claim filed before an earlier run moved the team kept the old number, and
+      the results panel printed it and sorted by it. Its own documentation says
+      "where this team stood when the run began", which is this.
+
+      The position in `priority`, not the raw `waiver_priority`, because that is
+      what `resolveWaiverClaims` decides by: it also places a team with no
+      priority yet. Written before any priority moves below, and to every
+      pending claim, so a deferred claim is restamped by whichever run settles it.
+    */
+    await tx.query(
+      `UPDATE waiver_claims c
+          SET priority_at_claim = p.n::smallint
+         FROM unnest($2::uuid[]) WITH ORDINALITY AS p(team_id, n)
+        WHERE c.league_id = $1 AND c.state = 'PENDING' AND c.team_id = p.team_id`,
+      [leagueId, priority],
+    );
 
     /*
       The same two IR columns `addFreeAgent` reads, and for the same reason.
@@ -1472,6 +1577,7 @@ export async function processWaivers(
           teamId: row.team_id,
           addPlayerId: row.add_player_id,
           dropPlayerId: row.drop_player_id,
+          claimRank: row.claim_rank === null ? null : Number(row.claim_rank),
           // Wrapped, following this file's convention for timestamp columns:
           // both drivers hand `timestamptz` back as a `Date` already, and the
           // wrap normalises the string shape too if one ever stops.
@@ -1520,7 +1626,7 @@ export async function processWaivers(
     }
 
     // Players this run actually released, which is not the same as every player
-    // any pending claim happens to name. See the loop below the transaction.
+    // any pending claim happens to name. See the loop at the end of the run.
     const dropped: string[] = [];
 
     for (const outcome of resolution.outcomes) {
@@ -1609,53 +1715,92 @@ export async function processWaivers(
     // only the first explains why a manager's claim is still outstanding.
     const deferred = claims.length - awarded - failed;
 
+    // Players nobody claimed become free agents once their wire time passes.
+    // Removing the row is what makes them free — absent means available.
+    const cleared = await tx.query<{ player_id: string }>(
+      `DELETE FROM waiver_wire
+        WHERE league_id = $1 AND clears_at <= $2
+        RETURNING player_id`,
+      [leagueId, now.toISOString()],
+    );
+
+    // Anyone dropped in the same run must not be swept up by that clear: he
+    // landed after it, and his own wire time has not passed.
+    //
+    // **Players this run released, not players some pending claim mentions.** It
+    // used to walk every pending claim, so a claim that failed — or, now that
+    // claims can be deferred, one that has simply not resolved yet — re-dated the
+    // wire row of a player it never touched. That is somebody else's player: a
+    // manager who legitimately dropped him watched his `clears_at` pushed a week
+    // further out by a stranger's losing claim, hourly, for as long as the claim
+    // sat there. Since `waiverClearsAt(now) > now` always, he could never clear.
+    //
+    // **Inside the transaction, which it was not.** This was the last release
+    // path writing its wire row after the commit — the shape #90 item 4 removed
+    // from `addFreeAgent`. In the gap the dropped player was released with no
+    // wire row, so `availabilityOf` answered `FREE_AGENT` and anyone polling
+    // could sign a player on his way to waivers; a run that died in the gap left
+    // him a free agent for good. The clear moved in with it so the order above
+    // still holds.
+    for (const playerId of dropped) {
+      await placeDroppedPlayer(tx, leagueId, playerId, now, stored.rules);
+    }
+
     return {
       awarded,
       failed,
       deferred,
-      dropped,
       priorityAfter: resolution.priorityAfter,
+      cleared: cleared.length,
     };
   });
 
-  const { awarded, failed, deferred, dropped } = run;
-
-  // Players nobody claimed become free agents once their wire time passes.
-  // Removing the row is what makes them free — absent means available.
-  const cleared = await db.query<{ player_id: string }>(
-    `DELETE FROM waiver_wire
-      WHERE league_id = $1 AND clears_at <= $2
-      RETURNING player_id`,
-    [leagueId, now.toISOString()],
-  );
-
-  // Anyone dropped in the same run must not be swept up by that clear: he landed
-  // after it, and his own wire time has not passed.
-  //
-  // **Players this run released, not players some pending claim mentions.** It
-  // used to walk every pending claim, so a claim that failed — or, now that
-  // claims can be deferred, one that has simply not resolved yet — re-dated the
-  // wire row of a player it never touched. That is somebody else's player: a
-  // manager who legitimately dropped him watched his `clears_at` pushed a week
-  // further out by a stranger's losing claim, hourly, for as long as the claim
-  // sat there. Since `waiverClearsAt(now) > now` always, he could never clear.
-  for (const playerId of dropped) {
-    await placeDroppedPlayer(db, leagueId, playerId, now, stored.rules);
-  }
-
-  return {
-    leagueId,
-    awarded,
-    failed,
-    deferred,
-    priorityAfter: run.priorityAfter,
-    cleared: cleared.length,
-  };
+  return { leagueId, ...run };
 }
 
 /** When this league's next waiver run is due. */
 export function nextWaiverRun(rules: LeagueRules, now: Date): Date {
   return nextProcessingAt(now, rules.waivers);
+}
+
+/**
+ * Whether this cycle's waiver run still has claims to decide. Issue #266.
+ *
+ * The lineup prefill waits on this. It used to wait on the clock alone — "has
+ * Wednesday 03:00 passed" — which held only because the waivers cron fires at
+ * :00 and the prefill at :05. A slow or failed run let the prefill fill from the
+ * pre-waiver roster, and the player the run then awarded sat on the bench.
+ *
+ * A claim is owed when the run at the most recent processing moment would have
+ * decided it: still PENDING, filed by then, and its player clear — no wire row,
+ * or `clears_at <= now`, the run's own test in `processWaivers`. A successful run
+ * leaves none, because it awards or fails every claim that passes that test.
+ *
+ * **Not `leaguesDueForWaivers`.** A deferred claim — its player not yet clear —
+ * keeps a league "due" every hour until it resolves (#108), so gating on that
+ * would hold the fill all week for a claim no run can decide yet. A deferred
+ * claim is not owed here, and neither is one filed after the run, which belongs
+ * to the next cycle.
+ */
+export async function waiverRunOwed(
+  db: SqlClient,
+  leagueId: string,
+  rules: LeagueRules,
+  now: Date,
+): Promise<boolean> {
+  const processed = latestWeekly(now, rules.waivers.processing, rules.waivers.timezone);
+  const [row] = await db.query<{ owed: boolean }>(
+    `SELECT EXISTS (
+       SELECT 1 FROM waiver_claims c
+        WHERE c.league_id = $1 AND c.state = 'PENDING' AND c.created_at <= $2
+          AND NOT EXISTS (
+            SELECT 1 FROM waiver_wire w
+             WHERE w.league_id = c.league_id AND w.player_id = c.add_player_id
+               AND w.clears_at > $3)
+     ) AS owed`,
+    [leagueId, processed.toISOString(), now.toISOString()],
+  );
+  return row?.owed === true;
 }
 
 /**

@@ -78,6 +78,8 @@ export {
   nextWaiverRun,
   pendingClaims,
   processWaivers,
+  reorderClaims,
+  waiverRunOwed,
   seedWaiverPriority,
   submitClaim,
   WaiverError,
