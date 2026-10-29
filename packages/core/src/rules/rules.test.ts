@@ -770,6 +770,24 @@ describe("validateLeagueRules", () => {
     );
   });
 
+  it("holds the trade deadline to the week 8 floor RULES.md promises — #104", () => {
+    const at = (week: number) =>
+      validateLeagueRules(
+        mutate((d) => {
+          (d.trades as { deadlineWeek: number }).deadlineWeek = week;
+        }),
+        NFL,
+      ).filter((problem) => problem.includes("trade deadline"));
+    expect(at(7)).toEqual([
+      "trade deadline must be week 8 or later, or disable trades outright",
+    ]);
+    expect(at(8)).toEqual([]);
+  });
+
+  it("defaults the trade deadline to week 12, the nearest week to ESPN's — #104", () => {
+    expect(FIXTURE.trades.deadlineWeek).toBe(12);
+  });
+
   it("rejects a bracket whose rounds do not match its playoff weeks", () => {
     const bad = mutate((d) => {
       d.schedule.playoffWeeks = [15, 16];
@@ -988,8 +1006,13 @@ describe("hashLeagueRules", () => {
     //   a live one, which is why this moves now — while every anchored league is
     //   disposable and `league_onchain_stakes` is empty — and could not move
     //   later.
+    //
+    // Moved 2026-10-29: trades.deadlineWeek default 11 -> 12 (#104). A
+    //   *defaults* change only. ESPN's default deadline is Wednesday noon ET
+    //   between weeks 12 and 13; the end of week 12 is the nearest whole week.
+    //   Existing leagues keep the deadline they were frozen with.
     expect(hashLeagueRules(FIXTURE)).toBe(
-      "34902406ca6e98967da17dc53bf63da250d47819d507d792098da037aa8195ac",
+      "028939bdef78850b8ccf63dcdaf029f2e4c6156b82f862f436ddd0f5ac30c209",
     );
   });
 });

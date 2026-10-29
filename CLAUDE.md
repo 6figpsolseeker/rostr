@@ -29,7 +29,7 @@ Today's date matters more than usual here.
 | **Aug 22 2026** | Leagues must be creatable, joinable, fundable, **draftable**  |
 | **Sep 9 2026**  | **NFL kickoff.** Lineups lock, scoring runs, matchups resolve |
 | Sep 16          | Waivers (Week 2)                                              |
-| Nov 22          | Trade deadline (Week 11)                                      |
+| Nov 30          | Trade deadline (Week 12)                                      |
 | Dec 13          | Regular-season prize **decided** (Week 14). Paid in January   |
 | Jan 3 2027      | Championship (Week 17)                                        |
 | Jan 10 2027     | Final payouts, after the 7-day correction window              |
@@ -2072,7 +2072,7 @@ the last moment a refund is still clean. A guard there is the outstanding piece.
 `packages/core/src/trades/veto.ts` (pure), `packages/db/src/trades.ts` (state),
 `/api/cron/trades` hourly, `TradeBlock.tsx` on `/leagues/[id]/trades`. Three points were
 settled by the owner on 2026-08-08 and written into `docs/RULES.md` §6 — **do not
-re-open them**: the deadline is **commissioner-set** (default 11), **bots are not in the
+re-open them**: the deadline is **commissioner-set** (default 12 since 2026-10-29, #104), **bots are not in the
 veto denominator** (one third of uninvolved _managers_), and there is **no commissioner
 override**.
 
@@ -3432,7 +3432,7 @@ These were discussed at length and decided. Re-proposing them wastes the owner's
 | NFTs _are_ the roster, not souvenirs             | **Abandoned** 2026-08-19 (`6d28c5e`) — nothing ever minted one; see below         |
 | NFTs persist as trophies, labelled "Player YYYY" | **Abandoned** with it — a weekly claimable award replaces the idea                |
 | Trades vetoable, never automatic                 | **Settled** — 48h escrow, ⅓ of uninvolved managers                                |
-| Trade deadline set by the commissioner           | **Settled** 2026-08-08 — default 11; binds on the execution week                  |
+| Trade deadline set by the commissioner           | **Settled** 2026-08-08 — default 12; binds on the execution week                  |
 | Rules immutable, shown before joining            | **Settled**                                                                       |
 | Per-game score updates, not real-time            | **Settled** — cost is not the reason; simplicity is                               |
 | Mainnet with the pot live for 2026               | **Settled** — risks were raised and the owner chose this                          |

@@ -368,7 +368,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   });
 
   // Belt and braces: validateLeagueRules already bounds the deadline to the
-  // regular season and to week 1, and createLeague refuses rules that do not
+  // regular season and to week 8, and createLeague refuses rules that do not
   // validate. Checking here only turns a 500-shaped failure into a 400 with a
   // message, since this is the one rule field a client supplies directly.
   const problems = validateLeagueRules(rules, NFL);

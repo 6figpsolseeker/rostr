@@ -12,6 +12,7 @@ import {
   NFL_DEFAULT_PAYOUT,
   NFL_DEFAULT_SCHEDULE,
   NFL_DEFAULT_SETTLEMENT,
+  NFL_DEFAULT_TRADES,
   NFL_WINNER_TAKE_ALL_PAYOUT,
 } from "@rostr/core";
 import type { LeagueRules, PotRules } from "@rostr/core";
@@ -106,8 +107,8 @@ const MAX_BUY_IN_USDC = MAX_BUY_IN_BASE_UNITS / 1_000_000;
  *
  * Bounded by the regular season at the top — `validateLeagueRules` refuses
  * anything later — and started at 8 because a deadline before midseason is a
- * league that has barely played. ESPN and Sleeper both land around 12-13 by
- * calendar date; 11 is our default and the middle of this range.
+ * league that has barely played. The default is `NFL_DEFAULT_TRADES`, which
+ * sits closest to ESPN's own (#104).
  */
 const TRADE_DEADLINE_WEEKS = [8, 9, 10, 11, 12, 13, 14];
 
@@ -182,7 +183,7 @@ export function CreateLeagueForm() {
   const [draftAt, setDraftAt] = useState(() => defaultDraftAt(new Date()));
   const [mode, setMode] = useState<"FAST" | "SLOW">("SLOW");
   const [pickSeconds, setPickSeconds] = useState(14_400);
-  const [tradeDeadlineWeek, setTradeDeadlineWeek] = useState(11);
+  const [tradeDeadlineWeek, setTradeDeadlineWeek] = useState(NFL_DEFAULT_TRADES.deadlineWeek);
   const [withPot, setWithPot] = useState(false);
   const [buyIn, setBuyIn] = useState("25");
   const [payoutShape, setPayoutShape] = useState<"SPLIT" | "WINNER_TAKE_ALL">("SPLIT");

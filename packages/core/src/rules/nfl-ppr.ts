@@ -170,7 +170,11 @@ export const NFL_DEFAULT_TRADES: TradeRules = {
   // trigger than ESPN's majority.
   vetoNumerator: 1,
   vetoDenominator: 3,
-  deadlineWeek: 11,
+  // ESPN's default deadline is Wednesday noon ET between weeks 12 and 13 (read
+  // from their league defaults for 2024-2026). A deadline here is a whole week,
+  // so 12 closes 36 hours before ESPN's and 13 would close five and a half days
+  // after it — the window a deadline exists to shut (#104).
+  deadlineWeek: 12,
 };
 
 export const NFL_DEFAULT_SETTLEMENT: SettlementRules = {

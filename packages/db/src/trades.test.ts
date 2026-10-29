@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { buildNflPprRules, buildRosterShape, countedRosterSize, NFL } from "@rostr/core";
+import {
+  buildNflPprRules,
+  buildRosterShape,
+  countedRosterSize,
+  NFL,
+  NFL_DEFAULT_TRADES,
+} from "@rostr/core";
 import type { DraftRules, LeagueRules } from "@rostr/core";
 import { createLeague } from "./leagues.js";
 import { createUser } from "./identity.js";
@@ -87,6 +93,14 @@ const WEEK11_SUNDAY = new Date("2026-11-22T18:00:00Z");
 const BEFORE_WEEK12_LOCK = new Date("2026-11-24T04:00:00Z");
 /** Tuesday 01:00 ET, an hour past it and still three days from any week-12 game. */
 const AFTER_WEEK12_LOCK = new Date("2026-11-24T06:00:00Z");
+/**
+ * These fixtures pin the boundary at the end of week 11, which was the default
+ * deadline until #104 moved it to 12. Named explicitly so the boundary they test
+ * does not move with the default.
+ */
+const DEADLINE_11: Partial<LeagueRules> = {
+  trades: { ...NFL_DEFAULT_TRADES, deadlineWeek: 11 },
+};
 
 interface Fixture {
   client: PGliteClient;
@@ -369,7 +383,7 @@ describe("proposing", () => {
     // it asks about `now` plus the veto window rather than about now. Proposed
     // during week 11's Sunday games, a 48-hour window closes on the Tuesday, by
     // which time the league is transacting in week 12.
-    const fx = await setup();
+    const fx = await setup(DEADLINE_11);
 
     await expect(propose(fx, WEEK11_SUNDAY)).rejects.toMatchObject({
       code: "PAST_DEADLINE",
@@ -379,13 +393,13 @@ describe("proposing", () => {
   it("allows one whose window still closes inside the deadline week", async () => {
     // Two days earlier the same 48 hours close on week 11's Sunday. Nothing
     // about the deadline week itself is refused — only landing past it.
-    const fx = await setup();
+    const fx = await setup(DEADLINE_11);
 
     await expect(propose(fx, WEEK11_FRIDAY)).resolves.toBeTypeOf("string");
   });
 
   it("honours a commissioner-set deadline, across the DST change", async () => {
-    // Deadline 8 rather than the default 11, which also moves the boundary to
+    // Deadline 8 rather than week 11, which also moves the boundary to
     // the other side of 1 November. The week-8 lock is 04:00 UTC and the week-9
     // lock is 05:00 UTC, because both are Tuesday 00:00 *Eastern* — a fixed
     // offset would put one of these two assertions on the wrong side of it.
@@ -1644,7 +1658,7 @@ describe("resolution", () => {
     // since Tuesday 00:00 ET. `currentWeek` still answers 11 here, because it
     // names the most recent kickoff — so the deadline used to read as unpassed,
     // and the swap landed in week 12's rosters days past a date members signed.
-    const fx = await setup();
+    const fx = await setup(DEADLINE_11);
     const tradeId = await propose(fx, WEEK11_FRIDAY);
     await acceptTrade(fx.client, tradeId, fx.teams[1]!, WEEK11_FRIDAY);
 
@@ -1663,7 +1677,7 @@ describe("resolution", () => {
     // Two hours earlier and the answer flips. The rule turns on the Tuesday lock
     // rather than on week 12's Thursday kickoff, so this pins where the boundary
     // is and not merely that one exists.
-    const fx = await setup();
+    const fx = await setup(DEADLINE_11);
     const tradeId = await propose(fx, WEEK11_FRIDAY);
     await acceptTrade(fx.client, tradeId, fx.teams[1]!, WEEK11_FRIDAY);
 
