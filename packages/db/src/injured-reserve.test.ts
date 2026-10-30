@@ -288,9 +288,11 @@ describe("moveToIr", () => {
 
   it("refuses somebody who is not on the roster", async () => {
     const fx = await setup();
-    await fx.client.query("DELETE FROM roster_entries WHERE player_id = $1", [
-      fx.players.get("third"),
-    ]);
+    // Released, not deleted: roster history is append-only (0055).
+    await fx.client.query(
+      "UPDATE roster_entries SET released_at = now() WHERE player_id = $1",
+      [fx.players.get("third")],
+    );
 
     await expect(
       moveToIr(fx.client, {
