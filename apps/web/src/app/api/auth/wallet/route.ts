@@ -39,7 +39,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   const user = await currentUser();
   if (!user) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
 
-  const body = (await request.json()) as {
+  const body = (await request.json().catch(() => ({}))) as {
     walletAddress?: string;
     signature?: string;
   };
