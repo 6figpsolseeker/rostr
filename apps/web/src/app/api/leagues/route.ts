@@ -161,7 +161,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     );
   }
 
-  const body = (await request.json()) as CreateBody;
+  const body = (await request.json().catch(() => ({}))) as CreateBody;
 
   if (!body.name || !body.draftAt) {
     return NextResponse.json({ error: "name and draftAt are required" }, { status: 400 });
