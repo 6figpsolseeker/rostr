@@ -2596,7 +2596,7 @@ describe("choosing which leagues are due — #131", () => {
     four throw sites and the injection reached one.
   */
   const failingLater = (client: PGliteClient, leagueId: string): PGliteClient =>
-    failingOn(client, "min(created_at)", [leagueId]);
+    failingOn(client, "waiver_wire w", [leagueId]);
 
   /** A second league in the same database, with a claim of its own pending. */
   async function secondLeague(
@@ -2797,6 +2797,89 @@ describe("choosing which leagues are due — #131", () => {
 
     // And due the moment it arrives.
     expect((await leaguesDueForWaivers(fx.client, runsAt)).due).toEqual([fx.leagueId]);
+  });
+});
+
+describe("a deferred claim does not keep its league due — #108", () => {
+  /** Wed 23 Sep 2026, 03:00 EDT: the run the deferred claim is waiting for. */
+  const NEXT_RUN = new Date("2026-09-23T07:00:00.000Z");
+  /** Tue 22 Sep 2026, 02:00 EDT: inside the weekly lock, a day before that run. */
+  const TUESDAY = new Date("2026-09-22T06:00:00.000Z");
+
+  /** A claim filed Monday for a player who does not clear until `NEXT_RUN`. */
+  async function deferred(fx: Fixture): Promise<void> {
+    await fx.client.query(
+      "INSERT INTO waiver_wire (league_id, player_id, clears_at) VALUES ($1, $2, $3)",
+      [fx.leagueId, fx.players.get("target")!, NEXT_RUN],
+    );
+    await fx.client.query(
+      `INSERT INTO waiver_claims (league_id, team_id, add_player_id, created_at)
+       VALUES ($1, $2, $3, $4)`,
+      [fx.leagueId, fx.teams[3], fx.players.get("target")!, MONDAY],
+    );
+  }
+
+  it("is not due between runs, and is due at the run its player clears", async () => {
+    const fx = await setup();
+    await deferred(fx);
+
+    expect((await leaguesDueForWaivers(fx.client, TUESDAY)).due).toEqual([]);
+    expect((await leaguesDueForWaivers(fx.client, NEXT_RUN)).due).toEqual([fx.leagueId]);
+  });
+
+  it("does not award a claim filed in the weekly lock before the run — the run waits for Wednesday", async () => {
+    /*
+      **The sharper half of #108.** While the deferred claim kept the league due
+      every hour, every hourly run also decided whatever else was pending. A
+      claim filed in the Tuesday lock for an unrostered player has no wire row,
+      so the run read it as clear and awarded it at the next tick — a day before
+      the Wednesday run, to whoever filed first, which is the race §6's lock
+      exists to remove.
+    */
+    const fx = await setup();
+    await deferred(fx);
+    const { claimId } = await submitClaim(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: fx.teams[1]!,
+      addPlayerId: fx.players.get("other")!,
+      now: TUESDAY,
+    });
+    await fx.client.query("UPDATE waiver_claims SET created_at = $2 WHERE id = $1", [
+      claimId,
+      TUESDAY,
+    ]);
+
+    const hourLater = new Date(TUESDAY.getTime() + HOUR);
+    expect((await leaguesDueForWaivers(fx.client, hourLater)).due).toEqual([]);
+    expect((await leaguesDueForWaivers(fx.client, NEXT_RUN)).due).toEqual([fx.leagueId]);
+  });
+
+  it("is due when a deferred claim sits beside one that has cleared", async () => {
+    const fx = await setup();
+    await deferred(fx);
+    await fx.client.query(
+      `INSERT INTO waiver_claims (league_id, team_id, add_player_id, created_at)
+       VALUES ($1, $2, $3, $4)`,
+      [fx.leagueId, fx.teams[2], fx.players.get("other")!, MONDAY],
+    );
+
+    expect((await leaguesDueForWaivers(fx.client, TUESDAY)).due).toEqual([fx.leagueId]);
+  });
+
+  it("is due for a claim whose player somebody already holds, so it can be failed", async () => {
+    // `held` is on team 1 with no wire row: nothing to award, something to write.
+    const fx = await setup();
+    await deferred(fx);
+    await fx.client.query(
+      `INSERT INTO waiver_claims (league_id, team_id, add_player_id, created_at)
+       VALUES ($1, $2, $3, $4)`,
+      [fx.leagueId, fx.teams[2], fx.players.get("held")!, MONDAY],
+    );
+
+    expect((await leaguesDueForWaivers(fx.client, TUESDAY)).due).toEqual([fx.leagueId]);
+    const outcome = await processWaivers(fx.client, fx.leagueId, TUESDAY);
+    expect(outcome.failed).toBe(1);
+    expect(outcome.deferred).toBe(1);
   });
 });
 
