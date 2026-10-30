@@ -9,6 +9,7 @@ import {
 import { db } from "@/lib/db";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { draftContext, DraftContextError } from "@/lib/draft-context";
+import { jsonBody } from "@/lib/json-body";
 
 const STATUS: Record<string, number> = {
   NO_SUCH_USER: 404,
@@ -110,7 +111,7 @@ export async function POST(
       return NextResponse.json({ error: "Not your league" }, { status: 403 });
     }
 
-    const body = (await request.json().catch(() => ({}))) as { identifier?: string };
+    const body = (await jsonBody(request)) as { identifier?: string };
     if (typeof body.identifier !== "string") {
       return NextResponse.json({ error: "identifier is required" }, { status: 400 });
     }
@@ -163,7 +164,7 @@ export async function DELETE(
       return NextResponse.json({ error: "Not your league" }, { status: 403 });
     }
 
-    const body = (await request.json().catch(() => ({}))) as { invitationId?: string };
+    const body = (await jsonBody(request)) as { invitationId?: string };
     if (typeof body.invitationId !== "string") {
       return NextResponse.json({ error: "invitationId is required" }, { status: 400 });
     }

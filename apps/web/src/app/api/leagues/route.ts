@@ -24,6 +24,7 @@ import { enforceRateLimit } from "@/lib/rate-limit";
 import { publishLeagueRules } from "@/lib/pinning";
 import { declaredCluster } from "@/lib/cluster";
 import { currentUser } from "@/lib/session";
+import { jsonBody } from "@/lib/json-body";
 
 /**
  * How far ahead a draft may be scheduled.
@@ -161,7 +162,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     );
   }
 
-  const body = (await request.json().catch(() => ({}))) as CreateBody;
+  const body = (await jsonBody(request)) as CreateBody;
 
   if (!body.name || !body.draftAt) {
     return NextResponse.json({ error: "name and draftAt are required" }, { status: 400 });

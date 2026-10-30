@@ -11,6 +11,7 @@ import { db } from "@/lib/db";
 import { PrivyLoginError, privyLogin } from "@/lib/privy";
 import { byIp, enforceRateLimit } from "@/lib/rate-limit";
 import { currentUser, setSessionCookie } from "@/lib/session";
+import { jsonBody } from "@/lib/json-body";
 
 /**
  * Exchange a Privy login for a rostr session.
@@ -49,7 +50,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ error: "Expected a JSON body" }, { status: 415 });
   }
 
-  const body = (await request.json().catch(() => ({}))) as { accessToken?: unknown };
+  const body = (await jsonBody(request)) as { accessToken?: unknown };
   if (typeof body.accessToken !== "string" || body.accessToken.trim() === "") {
     return NextResponse.json({ error: "accessToken is required" }, { status: 400 });
   }

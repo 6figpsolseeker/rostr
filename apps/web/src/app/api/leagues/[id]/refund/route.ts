@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { currentUser } from "@/lib/session";
 import { assertRpcCluster, ClusterConfigError } from "@/lib/cluster";
 import { EscrowConfigError, readOnlyEscrow } from "@/lib/escrow";
+import { jsonBody } from "@/lib/json-body";
 
 /**
  * Recording that a member has withdrawn their stake on-chain.
@@ -46,7 +47,7 @@ export async function POST(
     // reason: this records *which* transaction returned the money so a stranger
     // can go and look at it. Nothing here trusts it — the refund is accepted or
     // refused entirely on what the `Membership` account says.
-    const body = (await request.json().catch(() => ({}))) as { signature?: unknown };
+    const body = (await jsonBody(request)) as { signature?: unknown };
     const signature = typeof body.signature === "string" ? body.signature.trim() : "";
 
     if (!/^[1-9A-HJ-NP-Za-km-z]{64,88}$/.test(signature)) {

@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { currentUser } from "@/lib/session";
 import { EscrowConfigError, readOnlyEscrow } from "@/lib/escrow";
 import { assertRpcCluster, ClusterConfigError } from "@/lib/cluster";
+import { jsonBody } from "@/lib/json-body";
 
 /**
  * Recording that a member has joined a league on-chain.
@@ -42,7 +43,7 @@ export async function POST(
       return NextResponse.json({ error: "Sign in first" }, { status: 401 });
     }
 
-    const body = (await request.json().catch(() => ({}))) as { signature?: unknown };
+    const body = (await jsonBody(request)) as { signature?: unknown };
     const signature = typeof body.signature === "string" ? body.signature.trim() : "";
 
     if (!/^[1-9A-HJ-NP-Za-km-z]{64,88}$/.test(signature)) {

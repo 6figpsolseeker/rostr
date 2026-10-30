@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { addBot, JoinError, removeBot } from "@rostr/db";
 import { db } from "@/lib/db";
 import { draftContext, DraftContextError } from "@/lib/draft-context";
+import { jsonBody } from "@/lib/json-body";
 
 /**
  * The bot seat, added and removed.
@@ -74,7 +75,7 @@ export async function POST(
       return NextResponse.json({ error: "Not your league" }, { status: 403 });
     }
 
-    const body = (await request.json().catch(() => ({}))) as { name?: unknown };
+    const body = (await jsonBody(request)) as { name?: unknown };
     // A name is a label on a seat, not an identity — there is no account behind
     // it and nothing joins by it. So an absent or unusable one is defaulted
     // rather than refused: failing here would block a draft over a cosmetic.
