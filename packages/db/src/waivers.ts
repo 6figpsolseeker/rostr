@@ -1776,11 +1776,11 @@ export function nextWaiverRun(rules: LeagueRules, now: Date): Date {
  * or `clears_at <= now`, the run's own test in `processWaivers`. A successful run
  * leaves none, because it awards or fails every claim that passes that test.
  *
- * **Not `leaguesDueForWaivers`.** A deferred claim — its player not yet clear —
- * keeps a league "due" every hour until it resolves (#108), so gating on that
- * would hold the fill all week for a claim no run can decide yet. A deferred
- * claim is not owed here, and neither is one filed after the run, which belongs
- * to the next cycle.
+ * **`leaguesDueForWaivers` asks this too**, per league, since #108. It used to
+ * ask whether the oldest pending claim was older than the last run, so a
+ * deferred claim — its player not yet clear — kept a league due every hour until
+ * it resolved. A deferred claim is not owed, and neither is one filed after the
+ * run, which belongs to the next cycle.
  */
 export async function waiverRunOwed(
   db: SqlClient,
@@ -1817,9 +1817,9 @@ export interface WaiverDueSelection {
   /**
    * Leagues whose due-ness could not be computed.
    *
-   * Every path that declines to answer for a league lands here — the two
-   * `continue`s below included. They said "never empty silently" while skipping
-   * in exactly the way that sentence forbade; both are unreachable in
+   * Every path that declines to answer for a league lands here — the
+   * `continue` below included. It said "never empty silently" while skipping
+   * in exactly the way that sentence forbade; it is unreachable in
    * production, which is a reason to keep the claim true cheaply rather than a
    * reason to have made it falsely.
    */
@@ -1860,8 +1860,8 @@ export async function leaguesDueForWaivers(
       *which* league, which is what `problems` adds.
 
       Four things in here can throw for one league: `getLeagueRules` issues a
-      query and then `JSON.parse`s what it finds, the `min(created_at)` query
-      below is a second round trip, and `nextProcessingAt` walks
+      query and then `JSON.parse`s what it finds, `waiverRunOwed` below is a
+      second round trip, and `latestWeekly` inside it walks
       `rules.waivers`. Both of the cheap content-level causes are now closed —
       the timezone by `validateLeagueRules` and the weekday by #230 — so the
       guard is latent, and deliberately kept: it is about the shape rather than
@@ -1877,23 +1877,11 @@ export async function leaguesDueForWaivers(
         continue;
       }
 
-      // The run this league is currently waiting for. If the next one is more
-      // than a full cycle away, the moment has passed and claims are overdue.
-      const [oldest] = await db.query<{ created_at: string }>(
-        `SELECT min(created_at) AS created_at FROM waiver_claims
-          WHERE league_id = $1 AND state = 'PENDING'`,
-        [row.id],
-      );
-      if (!oldest?.created_at) {
-        // Also unrepresentable: the selection query joins a PENDING claim, so
-        // one exists by construction. Same reasoning as above.
-        problems.push({ leagueId: row.id, error: "no pending claim to date the run from" });
-        continue;
-      }
-
-      if (nextProcessingAt(new Date(oldest.created_at), stored.rules.waivers) <= now) {
-        due.push(row.id);
-      }
+      // Due when a run would decide something, not merely when the oldest claim
+      // is old (#108). That test kept a league with one deferred claim due every
+      // hour until its player cleared — up to a week of runs that did nothing but
+      // contend with free-agent adds and decide whatever else was pending early.
+      if (await waiverRunOwed(db, row.id, stored.rules, now)) due.push(row.id);
     } catch (error) {
       /*
         Recorded, never swallowed. A selection that quietly skipped a league
