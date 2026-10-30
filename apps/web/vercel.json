@@ -2,27 +2,27 @@
   "crons": [
     {
       "path": "/api/cron/draft-tick",
-      "schedule": "* * * * *"
+      "schedule": "0 6 * * *"
     },
     {
       "path": "/api/cron/stats",
-      "schedule": "*/10 * * * *"
+      "schedule": "0 11 * * *"
     },
     {
       "path": "/api/cron/score-week",
-      "schedule": "5-59/10 * * * *"
+      "schedule": "5 12 * * *"
     },
     {
       "path": "/api/cron/waivers",
-      "schedule": "0 * * * *"
+      "schedule": "0 13 * * *"
     },
     {
       "path": "/api/cron/trades",
-      "schedule": "30 * * * *"
+      "schedule": "30 14 * * *"
     },
     {
       "path": "/api/cron/injuries",
-      "schedule": "35 * * * *"
+      "schedule": "35 8 * * *"
     },
     {
       "path": "/api/cron/season-sync",
