@@ -27,6 +27,9 @@ const SLOW_PICK_SECONDS = [3600, 14_400, 28_800, 86_400];
 /** The NFL issues official stat corrections for up to seven days. */
 const MIN_PAYING_FINALIZATION_HOURS = 168;
 
+/** The earliest trade deadline `RULES.md` §6 permits. */
+const MIN_TRADE_DEADLINE_WEEK = 8;
+
 /**
  * The most teams a league may have. `docs/RULES.md` §3.
  *
@@ -505,11 +508,14 @@ function validateTrades(rules: LeagueRules, out: string[]): void {
   if (t.vetoWindowHours <= 0) out.push("vetoWindowHours must be positive");
 
   // The deadline is the commissioner's to set, so it needs a floor as well as a
-  // ceiling. Week 0 would leave trading enabled in the rules and impossible in
-  // practice — members would sign a rule set that says one thing and behaves
-  // like another, and rules cannot be corrected afterwards.
-  if (t.deadlineWeek < 1) {
-    out.push("trade deadline must be at least week 1, or disable trades outright");
+  // ceiling. `RULES.md` §6 promises week 8 at the earliest, and members sign
+  // that document: a deadline before midseason is a league that has barely
+  // played, and week 0 would leave trading enabled in the rules and impossible
+  // in practice. Rules cannot be corrected afterwards (#104).
+  if (t.deadlineWeek < MIN_TRADE_DEADLINE_WEEK) {
+    out.push(
+      `trade deadline must be week ${MIN_TRADE_DEADLINE_WEEK} or later, or disable trades outright`,
+    );
   }
   if (t.deadlineWeek > rules.schedule.regularSeasonWeeks) {
     out.push(

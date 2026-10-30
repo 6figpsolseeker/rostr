@@ -453,10 +453,11 @@ not, and it is the same reasoning as everything else here: an administrator who 
 reverse a result is the thing the project exists to remove. A trade the league does not
 veto stands.
 
-**Trade deadline: end of Week 11 by default, set by the commissioner at creation.**
-Checked against ESPN on 2026-08-08: they publish a calendar date rather than a week, and
-recent seasons landed around Weeks 12–13. Ours is deliberately a little earlier, and
-frozen per league like every other rule. Necessary rather than traditional — without it,
+**Trade deadline: end of Week 12 by default, set by the commissioner at creation.**
+ESPN's default is a calendar moment rather than a week — Wednesday noon Eastern, after
+Week 12's games and before Week 13's (checked against their league defaults for
+2024–2026). Ours counts whole weeks, so the end of Week 12 closes about a day and a half
+before ESPN's. It is frozen per league like every other rule. Necessary rather than traditional — without it,
 an eliminated team can hand its roster to a contender it has a side arrangement with.
 Any week from 8 to the end of the regular season may be chosen; validation refuses
 anything outside that, so a league cannot be created with a deadline it has already
