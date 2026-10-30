@@ -96,16 +96,17 @@ describe("expectedJobs", () => {
     const path = fileURLToPath(new URL("../../../apps/web/vercel.json", import.meta.url));
     const config = JSON.parse(readFileSync(path, "utf8")) as CronConfig;
 
+    // Every job is daily while the project is on Vercel Hobby, which refuses to
+    // deploy anything more frequent (#372). That issue holds the live
+    // cadences — 1, 10, 10, 60, 60, 60 and 1440 minutes, in this order — and
+    // restoring them before launch means putting them back here too.
     expect(expectedJobs(config)).toEqual([
-      { name: "draft-tick", everyMinutes: 1 },
-      { name: "stats", everyMinutes: 10 },
-      { name: "score-week", everyMinutes: 10 },
-      { name: "waivers", everyMinutes: 60 },
-      { name: "trades", everyMinutes: 60 },
-      // Hourly because Tank01 refreshes rosters hourly and this reads the
-      // roster endpoint — a faster cadence would spend calls to learn what one
-      // already knew. Offset to :35 so it does not land with waivers and trades.
-      { name: "injuries", everyMinutes: 60 },
+      { name: "draft-tick", everyMinutes: 1440 },
+      { name: "stats", everyMinutes: 1440 },
+      { name: "score-week", everyMinutes: 1440 },
+      { name: "waivers", everyMinutes: 1440 },
+      { name: "trades", everyMinutes: 1440 },
+      { name: "injuries", everyMinutes: 1440 },
       { name: "season-sync", everyMinutes: 1440 },
     ]);
   });

@@ -419,6 +419,18 @@ above are what make that tolerable.
 
 ## Blocking later
 
+### ⬜ Vercel Pro, and the real cron schedule
+
+**Blocks:** live drafts, live scoring, hourly waivers and trades.
+**Needed by:** before the first real league drafts.
+**Cost:** $20/month.
+
+The project moved to Vercel Hobby on 2026-10-30 to save $20/month before launch. Hobby
+refuses to deploy a cron that runs more than once a day, so every job in
+`apps/web/vercel.json` is daily until then (#372). To restore: upgrade the team to Pro,
+then put back the schedules listed in that issue, in `vercel.json` and in the pin test in
+`packages/db/src/cron-health.test.ts`.
+
 ### ⬜ SportsDataIO subscription
 
 **Blocks:** gameday inactives, and the independent second oracle source that settlement
