@@ -15,6 +15,7 @@ import {
 } from "@rostr/db";
 import { db } from "@/lib/db";
 import { draftContext, DraftContextError } from "@/lib/draft-context";
+import { jsonBody } from "@/lib/json-body";
 
 const STATUS: Record<string, number> = {
   LEAGUE_NOT_FOUND: 404,
@@ -190,7 +191,7 @@ export async function POST(
       return NextResponse.json({ error: "You are not in this league" }, { status: 403 });
     }
 
-    const body = (await request.json().catch(() => ({}))) as {
+    const body = (await jsonBody(request)) as {
       action?: "PROPOSE" | "ACCEPT" | "DECLINE" | "WITHDRAW" | "VETO";
       tradeId?: string;
       receiverTeamId?: string;

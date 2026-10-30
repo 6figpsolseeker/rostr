@@ -2,16 +2,30 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
+import { jsonBody } from "./json-body";
+
+const post = (body: string) => new Request("http://x", { method: "POST", body });
+
+describe("jsonBody", () => {
+  it("answers {} for a body that is not an object", async () => {
+    expect(await jsonBody(post("{not json"))).toEqual({});
+    expect(await jsonBody(post("null"))).toEqual({});
+    expect(await jsonBody(post("5"))).toEqual({});
+    expect(await jsonBody(post(""))).toEqual({});
+  });
+
+  it("passes an object through", async () => {
+    expect(await jsonBody(post('{"a":1}'))).toEqual({ a: 1 });
+  });
+});
 
 /**
- * Every route reads its body as `request.json().catch(() => ({}))` (#367).
+ * Every route reads its body through `jsonBody` (#367).
  *
- * A bare `request.json()` throws on a malformed body, and the route answers 500
- * for what is the caller's mistake. Caught, the body is `{}` and the handler's
- * own required-field check answers 400 — so the guard adds no validation, it
- * routes bad input to the validation that already exists.
- *
- * Like `league-read.test.ts`, this proves the text is there, not the behaviour.
+ * A bare `request.json()` throws on a malformed body, and even with a catch a
+ * body of `null` throws on the first field read; both answered 500 for the
+ * caller's mistake. Like `league-read.test.ts`, this proves the text is there,
+ * not the behaviour.
  */
 
 const API = fileURLToPath(new URL("../app/api/", import.meta.url));
@@ -25,14 +39,14 @@ function routes(dir: string): string[] {
 }
 
 describe("route bodies", () => {
-  it("never read JSON without a catch", () => {
-    const unguarded = routes(API).flatMap((file) =>
+  it("are read through jsonBody, never request.json()", () => {
+    const direct = routes(API).flatMap((file) =>
       readFileSync(file, "utf8")
         .split("\n")
         .flatMap((line, i) =>
-          /request\.json\(\)(?!\.catch)/.test(line) ? [`${relative(API, file)}:${i + 1}`] : [],
+          /request\.json\(/.test(line) ? [`${relative(API, file)}:${i + 1}`] : [],
         ),
     );
-    expect(unguarded).toEqual([]);
+    expect(direct).toEqual([]);
   });
 });

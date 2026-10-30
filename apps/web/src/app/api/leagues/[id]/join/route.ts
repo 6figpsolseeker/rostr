@@ -3,6 +3,7 @@ import { getJoinMessage, JoinError, joinLeague } from "@rostr/db";
 import { db } from "@/lib/db";
 import { currentUser } from "@/lib/session";
 import { ClusterConfigError, declaredCluster } from "@/lib/cluster";
+import { jsonBody } from "@/lib/json-body";
 
 /**
  * The message to sign.
@@ -90,7 +91,7 @@ export async function POST(
     );
   }
 
-  const body = (await request.json().catch(() => ({}))) as {
+  const body = (await jsonBody(request)) as {
     walletAddress?: string;
     signature?: string;
     teamName?: string;

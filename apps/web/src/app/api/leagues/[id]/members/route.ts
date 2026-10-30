@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { JoinError, removeMember } from "@rostr/db";
 import { db } from "@/lib/db";
 import { draftContext, DraftContextError } from "@/lib/draft-context";
+import { jsonBody } from "@/lib/json-body";
 
 const STATUS: Record<string, number> = {
   LEAGUE_NOT_FOUND: 404,
@@ -39,7 +40,7 @@ export async function DELETE(
       return NextResponse.json({ error: "Not your league" }, { status: 403 });
     }
 
-    const body = (await request.json().catch(() => ({}))) as { teamId?: string };
+    const body = (await jsonBody(request)) as { teamId?: string };
     if (typeof body.teamId !== "string") {
       return NextResponse.json({ error: "teamId is required" }, { status: 400 });
     }

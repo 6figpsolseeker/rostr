@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { declineInvitation, invitationsForUser } from "@rostr/db";
 import { db } from "@/lib/db";
 import { currentUser } from "@/lib/session";
+import { jsonBody } from "@/lib/json-body";
 
 /**
  * Leagues you have been asked to join.
@@ -63,7 +64,7 @@ export async function DELETE(request: Request): Promise<NextResponse> {
   const user = await currentUser();
   if (!user) return NextResponse.json({ error: "Sign in first" }, { status: 401 });
 
-  const body = (await request.json().catch(() => ({}))) as { invitationId?: unknown };
+  const body = (await jsonBody(request)) as { invitationId?: unknown };
   if (typeof body.invitationId !== "string") {
     return NextResponse.json({ error: "invitationId is required" }, { status: 400 });
   }

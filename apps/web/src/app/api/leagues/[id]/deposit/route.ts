@@ -12,6 +12,7 @@ import { currentUser } from "@/lib/session";
 import { assertRpcCluster, ClusterConfigError } from "@/lib/cluster";
 import { EscrowConfigError, readOnlyEscrow } from "@/lib/escrow";
 import { depositsOpen } from "@/lib/pot";
+import { jsonBody } from "@/lib/json-body";
 
 /**
  * Recording that a member has staked into a league on-chain.
@@ -74,7 +75,7 @@ export async function POST(
 
     // Shape-checked only, as in the anchor route: it records *which* transaction
     // moved the money so a stranger can go and look at it. Nothing trusts it.
-    const body = (await request.json().catch(() => ({}))) as { signature?: unknown };
+    const body = (await jsonBody(request)) as { signature?: unknown };
     const signature = typeof body.signature === "string" ? body.signature.trim() : "";
 
     if (!/^[1-9A-HJ-NP-Za-km-z]{64,88}$/.test(signature)) {

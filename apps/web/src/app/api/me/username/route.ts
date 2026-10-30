@@ -9,6 +9,7 @@ import {
 import { db } from "@/lib/db";
 import { byIp, enforceRateLimit } from "@/lib/rate-limit";
 import { currentUser } from "@/lib/session";
+import { jsonBody } from "@/lib/json-body";
 
 const STATUS: Record<string, number> = {
   INVALID_USERNAME: 422,
@@ -48,7 +49,7 @@ export async function PUT(request: Request): Promise<NextResponse> {
   const user = await currentUser();
   if (!user) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
 
-  const body = (await request.json().catch(() => ({}))) as { username?: string };
+  const body = (await jsonBody(request)) as { username?: string };
   if (typeof body.username !== "string") {
     return NextResponse.json({ error: "username is required" }, { status: 400 });
   }

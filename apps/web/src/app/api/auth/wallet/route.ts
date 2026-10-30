@@ -11,6 +11,7 @@ import {
 import { db } from "@/lib/db";
 import { byIp, enforceRateLimit } from "@/lib/rate-limit";
 import { currentUser } from "@/lib/session";
+import { jsonBody } from "@/lib/json-body";
 
 const STATUS: Record<string, number> = {
   USER_NOT_FOUND: 401,
@@ -39,7 +40,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   const user = await currentUser();
   if (!user) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
 
-  const body = (await request.json().catch(() => ({}))) as {
+  const body = (await jsonBody(request)) as {
     walletAddress?: string;
     signature?: string;
   };

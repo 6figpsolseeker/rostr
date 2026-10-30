@@ -9,6 +9,7 @@ import { db } from "@/lib/db";
 import { draftContext, DraftContextError } from "@/lib/draft-context";
 import { EscrowConfigError, readOnlyEscrow } from "@/lib/escrow";
 import { assertRpcCluster, ClusterConfigError } from "@/lib/cluster";
+import { jsonBody } from "@/lib/json-body";
 
 /**
  * Recording that a league's rules are anchored on-chain.
@@ -137,7 +138,7 @@ export async function POST(
     // nothing here trusts it, and the anchor is accepted or refused entirely on
     // what the account says. Shape-checked only, because a malformed one would
     // be recorded forever in a write-once column.
-    const body = (await request.json().catch(() => ({}))) as { signature?: unknown };
+    const body = (await jsonBody(request)) as { signature?: unknown };
     const signature = typeof body.signature === "string" ? body.signature.trim() : "";
 
     if (!/^[1-9A-HJ-NP-Za-km-z]{64,88}$/.test(signature)) {

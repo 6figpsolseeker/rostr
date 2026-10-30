@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { activateFromIr, IrError, moveToIr } from "@rostr/db";
 import { db } from "@/lib/db";
 import { draftContext, DraftContextError } from "@/lib/draft-context";
+import { jsonBody } from "@/lib/json-body";
 
 /**
  * Injured reserve, on and off.
@@ -64,7 +65,7 @@ export async function POST(
       return NextResponse.json({ error: "You are not in this league" }, { status: 403 });
     }
 
-    const body = (await request.json().catch(() => ({}))) as {
+    const body = (await jsonBody(request)) as {
       playerId?: unknown;
       week?: unknown;
       action?: unknown;
