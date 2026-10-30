@@ -525,7 +525,9 @@ export function CreateLeagueForm() {
             I have read the rule set and understand it cannot be changed.
             <span className="mt-1 block text-[13px] text-nocturne-neutral-600">
               After this it cannot be amended without unanimous signed consent of every member
-              holding a stake. There is no commissioner override — not now, not later.
+              holding a stake. There is no commissioner override — not now, not later. A copy is
+              also published to IPFS, a public network, where anyone can read it and nobody can
+              take it down — private leagues included.
             </span>
           </span>
         </label>
