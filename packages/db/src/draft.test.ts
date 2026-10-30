@@ -805,6 +805,83 @@ describe("recordPick", () => {
   });
 });
 
+describe("a pick and the roster it made are history — 0055, #82", () => {
+  async function picked(): Promise<Fixture & { playerId: string; entryId: string }> {
+    const fx = await setup();
+    const order = await scheduled(fx);
+    await startDraft(fx.client, fx.leagueId, SCHEDULED);
+    const playerId = anyAvailable(fx, new Set());
+    await recordPick(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: order[0]!,
+      playerId,
+      pool: fx.pool,
+      shape: SHAPE,
+      now: SCHEDULED,
+    });
+    const [entry] = await fx.client.query<{ id: string }>(
+      "SELECT id FROM roster_entries WHERE player_id = $1",
+      [playerId],
+    );
+    return { ...fx, playerId, entryId: entry!.id };
+  }
+
+  it("refuses to update or delete a pick", async () => {
+    const fx = await picked();
+    await expect(
+      fx.client.query("UPDATE draft_picks SET source = 'QUEUE' WHERE player_id = $1", [
+        fx.playerId,
+      ]),
+    ).rejects.toThrow(/append-only/);
+    await expect(
+      fx.client.query("DELETE FROM draft_picks WHERE player_id = $1", [fx.playerId]),
+    ).rejects.toThrow(/append-only/);
+    await expect(fx.client.query("TRUNCATE draft_picks")).rejects.toThrow(/frozen/);
+  });
+
+  it("refuses to delete a roster row or rewrite who held whom", async () => {
+    const fx = await picked();
+    await expect(
+      fx.client.query("DELETE FROM roster_entries WHERE id = $1", [fx.entryId]),
+    ).rejects.toThrow(/history/);
+    await expect(
+      fx.client.query("UPDATE roster_entries SET acquired_via = 'TRADE' WHERE id = $1", [
+        fx.entryId,
+      ]),
+    ).rejects.toThrow(/history/);
+    await expect(
+      fx.client.query(
+        "UPDATE roster_entries SET acquired_at = acquired_at - interval '1 day' WHERE id = $1",
+        [fx.entryId],
+      ),
+    ).rejects.toThrow(/history/);
+  });
+
+  it("allows the IR flag and one release, and nothing after the release", async () => {
+    const fx = await picked();
+    await fx.client.query("UPDATE roster_entries SET on_ir = true WHERE id = $1", [fx.entryId]);
+    await fx.client.query("UPDATE roster_entries SET on_ir = false WHERE id = $1", [
+      fx.entryId,
+    ]);
+    await fx.client.query("UPDATE roster_entries SET released_at = now() WHERE id = $1", [
+      fx.entryId,
+    ]);
+
+    // Un-releasing, or moving the release, would change who held him in a past week.
+    await expect(
+      fx.client.query("UPDATE roster_entries SET released_at = NULL WHERE id = $1", [
+        fx.entryId,
+      ]),
+    ).rejects.toThrow(/history/);
+    await expect(
+      fx.client.query(
+        "UPDATE roster_entries SET released_at = released_at + interval '1 day' WHERE id = $1",
+        [fx.entryId],
+      ),
+    ).rejects.toThrow(/history/);
+  });
+});
+
 describe("clocks", () => {
   it("refuses to start before the order is drawn", async () => {
     // Without an order there is no rotation, so there is no answer to "whose

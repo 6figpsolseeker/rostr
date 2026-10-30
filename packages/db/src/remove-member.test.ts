@@ -281,3 +281,36 @@ describe("removeMember", () => {
     expect(await teamCount(fx)).toBe(1);
   });
 });
+
+describe("a membership is a signed record — 0055, #82", () => {
+  it("refuses any update to the consent row", async () => {
+    const fx = await fixture();
+    await expect(
+      fx.client.query(
+        "UPDATE league_memberships SET rules_hash = repeat('c', 64) WHERE team_id = $1",
+        [fx.memberTeam],
+      ),
+    ).rejects.toThrow(/signed record/);
+    await expect(
+      fx.client.query("UPDATE league_memberships SET signature = 'forged' WHERE team_id = $1", [
+        fx.memberTeam,
+      ]),
+    ).rejects.toThrow(/signed record/);
+  });
+
+  it("refuses a delete once the draft order is drawn, whoever issues it", async () => {
+    // `removeMember` already refuses here; this is the database refusing too.
+    const fx = await fixture();
+    await fx.client.query(
+      `UPDATE drafts
+          SET order_drawn_at = now(), order_slot = 1, order_blockhash = 'hash',
+              order_seed = repeat('b', 64)
+        WHERE league_id = $1`,
+      [fx.leagueId],
+    );
+
+    await expect(
+      fx.client.query("DELETE FROM league_memberships WHERE team_id = $1", [fx.memberTeam]),
+    ).rejects.toThrow(/drawn its draft order/);
+  });
+});
