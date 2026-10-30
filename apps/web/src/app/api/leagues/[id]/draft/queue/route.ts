@@ -44,7 +44,7 @@ export async function PUT(
       return NextResponse.json({ error: "You are not in this league" }, { status: 403 });
     }
 
-    const body = (await request.json()) as { playerIds?: string[] };
+    const body = (await request.json().catch(() => ({}))) as { playerIds?: string[] };
     if (!Array.isArray(body.playerIds)) {
       return NextResponse.json({ error: "playerIds must be an array" }, { status: 400 });
     }

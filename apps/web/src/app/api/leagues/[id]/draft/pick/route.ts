@@ -50,7 +50,7 @@ export async function POST(
       return NextResponse.json({ error: "You are not in this league" }, { status: 403 });
     }
 
-    const body = (await request.json()) as { playerId?: string };
+    const body = (await request.json().catch(() => ({}))) as { playerId?: string };
     if (!body.playerId) {
       return NextResponse.json({ error: "playerId is required" }, { status: 400 });
     }

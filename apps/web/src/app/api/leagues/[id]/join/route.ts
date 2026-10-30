@@ -90,7 +90,7 @@ export async function POST(
     );
   }
 
-  const body = (await request.json()) as {
+  const body = (await request.json().catch(() => ({}))) as {
     walletAddress?: string;
     signature?: string;
     teamName?: string;
