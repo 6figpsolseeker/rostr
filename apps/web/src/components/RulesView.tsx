@@ -1,4 +1,5 @@
 import type { LeagueRules, ScoringRule } from "@rostr/core";
+import { TIEBREAKER_LABELS } from "@/lib/tiebreakers";
 
 /**
  * The full rule set, rendered for a human.
@@ -192,7 +193,10 @@ function Season({ rules }: { rules: LeagueRules }) {
         <Row label="Playoff teams" value={`${s.playoffTeams} of ${rules.league.maxTeams}`} />
         <Row label="First-round byes" value={`Top ${s.byeSeeds} seeds`} />
         <Row label="Consolation bracket" value={s.consolationBracket ? "Yes" : "No"} />
-        <Row label="Tiebreakers" value={s.tiebreakers.join(" → ")} />
+        <Row
+          label="Tiebreakers"
+          value={s.tiebreakers.map((t) => TIEBREAKER_LABELS[t]).join(" → ")}
+        />
       </div>
     </Section>
   );
