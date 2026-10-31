@@ -227,6 +227,7 @@ export {
   syncBoxScores,
   unresolvedStatsProblems,
   type BoxScoreSyncResult,
+  type IngestState,
 } from "./box-scores.js";
 
 export { listCronRuns, recordCronRun, type CronRun } from "./cron-runs.js";

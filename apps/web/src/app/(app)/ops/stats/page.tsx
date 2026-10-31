@@ -9,6 +9,7 @@ import {
   buildRunBanner,
   ingestSentence,
   toneOf,
+  type IngestState,
   type ProblemRow,
   type RunBanner,
 } from "@/lib/ops";
@@ -52,6 +53,12 @@ export const metadata = {
 
 export const dynamic = "force-dynamic";
 
+const INGEST_LABEL: Record<IngestState, string> = {
+  NO_STATS: "No box score",
+  STALE: "Stats are stale",
+  DISCREPANCY: "Discrepancy",
+};
+
 /**
  * What we hold for this game. The tone lives here and nowhere else.
  *
@@ -61,13 +68,7 @@ export const dynamic = "force-dynamic";
  * it final yet. The most severe row wore the calmest chip.
  */
 function IngestChip({ row }: { row: ProblemRow }) {
-  const label =
-    row.ingest === "NO_STATS"
-      ? "No box score"
-      : row.ingest === "STALE"
-        ? "Stats are stale"
-        : "Discrepancy";
-
+  const label = INGEST_LABEL[row.ingest];
   const tone = toneOf(row.ingest);
   const cls =
     tone === "critical"
