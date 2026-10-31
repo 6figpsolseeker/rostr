@@ -1245,9 +1245,9 @@ export interface WaiverRunOutcome {
    * why a manager's claim is still outstanding. Same argument as
    * `finalizedWithUnfinishedGames` on the week outcome.
    *
-   * It is also the only trace this leaves. A wrongly-early award used to destroy
-   * its own evidence: the wire row carrying `clears_at` is deleted as part of
-   * awarding, and nothing else stores it.
+   * A wrongly-early award used to destroy its own evidence: the wire row
+   * carrying `clears_at` is deleted as part of awarding. The awarded claim now
+   * keeps a copy (`0057`), so `processed_at < clears_at` on that row answers it.
    */
   readonly deferred: number;
   readonly priorityAfter: readonly string[];
@@ -1692,9 +1692,16 @@ export async function processWaivers(
         claim.add_player_id,
       ]);
 
+      // The wire row just deleted was the only record of when he was due to
+      // clear, so the claim keeps it — "was this early" stays answerable (#109).
       await tx.query(
-        "UPDATE waiver_claims SET state = 'AWARDED', processed_at = $2 WHERE id = $1",
-        [outcome.claimId, now.toISOString()],
+        `UPDATE waiver_claims SET state = 'AWARDED', processed_at = $2, clears_at = $3
+          WHERE id = $1`,
+        [
+          outcome.claimId,
+          now.toISOString(),
+          clearsAt.get(claim.add_player_id)?.toISOString() ?? null,
+        ],
       );
       awarded++;
     }
