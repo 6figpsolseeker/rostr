@@ -21,8 +21,8 @@ function providerReturning(injuries: ProviderInjury[]): StatsProvider {
     listGames: () => Promise.resolve([]),
     getBoxScore: () => Promise.reject(new Error("not used")),
     listInjuries: () => Promise.resolve(injuries),
-    healthCheck: () => Promise.resolve({ ok: true }),
-  } as unknown as StatsProvider;
+    healthCheck: () => Promise.resolve({ ok: true, provider: "test", detail: "fake" }),
+  };
 }
 
 interface Fixture {
