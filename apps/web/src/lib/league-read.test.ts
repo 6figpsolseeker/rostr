@@ -99,6 +99,19 @@ function filesUnder(name: string, urlPrefix: string): { key: string; path: strin
   return found;
 }
 
+/**
+ * Each exported handler's source, from its `export` to the closing brace at
+ * column 0 — which prettier guarantees for a top-level function. A gate in a
+ * local helper the handler calls would not be seen; none exists today, and the
+ * failure would name the handler, so it is found rather than missed.
+ */
+function handlers(source: string): { name: string; body: string }[] {
+  return [...source.matchAll(/^export async function (\w+)\([\s\S]*?^\}/gm)].map((m) => ({
+    name: m[1] ?? "",
+    body: m[0],
+  }));
+}
+
 const leagueScoped = [
   ...filesUnder("route.ts", "api/leagues/[id]/"),
   // Anchored, or every `api/leagues/[id]/…/page.tsx` would match here too.
@@ -118,14 +131,38 @@ describe("league-scoped routes and pages are gated", () => {
     if (key in OPEN) return;
 
     const source = readFileSync(path, "utf8");
-    const gate = GATES.find((g) => g.test(source));
+    // A route file is judged handler by handler (#368). Judged whole, a gated
+    // GET let an ungated POST beside it pass.
+    const units = key.endsWith("route.ts")
+      ? handlers(source)
+      : [{ name: "page", body: source }];
+    expect(units.length, `${key} exports no handler this can find`).toBeGreaterThan(0);
 
-    expect(
-      gate,
-      `${key} reads a league by id and asks nobody who is looking. Call ` +
-        `leagueReadForbidden (routes) or leagueReadAccess (pages), or require ` +
-        `membership — or add it to OPEN with a reason.`,
-    ).toBeDefined();
+    for (const { name, body } of units) {
+      expect(
+        GATES.find((g) => g.test(body)),
+        `${key} ${name} reads a league by id and asks nobody who is looking. Call ` +
+          `leagueReadForbidden (routes) or leagueReadAccess (pages), or require ` +
+          `membership — or add it to OPEN with a reason.`,
+      ).toBeDefined();
+    }
+  });
+
+  it("splits a file into its handlers", () => {
+    // The mutation that matters: an ungated handler beside a gated one.
+    const source = [
+      "export async function GET() {",
+      "  if (await leagueReadForbidden(id)) return;",
+      "}",
+      "",
+      "export async function POST() {",
+      "  return ok();",
+      "}",
+    ].join("\n");
+    const units = handlers(source);
+
+    expect(units.map((u) => u.name)).toEqual(["GET", "POST"]);
+    expect(units.map((u) => GATES.some((g) => g.test(u.body)))).toEqual([true, false]);
   });
 
   it("has a reason recorded for every open file, and no stale entries", () => {
