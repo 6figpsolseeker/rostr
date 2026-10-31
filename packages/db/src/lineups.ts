@@ -1251,6 +1251,13 @@ export async function autoFillLineup(
      * and it never leaves a player you dropped in your lineup.
      */
     readonly fillEmptySlots?: boolean;
+    /**
+     * The week's projections, when the caller already holds them.
+     *
+     * `loadProjectedPoints` takes no team, so `ensureLineups` reads it once for
+     * the league rather than once per team (#101).
+     */
+    readonly projected?: ReadonlyMap<string, number> | undefined;
   },
 ): Promise<readonly LineupAssignment[]> {
   const stored = await getLeagueRules(db, leagueId);
@@ -1272,7 +1279,7 @@ export async function autoFillLineup(
   const mode = stored.rules.roster.autofill;
   const projected =
     mode === "WEEKLY_PROJECTION"
-      ? await loadProjectedPoints(db, season, week, stored.rules)
+      ? (options?.projected ?? (await loadProjectedPoints(db, season, week, stored.rules)))
       : new Map<string, number>();
 
   /*
@@ -1578,6 +1585,12 @@ export async function ensureLineups(
     [leagueId],
   );
 
+  // Once for the league: the scan has no per-team input (#101).
+  const projected =
+    stored.rules.roster.autofill === "WEEKLY_PROJECTION"
+      ? await loadProjectedPoints(db, stored.rules.seasonYear, week, stored.rules)
+      : undefined;
+
   let teamsFilled = 0;
   let teamsOptedOut = 0;
   const teamsOverLimit: string[] = [];
@@ -1606,7 +1619,10 @@ export async function ensureLineups(
       // matters: nothing has kicked off yet here.
       const tidy = options.optedOutRows !== "skip" || team.is_bot || team.autofill_enabled;
       if (tidy) {
-        await autoFillLineup(db, leagueId, team.id, week, now, { fillEmptySlots: false });
+        await autoFillLineup(db, leagueId, team.id, week, now, {
+          fillEmptySlots: false,
+          projected,
+        });
       }
       teamsOverLimit.push(team.id);
       continue;
@@ -1614,7 +1630,7 @@ export async function ensureLineups(
 
     // A bot has no manager to forget, so the switch is not theirs to hold.
     if (team.is_bot || team.autofill_enabled) {
-      await autoFillLineup(db, leagueId, team.id, week, now);
+      await autoFillLineup(db, leagueId, team.id, week, now, { projected });
       teamsFilled++;
       continue;
     }

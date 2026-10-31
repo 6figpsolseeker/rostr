@@ -725,6 +725,31 @@ describe("ensureLineups", () => {
     }
   });
 
+  it("scans the week's projections once, not once per team", async () => {
+    // #101: the scan takes no team, so every team got the same map.
+    const fx = await setup();
+    let scans = 0;
+    const counting = new Proxy(fx.client, {
+      get(target, prop, receiver) {
+        if (prop !== "query") return Reflect.get(target, prop, receiver);
+        return (sql: string, params?: unknown[]) => {
+          if (sql.includes("FROM player_projections")) scans++;
+          return target.query(sql, params);
+        };
+      },
+    });
+
+    // One call can be two statements — weekly, then the season-total fallback.
+    await loadProjectedPoints(counting, fx.rules.seasonYear, WEEK, fx.rules);
+    const perCall = scans;
+    scans = 0;
+
+    const result = await ensureLineups(counting, fx.leagueId, WEEK, BEFORE_ANYTHING);
+
+    expect(result.teamsFilled).toBe(2);
+    expect(scans).toBe(perCall);
+  });
+
   it("copes with a team that has almost no roster", async () => {
     // The other team has one quarterback. Eight slots stay empty, and that is a
     // legal lineup — it simply scores very little.
