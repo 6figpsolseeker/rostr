@@ -7,6 +7,7 @@ import type { StandingsRow } from "@rostr/core";
 import { getLeagueRules, loadWeekResults, teamForUser } from "@rostr/db";
 import { db } from "@/lib/db";
 import { currentUser } from "@/lib/session";
+import { decidedByLabel } from "@/lib/tiebreakers";
 
 const points = (milli: number): string => (milli / 1000).toFixed(1);
 
@@ -14,14 +15,6 @@ const points = (milli: number): string => (milli / 1000).toFixed(1);
 function record(row: StandingsRow): string {
   return row.ties > 0 ? `${row.wins}-${row.losses}-${row.ties}` : `${row.wins}-${row.losses}`;
 }
-
-const TIEBREAKER_LABELS: Record<string, string> = {
-  WIN_PCT: "record",
-  POINTS_FOR: "points for",
-  HEAD_TO_HEAD: "head-to-head",
-  POINTS_AGAINST: "points against",
-  LOWEST_TEAM_ID: "team ID",
-};
 
 export default async function StandingsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -93,9 +86,9 @@ export default async function StandingsPage({ params }: { params: Promise<{ id: 
                 on points for" is a different feeling from just "seventh", and it
                 is the one place a manager can see the chain actually applied.
               */}
-              {row.decidedBy && (
+              {decidedByLabel(row.decidedBy, weeksPlayed) && (
                 <span className="hidden text-xs text-nocturne-neutral-600 sm:inline">
-                  on {TIEBREAKER_LABELS[row.decidedBy] ?? row.decidedBy.toLowerCase()}
+                  {decidedByLabel(row.decidedBy, weeksPlayed)}
                 </span>
               )}
 
