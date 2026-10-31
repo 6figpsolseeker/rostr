@@ -1,3 +1,5 @@
+import type { IngestState } from "@rostr/db";
+
 /**
  * The operator view's decisions, kept where a test can reach them.
  *
@@ -164,8 +166,13 @@ export function statusOf(
  * can sort into one bucket and wear another — which is issue #233's own defect
  * one layer up. What this module owns is the *presentation* of that fact: the
  * tone, the ordering of the sections, and the sentence.
+ *
+ * Declared once, in `@rostr/db` beside the `CASE` that produces it, and
+ * re-exported here. Every consumer handles each state by name, with no default, so a
+ * fourth state fails the build until somebody decides its colour, sentence and
+ * section. A default would draw it in the calmest tone, which is #233 again.
  */
-export type IngestState = "NO_STATS" | "STALE" | "DISCREPANCY";
+export type { IngestState };
 
 /**
  * The tone a row is drawn in.
@@ -178,9 +185,14 @@ export type IngestState = "NO_STATS" | "STALE" | "DISCREPANCY";
  * the calmest chip, by default, every Sunday.
  */
 export function toneOf(ingest: IngestState): "critical" | "warning" | "neutral" {
-  if (ingest === "NO_STATS") return "critical";
-  if (ingest === "STALE") return "warning";
-  return "neutral";
+  switch (ingest) {
+    case "NO_STATS":
+      return "critical";
+    case "STALE":
+      return "warning";
+    case "DISCREPANCY":
+      return "neutral";
+  }
 }
 
 /**
@@ -194,23 +206,24 @@ export function toneOf(ingest: IngestState): "critical" | "warning" | "neutral" 
  * A claim that can only be true of some rows belongs on a row.
  */
 export function ingestSentence(row: ProblemRow): string {
-  if (row.ingest === "NO_STATS") {
-    return row.status === "CLOSED"
-      ? "No box score was ever read for this game. Every player in it scored zero, permanently."
-      : "No box score has been read for this game. Every player in it currently scores zero.";
+  switch (row.ingest) {
+    case "NO_STATS":
+      return row.status === "CLOSED"
+        ? "No box score was ever read for this game. Every player in it scored zero, permanently."
+        : "No box score has been read for this game. Every player in it currently scores zero.";
+    case "STALE":
+      // **Not "the most recent read failed".** That is one of two ways to get here
+      // and not the more common one: a game starved by `MAX_GAMES_PER_RUN`, or
+      // skipped by the consecutive-failure breaker, has had no read attempted
+      // since the whistle at all. Naming a failure that did not happen sends an
+      // operator looking for an error that is not there.
+      return (
+        "Stat lines exist from a read taken before the game finished, and nothing has " +
+        "been read successfully since, so these are not the final numbers."
+      );
+    case "DISCREPANCY":
+      return "The stat lines were ingested — this is a discrepancy, not a failure — so this game has been scored, possibly wrongly.";
   }
-  if (row.ingest === "STALE") {
-    // **Not "the most recent read failed".** That is one of two ways to get here
-    // and not the more common one: a game starved by `MAX_GAMES_PER_RUN`, or
-    // skipped by the consecutive-failure breaker, has had no read attempted
-    // since the whistle at all. Naming a failure that did not happen sends an
-    // operator looking for an error that is not there.
-    return (
-      "Stat lines exist from a read taken before the game finished, and nothing has " +
-      "been read successfully since, so these are not the final numbers."
-    );
-  }
-  return "The stat lines were ingested — this is a discrepancy, not a failure — so this game has been scored, possibly wrongly.";
 }
 
 /**
@@ -262,15 +275,16 @@ export function buildOpsView(
     };
   });
 
-  const of = (state: IngestState) => rows.filter((row) => row.ingest === state);
+  const by: Record<IngestState, ProblemRow[]> = { NO_STATS: [], STALE: [], DISCREPANCY: [] };
+  for (const row of rows) by[row.ingest].push(row);
 
   return {
     total: input.total,
     shown: rows.length,
     blockingRecent: input.blockingRecent,
-    noStats: of("NO_STATS"),
-    stale: of("STALE"),
-    discrepancies: of("DISCREPANCY"),
+    noStats: by.NO_STATS,
+    stale: by.STALE,
+    discrepancies: by.DISCREPANCY,
   };
 }
 
