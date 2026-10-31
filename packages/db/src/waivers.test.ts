@@ -1004,6 +1004,26 @@ describe("processing", () => {
     expect(winner?.team_id).toBe(fx.teams[3]);
   });
 
+  it("keeps the deleted wire row's clears_at on the awarded claim — #109", async () => {
+    // The award deletes the wire row, which was the only record of when the
+    // player was due to clear; without a copy, an early award is unprovable.
+    const fx = await setup();
+    const playerId = await contested(fx, [1, 3]);
+    const [wire] = await fx.client.query<{ clears_at: Date }>(
+      "SELECT clears_at FROM waiver_wire WHERE league_id = $1 AND player_id = $2",
+      [fx.leagueId, playerId],
+    );
+
+    await processWaivers(fx.client, fx.leagueId, WEDNESDAY);
+
+    const [claim] = await fx.client.query<{ clears_at: Date | null }>(
+      "SELECT clears_at FROM waiver_claims WHERE add_player_id = $1 AND state = 'AWARDED'",
+      [playerId],
+    );
+    expect(wire?.clears_at).toBeDefined();
+    expect(claim?.clears_at).toEqual(wire?.clears_at);
+  });
+
   it("tries a team's own claims in the order it filed them", async () => {
     // The wiring, which no test in `@rostr/core` can see: that `created_at` is
     // actually selected and threaded into `WaiverClaim`. Room is expressed as a
@@ -1397,6 +1417,13 @@ describe("RULES.md §6 — a claim waits for its player to clear", () => {
 
     const outcome = await processWaivers(fx.client, fx.leagueId, RUN);
     expect(outcome.awarded).toBe(1);
+
+    // No wire row to copy from, so nothing is invented.
+    const [claim] = await fx.client.query<{ clears_at: Date | null }>(
+      "SELECT clears_at FROM waiver_claims WHERE add_player_id = $1",
+      [held],
+    );
+    expect(claim?.clears_at).toBeNull();
   });
 
   it("resolves a cleared claim without dragging an uncleared one along", async () => {
