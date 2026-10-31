@@ -1356,6 +1356,30 @@ describe("vetoing", () => {
     ).rejects.toThrow(/trades_proposer_in_league/);
   });
 
+  it("cannot record an asset from a team outside the trade's league", async () => {
+    // #111, the row `0026` left open. `resolveTrade` reads any non-proposer
+    // asset as the receiver's, so this row would release a stranger's player.
+    const fx = await setupWithSecondLeague();
+    const tradeId = await propose(fx);
+
+    await expect(
+      fx.client.query(
+        "INSERT INTO trade_assets (trade_id, from_team_id, player_id) VALUES ($1, $2, $3)",
+        [tradeId, fx.otherTeams[0], fx.players.get("q1")],
+      ),
+    ).rejects.toThrow(/trade_assets_from_team_in_league/);
+
+    // Naming the other league does not help: the trigger derives it from the
+    // trade and overwrites the caller's value.
+    await expect(
+      fx.client.query(
+        `INSERT INTO trade_assets (trade_id, from_team_id, player_id, league_id)
+         VALUES ($1, $2, $3, $4)`,
+        [tradeId, fx.otherTeams[0], fx.players.get("q1"), fx.otherLeagueId],
+      ),
+    ).rejects.toThrow(/trade_assets_from_team_in_league/);
+  });
+
   it("still executes an ordinary trade with another league present", async () => {
     // The negative. Every other trade test runs in one league, so this is the
     // only one that would catch a league predicate scoped against the wrong
