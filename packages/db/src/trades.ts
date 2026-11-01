@@ -1152,9 +1152,18 @@ export async function vetoTrade(
 // Resolution
 // ---------------------------------------------------------------------------
 
+/**
+ * Why a trade expired (`0058`). `DEADLINE` is the ordinary case; `ASSET_GONE`
+ * means a promised player left the roster before execution, which every upstream
+ * guard exists to prevent — so seeing one means one of them failed.
+ */
+export type ExpiredReason = "DEADLINE" | "ASSET_GONE";
+
 export interface TradeResolution {
   readonly tradeId: string;
   readonly outcome: "EXECUTED" | "VETOED" | "EXPIRED";
+  /** Set exactly when `outcome` is `EXPIRED`. */
+  readonly expiredReason: ExpiredReason | null;
   readonly vetoes: number;
   readonly required: number;
 }
@@ -1272,7 +1281,13 @@ export async function resolveDueTrades(
         // not get it relabelled EXPIRED over the top of a completed swap — which
         // is how "rosters untouched" came to be reported for moved rosters.
         if (await tradeCannotExecute(db, row.id, now)) {
-          out.push({ tradeId: row.id, outcome: "EXPIRED", vetoes: 0, required: 0 });
+          out.push({
+            tradeId: row.id,
+            outcome: "EXPIRED",
+            expiredReason: "ASSET_GONE",
+            vetoes: 0,
+            required: 0,
+          });
         }
         continue;
       }
@@ -1287,9 +1302,9 @@ export async function resolveDueTrades(
 /**
  * A trade that can never execute, recorded rather than retried.
  *
- * Separate from the veto and deadline paths because the reason differs and a
- * reader should be able to tell them apart, even though the state is the same:
- * nothing moved, and nothing will.
+ * Separate from the veto and deadline paths because the reason differs, and
+ * `expired_reason` is what lets a reader tell this expiry from a deadline one:
+ * the state is the same, nothing moved, and nothing will.
  */
 async function tradeCannotExecute(db: SqlClient, tradeId: string, now: Date): Promise<boolean> {
   // Guarded, and deliberately silent when it matches nothing. This runs from a
@@ -1297,7 +1312,7 @@ async function tradeCannotExecute(db: SqlClient, tradeId: string, now: Date): Pr
   // zero rows here means another run already settled the trade — which is the
   // benign outcome, not an error to raise on top of the one being handled.
   const expired = await db.query<{ id: string }>(
-    `UPDATE trades SET state = 'EXPIRED', resolved_at = $2
+    `UPDATE trades SET state = 'EXPIRED', expired_reason = 'ASSET_GONE', resolved_at = $2
       WHERE id = $1 AND state = 'ACCEPTED'
     RETURNING id`,
     [tradeId, now.toISOString()],
@@ -1324,14 +1339,20 @@ async function resolveTrade(
   // mine to report", which is different from "it failed".
   if (pastDeadline) {
     const expired = await db.query<{ id: string }>(
-      `UPDATE trades SET state = 'EXPIRED', resolved_at = $2
+      `UPDATE trades SET state = 'EXPIRED', expired_reason = 'DEADLINE', resolved_at = $2
         WHERE id = $1 AND state = 'ACCEPTED'
       RETURNING id`,
       [tradeId, now.toISOString()],
     );
     if (expired.length === 0) return null;
 
-    return { tradeId, outcome: "EXPIRED", vetoes: trade.vetoes, required };
+    return {
+      tradeId,
+      outcome: "EXPIRED",
+      expiredReason: "DEADLINE",
+      vetoes: trade.vetoes,
+      required,
+    };
   }
 
   if (isVetoed(trade.vetoes, electorate, rules.trades)) {
@@ -1343,7 +1364,7 @@ async function resolveTrade(
     );
     if (vetoed.length === 0) return null;
 
-    return { tradeId, outcome: "VETOED", vetoes: trade.vetoes, required };
+    return { tradeId, outcome: "VETOED", expiredReason: null, vetoes: trade.vetoes, required };
   }
 
   await withTransaction(db, async (tx) => {
@@ -1555,7 +1576,7 @@ async function resolveTrade(
     }
   });
 
-  return { tradeId, outcome: "EXECUTED", vetoes: trade.vetoes, required };
+  return { tradeId, outcome: "EXECUTED", expiredReason: null, vetoes: trade.vetoes, required };
 }
 
 async function uninvolvedManagersFor(db: SqlClient, tradeId: string): Promise<number> {
