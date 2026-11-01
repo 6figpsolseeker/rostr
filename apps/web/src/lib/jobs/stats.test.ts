@@ -47,10 +47,9 @@ function fakeProvider(behaviour: (gameRef: string) => ProviderBoxScore | Error):
   calls: string[];
 } {
   const calls: string[] = [];
-  const provider = {
+  const provider: StatsProvider = {
     name: "tank01",
     listPlayers: () => Promise.resolve([]),
-    listByeWeeks: () => Promise.resolve(new Map()),
     listGames: () => Promise.resolve([]),
     listInjuries: () => Promise.resolve([]),
     getBoxScore: (gameRef: string) => {
@@ -58,7 +57,8 @@ function fakeProvider(behaviour: (gameRef: string) => ProviderBoxScore | Error):
       const answer = behaviour(gameRef);
       return answer instanceof Error ? Promise.reject(answer) : Promise.resolve(answer);
     },
-  } as unknown as StatsProvider;
+    healthCheck: () => Promise.resolve({ ok: true, provider: "tank01", detail: "fake" }),
+  };
 
   return { provider, calls };
 }

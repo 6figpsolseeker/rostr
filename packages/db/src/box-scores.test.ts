@@ -56,11 +56,9 @@ function recordingProvider(byRef: Map<string, ProviderBoxScore | Error>): {
       ...inner,
       getBoxScore: (gameRef: string) => {
         asked.push(gameRef);
-        return (
-          inner as { getBoxScore: (ref: string) => Promise<ProviderBoxScore> }
-        ).getBoxScore(gameRef);
+        return inner.getBoxScore(gameRef);
       },
-    } as unknown as StatsProvider,
+    },
   };
 }
 
@@ -68,7 +66,6 @@ function fakeProvider(byRef: Map<string, ProviderBoxScore | Error>): StatsProvid
   return {
     name: "tank01",
     listPlayers: () => Promise.resolve([]),
-    listByeWeeks: () => Promise.resolve(new Map()),
     listGames: () => Promise.resolve([]),
     getBoxScore: (gameRef: string) => {
       const answer = byRef.get(gameRef);
@@ -77,7 +74,8 @@ function fakeProvider(byRef: Map<string, ProviderBoxScore | Error>): StatsProvid
       return Promise.resolve(answer);
     },
     listInjuries: () => Promise.resolve([]),
-  } as unknown as StatsProvider;
+    healthCheck: () => Promise.resolve({ ok: true, provider: "tank01", detail: "fake" }),
+  };
 }
 
 const boxScore = (
@@ -1702,7 +1700,7 @@ describe("a run gives up on a provider that has stopped answering — #256", () 
       or fail by luck.
     */
     const asked: string[] = [];
-    const provider = {
+    const provider: StatsProvider = {
       ...fakeProvider(new Map()),
       getBoxScore: (gameRef: string) => {
         asked.push(gameRef);
@@ -1710,7 +1708,7 @@ describe("a run gives up on a provider that has stopped answering — #256", () 
           ? Promise.resolve(boxScore(gameRef, { qb1: [line("pass_yd", 100)], ...bothDefenses }))
           : Promise.reject(new Error("bad game"));
       },
-    } as unknown as StatsProvider;
+    };
 
     const result = await syncBoxScores(fx.client, provider, NFL.key, SEASON);
 
