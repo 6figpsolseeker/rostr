@@ -248,6 +248,13 @@ recorded too; `written_by` names the writer (`MANAGER`, `AUTOFILL`, `RELEASE`) a
 NULL for one that did not say, including a delete. Changes only — an autofill pass that leaves a slot alone
 adds nothing. Append-only by trigger, like `draft_picks`.
 
+`teams.waiver_priority` is rewritten in place by every waiver run, so
+`waiver_priority_changes` keeps every change to it (`0060`, issue #380): league, team,
+priority before and after, and `changed_at`. Written by trigger, changes only, the seed
+included, so a team's priority at any instant is its latest row's `priority_after`.
+`changed_at` is `now()`, the transaction's start, so the rows one run writes share a
+timestamp. Append-only by trigger.
+
 `roster_entries.league_id` is the team's own league, **derived by trigger and never
 supplied by a writer**. It is denormalised for one reason: a partial unique index cannot
 join, so the only way to enforce "one active owner per league" — the rule `0005` claimed
