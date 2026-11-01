@@ -17,6 +17,7 @@ import { addTestTeam, createTestDatabase } from "./testing.js";
 import type { PGliteClient } from "./testing.js";
 import {
   autoFillLineup,
+  clearReleasedFromLineups,
   autolineupCandidate,
   ensureLineups,
   teamsWithLineupWork,
@@ -2871,4 +2872,113 @@ describe("teamsWithLineupWork", () => {
     await ensureLineups(fx.client, fx.leagueId, WEEK, BEFORE_ANYTHING);
     expect(await teamsWithLineupWork(fx.client, fx.leagueId, WEEK + 1)).toBe(2);
   });
+});
+
+describe("every change to a slot is kept — #102", () => {
+  /** The QB slot's history, oldest first, as handles where the fixture has one. */
+  async function qbHistory(fx: Fixture): Promise<(string | null)[][]> {
+    const byId = new Map([...fx.players].map(([handle, id]) => [id, handle]));
+    const rows = await fx.client.query<{
+      player_id: string | null;
+      previous_player_id: string | null;
+      written_by: string | null;
+    }>(
+      `SELECT w.player_id, w.previous_player_id, w.written_by
+         FROM lineup_writes w
+         JOIN slot_types st ON st.id = w.slot_type_id
+        WHERE w.team_id = $1 AND w.week = $2 AND st.key = 'QB'
+        ORDER BY w.written_at`,
+      [fx.teamId, WEEK],
+    );
+    const name = (id: string | null) => (id === null ? null : (byId.get(id) ?? id));
+    return rows.map((r) => [name(r.previous_player_id), name(r.player_id), r.written_by]);
+  }
+
+  it("records who changed the slot, and only when it changed", async () => {
+    const fx = await setup();
+    await set(fx, "sun-qb");
+    // Fills the other eight and leaves the manager's quarterback alone, so it
+    // adds nothing to this slot's history — and neither does a second pass.
+    await autoFillLineup(fx.client, fx.leagueId, fx.teamId, WEEK, BEFORE_ANYTHING);
+    await autoFillLineup(fx.client, fx.leagueId, fx.teamId, WEEK, BEFORE_ANYTHING);
+    // The pass re-writes every slot; one it left alone is still the manager's.
+    const [qb] = await fx.client.query<{ written_by: string | null }>(
+      `SELECT written_by FROM lineups WHERE team_id = $1 AND week = $2 AND player_id = $3`,
+      [fx.teamId, WEEK, fx.player("sun-qb")],
+    );
+    expect(qb?.written_by).toBe("MANAGER");
+    await set(fx, "thu-qb");
+    await clearReleasedFromLineups(
+      fx.client,
+      fx.teamId,
+      fx.player("thu-qb"),
+      SEASON,
+      WEEK,
+      new Date(BEFORE_ANYTHING * 1000),
+    );
+
+    expect(await qbHistory(fx)).toEqual([
+      [null, "sun-qb", "MANAGER"],
+      ["sun-qb", "thu-qb", "MANAGER"],
+      ["thu-qb", null, "RELEASE"],
+    ]);
+  });
+
+  it("records the autofill's own picks as the autofill's", async () => {
+    const fx = await setup();
+
+    await autoFillLineup(fx.client, fx.leagueId, fx.teamId, WEEK, BEFORE_ANYTHING);
+
+    const history = await qbHistory(fx);
+    expect(history).toHaveLength(1);
+    expect(history[0]?.[2]).toBe("AUTOFILL");
+  });
+
+  it("names a write made outside the application as unstated", async () => {
+    const fx = await setup();
+    await set(fx, "sun-qb");
+
+    await fx.client.query(
+      `UPDATE lineups SET player_id = $1, written_by = NULL WHERE team_id = $2 AND week = $3
+          AND player_id = $4`,
+      [fx.player("thu-qb"), fx.teamId, WEEK, fx.player("sun-qb")],
+    );
+
+    expect((await qbHistory(fx)).at(-1)).toEqual(["sun-qb", "thu-qb", null]);
+  });
+
+  it("outlives a deleted row, and records the delete", async () => {
+    const fx = await setup();
+    await set(fx, "sun-qb");
+
+    await fx.client.query("DELETE FROM lineups WHERE team_id = $1 AND week = $2", [
+      fx.teamId,
+      WEEK,
+    ]);
+
+    expect(await qbHistory(fx)).toEqual([
+      [null, "sun-qb", "MANAGER"],
+      ["sun-qb", null, null],
+    ]);
+  });
+
+  it("cannot be rewritten", async () => {
+    const fx = await setup();
+    await set(fx, "sun-qb");
+
+    await expect(
+      fx.client.query("UPDATE lineup_writes SET written_by = 'AUTOFILL'"),
+    ).rejects.toThrow(/append-only/);
+    await expect(fx.client.query("DELETE FROM lineup_writes")).rejects.toThrow(/append-only/);
+  });
+
+  async function set(fx: Fixture, handle: string): Promise<void> {
+    await setLineup(fx.client, {
+      leagueId: fx.leagueId,
+      teamId: fx.teamId,
+      week: WEEK,
+      assignments: lineupOf(fx, { "QB:0": handle }),
+      now: BEFORE_ANYTHING,
+    });
+  }
 });
