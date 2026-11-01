@@ -231,7 +231,8 @@ teams             id, league_id, owner_id (nullable), is_bot, name,
                   draft_position, waiver_priority, ~~strikes, abandoned_at~~ (dropped by migration `0015` — abandonment was removed in schema 4)
 roster_entries    id, team_id, league_id, player_id, acquired_via, acquired_at,
                   released_at
-lineups           id, team_id, week, slot_type_id, player_id, locked_at
+lineups           id, team_id, week, slot_type_id, player_id, written_by, locked_at (never written)
+lineup_writes     id, team_id, week, slot_type_id, slot_index, player_id, previous_player_id, written_by, written_at
 ```
 
 `owner_id` is nullable and `is_bot` is a flag on the same table — a bot is a team without
@@ -240,6 +241,12 @@ an owner, not a separate entity. Keeps every join, standing, and matchup query u
 `roster_entries` is append-only with `released_at`, so full roster history is
 reconstructible for any week. `lineups` records what was actually started, never derived
 after the fact — a settled week must be provable.
+
+`lineups` is updated in place, so `lineup_writes` keeps every change to a slot (`0059`,
+issue #102). A trigger writes it, not the application, so a write nobody expected is
+recorded too; `written_by` names the writer (`MANAGER`, `AUTOFILL`, `RELEASE`) and is
+NULL for one that did not say, including a delete. Changes only — an autofill pass that leaves a slot alone
+adds nothing. Append-only by trigger, like `draft_picks`.
 
 `roster_entries.league_id` is the team's own league, **derived by trigger and never
 supplied by a writer**. It is denormalised for one reason: a partial unique index cannot

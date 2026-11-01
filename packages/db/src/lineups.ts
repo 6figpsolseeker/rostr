@@ -884,10 +884,10 @@ export async function setLineup(
       if (expected === assignment.playerId) continue;
 
       const written = await tx.query<{ slot_index: number }>(
-        `INSERT INTO lineups (team_id, week, slot_type_id, slot_index, player_id, locked_at)
-         VALUES ($1, $2, $3, $4, $5, NULL)
+        `INSERT INTO lineups (team_id, week, slot_type_id, slot_index, player_id, locked_at, written_by)
+         VALUES ($1, $2, $3, $4, $5, NULL, 'MANAGER')
          ON CONFLICT (team_id, week, slot_type_id, slot_index)
-         DO UPDATE SET player_id = EXCLUDED.player_id
+         DO UPDATE SET player_id = EXCLUDED.player_id, written_by = 'MANAGER'
           WHERE lineups.player_id IS NOT DISTINCT FROM $6
         RETURNING slot_index`,
         [
@@ -1501,11 +1501,16 @@ async function setLineupUnchecked(
     await tx.query(
       `INSERT INTO lineups (
          team_id, week, slot_type_id, slot_index, player_id,
-         autofilled_at, ranked_milli_points, ranked_on, ranked_source
+         autofilled_at, ranked_milli_points, ranked_on, ranked_source, written_by
        )
-       VALUES ($1, $2, $3, $4, $5, $7, $8, $9, $10)
+       VALUES ($1, $2, $3, $4, $5, $7, $8, $9, $10, 'AUTOFILL')
        ON CONFLICT (team_id, week, slot_type_id, slot_index)
        DO UPDATE SET player_id = EXCLUDED.player_id,
+                     -- Only when the player changes. This runs over every slot
+                     -- every pass, and a slot the manager set and the autofill
+                     -- left alone is still the manager's (#102).
+                     written_by = CASE WHEN lineups.player_id IS DISTINCT FROM EXCLUDED.player_id
+                                       THEN 'AUTOFILL' ELSE lineups.written_by END,
                      autofilled_at = CASE WHEN $11 THEN EXCLUDED.autofilled_at
                                           ELSE lineups.autofilled_at END,
                      ranked_milli_points = CASE WHEN $11 THEN EXCLUDED.ranked_milli_points
@@ -1916,7 +1921,7 @@ export async function clearReleasedFromLineups(
 ): Promise<number> {
   const rows = await db.query<{ id: string }>(
     `UPDATE lineups ln
-        SET player_id = NULL
+        SET player_id = NULL, written_by = 'RELEASE'
       WHERE ln.team_id = $1
         AND ln.player_id = $2
         AND ln.week >= $4
