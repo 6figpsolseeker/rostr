@@ -324,6 +324,15 @@ async function propose(fx: Fixture, now = MONDAY): Promise<string> {
 const settle = async (...args: Parameters<typeof resolveDueTrades>) =>
   (await resolveDueTrades(...args)).resolutions;
 
+/** What the row says about why it expired, read back rather than trusted. */
+const expiredReason = async (client: PGliteClient, tradeId: string) =>
+  (
+    await client.query<{ expired_reason: string | null }>(
+      "SELECT expired_reason FROM trades WHERE id = $1",
+      [tradeId],
+    )
+  )[0]?.expired_reason;
+
 describe("proposing", () => {
   it("records both sides", async () => {
     const fx = await setup();
@@ -1082,6 +1091,9 @@ describe("no double-spend across trades", () => {
 
     // Recorded, not retried hourly for the rest of the season, and not executed.
     expect(resolution?.outcome).toBe("EXPIRED");
+    // And recorded as this kind of expiry, not the deadline kind (#121).
+    expect(resolution?.expiredReason).toBe("ASSET_GONE");
+    expect(await expiredReason(fx.client, trade.tradeId)).toBe("ASSET_GONE");
 
     const owners = await fx.client.query<{ team_id: string }>(
       "SELECT team_id FROM roster_entries WHERE player_id = $1 AND released_at IS NULL",
@@ -1689,6 +1701,8 @@ describe("resolution", () => {
     const [resolution] = await settle(fx.client, fx.leagueId, AFTER_WEEK12_LOCK);
 
     expect(resolution?.outcome).toBe("EXPIRED");
+    expect(resolution?.expiredReason).toBe("DEADLINE");
+    expect(await expiredReason(fx.client, tradeId)).toBe("DEADLINE");
 
     const [row] = await fx.client.query<{ team_id: string }>(
       "SELECT team_id FROM roster_entries WHERE player_id = $1 AND released_at IS NULL",

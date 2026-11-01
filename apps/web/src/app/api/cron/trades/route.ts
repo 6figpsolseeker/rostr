@@ -77,6 +77,12 @@ async function run(client: SqlClient, now: Date): Promise<NextResponse> {
     vetoed?: number;
     expired?: number;
     /**
+     * How many of `expired` were `ASSET_GONE` rather than the deadline (#121): a
+     * promised player left the roster before execution, which an upstream guard
+     * should have refused. Present only when non-zero.
+     */
+    assetGone?: number;
+    /**
      * Trades this run could not settle. They are still ACCEPTED and will be
      * retried next hour — reported because a trade that can never execute would
      * otherwise look healthy forever, the same reason `bracketProblem` exists.
@@ -105,11 +111,13 @@ async function run(client: SqlClient, now: Date): Promise<NextResponse> {
   for (const leagueId of due) {
     try {
       const { resolutions, failures } = await resolveDueTrades(client, leagueId, now);
+      const assetGone = resolutions.filter((r) => r.expiredReason === "ASSET_GONE").length;
       runs.push({
         leagueId,
         executed: resolutions.filter((r) => r.outcome === "EXECUTED").length,
         vetoed: resolutions.filter((r) => r.outcome === "VETOED").length,
         expired: resolutions.filter((r) => r.outcome === "EXPIRED").length,
+        ...(assetGone > 0 ? { assetGone } : {}),
         ...(failures.length > 0 ? { failures: [...failures] } : {}),
       });
     } catch (error) {
