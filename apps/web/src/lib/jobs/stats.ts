@@ -8,7 +8,7 @@ import {
   unresolvedStatsProblems,
 } from "@rostr/db";
 import type { SqlClient } from "@rostr/db";
-import type { StatsProvider } from "@rostr/stats";
+import type { RequestCounts, StatsProvider } from "@rostr/stats";
 
 /**
  * The body of `/api/cron/stats`.
@@ -57,6 +57,18 @@ import type { StatsProvider } from "@rostr/stats";
  * does, and its count rides along on every run — so a discrepancy stays visible
  * until the game is re-read cleanly, rather than until the next tick.
  */
+/**
+ * Whether a run spent enough on retries to be worth a person's attention (#243).
+ *
+ * One retry per two calls. A provider failing a third of first attempts lands
+ * near that line, and one failing two thirds is well over it, while every call
+ * still succeeds. A healthy Sunday spends none. The floor of three keeps a quiet
+ * Tuesday, one call and one retry, from going red over a single blip.
+ */
+export function retryAlarm(requests: RequestCounts): boolean {
+  return requests.retries >= 3 && requests.retries * 2 >= requests.calls;
+}
+
 export async function runStatsJob(
   client: SqlClient,
   provider: StatsProvider,
@@ -144,6 +156,10 @@ export async function runStatsJob(
   // itself clean over a game that has been failing since Sunday.
   const outstanding = await unresolvedStatsProblems(client, NFL.key);
 
+  // Read once, after every call this run made. The route builds a fresh
+  // provider per run, so these are this run's numbers and nothing older.
+  const requests = provider.requestCounts?.() ?? null;
+
   // **Every reason, joined — not the first one.** This was a chain of ternaries,
   // so a run with a broken season announced only that and said nothing about the
   // twelve games that also failed. A heartbeat is read once and acted on once.
@@ -215,6 +231,21 @@ export async function runStatsJob(
       starvedSeasons > 0
         ? `${starvedSeasons} season(s) had games under way and read none`
         : null,
+      /*
+        **The provider is struggling and every call still succeeded** (#243).
+
+        A retry that ends in success leaves no failure and no warning, so a
+        provider sliding towards its rate limit reported `OK` on every tick until
+        the tick where all three attempts failed together. By then a game is
+        dropped, and past its correction window it settles at zero.
+
+        Something to act on, which is the test for a note here: check the quota
+        or the plan before it runs out. Self-clearing, because the next healthy
+        run overwrites it. `retryAlarm` decides, and says why at that line.
+      */
+      requests !== null && retryAlarm(requests)
+        ? `provider needed ${requests.retries} retries for ${requests.calls} calls`
+        : null,
     ]
       .filter((part) => part !== null)
       .join("; ") || null;
@@ -227,6 +258,7 @@ export async function runStatsJob(
     // Surfaced here rather than in `last_outcome`, which is a state and not a
     // message. See the note above the `problem` string.
     gameWarnings,
+    requests,
     runs,
     outstanding,
   });

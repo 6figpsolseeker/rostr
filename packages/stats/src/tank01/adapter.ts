@@ -13,6 +13,7 @@ import type {
   ProviderInjury,
   ProviderPlayer,
   ProviderPlayerProfile,
+  RequestCounts,
   StatsProvider,
 } from "../provider.js";
 import { Tank01Client } from "./client.js";
@@ -352,6 +353,10 @@ export class Tank01Provider implements StatsProvider {
 
   healthCheck(): Promise<ProviderHealth> {
     return this.client.healthCheck();
+  }
+
+  requestCounts(): RequestCounts {
+    return this.client.requestCounts();
   }
 
   /**

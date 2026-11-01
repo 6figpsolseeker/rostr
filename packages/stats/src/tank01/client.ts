@@ -9,7 +9,7 @@
  */
 
 import { ProviderError } from "../provider.js";
-import type { ProviderHealth } from "../provider.js";
+import type { ProviderHealth, RequestCounts } from "../provider.js";
 
 const HOST = "tank01-nfl-live-in-game-real-time-statistics-nfl.p.rapidapi.com";
 
@@ -108,6 +108,8 @@ export class Tank01Client {
   private readonly doFetch: typeof globalThis.fetch;
   private readonly attempts: number;
   private readonly sleep: (ms: number) => Promise<void>;
+  private calls = 0;
+  private retries = 0;
 
   constructor(options: Tank01Options) {
     if (!options.apiKey) {
@@ -153,6 +155,7 @@ export class Tank01Client {
    */
   async get<T>(path: string, params: Record<string, string> = {}): Promise<T> {
     let lastError: unknown;
+    this.calls++;
 
     for (let attempt = 1; attempt <= this.attempts; attempt++) {
       try {
@@ -172,6 +175,7 @@ export class Tank01Client {
         */
         if (attempt === this.attempts || !isRetryable(error)) throw error;
 
+        this.retries++;
         await this.sleep(RETRY_BASE_MS * 2 ** (attempt - 1));
       }
     }
@@ -179,6 +183,18 @@ export class Tank01Client {
     // Unreachable: the loop either returns or throws. Present so the function is
     // total rather than relying on the reader to prove that.
     throw lastError;
+  }
+
+  /**
+   * Calls made and retries spent since this client was built (#243).
+   *
+   * A retry that ends in success is otherwise discarded, so a provider sliding
+   * towards its rate limit looks healthy right up to the call where all three
+   * attempts fail. The stats cron builds one client per run and reads this at
+   * the end.
+   */
+  requestCounts(): RequestCounts {
+    return { calls: this.calls, retries: this.retries };
   }
 
   private async attempt<T>(path: string, params: Record<string, string> = {}): Promise<T> {
