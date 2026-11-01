@@ -100,6 +100,8 @@ interface MarketResponse {
    * refuse is the failure this exists to prevent — it turns a rule into a wall.
    */
   market: { open: boolean; notice: string | null };
+  /** Counted roster size against the limit, IR exemption already applied. */
+  capacity: { counted: number; limit: number; notice: string | null };
 }
 
 const fetcher = async (url: string): Promise<MarketResponse> => {
@@ -419,7 +421,14 @@ export function PlayerMarket({ leagueId }: { leagueId: string }) {
       </section>
 
       <section className="space-y-2">
-        <h2 className="text-sm font-medium text-nocturne-neutral-400">Your roster</h2>
+        <h2 className="text-sm font-medium text-nocturne-neutral-400">
+          Your roster · {data.capacity.counted} of {data.capacity.limit}
+        </h2>
+        {data.capacity.notice !== null && (
+          <p className="rounded border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+            {data.capacity.notice}
+          </p>
+        )}
         <ul className="divide-y divide-nocturne-neutral-900 rounded border border-nocturne-neutral-900">
           {data.roster.map((player) => (
             <li key={player.playerId} className="flex items-center gap-3 px-4 py-2 text-sm">
