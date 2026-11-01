@@ -6,6 +6,8 @@ import {
   dropPlayer,
   lockedByTrade,
   marketClosedReason,
+  overageFor,
+  overLimitNotice,
   pendingClaims,
   reorderClaims,
   submitClaim,
@@ -64,6 +66,7 @@ export async function GET(
 
     const available = await availablePlayers(client, id, now);
     const locked = await lockedByTrade(client, id);
+    const overage = await overageFor(client, context.myTeamId, context.rules);
     const roster = await client.query<{
       player_id: string;
       on_ir: boolean;
@@ -122,6 +125,19 @@ export async function GET(
         injuryDesignation: row.injury_designation,
       })),
       claims: await pendingClaims(client, id, context.myTeamId),
+      /*
+        The roster against its limit (#254). Counted, not row count: a team at
+        the limit with two players genuinely on IR holds more rows than the
+        limit and is legal. `rosterOverage` is the one place that subtracts the
+        exemption, and the notice is the sentence the lineup refusal uses, so
+        this screen cannot disagree with either. It names no cause on purpose —
+        IR recovery is one way over, and not the only one.
+      */
+      capacity: {
+        counted: overage.counted,
+        limit: overage.limit,
+        notice: overLimitNotice(overage),
+      },
       /*
         Whether this league is transacting at all, and the sentence if not.
 
