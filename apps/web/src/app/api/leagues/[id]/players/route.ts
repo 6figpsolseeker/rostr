@@ -4,6 +4,7 @@ import {
   availablePlayers,
   cancelClaim,
   dropPlayer,
+  lockedByTrade,
   marketClosedReason,
   pendingClaims,
   reorderClaims,
@@ -62,6 +63,7 @@ export async function GET(
     const now = new Date();
 
     const available = await availablePlayers(client, id, now);
+    const locked = await lockedByTrade(client, id);
     const roster = await client.query<{
       player_id: string;
       on_ir: boolean;
@@ -104,6 +106,9 @@ export async function GET(
       roster: roster.map((row) => ({
         playerId: row.player_id,
         onIr: row.on_ir,
+        // Frozen by an accepted trade (#120). The server refuses to drop him
+        // (`IN_A_TRADE`); this is so the screen says so before he is tried.
+        inTrade: locked.has(row.player_id),
         // The same fact the available list carries, and the one that decides
         // whether his club column reads "FA". Since 2026-09-20 those letters
         // mean *no NFL club* — a fact about the real world — so a rostered

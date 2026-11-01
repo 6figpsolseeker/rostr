@@ -78,6 +78,8 @@ interface Rostered {
   onNflRoster: boolean;
   injuryDesignation: string | null;
   onIr: boolean;
+  /** Committed to an accepted trade, so he cannot be dropped until it resolves. */
+  inTrade: boolean;
 }
 
 interface Claim {
@@ -324,9 +326,10 @@ export function PlayerMarket({ leagueId }: { leagueId: string }) {
           >
             <option value="">— nobody —</option>
             {data.roster.map((player) => (
-              <option key={player.playerId} value={player.playerId}>
+              <option key={player.playerId} value={player.playerId} disabled={player.inTrade}>
                 {player.position} {player.name}
                 {player.onIr ? " (IR — dropping him frees no space)" : ""}
+                {player.inTrade ? " (in a trade)" : ""}
               </option>
             ))}
           </select>
@@ -459,7 +462,12 @@ export function PlayerMarket({ leagueId }: { leagueId: string }) {
                   </span>
                 </span>
               </button>
-              {data.market.open && (
+              {data.market.open && player.inTrade && (
+                // Shown, not hidden, as on the trade screen: a missing Drop button
+                // with no reason reads as the screen being broken.
+                <span className="text-xs text-nocturne-neutral-600">in a trade</span>
+              )}
+              {data.market.open && !player.inTrade && (
                 <button
                   onClick={() => void act({ action: "DROP", playerId: player.playerId })}
                   disabled={busy}
