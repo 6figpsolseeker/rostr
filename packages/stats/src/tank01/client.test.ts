@@ -256,6 +256,22 @@ describe("retrying a request — #97", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(3);
   });
 
+  it("counts the retries a success would otherwise hide (#243)", async () => {
+    const fetchImpl = flaky(2, 429);
+    const { sleepImpl } = recordingSleep();
+    const client = new Tank01Client({
+      apiKey: "test",
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      sleepImpl,
+    });
+
+    await expect(client.get("getNFLBoxScore")).resolves.toEqual(["ok"]);
+    await expect(client.get("getNFLBoxScore")).resolves.toEqual(["ok"]);
+
+    // Two calls; the first needed two retries, the second none.
+    expect(client.requestCounts()).toEqual({ calls: 2, retries: 2 });
+  });
+
   it("retries a 5xx", async () => {
     const fetchImpl = flaky(1, 503);
     const { sleepImpl } = recordingSleep();

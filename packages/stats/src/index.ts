@@ -3,6 +3,7 @@ export {
   type ProviderBoxScore,
   type ProviderGame,
   type ProviderHealth,
+  type RequestCounts,
   type ProviderInjury,
   type ProviderPlayer,
   type ProviderPlayerProfile,
