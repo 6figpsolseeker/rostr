@@ -5,7 +5,7 @@ import type { ProviderBoxScore, StatsProvider } from "@rostr/stats";
 import { createLeague, createUser, listCronRuns, seedSport } from "@rostr/db";
 import { createTestDatabase } from "@rostr/db/testing";
 import type { PGliteClient } from "@rostr/db/testing";
-import { runStatsJob } from "./stats.js";
+import { retryAlarm, runStatsJob } from "./stats.js";
 
 /**
  * The stats cron, against a fake provider.
@@ -440,6 +440,55 @@ describe("the stats cron", () => {
    * had to be fixed. See `score-week/route.test.ts` for that property tested
    * where it can be.
    */
+});
+
+describe("retries that ended in success — #243", () => {
+  it("draws the line at one retry per two calls, and not below three", () => {
+    expect(retryAlarm({ calls: 20, retries: 0 })).toBe(false);
+    expect(retryAlarm({ calls: 20, retries: 9 })).toBe(false);
+    expect(retryAlarm({ calls: 20, retries: 10 })).toBe(true);
+    // A quiet day: one call, a couple of blips, nothing to do.
+    expect(retryAlarm({ calls: 1, retries: 2 })).toBe(false);
+    expect(retryAlarm({ calls: 2, retries: 3 })).toBe(true);
+  });
+
+  it("turns the heartbeat red when every game landed but the provider struggled", async () => {
+    db = await createTestDatabase();
+    await seedSport(db, NFL);
+    await league(2026);
+    await seedDefenses();
+    await finishedGame(2026, "g1");
+
+    const { provider } = fakeProvider(healthy);
+    const struggling: StatsProvider = {
+      ...provider,
+      requestCounts: () => ({ calls: 1, retries: 3 }),
+    };
+
+    const response = await runStatsJob(db, struggling, NOW);
+    const body = (await response.json()) as { requests: unknown };
+
+    expect(body.requests).toEqual({ calls: 1, retries: 3 });
+    expect(await lastOutcome()).toBe("provider needed 3 retries for 1 calls");
+  });
+
+  it("stays green on a provider that reports no retries", async () => {
+    db = await createTestDatabase();
+    await seedSport(db, NFL);
+    await league(2026);
+    await seedDefenses();
+    await finishedGame(2026, "g1");
+
+    const { provider } = fakeProvider(healthy);
+
+    await runStatsJob(
+      db,
+      { ...provider, requestCounts: () => ({ calls: 1, retries: 0 }) },
+      NOW,
+    );
+
+    expect(await lastOutcome()).toBeNull();
+  });
 });
 
 describe("a slate that was under way and read nothing — #256", () => {

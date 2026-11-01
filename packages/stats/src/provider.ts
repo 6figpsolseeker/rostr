@@ -209,6 +209,22 @@ export interface StatsProvider {
 
   /** Cheap call that proves credentials work. Used by `pnpm stats:check`. */
   healthCheck(): Promise<ProviderHealth>;
+
+  /**
+   * HTTP requests made so far, and how many of them were retries (#243).
+   *
+   * Optional because only a provider that retries has anything to say. Without
+   * it a provider whose retries rise from none to most calls reads exactly like
+   * a healthy one until the tick where every attempt fails at once.
+   */
+  requestCounts?(): RequestCounts;
+}
+
+export interface RequestCounts {
+  /** Calls to `get`, each of which may have made several attempts. */
+  readonly calls: number;
+  /** Attempts after the first. Zero on a healthy provider. */
+  readonly retries: number;
 }
 
 export interface ProviderHealth {
