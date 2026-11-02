@@ -1024,6 +1024,66 @@ describe("processing", () => {
     expect(claim?.clears_at).toEqual(wire?.clears_at);
   });
 
+  it("keeps the order before and after the run — #380", async () => {
+    // Seeded 4, 3, 2, 1 (reverse draft order). Team 4 wins and goes to the back,
+    // so every team moves and the run writes four rows sharing one timestamp.
+    const fx = await setup();
+    await contested(fx, [1, 3]);
+
+    await processWaivers(fx.client, fx.leagueId, WEDNESDAY);
+
+    const rows = await fx.client.query<{
+      team_id: string;
+      priority_before: number | null;
+      priority_after: number;
+      changed_at: Date;
+    }>(
+      `SELECT team_id, priority_before, priority_after, changed_at
+         FROM waiver_priority_changes WHERE league_id = $1
+        ORDER BY changed_at, priority_after`,
+      [fx.leagueId],
+    );
+    const [t1, t2, t3, t4] = fx.teams;
+
+    // The seed, then the run.
+    expect(rows.map((r) => [r.team_id, r.priority_before, r.priority_after])).toEqual([
+      [t4, null, 1],
+      [t3, null, 2],
+      [t2, null, 3],
+      [t1, null, 4],
+      [t3, 2, 1],
+      [t2, 3, 2],
+      [t1, 4, 3],
+      [t4, 1, 4],
+    ]);
+    // One run, one timestamp: that is what groups its rows.
+    expect(new Set(rows.slice(4).map((r) => r.changed_at.getTime())).size).toBe(1);
+  });
+
+  it("records nothing for a run that moved nobody — #380", async () => {
+    // The run rewrites the whole order every time; only a change is history.
+    const fx = await setup();
+
+    await processWaivers(fx.client, fx.leagueId, WEDNESDAY);
+
+    const [row] = await fx.client.query<{ n: number }>(
+      "SELECT count(*)::int AS n FROM waiver_priority_changes WHERE league_id = $1",
+      [fx.leagueId],
+    );
+    expect(row?.n).toBe(4); // the seed alone
+  });
+
+  it("cannot rewrite the priority history", async () => {
+    const fx = await setup();
+
+    await expect(
+      fx.client.query("UPDATE waiver_priority_changes SET priority_after = 1"),
+    ).rejects.toThrow(/append-only/);
+    await expect(fx.client.query("DELETE FROM waiver_priority_changes")).rejects.toThrow(
+      /append-only/,
+    );
+  });
+
   it("tries a team's own claims in the order it filed them", async () => {
     // The wiring, which no test in `@rostr/core` can see: that `created_at` is
     // actually selected and threaded into `WaiverClaim`. Room is expressed as a
