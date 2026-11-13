@@ -155,6 +155,10 @@ export class Tank01Client {
    */
   async get<T>(path: string, params: Record<string, string> = {}): Promise<T> {
     let lastError: unknown;
+    // Messages of the attempts that failed before the current one (#243). The
+    // thrown error is the last attempt's, so a 429 → 429 → 500 recorded only the
+    // 500 and the rate limiting that actually happened was gone.
+    const earlier: string[] = [];
     this.calls++;
 
     for (let attempt = 1; attempt <= this.attempts; attempt++) {
@@ -162,6 +166,18 @@ export class Tank01Client {
         return await this.attempt<T>(path, params);
       } catch (error) {
         lastError = error;
+
+        const giveUp = attempt === this.attempts || !isRetryable(error);
+        if (giveUp && earlier.length > 0 && error instanceof Tank01RequestError) {
+          throw new Tank01RequestError(
+            `${error.message} (after ${earlier.length} failed ${
+              earlier.length === 1 ? "attempt" : "attempts"
+            }: ${earlier.join(" | ")})`,
+            error.retryable,
+            error,
+          );
+        }
+        if (error instanceof Error) earlier.push(error.message);
 
         /*
           Retried only when trying again could plausibly work.
@@ -173,7 +189,7 @@ export class Tank01Client {
           fail-closed direction here is to give up and report, because the caller
           records the error per game and the next tick tries again anyway.
         */
-        if (attempt === this.attempts || !isRetryable(error)) throw error;
+        if (giveUp) throw error;
 
         this.retries++;
         await this.sleep(RETRY_BASE_MS * 2 ** (attempt - 1));
