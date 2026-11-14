@@ -66,13 +66,13 @@ export async function GET(): Promise<NextResponse> {
   }>(
     `SELECT l.id, l.name, l.season, l.state,
             (SELECT count(*)::int FROM teams t WHERE t.league_id = l.id) AS team_count,
-            -- Size, draft time and buy-in come from the frozen rule document
-            -- rather than from a column, because that document is what a member
-            -- signs. A denormalised copy that drifted would advertise a league
-            -- on terms nobody agreed to.
-            (r.rule_json -> 'league' ->> 'maxTeams')::int AS max_teams,
-            (r.rule_json -> 'draft' ->> 'scheduledAt')::bigint AS scheduled_at,
-            (r.rule_json -> 'pot' ->> 'buyInBaseUnits') AS buy_in
+            -- Size, draft time and buy-in come from canonical, the signed
+            -- bytes, rather than a denormalised column, because that document
+            -- is what a member signs. A copy that drifted would advertise a
+            -- league on terms nobody agreed to.
+            (r.canonical::jsonb -> 'league' ->> 'maxTeams')::int AS max_teams,
+            (r.canonical::jsonb -> 'draft' ->> 'scheduledAt')::bigint AS scheduled_at,
+            (r.canonical::jsonb -> 'pot' ->> 'buyInBaseUnits') AS buy_in
        FROM leagues l
        LEFT JOIN league_rules r ON r.league_id = l.id
       WHERE l.visibility = 'PUBLIC' AND l.state = 'FORMING'

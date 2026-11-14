@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { buildNflPprRules, buildRosterShape, NFL } from "@rostr/core";
+import {
+  buildNflPprRules,
+  buildRosterShape,
+  encodeLeagueRules,
+  hashLeagueRules,
+  NFL,
+} from "@rostr/core";
 import type { DraftRules, LeagueRules } from "@rostr/core";
 import { createLeague } from "./leagues.js";
 import { createUser } from "./identity.js";
@@ -1854,6 +1860,41 @@ describe("a manager ranks their own claims — #125", () => {
   });
 });
 
+/**
+ * A league written the way the schema before `0061` expects, for the backfill
+ * tests below that stop migrating at an older version.
+ *
+ * Not `createLeague`: that is today's code, and it writes today's columns.
+ * Before `0061` `league_rules` also requires `rule_json`, so the current
+ * writer cannot insert into it. These tests need a league that exists, not
+ * the current way of making one.
+ */
+async function leagueOnOldSchema(
+  client: PGliteClient,
+  commissionerId: string,
+  name: string,
+): Promise<{ id: string }> {
+  const rules = buildNflPprRules({ seasonYear: 2026, draft: DRAFT }) as LeagueRules;
+  const canonical = encodeLeagueRules(rules);
+  const hash = hashLeagueRules(rules);
+  const [sport] = await client.query<{ id: string }>("SELECT id FROM sports WHERE key = $1", [
+    NFL.key,
+  ]);
+  const [league] = await client.query<{ id: string }>(
+    `INSERT INTO leagues (sport_id, season, name, visibility, commissioner_id, rules_hash)
+     VALUES ($1, 2026, $2, 'PRIVATE', $3, $4) RETURNING id`,
+    [sport!.id, name, commissionerId, hash],
+  );
+  // Two parameters for one value: bound once, Postgres would type the
+  // placeholder as jsonb and store jsonb's rendering in the text column.
+  await client.query(
+    `INSERT INTO league_rules (league_id, rule_json, canonical, hash)
+     VALUES ($1, $2::jsonb, $3, $4)`,
+    [league!.id, canonical, canonical, hash],
+  );
+  return league!;
+}
+
 describe("0054 backfills ranks in the order claims were already tried — #125", () => {
   it("numbers each team's pending claims by filing time then id, and leaves settled claims unranked", async () => {
     const client = new PGliteClient(new PGlite());
@@ -1864,11 +1905,7 @@ describe("0054 backfills ranks in the order claims were already tried — #125",
     );
     await seedSport(client, NFL);
     const commissioner = await createUser(client, "c@example.com", "C");
-    const league = await createLeague(client, NFL, {
-      name: "Backfill",
-      commissionerId: commissioner.id,
-      rules: buildNflPprRules({ seasonYear: 2026, draft: DRAFT }) as LeagueRules,
-    });
+    const league = await leagueOnOldSchema(client, commissioner.id, "Backfill");
     const teamA = (await addTestTeam(client, league.id, "A")).teamId;
     const teamB = (await addTestTeam(client, league.id, "B")).teamId;
     const [sport] = await client.query<{ id: string }>("SELECT id FROM sports WHERE key = $1", [
@@ -1938,11 +1975,7 @@ describe("0053 clears duplicates the race already made — #354", () => {
     );
     await seedSport(client, NFL);
     const commissioner = await createUser(client, "c@example.com", "C");
-    const league = await createLeague(client, NFL, {
-      name: "Dedupe",
-      commissionerId: commissioner.id,
-      rules: buildNflPprRules({ seasonYear: 2026, draft: DRAFT }) as LeagueRules,
-    });
+    const league = await leagueOnOldSchema(client, commissioner.id, "Dedupe");
     const teamA = (await addTestTeam(client, league.id, "A")).teamId;
     const teamB = (await addTestTeam(client, league.id, "B")).teamId;
     const [sport] = await client.query<{ id: string }>("SELECT id FROM sports WHERE key = $1", [

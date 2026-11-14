@@ -1038,7 +1038,8 @@ after the seed is public, gives a mean pick of **1.64** against a fair 6.50, and
 fifty-seven percent of the time. That is what `0028` closes.
 
 `drafts.scheduled_at` is now the lock instant, so `0028` also makes it write-once and
-checks it against `league_rules.rule_json` — the lock has to be the number members signed,
+checks it against the frozen rules (`league_rules.canonical` since `0061`; `rule_json`, now
+dropped, before that) — the lock has to be the number members signed,
 not a copy that happens to agree. They already disagreed by a year in the draft fixtures.
 
 **The cost, stated rather than discovered later:** a league that has not filled by its

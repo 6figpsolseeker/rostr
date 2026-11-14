@@ -970,7 +970,7 @@ describe("hashLeagueRules", () => {
     //   dissolves leagues there whenever `DATABASE_URL` is set. What makes this
     //   safe is a different fact, and a stronger one: **an addition cannot reach
     //   a league that already exists.** A frozen league holds its own copy of
-    //   the scoring table in `league_rules.rule_json`, `scorePlayer` skips a
+    //   the scoring table in `league_rules.canonical`, `scorePlayer` skips a
     //   stat with no matching rule by design, and so a key those leagues have
     //   never heard of scores them nothing — which is exactly right. The move
     //   that does damage is a *rename* or a removal, which is what #162 and
