@@ -634,8 +634,8 @@ async function autofillCouldNotFill(
           SELECT g.week
             FROM games g
             JOIN sports s ON s.id = g.sport_id
-           WHERE s.key = lr.rule_json->>'sportKey'
-             AND g.season = (lr.rule_json->>'seasonYear')::int
+           WHERE s.key = lr.canonical::jsonb->>'sportKey'
+             AND g.season = (lr.canonical::jsonb->>'seasonYear')::int
              AND g.kickoff_at <= $2
            ORDER BY g.kickoff_at DESC
            LIMIT 1

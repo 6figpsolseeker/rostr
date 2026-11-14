@@ -243,8 +243,8 @@ describe("league_rules immutability", () => {
     const leagueId = await seedLeague(client, HASH);
 
     await client.query(
-      "INSERT INTO league_rules (league_id, rule_json, canonical, hash) VALUES ($1, $2, $3, $4)",
-      [leagueId, JSON.stringify({ a: 1 }), '{"a":1}', HASH],
+      "INSERT INTO league_rules (league_id, canonical, hash) VALUES ($1, $2, $3)",
+      [leagueId, '{"a":1}', HASH],
     );
 
     const rows = await client.query("SELECT * FROM league_rules WHERE league_id = $1", [
@@ -257,8 +257,8 @@ describe("league_rules immutability", () => {
     const client = await fresh();
     const leagueId = await seedLeague(client, HASH);
     await client.query(
-      "INSERT INTO league_rules (league_id, rule_json, canonical, hash) VALUES ($1, $2, $3, $4)",
-      [leagueId, JSON.stringify({ a: 1 }), '{"a":1}', HASH],
+      "INSERT INTO league_rules (league_id, canonical, hash) VALUES ($1, $2, $3)",
+      [leagueId, '{"a":1}', HASH],
     );
 
     // Application-layer immutability is a promise. This is the guarantee.
@@ -271,8 +271,8 @@ describe("league_rules immutability", () => {
     const client = await fresh();
     const leagueId = await seedLeague(client, HASH);
     await client.query(
-      "INSERT INTO league_rules (league_id, rule_json, canonical, hash) VALUES ($1, $2, $3, $4)",
-      [leagueId, JSON.stringify({ a: 1 }), '{"a":1}', HASH],
+      "INSERT INTO league_rules (league_id, canonical, hash) VALUES ($1, $2, $3)",
+      [leagueId, '{"a":1}', HASH],
     );
 
     await expect(
@@ -287,8 +287,8 @@ describe("league_rules immutability", () => {
     const client = await fresh();
     const leagueId = await seedLeague(client, HASH);
     await client.query(
-      "INSERT INTO league_rules (league_id, rule_json, canonical, hash) VALUES ($1, $2, $3, $4)",
-      [leagueId, JSON.stringify({ a: 1 }), '{"a":1}', HASH],
+      "INSERT INTO league_rules (league_id, canonical, hash) VALUES ($1, $2, $3)",
+      [leagueId, '{"a":1}', HASH],
     );
 
     await expect(client.query("TRUNCATE league_rules")).rejects.toThrow(/immutable/i);
@@ -300,8 +300,8 @@ describe("league_rules immutability", () => {
 
     await expect(
       client.query(
-        "INSERT INTO league_rules (league_id, rule_json, canonical, hash) VALUES ($1, $2, $3, $4)",
-        [leagueId, JSON.stringify({ a: 1 }), '{"a":1}', "b".repeat(64)],
+        "INSERT INTO league_rules (league_id, canonical, hash) VALUES ($1, $2, $3)",
+        [leagueId, '{"a":1}', "b".repeat(64)],
       ),
     ).rejects.toThrow(/hash mismatch/i);
   });

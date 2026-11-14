@@ -631,11 +631,6 @@ describe("verifyStoredRules hashes the stored bytes — #69 §1", () => {
    * columns from one derivation and `league_rules_immutable` then refuses every
    * rewrite — so an honest league cannot be corrupted after the fact, and the
    * insert is the shape a second writer would actually produce.
-   *
-   * `canonical` goes into both columns, as `createLeague` does with the bytes
-   * it hashed. A helper that wrote honest JSON to one and corrupt text to the
-   * other would manufacture the divergence the duplicate-key case is there to
-   * demonstrate.
    */
   const leagueWithBytes = async (
     client: PGliteClient,
@@ -665,13 +660,8 @@ describe("verifyStoredRules hashes the stored bytes — #69 §1", () => {
     // hash and never at the bytes.
     await withBytesCheckOff(client, () =>
       client.query(
-        `INSERT INTO league_rules (league_id, rule_json, canonical, hash)
-       VALUES ($1, $2::jsonb, $3, $4)`,
-        // Two parameters for one value, deliberately. Bound once and used twice,
-        // Postgres infers a single type for the placeholder — jsonb, from the cast —
-        // and the text column then stores jsonb's normalised rendering instead of the
-        // bytes under test. That silently repairs the corruption before the check runs.
-        [league!.id, canonical, canonical, hash],
+        `INSERT INTO league_rules (league_id, canonical, hash) VALUES ($1, $2, $3)`,
+        [league!.id, canonical, hash],
       ),
     );
 
@@ -715,29 +705,17 @@ describe("verifyStoredRules hashes the stored bytes — #69 §1", () => {
     expect(await verifyStoredRules(client, id)).toBe(false);
   });
 
-  it("catches a duplicated key, where the two stored columns disagree", async () => {
+  it("catches a duplicated key", async () => {
     /*
-      The worst of them, because the corruption does not stay in one column.
-      `rule_json` is jsonb and normalises a duplicate key away; `canonical` is
-      text and keeps both. So one insert of one string leaves the column that is
-      queried and the column that is hashed holding different documents — and
-      the old check, which read the parsed object, saw only the tidy one.
+      Any jsonb reader of `canonical` normalises a duplicate key away and sees
+      only the tidy document, so the check has to read the bytes, not the
+      parsed object.
     */
     const doubled = honest.replace(/^{/, '{"seasonYear":2026,');
     expect(doubled).not.toBe(honest);
 
     const { client, commissionerId } = await setup();
     const id = await leagueWithBytes(client, commissionerId, doubled);
-
-    // The divergence is Postgres's doing, not the fixture's: both columns were
-    // bound from the same parameter.
-    const [row] = await client.query<{ from_json: string; from_text: string }>(
-      "SELECT rule_json::text AS from_json, canonical AS from_text FROM league_rules WHERE league_id = $1",
-      [id],
-    );
-    const seasonYears = (s: string) => s.split('"seasonYear"').length - 1;
-    expect(seasonYears(row!.from_text)).toBe(2);
-    expect(seasonYears(row!.from_json)).toBe(1);
 
     expect(await verifyStoredRules(client, id)).toBe(false);
   });
@@ -748,12 +726,6 @@ describe("verifyStoredRules hashes the stored bytes — #69 §1", () => {
     `JSON.parse(row.canonical)` — so bytes that are not JSON at all threw a
     `SyntaxError` out of a function declared to return a boolean. A caller
     asking "are these rules intact?" got an exception instead of "no".
-
-    These need the two columns bound separately, unlike every case above:
-    `rule_json` is jsonb and simply cannot hold text that does not parse, so
-    this is the one shape where a writer must fill the columns from different
-    values. That is not a contrivance — it is what makes the case reachable at
-    all, and `0004` checks neither column against the hash.
   */
   it.each([
     ["empty", ""],
@@ -783,9 +755,8 @@ describe("verifyStoredRules hashes the stored bytes — #69 §1", () => {
     );
     await withBytesCheckOff(client, () =>
       client.query(
-        `INSERT INTO league_rules (league_id, rule_json, canonical, hash)
-         VALUES ($1, $2::jsonb, $3, $4)`,
-        [league!.id, honest, canonical, hash],
+        `INSERT INTO league_rules (league_id, canonical, hash) VALUES ($1, $2, $3)`,
+        [league!.id, canonical, hash],
       ),
     );
 
@@ -1069,16 +1040,12 @@ describe("the rules URI is written once — #69 §3, §4", () => {
 describe("the hash covers the bytes — #294, migration 0045", () => {
   /*
     `0004` checks that an incoming row declares the hash its league declares,
-    and nothing else — never `canonical`, never `rule_json`. So any bytes at all
-    could be stored under a correct hash, at ordinary application privilege, and
-    both that trigger and the on-chain anchor accepted it.
+    and nothing else — never `canonical`. So any bytes at all could be stored
+    under a correct hash, at ordinary application privilege, and both that
+    trigger and the on-chain anchor accepted it.
 
-    No live exploit: `createLeague` binds one string to both columns. What made
-    it worth a migration is that two consumers already document the guarantee as
-    though it held — the lobby reads `rule_json` under a comment calling it "the
-    frozen rule document … what a member signs", and `0028` anchors the draft
-    clock to it under one calling it "checkable by a stranger". A stranger holds
-    the pinned bytes, which are `canonical`.
+    `0061` dropped the second byte column, `rule_json`, so the checks here that
+    compared the two are gone with it.
   */
 
   /** A league row whose declared hash is `hash`, so 0004's check passes. */
@@ -1101,15 +1068,14 @@ describe("the hash covers the bytes — #294, migration 0045", () => {
   const insertRules = (
     client: PGliteClient,
     leagueId: string,
-    ruleJson: string,
     canonical: string,
     hash: string,
   ) =>
-    client.query(
-      `INSERT INTO league_rules (league_id, rule_json, canonical, hash)
-       VALUES ($1, $2::jsonb, $3, $4)`,
-      [leagueId, ruleJson, canonical, hash],
-    );
+    client.query(`INSERT INTO league_rules (league_id, canonical, hash) VALUES ($1, $2, $3)`, [
+      leagueId,
+      canonical,
+      hash,
+    ]);
 
   it("still lets an ordinary league be created", async () => {
     // The first thing a byte check can break is the honest path.
@@ -1147,31 +1113,35 @@ describe("the hash covers the bytes — #294, migration 0045", () => {
     const hash = sha256Hex(canonical);
     const leagueId = await leagueDeclaring(client, commissionerId, hash);
 
-    await expect(
-      insertRules(client, leagueId, canonical, canonical, hash),
-    ).resolves.toBeDefined();
+    await expect(insertRules(client, leagueId, canonical, hash)).resolves.toBeDefined();
     expect(await verifyStoredRules(client, leagueId)).toBe(true);
   });
 
-  it("cannot store a NUL, and that is jsonb's limit rather than this check's", async () => {
+  it("cannot store a NUL, because every reader casts to jsonb", async () => {
     /*
       Postgres refuses \u0000 in a jsonb value outright — "unsupported Unicode
-      escape sequence" — however the surrounding document is escaped. Recorded
-      here because it looks like a false refusal from 0045 and is not: it is the
-      column type, it predates this migration, and it fires on the cast before
-      either trigger runs.
+      escape sequence" — while its json parser, which `IS JSON` uses, accepts
+      it. Until `0061` the jsonb `rule_json` column refused it. Now the byte
+      check casts `canonical` itself, because the lobby, the draft-clock trigger
+      and the empty-slot notice all cast it, and one row that fails the cast
+      fails the whole lobby listing.
 
       Reachable in principle through `pot.feeRecipient`, the one rule field with
       no charset validation (`validate.ts` checks only that it is non-empty). It
-      fails closed — a write error at creation, never a corrupt row — so nothing
-      here has to defend against it.
+      fails closed — a write error at creation, never a stored row.
     */
     const { client, commissionerId } = await setup();
     const canonical = '{"a":"\\u0000"}';
     const hash = sha256Hex(canonical);
     const leagueId = await leagueDeclaring(client, commissionerId, hash);
 
-    await expect(insertRules(client, leagueId, canonical, canonical, hash)).rejects.toThrow(
+    const [{ json }] = (await client.query<{ json: boolean }>(
+      "SELECT $1::text IS JSON AS json",
+      [canonical],
+    )) as [{ json: boolean }];
+    expect(json).toBe(true);
+
+    await expect(insertRules(client, leagueId, canonical, hash)).rejects.toThrow(
       /unsupported Unicode escape sequence/,
     );
   });
@@ -1183,49 +1153,9 @@ describe("the hash covers the bytes — #294, migration 0045", () => {
     const leagueId = await leagueDeclaring(client, commissionerId, hash);
 
     // A different document entirely, under a correct hash. Accepted before 0045.
-    await expect(insertRules(client, leagueId, '{"a":99}', '{"a":99}', hash)).rejects.toThrow(
+    await expect(insertRules(client, leagueId, '{"a":99}', hash)).rejects.toThrow(
       /stored rule bytes do not hash/,
     );
-  });
-
-  it("refuses two byte columns that disagree with each other", async () => {
-    /*
-      The sharper shape, and the one `verifyStoredRules` cannot see: `canonical`
-      is honest, so the hash checks out and the chain agrees — while
-      `rule_json`, the column the lobby and `0028` actually query, holds
-      something else.
-    */
-    const { client, commissionerId } = await setup();
-    const honest = '{"a":1}';
-    const hash = sha256Hex(honest);
-    const leagueId = await leagueDeclaring(client, commissionerId, hash);
-
-    await expect(insertRules(client, leagueId, '{"a":99}', honest, hash)).rejects.toThrow(
-      /rule_json is not the document in canonical/,
-    );
-  });
-
-  it("refuses a number spelled differently in the two columns", async () => {
-    /*
-      Found by review, and it falsified the first version of this check.
-
-      jsonb equality is **numeric** equality, so `{"a":1}` and `{"a":1.0}` were
-      equal to `IS DISTINCT FROM` — while `->>` answers `1` and `1.0`. Both
-      consumers cast that result, so a row this trigger accepted would then break
-      `0028`'s draft-clock anchor and the lobby query with `invalid input syntax
-      for type bigint`. Fail-closed, and still a divergence the check claimed to
-      have removed.
-
-      Comparing the rendered text on both sides is what closes it.
-    */
-    const { client, commissionerId } = await setup();
-    const canonical = '{"scheduledAt":1767225600}';
-    const hash = sha256Hex(canonical);
-    const leagueId = await leagueDeclaring(client, commissionerId, hash);
-
-    await expect(
-      insertRules(client, leagueId, '{"scheduledAt":1767225600.0}', canonical, hash),
-    ).rejects.toThrow(/rule_json is not the document in canonical/);
   });
 
   it("names non-JSON bytes as non-JSON, even under a correct hash", async () => {
@@ -1241,24 +1171,23 @@ describe("the hash covers the bytes — #294, migration 0045", () => {
     const hash = sha256Hex(canonical);
     const leagueId = await leagueDeclaring(client, commissionerId, hash);
 
-    await expect(insertRules(client, leagueId, '{"a":1}', canonical, hash)).rejects.toThrow(
+    await expect(insertRules(client, leagueId, canonical, hash)).rejects.toThrow(
       /canonical is not JSON/,
     );
   });
 
-  it("accepts rule_json written with different whitespace and key order", async () => {
-    // jsonb compares as a document, not as text. Requiring the two columns to
-    // match byte-for-byte would refuse every honest league: jsonb re-renders
-    // with a space after each colon and sorts keys by length, while the
-    // canonical encoder emits no whitespace and sorts by code unit.
-    const { client, commissionerId } = await setup();
-    const canonical = '{"a":1,"bbb":2}';
-    const hash = sha256Hex(canonical);
-    const leagueId = await leagueDeclaring(client, commissionerId, hash);
-
-    await expect(
-      insertRules(client, leagueId, '{ "bbb" : 2, "a" : 1 }', canonical, hash),
-    ).resolves.toBeDefined();
+  it("has no rule_json column (0061)", async () => {
+    const { client } = await setup();
+    const columns = await client.query<{ column_name: string }>(
+      `SELECT column_name FROM information_schema.columns
+        WHERE table_name = 'league_rules' ORDER BY column_name`,
+    );
+    expect(columns.map((c) => c.column_name)).toEqual([
+      "canonical",
+      "created_at",
+      "hash",
+      "league_id",
+    ]);
   });
 
   it("lets 0004 answer first when both checks would refuse the row", async () => {
@@ -1285,8 +1214,8 @@ describe("the hash covers the bytes — #294, migration 0045", () => {
     const wrongForBoth = "b".repeat(64);
     expect(wrongForBoth).not.toBe(sha256Hex(canonical));
 
-    await expect(
-      insertRules(client, leagueId, canonical, canonical, wrongForBoth),
-    ).rejects.toThrow(/rules hash mismatch/);
+    await expect(insertRules(client, leagueId, canonical, wrongForBoth)).rejects.toThrow(
+      /rules hash mismatch/,
+    );
   });
 });
