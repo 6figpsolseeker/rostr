@@ -751,7 +751,11 @@ function validatePot(rules: LeagueRules, out: string[]): void {
   const pot = rules.pot;
   if (pot === null) return;
 
-  if (!/^[1-9][0-9]*$/.test(pot.buyInBaseUnits)) {
+  // `typeof` first: `RegExp.test` stringifies its argument, so the number
+  // 5000000 and the array [5000000] both passed, and a non-string was frozen as
+  // the buy-in. The on-chain terms comparison then refused the anchor, so the
+  // league could never be joined, only recreated.
+  if (typeof pot.buyInBaseUnits !== "string" || !/^[1-9][0-9]*$/.test(pot.buyInBaseUnits)) {
     out.push("buyInBaseUnits must be a positive integer expressed as a decimal string");
   } else {
     // BigInt because a u64 buy-in can exceed Number.MAX_SAFE_INTEGER, and a
