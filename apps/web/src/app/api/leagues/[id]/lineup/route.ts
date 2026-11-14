@@ -48,14 +48,10 @@ const STATUS: Record<string, number> = {
   // A league whose games are not ingested cannot enforce a kickoff lock, so it
   // refuses rather than accepting a lineup it could not police.
   //
-  // **409 is a partial answer to #98 and this comment used to overstate it
-  // twice.** It said the code "fell through to 400 with no diagnosis"; the catch
-  // already returned the error message, and #98 says so itself ("the diagnosis
-  // is right"). What #98 actually asks for is **503** — the manager did nothing
-  // wrong and there is nothing they can do, which is a server-state problem
-  // wearing a 4xx. Moving it out of the 400 bucket is an improvement and not the
-  // fix; #98 stays open for the status itself.
-  SCHEDULE_MISSING: 409,
+  // 503, not a 4xx (#98): the manager did nothing wrong and nothing they send
+  // will fix it — the server is missing the schedule until `pnpm db:sync` runs.
+  // The editor branches on `code`, not on status, so this changes no client path.
+  SCHEDULE_MISSING: 503,
 };
 
 function weekOf(request: Request): number {

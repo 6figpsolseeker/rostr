@@ -7,7 +7,7 @@ import { NFL } from "./nfl.js";
  *
  * ## The failure this exists to prevent
  *
- * A league's scoring table is copied into `league_rules.rule_json` at creation
+ * A league's scoring table is copied into `league_rules.canonical` at creation
  * and never rewritten — that is the whole point of the frozen rules. The stats
  * pipeline, meanwhile, always runs the current code. So the two are joined by
  * nothing but the stat key string, and `scorePlayer` skips a stat with no
@@ -77,7 +77,7 @@ const EVER_DEFINED = [
  *
  * Putting one here is a decision with a cost, not a tidy-up. Before adding an
  * entry, establish that **no league in any deployed database holds a scoring
- * rule referencing it** — `SELECT` against `league_rules.rule_json`, not a
+ * rule referencing it** — `SELECT` against `league_rules.canonical`, not a
  * belief about whether leagues exist. After 22 August 2026 the honest answer is
  * usually that removal is not available, and the key should be left defined and
  * unscored instead.
