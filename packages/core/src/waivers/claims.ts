@@ -207,7 +207,7 @@ export function resolveWaiverClaims(input: ResolveInput): WaiverResolution {
     if (byRank !== 0) return byRank;
 
     const byTime = a.submittedAt.getTime() - b.submittedAt.getTime();
-    return byTime !== 0 ? byTime : a.claimId.localeCompare(b.claimId);
+    return byTime !== 0 ? byTime : a.claimId < b.claimId ? -1 : a.claimId > b.claimId ? 1 : 0;
   });
 
   const working = new Map<string, RosterMember[]>(

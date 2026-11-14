@@ -23,10 +23,11 @@ import type { MatchupResult } from "../standings.js";
 /**
  * Team ids are **canonical lowercase-hex UUIDs**, and that is load-bearing.
  *
- * `LOWEST_TEAM_ID` sorts with `localeCompare` on the string. A Rust kernel
- * holding a team as 16 raw bytes compares bytes. Those two orders agree for
- * lowercase hex and disagree the moment a capital letter appears — `"a"` sorts
- * *after* `"Z"` under `localeCompare` and before it by byte. Production ids come
+ * `LOWEST_TEAM_ID` sorts the string by UTF-16 code unit. A Rust kernel holding
+ * a team as 16 raw bytes compares bytes. Those two orders agree while every id
+ * uses one case, and disagree when cases mix: the string puts `"B"` before
+ * `"a"`, the bytes put 0xa before 0xb. (It used `localeCompare` until #25's
+ * re-check; that also depended on the server's locale.) Production ids come
  * from Postgres `gen_random_uuid()`, so the property holds there; the corpus
  * uses the same shape so it holds here, and `corpus.test.ts` asserts it rather
  * than trusting it.

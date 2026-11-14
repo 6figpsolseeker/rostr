@@ -155,7 +155,7 @@ function compare(a: AutolineupCandidate, b: AutolineupCandidate, mode: AutofillM
 
   // Arbitrary, and that is the point: every real criterion is equal, so all that
   // remains is that two machines agree.
-  return a.playerId.localeCompare(b.playerId);
+  return a.playerId < b.playerId ? -1 : a.playerId > b.playerId ? 1 : 0;
 }
 
 /**
@@ -336,7 +336,7 @@ export function autolineupChoices(input: AutolineupInput): readonly AutolineupCh
   const order = [...slots].sort((a, b) => {
     const scarcity = eligibleCount(a) - eligibleCount(b);
     if (scarcity !== 0) return scarcity;
-    const byType = a.slotType.localeCompare(b.slotType);
+    const byType = a.slotType < b.slotType ? -1 : a.slotType > b.slotType ? 1 : 0;
     return byType !== 0 ? byType : a.slotIndex - b.slotIndex;
   });
 

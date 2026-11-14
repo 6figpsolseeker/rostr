@@ -287,7 +287,7 @@ function orderGroup(
     // a hundred million league-seasons.
     if (tiebreaker === "LOWEST_TEAM_ID") {
       return [...group]
-        .sort((a, b) => a.teamId.localeCompare(b.teamId))
+        .sort((a, b) => (a.teamId < b.teamId ? -1 : a.teamId > b.teamId ? 1 : 0))
         .map((record, index) => ({
           record,
           decidedBy: index === 0 ? decidedBy : tiebreaker,

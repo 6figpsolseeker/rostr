@@ -67,17 +67,16 @@ describe("the standings conformance corpus", () => {
   /**
    * The assumption `LOWEST_TEAM_ID` rests on, asserted rather than trusted.
    *
-   * TypeScript sorts the id with `localeCompare`; a Rust kernel holding a team
-   * as sixteen raw UUID bytes compares bytes. Those agree for canonical
-   * lowercase hex and diverge the moment case or a non-hex character appears —
-   * `"a"` sorts after `"Z"` under `localeCompare` and before it by byte.
+   * TypeScript sorts the id string by UTF-16 code unit; a Rust kernel holding a
+   * team as sixteen raw UUID bytes compares bytes. Those agree for canonical
+   * lowercase hex and diverge when cases mix or a non-hex character appears.
    * Postgres `gen_random_uuid()` produces lowercase hex, so this holds in
    * production; it is asserted here because the corpus is what a Rust
    * implementation will be written against, and a corpus that quietly violated
    * it would teach the wrong lesson.
    */
   it("uses ids whose string order and byte order agree", () => {
-    const byString = [...TEAM].sort((a, b) => a.localeCompare(b));
+    const byString = [...TEAM].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
     const byBytes = [...TEAM].sort((a, b) => {
       const x = a.replaceAll("-", "");
       const y = b.replaceAll("-", "");
