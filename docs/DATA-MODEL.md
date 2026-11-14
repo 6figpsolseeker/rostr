@@ -211,7 +211,7 @@ qualifies for FLEX; that is a property of the player, not a relationship.
 ```
 leagues           id, sport_id, season, name, visibility (PRIVATE|PUBLIC),
                   commissioner_id, rules_hash, rules_uri, state, created_at
-league_rules      id, league_id, rule_json, hash          -- immutable, one row, ever
+league_rules      league_id, canonical, hash              -- immutable, one row, ever
 scoring_rules     id, league_id, stat_key_id, kind, multiplier, tiers_json
 roster_slots      id, league_id, slot_type_id, count, ordinal
 ```

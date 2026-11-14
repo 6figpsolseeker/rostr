@@ -83,9 +83,9 @@ export async function createLeague(
     // The authoritative copy. `canonical` is stored verbatim so anyone can
     // re-hash it and check the result against the chain.
     await tx.query(
-      `INSERT INTO league_rules (league_id, rule_json, canonical, hash)
-       VALUES ($1, $2::jsonb, $3, $4)`,
-      [leagueId, canonical, canonical, rulesHash],
+      `INSERT INTO league_rules (league_id, canonical, hash)
+       VALUES ($1, $2, $3)`,
+      [leagueId, canonical, rulesHash],
     );
 
     // Denormalised copies for querying. Copies, never references to a shared
