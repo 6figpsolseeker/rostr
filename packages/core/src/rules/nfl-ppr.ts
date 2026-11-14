@@ -256,6 +256,28 @@ export type NflPprOverrides = {
 };
 
 /**
+ * The NFL season a league drafting at `scheduledAt` (Unix seconds) plays.
+ *
+ * The calendar year of the draft in Eastern time. A draft always precedes the
+ * season it is for, and nobody drafts across New Year's Eve, so the year the
+ * draft happens in is the season. Eastern because that is the league's clock
+ * (`NFL_DEFAULT_WAIVERS.timezone`): in UTC a 9pm New Year's Eve draft would land
+ * in the following year.
+ *
+ * The create route used to default `seasonYear` to a literal 2026, and the form
+ * never sent one, so every league was frozen as 2026, permanently, including
+ * one drafting in August 2027.
+ */
+export function nflSeasonForDraft(scheduledAt: number): number {
+  return Number(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: NFL_DEFAULT_WAIVERS.timezone,
+      year: "numeric",
+    }).format(new Date(scheduledAt * 1000)),
+  );
+}
+
+/**
  * Build a complete rule set from the defaults.
  *
  * The result is a plain value with no shared references into this module, so a
