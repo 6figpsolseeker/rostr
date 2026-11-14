@@ -452,6 +452,33 @@ describe("the field locks at the draw", () => {
     ).rejects.toThrow(/drawn once/i);
   });
 
+  it.each([
+    ["pick_seconds", 3600, /pick clock frozen/],
+    ["rounds", 3, /round count frozen/],
+  ])("refuses to change %s once written (0062)", async (column, value, message) => {
+    const fx = await setup();
+    await createDraftRecord(fx.client, scheduleArgs(fx.leagueId));
+
+    await expect(
+      fx.client.query(`UPDATE drafts SET ${column} = $2 WHERE league_id = $1`, [
+        fx.leagueId,
+        value,
+      ]),
+    ).rejects.toThrow(message);
+  });
+
+  it("lets a statement set the clock to the value it already has", async () => {
+    const fx = await setup();
+    await createDraftRecord(fx.client, scheduleArgs(fx.leagueId));
+
+    await expect(
+      fx.client.query(
+        "UPDATE drafts SET pick_seconds = pick_seconds, rounds = rounds WHERE league_id = $1",
+        [fx.leagueId],
+      ),
+    ).resolves.toBeDefined();
+  });
+
   it("refuses a seed recorded without the block it came from", async () => {
     const fx = await setup();
     await createDraftRecord(fx.client, scheduleArgs(fx.leagueId));
