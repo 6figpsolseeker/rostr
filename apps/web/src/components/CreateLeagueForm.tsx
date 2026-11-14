@@ -14,6 +14,7 @@ import {
   NFL_DEFAULT_SETTLEMENT,
   NFL_DEFAULT_TRADES,
   NFL_WINNER_TAKE_ALL_PAYOUT,
+  nflSeasonForDraft,
 } from "@rostr/core";
 import type { LeagueRules, PotRules } from "@rostr/core";
 import {
@@ -288,7 +289,7 @@ export function CreateLeagueForm() {
 
     try {
       return buildNflPprRules({
-        seasonYear: 2026,
+        seasonYear: nflSeasonForDraft(scheduledAt),
         draft: { type: "SNAKE", mode, pickSeconds, scheduledAt },
         league: { visibility },
         trades: { deadlineWeek: tradeDeadlineWeek },
