@@ -256,6 +256,45 @@ describe("retrying a request — #97", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(3);
   });
 
+  it("names every failed attempt when it gives up, not only the last (#243)", async () => {
+    // 429 → 429 → 500. The error used to read "HTTP 500" alone, and the rate
+    // limiting behind it was gone from games.stats_error.
+    const statuses = [429, 429, 500];
+    const fetchImpl = vi.fn().mockImplementation(() =>
+      Promise.resolve({
+        ok: false,
+        status: statuses.shift(),
+        text: () => Promise.resolve(""),
+        json: () => Promise.resolve({}),
+        headers: new Headers({}),
+      } as Response),
+    );
+    const { sleepImpl } = recordingSleep();
+    const client = new Tank01Client({
+      apiKey: "test",
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      sleepImpl,
+    });
+
+    const error = await client.get("getNFLBoxScore").catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ProviderError);
+    expect((error as Error).message).toMatch(
+      /^Tank01 returned HTTP 500 \(after 2 failed attempts: .*HTTP 429.* \| .*HTTP 429.*\)$/,
+    );
+  });
+
+  it("leaves a first-attempt failure's message alone", async () => {
+    const fetchImpl = flaky(99, 404);
+    const { sleepImpl } = recordingSleep();
+    const client = new Tank01Client({
+      apiKey: "test",
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      sleepImpl,
+    });
+
+    await expect(client.get("getNFLBoxScore")).rejects.toThrow(/^Tank01 returned HTTP 404$/);
+  });
+
   it("counts the retries a success would otherwise hide (#243)", async () => {
     const fetchImpl = flaky(2, 429);
     const { sleepImpl } = recordingSleep();
