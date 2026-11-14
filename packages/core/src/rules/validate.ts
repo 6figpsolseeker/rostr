@@ -282,6 +282,13 @@ function validateRoster(rules: LeagueRules, sport: SportDef, out: string[]): voi
 
 function validateDraft(rules: LeagueRules, out: string[]): void {
   const { mode, pickSeconds } = rules.draft;
+
+  // A runtime check, because the union is erased and the create route takes
+  // `draftMode` off the request. Without it any other string fell through to the
+  // SLOW clock list below and was frozen into the rules as the league's mode.
+  if (mode !== "FAST" && mode !== "SLOW") {
+    out.push(`draft mode must be FAST or SLOW, got ${JSON.stringify(mode)}`);
+  }
   const allowed = mode === "FAST" ? FAST_PICK_SECONDS : SLOW_PICK_SECONDS;
 
   if (!allowed.includes(pickSeconds)) {

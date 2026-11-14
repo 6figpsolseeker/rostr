@@ -7,6 +7,7 @@ import {
   NFL_DEFAULT_FEE_BPS,
   NFL_DEFAULT_PAYOUT,
   NFL_WINNER_TAKE_ALL_PAYOUT,
+  nflSeasonForDraft,
   validateLeagueRules,
 } from "@rostr/core";
 import type { PotRules } from "@rostr/core";
@@ -207,6 +208,21 @@ export async function POST(request: Request): Promise<NextResponse> {
     );
   }
 
+  // The season comes from the draft date. It used to default to a literal 2026
+  // and the form never sent one, so every league was frozen as 2026, including
+  // one drafting in August 2027, which would then look up a schedule that had
+  // already ended. A request may still name the season, but only the right one:
+  // rules are frozen at creation and a wrong year can never be corrected.
+  const seasonYear = nflSeasonForDraft(body.draftAt);
+  if (body.seasonYear !== undefined && body.seasonYear !== seasonYear) {
+    return NextResponse.json(
+      {
+        error: `A draft on that date is for the ${seasonYear} season, not ${JSON.stringify(body.seasonYear)}.`,
+      },
+      { status: 400 },
+    );
+  }
+
   // The fee and its recipient come from server configuration, never from the
   // request. A client-supplied fee would let anyone create a league that pays
   // nothing, and a client-supplied recipient would let them redirect ours.
@@ -354,7 +370,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     : null;
 
   const rules = buildNflPprRules({
-    seasonYear: body.seasonYear ?? 2026,
+    seasonYear,
     draft: {
       type: "SNAKE",
       mode: body.draftMode ?? "SLOW",
@@ -439,10 +455,11 @@ export async function POST(request: Request): Promise<NextResponse> {
     // The encoder is the last word on what may be frozen, and it is stricter
     // than validation: `canonicalize` rejects every non-integer, while
     // `validateLeagueRules` integer-checks the scoring numbers and not much
-    // else. This is reachable from here today — `seasonYear`, `draftAt`,
-    // `tradeDeadlineWeek` and `pot.refundUnlockAt` all come off the request as
-    // numbers and none is integer-checked, so `{ "seasonYear": 2026.5 }` used
-    // to escape as an unhandled 500. It is a client error and gets the same
+    // else. This is reachable from here today — `draftAt`, `tradeDeadlineWeek`
+    // and `pot.refundUnlockAt` all come off the request as numbers and none is
+    // integer-checked, so `{ "seasonYear": 2026.5 }` used to escape as an
+    // unhandled 500 (the season is now derived from the draft date, and a
+    // request naming any other value is refused above). It is a client error and gets the same
     // 400-with-problems shape as any other bad rule set. Nothing is written:
     // `createLeague` encodes before it opens its transaction.
     if (error instanceof CanonicalEncodingError) {

@@ -59,6 +59,7 @@ export {
   NFL_DEFAULT_WAIVERS,
   NFL_PPR_ROSTER,
   NFL_PPR_SCORING,
+  nflSeasonForDraft,
   type NflPprOverrides,
 } from "./rules/nfl-ppr.js";
 

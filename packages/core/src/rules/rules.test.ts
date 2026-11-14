@@ -10,6 +10,7 @@ import {
   NFL_DEFAULT_PAYOUT,
   NFL_PPR_SCORING,
   NFL_WINNER_TAKE_ALL_PAYOUT,
+  nflSeasonForDraft,
 } from "./nfl-ppr.js";
 import type { LeagueRules, PotRules, Weekday } from "./types.js";
 import {
@@ -214,6 +215,17 @@ describe("validateLeagueRules", () => {
 
   it("accepts the default rule set", () => {
     expect(validateLeagueRules(FIXTURE, NFL)).toEqual([]);
+  });
+
+  it("rejects a draft mode that is neither FAST nor SLOW", () => {
+    // The create route takes `draftMode` off the request, and an unknown string
+    // used to validate against the SLOW clocks and be frozen as the mode.
+    const bad = mutate((d) => {
+      (d.draft as { mode: string }).mode = "TURBO";
+    });
+    expect(validateLeagueRules(bad, NFL)).toContainEqual(
+      'draft mode must be FAST or SLOW, got "TURBO"',
+    );
   });
 
   /**
@@ -1221,5 +1233,21 @@ describe("the waiver weekday is checked against the union — #132", () => {
   it("accepts the default rule set unchanged", () => {
     const rules = FIXTURE;
     expect(validateLeagueRules(rules, NFL)).toEqual([]);
+  });
+});
+
+describe("nflSeasonForDraft", () => {
+  const at = (iso: string) => Date.parse(iso) / 1000;
+
+  it("is the year the draft happens in", () => {
+    expect(nflSeasonForDraft(at("2027-08-20T23:00:00Z"))).toBe(2027);
+    expect(nflSeasonForDraft(at("2026-11-20T23:00:00Z"))).toBe(2026);
+  });
+
+  it("reads the year in Eastern time, not UTC", () => {
+    // 9pm New Year's Eve in New York is already 2027 in UTC.
+    expect(nflSeasonForDraft(at("2027-01-01T02:00:00Z"))).toBe(2026);
+    // 12:30am New Year's Day in New York.
+    expect(nflSeasonForDraft(at("2027-01-01T05:30:00Z"))).toBe(2027);
   });
 });
