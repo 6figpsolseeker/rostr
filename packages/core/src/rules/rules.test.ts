@@ -217,6 +217,17 @@ describe("validateLeagueRules", () => {
     expect(validateLeagueRules(FIXTURE, NFL)).toEqual([]);
   });
 
+  it("rejects a draft mode that is neither FAST nor SLOW", () => {
+    // The create route takes `draftMode` off the request, and an unknown string
+    // used to validate against the SLOW clocks and be frozen as the mode.
+    const bad = mutate((d) => {
+      (d.draft as { mode: string }).mode = "TURBO";
+    });
+    expect(validateLeagueRules(bad, NFL)).toContainEqual(
+      'draft mode must be FAST or SLOW, got "TURBO"',
+    );
+  });
+
   /**
    * The ceiling, which did not exist until 2026-08-17.
    *
