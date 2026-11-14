@@ -564,6 +564,18 @@ describe("validateLeagueRules", () => {
     expect(validateLeagueRules(ok, NFL)).toEqual([]);
   });
 
+  it.each([
+    ["a number", 5_000_000],
+    ["an array", [5_000_000]],
+  ])("rejects a buy-in sent as %s, which the pattern alone accepted", (_name, units) => {
+    const bad = mutate((d) => {
+      (d.pot as { buyInBaseUnits: unknown }).buyInBaseUnits = units;
+    });
+    expect(validateLeagueRules(bad, NFL)).toContainEqual(
+      expect.stringContaining("buyInBaseUnits must be a positive integer"),
+    );
+  });
+
   it("rejects a fee above the ceiling", () => {
     const bad = mutate((d) => {
       (d.pot as { feeBps: number }).feeBps = 501;
