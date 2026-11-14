@@ -3417,7 +3417,14 @@ unanimous consent to amend and unanimous/automatic dissolve with refunds.
 
 **5. Paying weeks wait 7 days.** Official NFL stat corrections arrive for up to a week
 after a game. Weeks 14 and 17 pay money and must finalise at T+168h. Other weeks finalise
-at T+48h. Validation enforces this.
+at T+48h.
+
+**Validation enforces only part of this.** `validateSettlement` requires
+`payingFinalizationHours` of at least 168 and requires the championship week to be a
+paying week. Nothing requires week 14 to be one: it is paying only because
+`buildNflPprRules` puts it in `payingWeeks`, and the 48 hours is a default, not a check.
+Every league holds today because `NflPprOverrides` has no settlement or schedule key. A
+custom-rules feature needs these checks first.
 
 ---
 

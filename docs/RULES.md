@@ -10,6 +10,10 @@ The only permitted post-creation changes are:
 - **Dissolve** — unanimous consent, or automatic if the league never fills, refunding
   every member their original stake.
 
+**Neither is built yet.** There is no amend and no dissolve anywhere in the product
+(issue #163). A league that never fills is never drafted. In a pot league every stake
+becomes refundable 48 hours after the draft time, and each member withdraws their own stake.
+
 Anything not listed as league state below is a rule, and rules do not move.
 
 |                                     |                                                                                                                                                                                                                           |
@@ -647,8 +651,12 @@ best record from them, so no instruction anywhere takes a winner. It cannot chan
 move a token, or pay anybody. If it never acts at all, every stake returns at the refund
 unlock. It is frozen for the life of the league like everything else here, which means it
 also cannot be swapped for someone else's key later.
-Two independent providers must agree before a week's scores finalise; disagreement
-freezes that week for review.
+
+The rules require two independent providers to agree before a week's scores finalise
+(`settlement.requiredOracleSources`), and disagreement is meant to freeze that week for
+review. **Neither the agreement check nor the freeze is built yet.** Today a week
+finalises on one provider's figures. Pot leagues are closed for the 2026 season, so no
+money depends on that; the check has to exist before they reopen.
 
 Finalisation is **two-tier**, because the NFL issues official stat corrections for up to
 **seven days** after a game and a reclassified fumble can flip a matchup long after it
@@ -775,6 +783,9 @@ Immutable rules must anticipate failure, because no one can patch them mid-seaso
 | A championship ends in an exact tie                             | Higher seed wins.                                                                                                                              |
 | A league never reaches 2 humans by the draft date               | Auto-dissolve, full refunds.                                                                                                                   |
 | A member disputes a result                                      | League vote. No commissioner discretion exists.                                                                                                |
+
+**Three of these rows are not built yet:** the freeze on disagreement, the auto-dissolve
+and the dispute vote. §7 and the top of this document say what happens instead.
 
 The Bills–Bengals game of January 2023 was abandoned mid-game and never made up, during
 fantasy playoff weeks, and every league in the country improvised. A league that cannot

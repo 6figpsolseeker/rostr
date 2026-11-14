@@ -319,7 +319,15 @@ function Governance({ rules }: { rules: LeagueRules }) {
           }
         />
         <Row label="Penalty for missing a week" value="None" />
-        <Row label="Oracle sources" value={rules.settlement.requiredOracleSources} />
+        {/*
+          The rules ask for this many independent stat sources to agree before a
+          week finalises, and nothing checks it yet (RULES.md §7). Saying so here
+          is the point: this renders above the join control.
+        */}
+        <Row
+          label="Stat sources that must agree"
+          value={`${rules.settlement.requiredOracleSources} (check not built yet)`}
+        />
         <Row
           label="Weeks finalise after"
           value={`${rules.settlement.standardFinalizationHours}h`}
