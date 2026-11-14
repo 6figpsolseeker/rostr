@@ -267,10 +267,11 @@ because `.env` is gitignored, so a fresh checkout still needs steps 2 onward:
    can ever finalise. A database that has migrated and seeded still cannot hold a league.
 
 Steps 3 through 6 all run `packages/db/dist/cli.js`, and `dist/` is gitignored — so on a
-fresh checkout they need a build first. `pnpm install` now does that through a `prepare`
-script, which is why step 3 no longer dies with `ERR_MODULE_NOT_FOUND` before it reaches
-the database. That was issue #98's first hard stop, and it made the very command this
-recipe opens with unrunnable.
+fresh checkout they need a build first. Every `db:*` and `cron:status` script in the root
+`package.json` builds the packages before it runs, which is why step 3 no longer dies with
+`ERR_MODULE_NOT_FOUND` before it reaches the database. There is no `prepare` script, and
+this paragraph used to say `pnpm install` built through one. That was issue #98's first
+hard stop, and it made the very command this recipe opens with unrunnable.
 
 ### Then check it can actually hold a season
 
